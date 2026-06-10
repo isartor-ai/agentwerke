@@ -36,5 +36,19 @@ Secure, BPMN-native, Docker-sandboxed autonomous software factory.
 	- `GET /api/runs`
 	- `GET /api/runs/{runId}`
 	- `POST /api/runs`
+4. Artifact storage by run ID:
+	 - Upload artifact bytes:
+		 - `POST /api/runs/{runId}/artifacts/{artifactName}`
+	 - Download artifact:
+		 - `GET /api/runs/{runId}/artifacts/{artifactName}`
 
 See `CONTRIBUTING.md` for contribution standards.
+
+## Persistence
+- Phase-1 schema documentation: `docs/persistence-schema.md`
+
+## Local Artifact Storage
+- Config section: `Storage:RootPath`
+- Defaults:
+	- production-like: `./storage`
+	- development: `./storage-dev`
