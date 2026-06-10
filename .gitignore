@@ -1,0 +1,25 @@
+bin/
+obj/
+.vs/
+.vscode/
+TestResults/
+*.user
+*.suo
+*.cache
+*.pdb
+*.db
+*.log
+*.trx
+
+# NuGet
+packages/
+*.nupkg
+.nuget/
+
+# Coverage
+coverage/
+coverage.*
+
+# OS
+.DS_Store
+Thumbs.db

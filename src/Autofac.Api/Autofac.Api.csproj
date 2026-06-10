@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
+    <ProjectReference Include="..\Autofac.Infrastructure\Autofac.Infrastructure.csproj" />
+    <ProjectReference Include="..\Autofac.Workflows\Autofac.Workflows.csproj" />
+    <ProjectReference Include="..\Autofac.Agents\Autofac.Agents.csproj" />
+    <ProjectReference Include="..\Autofac.AgentSecOps\Autofac.AgentSecOps.csproj" />
+    <ProjectReference Include="..\Autofac.Sandboxes\Autofac.Sandboxes.csproj" />
+    <ProjectReference Include="..\Autofac.Integrations\Autofac.Integrations.csproj" />
+    <ProjectReference Include="..\Autofac.Storage\Autofac.Storage.csproj" />
+    <ProjectReference Include="..\Autofac.Observability\Autofac.Observability.csproj" />
+  </ItemGroup>
+
+</Project>
