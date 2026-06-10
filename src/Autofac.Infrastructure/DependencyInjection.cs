@@ -1,4 +1,5 @@
 using Autofac.Infrastructure.Persistence;
+using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,8 @@ public static class DependencyInjection
 
         services.AddDbContext<AutofacDbContext>(options =>
             options.UseNpgsql(connectionString));
+
+        services.AddScoped<IWorkflowRuntimeStore, WorkflowRuntimeStore>();
 
         return services;
     }

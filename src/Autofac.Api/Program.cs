@@ -1,5 +1,6 @@
 using Autofac.Infrastructure;
 using Autofac.Storage;
+using Autofac.Workflows;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddOpenApi("v1");
 builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
+builder.Services.AddAutofacWorkflows();
 
 var app = builder.Build();
 
