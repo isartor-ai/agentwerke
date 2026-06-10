@@ -8,6 +8,7 @@ import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
+import { BpmnRunGraph } from '../components/BpmnRunGraph';
 import type { WorkflowRun } from '../types';
 
 const tabs = ['Summary', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
@@ -85,11 +86,31 @@ export function RunDetail() {
       </section>
 
       <section className="run-detail-grid">
-        <StepTimeline
-          steps={run.steps ?? []}
-          expandedStepId={expandedStepId}
-          onToggleStep={(stepId) => setExpandedStepId((current) => (current === stepId ? null : stepId))}
-        />
+        <div className="run-detail-left">
+          <BpmnRunGraph steps={run.steps ?? []} />
+          <StepTimeline
+            steps={run.steps ?? []}
+            expandedStepId={expandedStepId}
+            onToggleStep={(stepId) => setExpandedStepId((current) => (current === stepId ? null : stepId))}
+          />
+
+          <article className="panel event-monitor-panel" aria-label="Run event monitor">
+            <h2>Runtime Events</h2>
+            {run.events && run.events.length > 0 ? (
+              <ul className="event-list" role="list">
+                {run.events.map((event) => (
+                  <li key={event.id}>
+                    <strong>{event.type.replace('_', ' ')}</strong>
+                    <p>{event.message}</p>
+                    <span className="cell-meta">{new Date(event.createdAt).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No runtime events available.</p>
+            )}
+          </article>
+        </div>
 
         <article className="panel run-side-panel">
           <div className="tab-row" role="tablist" aria-label="Run detail tabs">

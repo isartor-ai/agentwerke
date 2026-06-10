@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-label="BPMN validation panel placeholder image">
+  <rect width="1200" height="640" fill="#f8fafc"/>
+  <rect x="40" y="40" width="1120" height="560" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="70" y="80" width="260" height="32" rx="6" fill="#e2e8f0"/>
+  <rect x="350" y="80" width="360" height="32" rx="6" fill="#dbeafe"/>
+  <text x="72" y="101" fill="#0f172a" font-size="14" font-family="Arial, sans-serif">Workflow Designer</text>
+  <text x="362" y="101" fill="#1d4ed8" font-size="14" font-family="Arial, sans-serif">Validation Results</text>
+  <rect x="70" y="140" width="1060" height="180" rx="8" fill="#fef2f2" stroke="#fca5a5"/>
+  <text x="90" y="175" fill="#7f1d1d" font-size="16" font-family="Arial, sans-serif">serviceTask: Service/script task requires autofac:agentTask metadata [id: DeployTask] at line 12, col 5</text>
+  <rect x="70" y="350" width="1060" height="210" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="90" y="390" fill="#334155" font-size="14" font-family="Arial, sans-serif">Paste BPMN XML to validate</text>
+  <text x="90" y="420" fill="#64748b" font-size="13" font-family="Arial, sans-serif">&lt;bpmn:definitions xmlns:bpmn=&quot;http://www.omg.org/spec/BPMN/20100524/MODEL&quot; ...&gt;</text>
+  <text x="90" y="444" fill="#64748b" font-size="13" font-family="Arial, sans-serif">  &lt;bpmn:process id=&quot;DeployWorkflow&quot;&gt; ... &lt;/bpmn:process&gt;</text>
+  <text x="90" y="468" fill="#64748b" font-size="13" font-family="Arial, sans-serif">&lt;/bpmn:definitions&gt;</text>
+</svg>

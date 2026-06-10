@@ -108,6 +108,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             }
 
             AutofacTaskMetadata? metadata = null;
+            AutofacApprovalMetadata? approvalMetadata = null;
 
             switch (localName)
             {
@@ -116,7 +117,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                     metadata = ValidateAgentTaskMetadata(element, autofacNamespace, errors);
                     break;
                 case "userTask":
-                    ValidateApprovalMetadata(element, autofacNamespace, errors);
+                    approvalMetadata = ValidateApprovalMetadata(element, autofacNamespace, errors);
                     break;
                 case "intermediateCatchEvent":
                     ValidateTimerEvent(element, errors);
@@ -130,7 +131,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 Id: id,
                 Name: element.Attribute("name")?.Value,
                 ElementName: localName,
-                Metadata: metadata));
+                Metadata: metadata,
+                ApprovalMetadata: approvalMetadata));
         }
 
         var definition = new BpmnWorkflowDefinition(
@@ -197,7 +199,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             TimeoutSeconds: timeoutSeconds);
     }
 
-    private static void ValidateApprovalMetadata(
+    private static AutofacApprovalMetadata? ValidateApprovalMetadata(
         XElement element,
         XNamespace autofacNamespace,
         ICollection<BpmnValidationError> errors)
@@ -212,19 +214,24 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         {
             errors.Add(CreateError(element,
                 "User task requires autofac:approvalTask metadata under bpmn:extensionElements."));
-            return;
+            return null;
         }
 
         var missingAttributes = new List<string>();
-        _ = GetAttribute(approvalTask, "purposeType", missingAttributes);
-        _ = GetAttribute(approvalTask, "policyTag", missingAttributes);
+        var purposeType = GetAttribute(approvalTask, "purposeType", missingAttributes);
+        var policyTag = GetAttribute(approvalTask, "policyTag", missingAttributes);
 
         if (missingAttributes.Count > 0)
         {
             errors.Add(CreateError(
                 element,
                 $"autofac:approvalTask is missing required attributes: {string.Join(", ", missingAttributes)}."));
+            return null;
         }
+
+        return new AutofacApprovalMetadata(
+            PurposeType: purposeType!,
+            PolicyTag: policyTag!);
     }
 
     private static void ValidateTimerEvent(XElement element, ICollection<BpmnValidationError> errors)

@@ -188,7 +188,14 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                     await _store.AppendEventAsync(
                         runId,
                         "user_task_waiting",
-                        Serialize(new { runId, nodeId = node.Id, nodeIndex = nextIndex }),
+                        Serialize(new
+                        {
+                            runId,
+                            nodeId = node.Id,
+                            nodeIndex = nextIndex,
+                            purposeType = node.ApprovalMetadata?.PurposeType,
+                            policyTag = node.ApprovalMetadata?.PolicyTag
+                        }),
                         cancellationToken);
                     nextIndex++;
                     await _store.UpdateRunStatusAsync(runId, status, completedAtUtc: null, cancellationToken);
@@ -433,7 +440,19 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
             await _store.AppendEventAsync(
                 runId,
                 "service_task_attempted",
-                Serialize(new { runId, nodeId = node.Id, attempt, maxRetries }),
+                Serialize(new
+                {
+                    runId,
+                    nodeId = node.Id,
+                    attempt,
+                    maxRetries,
+                    agent = metadata?.Agent,
+                    action = metadata?.Action,
+                    environment = metadata?.Environment,
+                    purposeType = metadata?.PurposeType,
+                    policyTag = metadata?.PolicyTag,
+                    requiresEvidence = metadata?.RequiresEvidence
+                }),
                 cancellationToken);
 
             if (simulateTimeout && boundaryNode is not null)
@@ -571,6 +590,16 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
         if (!hasStart || !hasEnd)
         {
             throw new InvalidOperationException("Workflow definition must include both startEvent and endEvent nodes.");
+        }
+
+        if (definition.Nodes.Any(static n => (n.ElementName == "serviceTask" || n.ElementName == "scriptTask") && n.Metadata is null))
+        {
+            throw new InvalidOperationException("Service/script tasks must include parsed autofac:agentTask metadata.");
+        }
+
+        if (definition.Nodes.Any(static n => n.ElementName == "userTask" && n.ApprovalMetadata is null))
+        {
+            throw new InvalidOperationException("User tasks must include parsed autofac:approvalTask metadata.");
         }
     }
 

@@ -47,7 +47,19 @@ public sealed class BpmnWorkflowValidatorTests
         Assert.Empty(result.Errors);
         Assert.NotNull(result.Definition);
         Assert.Equal("DeployWorkflow", result.Definition!.ProcessId);
-        Assert.Contains(result.Definition.Nodes, node => node.Id == "DeployTask" && node.Metadata is not null);
+
+        var deployNode = Assert.Single(result.Definition.Nodes, node => node.Id == "DeployTask");
+        Assert.NotNull(deployNode.Metadata);
+        Assert.Equal("DeploymentAgent", deployNode.Metadata!.Agent);
+        Assert.Equal("cloud.deploy_artifact", deployNode.Metadata.Action);
+        Assert.Equal("production_deployment", deployNode.Metadata.PurposeType);
+        Assert.Equal("production_deployment_gateway", deployNode.Metadata.PolicyTag);
+        Assert.Equal(3, deployNode.Metadata.RequiresEvidence.Count);
+
+        var approvalNode = Assert.Single(result.Definition.Nodes, node => node.Id == "ApprovalTask");
+        Assert.NotNull(approvalNode.ApprovalMetadata);
+        Assert.Equal("production_deployment", approvalNode.ApprovalMetadata!.PurposeType);
+        Assert.Equal("human_approval_required", approvalNode.ApprovalMetadata.PolicyTag);
     }
 
     [Fact]

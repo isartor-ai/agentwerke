@@ -29,6 +29,10 @@ public sealed class WorkflowInstanceEngineTests
         var eventTypes = events.Select(static e => e.EventType).ToList();
         Assert.Contains("run_started", eventTypes);
         Assert.Contains("user_task_waiting", eventTypes);
+        Assert.Contains(events, static e =>
+            e.EventType == "user_task_waiting" &&
+            e.PayloadJson.Contains("\"purposeType\":\"manual_review\"", StringComparison.Ordinal) &&
+            e.PayloadJson.Contains("\"policyTag\":\"human_approval_required\"", StringComparison.Ordinal));
 
         var firstRunStarted = eventTypes.FindIndex(static t => string.Equals(t, "run_started", StringComparison.Ordinal));
         var firstUserTaskWaiting = eventTypes.FindIndex(static t => string.Equals(t, "user_task_waiting", StringComparison.Ordinal));
@@ -105,6 +109,12 @@ public sealed class WorkflowInstanceEngineTests
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
         Assert.Equal(3, events.Count(static e => e.EventType == "service_task_attempted"));
         Assert.Equal(2, events.Count(static e => e.EventType == "retry_scheduled"));
+        Assert.Contains(events, static e =>
+            e.EventType == "service_task_attempted" &&
+            e.PayloadJson.Contains("\"agent\":\"agent\"", StringComparison.Ordinal) &&
+            e.PayloadJson.Contains("\"action\":\"action\"", StringComparison.Ordinal) &&
+            e.PayloadJson.Contains("\"purposeType\":\"purpose\"", StringComparison.Ordinal) &&
+            e.PayloadJson.Contains("\"policyTag\":\"policy\"", StringComparison.Ordinal));
         Assert.Contains(events, static e => e.EventType == "run_completed");
     }
 
@@ -177,7 +187,12 @@ public sealed class WorkflowInstanceEngineTests
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
                 new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
-                new BpmnNodeDefinition("HumanApproval", "Approval", "userTask", null),
+                new BpmnNodeDefinition(
+                    "HumanApproval",
+                    "Approval",
+                    "userTask",
+                    null,
+                    new AutofacApprovalMetadata("manual_review", "human_approval_required")),
                 new BpmnNodeDefinition("Finalize", "Finalize", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);

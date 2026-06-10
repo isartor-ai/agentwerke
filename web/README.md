@@ -47,3 +47,32 @@ VITE_API_BASE_URL=http://localhost:5000
 - Workflow designer shell: /workflows
 - Approvals dashboard: /approvals
 - Placeholder sections: /policies, /audit, /integrations, /settings
+
+## BPMN UI MVP (Phase 2.4)
+
+### Implemented flows
+
+- BPMN upload/import in Workflow Designer (`/workflows`)
+- Validation results panel with actionable errors (element, message, id, line/column)
+- Run graph visualization and runtime event monitor in Run Detail (`/runs/:runId`)
+- Retry/timeout/boundary event visibility in runtime events
+- HITL approval action flow in Approvals Dashboard (`/approvals`)
+
+### Quick usage flow
+
+1. Open `/workflows`.
+2. Click `Import BPMN` and select a `.bpmn` or `.xml` file.
+3. Review validation results in the `Validation Results` panel.
+4. Open `/runs` and select a run.
+5. In run detail, inspect `BPMN Graph` and `Runtime Events` for retry/timeout signals.
+6. Open `/approvals` and submit approval/reject/escalate decisions.
+
+### UI snapshots
+
+Workflow Designer validation panel:
+
+![BPMN validation panel](public/docs/bpmn-validation-panel.svg)
+
+Run graph and event monitor:
+
+![Run monitoring view](public/docs/run-monitoring-view.svg)

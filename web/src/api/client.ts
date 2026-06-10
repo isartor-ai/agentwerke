@@ -1,6 +1,8 @@
 import type {
   ApprovalRequest,
   PolicyDecision,
+  WorkflowPublishResult,
+  WorkflowValidationResult,
   Workflow,
   WorkflowRun,
 } from '../types';
@@ -121,6 +123,7 @@ const mockRuns: WorkflowRun[] = [
         name: 'Run Security Scan',
         type: 'service_task',
         status: 'completed',
+        output: 'Retry policy configured: maxRetries=2, backoff=5s',
       },
       {
         id: 'step-4',
@@ -137,6 +140,38 @@ const mockRuns: WorkflowRun[] = [
         policyDecision: policyEscalate,
       },
     ],
+    events: [
+      {
+        id: 'evt-1',
+        type: 'node_entered',
+        message: 'Entered start event.',
+        createdAt: new Date(now - 8 * 60_000).toISOString(),
+      },
+      {
+        id: 'evt-2',
+        type: 'retry_scheduled',
+        message: 'Security scan failed on attempt 1. Retry scheduled in 5s.',
+        createdAt: new Date(now - 7 * 60_000).toISOString(),
+      },
+      {
+        id: 'evt-3',
+        type: 'timeout_triggered',
+        message: 'Static analysis exceeded timeout threshold; boundary timer triggered.',
+        createdAt: new Date(now - 6 * 60_000).toISOString(),
+      },
+      {
+        id: 'evt-4',
+        type: 'boundary_event_triggered',
+        message: 'Boundary event redirected flow to fallback scan path.',
+        createdAt: new Date(now - 5 * 60_000).toISOString(),
+      },
+      {
+        id: 'evt-5',
+        type: 'user_task_waiting',
+        message: 'Waiting for human approval before merge.',
+        createdAt: new Date(now - 3 * 60_000).toISOString(),
+      },
+    ],
   },
   {
     id: 'run-0420',
@@ -151,6 +186,20 @@ const mockRuns: WorkflowRun[] = [
     durationMs: 22 * 60_000,
     pendingApprovals: 0,
     tags: ['security'],
+    events: [
+      {
+        id: 'evt-6',
+        type: 'parallel_forked',
+        message: 'Parallel gateway forked to patch + verify branches.',
+        createdAt: new Date(now - 20 * 60_000).toISOString(),
+      },
+      {
+        id: 'evt-7',
+        type: 'parallel_joined',
+        message: 'Parallel branches rejoined at consolidation gateway.',
+        createdAt: new Date(now - 8 * 60_000).toISOString(),
+      },
+    ],
   },
   {
     id: 'run-0419',
@@ -166,6 +215,14 @@ const mockRuns: WorkflowRun[] = [
     durationMs: 40 * 60_000,
     pendingApprovals: 0,
     tags: ['critical', 'incident'],
+    events: [
+      {
+        id: 'evt-8',
+        type: 'timeout_triggered',
+        message: 'Hotfix deployment exceeded timeout and failed boundary recovery.',
+        createdAt: new Date(now - 2.7 * 3_600_000).toISOString(),
+      },
+    ],
   },
   {
     id: 'run-0418',
@@ -180,6 +237,14 @@ const mockRuns: WorkflowRun[] = [
     durationMs: 24 * 60_000,
     pendingApprovals: 0,
     tags: ['sandbox'],
+    events: [
+      {
+        id: 'evt-9',
+        type: 'run_completed',
+        message: 'Workflow completed successfully.',
+        createdAt: new Date(now - 3.6 * 3_600_000).toISOString(),
+      },
+    ],
   },
   {
     id: 'run-0417',
@@ -194,8 +259,74 @@ const mockRuns: WorkflowRun[] = [
     durationMs: 120 * 60_000,
     pendingApprovals: 0,
     tags: ['compliance'],
+    events: [
+      {
+        id: 'evt-10',
+        type: 'retry_scheduled',
+        message: 'Publish step retry exhausted due registry lock contention.',
+        createdAt: new Date(now - 5 * 3_600_000).toISOString(),
+      },
+    ],
   },
 ];
+
+function toWorkflowValidationResultFromXml(xml: string): WorkflowValidationResult {
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(xml, 'application/xml');
+  const parserError = parsed.querySelector('parsererror');
+  if (parserError) {
+    return {
+      isValid: false,
+      errors: [
+        {
+          message: 'Invalid XML payload.',
+          elementName: 'document',
+        },
+      ],
+    };
+  }
+
+  const process = parsed.getElementsByTagName('bpmn:process')[0] ?? parsed.getElementsByTagName('process')[0];
+  if (!process) {
+    return {
+      isValid: false,
+      errors: [
+        {
+          message: 'BPMN document must include a process element.',
+          elementName: 'process',
+        },
+      ],
+    };
+  }
+
+  const xmlText = xml.toLowerCase();
+  const hasAgentTask = xmlText.includes('autofac:agenttask');
+  const hasApprovalTask = xmlText.includes('autofac:approvaltask');
+
+  const errors = [] as WorkflowValidationResult['errors'];
+  if (!hasAgentTask) {
+    errors.push({
+      message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
+      elementName: 'serviceTask',
+      elementId: null,
+    });
+  }
+
+  if (!hasApprovalTask && xmlText.includes('usertask')) {
+    errors.push({
+      message: 'User task requires autofac:approvalTask metadata under extensionElements.',
+      elementName: 'userTask',
+      elementId: null,
+    });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    processId: process.getAttribute('id') ?? undefined,
+    processName: process.getAttribute('name') ?? undefined,
+    errors,
+  };
+}
 
 const mockApprovals: ApprovalRequest[] = [
   {
@@ -288,6 +419,62 @@ export const apiClient = {
 
     await delay(120);
     return mockWorkflows.find((workflow) => workflow.id === id);
+  },
+
+  async uploadBpmnWorkflow(file: File): Promise<{ workflowId: string; validation: WorkflowValidationResult }> {
+    const xml = await file.text();
+
+    if (isRemoteEnabled()) {
+      return requestJson<{ workflowId: string; validation: WorkflowValidationResult }>('/api/workflows/import', {
+        method: 'POST',
+        body: JSON.stringify({ fileName: file.name, bpmnXml: xml }),
+      });
+    }
+
+    await delay(140);
+    const validation = toWorkflowValidationResultFromXml(xml);
+    return {
+      workflowId: `wf-import-${Date.now()}`,
+      validation,
+    };
+  },
+
+  async validateBpmnWorkflow(payload: { workflowId?: string; bpmnXml: string }): Promise<WorkflowValidationResult> {
+    if (isRemoteEnabled()) {
+      return requestJson<WorkflowValidationResult>('/api/workflows/validate', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+
+    await delay(120);
+    return toWorkflowValidationResultFromXml(payload.bpmnXml);
+  },
+
+  async publishWorkflowDefinition(payload: {
+    workflowId?: string;
+    bpmnXml: string;
+  }): Promise<WorkflowPublishResult> {
+    if (isRemoteEnabled()) {
+      return requestJson<WorkflowPublishResult>(`/api/workflows/${payload.workflowId ?? 'draft'}/publish`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+
+    await delay(140);
+    const workflow = mockWorkflows.find((item) => item.id === payload.workflowId) ?? mockWorkflows[0];
+    const [major, minor, patch] = workflow.version.replace(/^v/, '').split('.').map((part) => Number(part) || 0);
+    const nextVersion = `v${major}.${minor}.${patch + 1}`;
+    workflow.version = nextVersion;
+    workflow.status = 'active';
+    workflow.lastEditedAt = new Date().toISOString();
+
+    return {
+      workflowId: workflow.id,
+      version: nextVersion,
+      publishedAt: new Date().toISOString(),
+    };
   },
 
   async getRuns(): Promise<WorkflowRun[]> {

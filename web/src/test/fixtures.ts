@@ -65,6 +65,20 @@ export const runsFixture: WorkflowRun[] = [
         },
       },
     ],
+    events: [
+      {
+        id: 'evt-a',
+        type: 'retry_scheduled',
+        message: 'Retry scheduled after transient failure.',
+        createdAt: new Date(Date.now() - 6 * 60_000).toISOString(),
+      },
+      {
+        id: 'evt-b',
+        type: 'timeout_triggered',
+        message: 'Timeout boundary triggered on security scan.',
+        createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+      },
+    ],
   },
   {
     id: 'run-0420',

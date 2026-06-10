@@ -56,6 +56,23 @@ export interface RunStep {
   policyDecision?: PolicyDecision;
 }
 
+export interface RunEvent {
+  id: string;
+  type:
+    | 'node_entered'
+    | 'node_completed'
+    | 'retry_scheduled'
+    | 'timeout_triggered'
+    | 'boundary_event_triggered'
+    | 'parallel_forked'
+    | 'parallel_joined'
+    | 'user_task_waiting'
+    | 'run_completed'
+    | 'info';
+  message: string;
+  createdAt: string;
+}
+
 export interface WorkflowRun {
   id: string;
   workflowId: string;
@@ -70,7 +87,29 @@ export interface WorkflowRun {
   durationMs?: number;
   pendingApprovals: number;
   steps?: RunStep[];
+  events?: RunEvent[];
   tags: string[];
+}
+
+export interface BpmnValidationError {
+  message: string;
+  elementId?: string | null;
+  elementName?: string | null;
+  lineNumber?: number | null;
+  linePosition?: number | null;
+}
+
+export interface WorkflowValidationResult {
+  isValid: boolean;
+  processId?: string;
+  processName?: string;
+  errors: BpmnValidationError[];
+}
+
+export interface WorkflowPublishResult {
+  workflowId: string;
+  version: string;
+  publishedAt: string;
 }
 
 export interface ApprovalRequest {
