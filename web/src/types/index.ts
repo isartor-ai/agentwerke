@@ -1,0 +1,108 @@
+export type RunStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'pending'
+  | 'cancelled'
+  | 'blocked'
+  | 'awaiting_approval';
+
+export type RiskLevel = 'critical' | 'high' | 'medium' | 'low' | 'none';
+
+export type WorkflowStatus = 'draft' | 'active' | 'archived' | 'deprecated';
+
+export type PolicyDecisionKind =
+  | 'allow'
+  | 'deny'
+  | 'escalate'
+  | 'allow_with_constraints';
+
+export interface PolicyDecision {
+  kind: PolicyDecisionKind;
+  policyId: string;
+  policyName: string;
+  rationale: string;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  riskFactors: string[];
+  decidedAt: string;
+  constraints?: string[];
+}
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  status: WorkflowStatus;
+  owner: string;
+  lastEditedAt: string;
+  createdAt: string;
+  validationState: 'valid' | 'invalid' | 'pending';
+  tags: string[];
+}
+
+export interface RunStep {
+  id: string;
+  name: string;
+  type: string;
+  status: RunStatus;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  agentName?: string;
+  output?: string;
+  error?: string;
+  policyDecision?: PolicyDecision;
+}
+
+export interface WorkflowRun {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  workflowVersion: string;
+  status: RunStatus;
+  riskLevel: RiskLevel;
+  currentStep?: string;
+  requestedBy: string;
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+  pendingApprovals: number;
+  steps?: RunStep[];
+  tags: string[];
+}
+
+export interface ApprovalRequest {
+  id: string;
+  runId: string;
+  workflowName: string;
+  actionRequested: string;
+  requester: string;
+  agentName: string;
+  policyRationale: string;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  riskFactors: string[];
+  affectedSystems: string[];
+  slaDeadline: string;
+  createdAt: string;
+  status: 'pending' | 'approved' | 'rejected' | 'escalated';
+  priority: 'urgent' | 'high' | 'normal';
+  decisionComment?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatarInitials: string;
+}
+
+export interface AuthState {
+  status: 'loading' | 'authenticated' | 'unauthenticated';
+  user?: AuthUser;
+}
