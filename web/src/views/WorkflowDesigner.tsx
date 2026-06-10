@@ -7,6 +7,14 @@ import { PageHeader } from '../components/PageHeader';
 import { Toolbar } from '../components/Toolbar';
 import type { Workflow, WorkflowValidationResult } from '../types';
 
+// localStorage keys
+const STORAGE_KEYS = {
+  BPMN_XML: 'autofac_draft_bpmn_xml',
+  NODE_METADATA: 'autofac_draft_node_metadata',
+  SELECTED_NODE: 'autofac_selected_node',
+  LAST_PUBLISHED: 'autofac_last_published_xml',
+} as const;
+
 const inspectorTabs = ['Details', 'Inputs', 'Policy', 'Agent', 'Retry'];
 
 type BpmnNodeType =
@@ -278,6 +286,75 @@ function createMetadataForNode(node: BpmnNodeCard): NodeMetadataDraft {
   };
 }
 
+function createMetadataForNode(node: BpmnNodeCard): NodeMetadataDraft {
+  if (node.type === 'userTask') {
+    return {
+      ...createEmptyMetadata(),
+      purposeType: 'production_deployment',
+      policyTag: 'approval_required',
+    };
+  }
+
+  return {
+    ...createEmptyMetadata(),
+    agent: 'AgentWorker',
+    action: 'task.execute',
+    environment: 'staging',
+    purposeType: 'build_release',
+    policyTag: 'task_policy',
+  };
+}
+
+/**
+ * Hook: Auto-save form state to localStorage with 5s debounce
+ * Recovers from localStorage on mount
+ */
+function useAutoSave<T>(
+  key: string,
+  value: T,
+  enabled: boolean = true,
+): { recovered: T | null } {
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    // Debounce save
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (error) {
+        console.error(`Failed to auto-save to localStorage[${key}]:`, error);
+      }
+    }, 5000); // 5s debounce
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [key, value, enabled]);
+
+  // Recover from localStorage on mount
+  const [recovered] = useState<T | null>(() => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch (error) {
+      console.error(`Failed to recover from localStorage[${key}]:`, error);
+      return null;
+    }
+  });
+
+  return { recovered };
+}
+
 function buildBpmnDiff(previousXml: string, currentXml: string): DiffLine[] {
   const previousLines = previousXml.split('\n');
   const currentLines = currentXml.split('\n');
@@ -334,6 +411,40 @@ export function WorkflowDesigner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-save: BPMN XML
+  const { recovered: recoveredXml } = useAutoSave(
+    STORAGE_KEYS.BPMN_XML,
+    bpmnXml,
+    true,
+  );
+
+  // Auto-save: Node metadata
+  const { recovered: recoveredMetadata } = useAutoSave(
+    STORAGE_KEYS.NODE_METADATA,
+    nodeMetadata,
+    true,
+  );
+
+  // Auto-save: Last published XML
+  const { recovered: recoveredLastPublished } = useAutoSave(
+    STORAGE_KEYS.LAST_PUBLISHED,
+    lastPublishedXml,
+    true,
+  );
+
+  // Recover from localStorage on mount
+  useEffect(() => {
+    if (recoveredXml) {
+      setBpmnXml(recoveredXml);
+    }
+    if (recoveredMetadata) {
+      setNodeMetadata(recoveredMetadata);
+    }
+    if (recoveredLastPublished) {
+      setLastPublishedXml(recoveredLastPublished);
+    }
+  }, [recoveredXml, recoveredMetadata, recoveredLastPublished]);
 
   const loadWorkflows = async () => {
     setLoading(true);
@@ -548,6 +659,15 @@ export function WorkflowDesigner() {
       setPublishMessage(
         `Published as ${publishResult.version} at ${new Date(publishResult.publishedAt).toLocaleString()}.`,
       );
+      
+      // Clear draft from localStorage after successful publish
+      try {
+        localStorage.removeItem(STORAGE_KEYS.BPMN_XML);
+        localStorage.removeItem(STORAGE_KEYS.NODE_METADATA);
+      } catch {
+        // Ignore localStorage errors
+      }
+      
       await loadWorkflows();
     } catch (publishError) {
       setPublishMessage(

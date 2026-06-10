@@ -255,4 +255,106 @@ describe('WorkflowDesigner integration', () => {
       expect(screen.getAllByText(/bpmn:definitions/i).length).toBeGreaterThan(0);
     });
   });
+
+  it('auto-saves metadata to localStorage when editing', async () => {
+    // Mock localStorage
+    const mockLocalStorage = (() => {
+      let store: Record<string, string> = {};
+      return {
+        getItem: (key: string) => store[key] || null,
+        setItem: (key: string, value: string) => {
+          store[key] = value;
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          store = {};
+        },
+      };
+    })();
+
+    Object.defineProperty(global, 'localStorage', {
+      value: mockLocalStorage,
+      writable: true,
+    });
+
+    render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Template Gallery')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Build Artifact')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Build Artifact'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Metadata Editor')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Agent'), { target: { value: 'TestAgent' } });
+
+    // After debounce window, metadata should be in localStorage
+    await waitFor(
+      () => {
+        const stored = mockLocalStorage.getItem('autofac_draft_node_metadata');
+        expect(stored).not.toBeNull();
+      },
+      { timeout: 6000 },
+    );
+  });
+
+  it('clears localStorage after successful publish', async () => {
+    const mockLocalStorage = (() => {
+      let store: Record<string, string> = {};
+      return {
+        getItem: (key: string) => store[key] || null,
+        setItem: (key: string, value: string) => {
+          store[key] = value;
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          store = {};
+        },
+      };
+    })();
+
+    Object.defineProperty(global, 'localStorage', {
+      value: mockLocalStorage,
+      writable: true,
+    });
+
+    render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Template Gallery')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Build Artifact')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.publishWorkflowDefinition)).toHaveBeenCalled();
+    });
+
+    // Verify draft was cleared from localStorage
+    expect(mockLocalStorage.getItem('autofac_draft_bpmn_xml')).toBeNull();
+    expect(mockLocalStorage.getItem('autofac_draft_node_metadata')).toBeNull();
+  });
 });
