@@ -25,6 +25,10 @@ React + TypeScript frontend for the Autofac operations cockpit.
 
   npm run lint
 
+5. Run unit and integration tests:
+
+  npm run test
+
 ## Environment
 
 - VITE_API_BASE_URL

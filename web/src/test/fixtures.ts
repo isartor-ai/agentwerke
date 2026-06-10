@@ -1,0 +1,103 @@
+import type { ApprovalRequest, Workflow, WorkflowRun } from '../types';
+
+export const workflowsFixture: Workflow[] = [
+  {
+    id: 'wf-001',
+    name: 'GitHub PR Review',
+    description: 'Automated review workflow',
+    version: 'v2.3.1',
+    status: 'active',
+    owner: 'platform-eng',
+    createdAt: new Date(Date.now() - 500000).toISOString(),
+    lastEditedAt: new Date(Date.now() - 200000).toISOString(),
+    validationState: 'valid',
+    tags: ['github'],
+  },
+  {
+    id: 'wf-002',
+    name: 'Dependency Patch',
+    description: 'Dependency remediation',
+    version: 'v1.0.4',
+    status: 'active',
+    owner: 'secops',
+    createdAt: new Date(Date.now() - 900000).toISOString(),
+    lastEditedAt: new Date(Date.now() - 300000).toISOString(),
+    validationState: 'valid',
+    tags: ['security'],
+  },
+];
+
+export const runsFixture: WorkflowRun[] = [
+  {
+    id: 'run-0421',
+    workflowId: 'wf-001',
+    workflowName: 'GitHub PR Review',
+    workflowVersion: 'v2.3.1',
+    status: 'awaiting_approval',
+    riskLevel: 'high',
+    currentStep: 'Merge to main',
+    requestedBy: 'alice@example.com',
+    startedAt: new Date(Date.now() - 8 * 60_000).toISOString(),
+    durationMs: 8 * 60_000,
+    pendingApprovals: 1,
+    tags: ['production'],
+    steps: [
+      {
+        id: 'step-1',
+        name: 'Trigger',
+        type: 'start_event',
+        status: 'completed',
+      },
+      {
+        id: 'step-2',
+        name: 'Merge to main',
+        type: 'user_task',
+        status: 'awaiting_approval',
+        policyDecision: {
+          kind: 'escalate',
+          policyId: 'pol-prod-merge',
+          policyName: 'Production Merge Protection',
+          rationale: 'Requires human approval.',
+          riskScore: 72,
+          riskLevel: 'high',
+          riskFactors: ['production'],
+          decidedAt: new Date().toISOString(),
+        },
+      },
+    ],
+  },
+  {
+    id: 'run-0420',
+    workflowId: 'wf-002',
+    workflowName: 'Dependency Patch',
+    workflowVersion: 'v1.0.4',
+    status: 'running',
+    riskLevel: 'medium',
+    currentStep: 'Patch dependencies',
+    requestedBy: 'bot@autofac',
+    startedAt: new Date(Date.now() - 22 * 60_000).toISOString(),
+    durationMs: 22 * 60_000,
+    pendingApprovals: 0,
+    tags: ['security'],
+  },
+];
+
+export const approvalsFixture: ApprovalRequest[] = [
+  {
+    id: 'apr-1001',
+    runId: 'run-0421',
+    workflowName: 'GitHub PR Review',
+    actionRequested: 'Merge branch feature/auth-refactor to main',
+    requester: 'alice@example.com',
+    agentName: 'GitAgent',
+    policyRationale: 'Policy requires review.',
+    riskScore: 72,
+    riskLevel: 'high',
+    riskFactors: ['production'],
+    affectedSystems: ['production/api'],
+    slaDeadline: new Date(Date.now() + 60 * 60_000).toISOString(),
+    createdAt: new Date(Date.now() - 6 * 60_000).toISOString(),
+    status: 'pending',
+    priority: 'high',
+  },
+];
