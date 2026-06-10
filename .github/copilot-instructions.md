@@ -49,6 +49,11 @@ Prioritize security, governance, and auditability over convenience in all genera
 - Audit every outbound side-effecting integration call.
 
 ## Testing Expectations
+- Treat tests as required deliverables for all new code and behavior changes.
+- For every new class/function/module, add or update corresponding unit tests in the same change whenever feasible.
+- Prefer test-driven implementation for new logic and bug fixes.
+- Keep code coverage high: add tests for success, failure, and edge-case paths, not just happy paths.
+- If some code cannot be realistically unit-tested, document the reason and add the closest integration/regression coverage instead.
 - Add unit tests for domain and policy evaluation logic.
 - Add integration tests for workflow progression and retry behavior.
 - Add security tests for deny/escalate policy scenarios.
