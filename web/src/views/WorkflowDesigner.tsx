@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { apiClient } from '../api/client';
-import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
@@ -14,6 +13,8 @@ const STORAGE_KEYS = {
   SELECTED_NODE: 'autofac_selected_node',
   LAST_PUBLISHED: 'autofac_last_published_xml',
 } as const;
+
+const AUTO_SAVE_DELAY_MS = 300;
 
 const inspectorTabs = ['Details', 'Inputs', 'Policy', 'Agent', 'Retry'];
 
@@ -267,23 +268,18 @@ function createEmptyMetadata(): NodeMetadataDraft {
   };
 }
 
-function createMetadataForNode(node: BpmnNodeCard): NodeMetadataDraft {
-  if (node.type === 'userTask') {
-    return {
-      ...createEmptyMetadata(),
-      purposeType: 'production_deployment',
-      policyTag: 'approval_required',
-    };
+function getSafeLocalStorage(): Storage | null {
+  const storage = globalThis.localStorage;
+  if (
+    storage &&
+    typeof storage.getItem === 'function' &&
+    typeof storage.setItem === 'function' &&
+    typeof storage.removeItem === 'function'
+  ) {
+    return storage;
   }
 
-  return {
-    ...createEmptyMetadata(),
-    agent: 'AgentWorker',
-    action: 'task.execute',
-    environment: 'staging',
-    purposeType: 'build_release',
-    policyTag: 'task_policy',
-  };
+  return null;
 }
 
 function createMetadataForNode(node: BpmnNodeCard): NodeMetadataDraft {
@@ -306,7 +302,7 @@ function createMetadataForNode(node: BpmnNodeCard): NodeMetadataDraft {
 }
 
 /**
- * Hook: Auto-save form state to localStorage with 5s debounce
+ * Hook: Auto-save form state to localStorage with a short debounce.
  * Recovers from localStorage on mount
  */
 function useAutoSave<T>(
@@ -314,7 +310,7 @@ function useAutoSave<T>(
   value: T,
   enabled: boolean = true,
 ): { recovered: T | null } {
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!enabled) {
@@ -328,11 +324,12 @@ function useAutoSave<T>(
 
     debounceTimerRef.current = setTimeout(() => {
       try {
-        localStorage.setItem(key, JSON.stringify(value));
+        const storage = getSafeLocalStorage();
+        storage?.setItem(key, JSON.stringify(value));
       } catch (error) {
         console.error(`Failed to auto-save to localStorage[${key}]:`, error);
       }
-    }, 5000); // 5s debounce
+    }, AUTO_SAVE_DELAY_MS);
 
     return () => {
       if (debounceTimerRef.current) {
@@ -344,7 +341,8 @@ function useAutoSave<T>(
   // Recover from localStorage on mount
   const [recovered] = useState<T | null>(() => {
     try {
-      const item = localStorage.getItem(key);
+      const storage = getSafeLocalStorage();
+      const item = storage?.getItem(key);
       return item ? JSON.parse(item) : null;
     } catch (error) {
       console.error(`Failed to recover from localStorage[${key}]:`, error);
@@ -662,8 +660,9 @@ export function WorkflowDesigner() {
       
       // Clear draft from localStorage after successful publish
       try {
-        localStorage.removeItem(STORAGE_KEYS.BPMN_XML);
-        localStorage.removeItem(STORAGE_KEYS.NODE_METADATA);
+        const storage = getSafeLocalStorage();
+        storage?.removeItem(STORAGE_KEYS.BPMN_XML);
+        storage?.removeItem(STORAGE_KEYS.NODE_METADATA);
       } catch {
         // Ignore localStorage errors
       }
@@ -709,13 +708,7 @@ export function WorkflowDesigner() {
         }
       />
 
-      {workflows.length === 0 ? (
-        <EmptyState
-          title="No workflows available"
-          description="Create your first workflow or import a BPMN file."
-        />
-      ) : (
-        <section className="designer-grid" aria-label="Workflow designer shell">
+      <section className="designer-grid" aria-label="Workflow designer shell">
           <article className="panel designer-list-panel">
             <label htmlFor="workflow-search" className="sr-only">
               Search workflows
@@ -727,22 +720,29 @@ export function WorkflowDesigner() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search workflows"
             />
-            <ul role="list" className="workflow-list">
-              {filtered.map((workflow) => (
-                <li key={workflow.id}>
-                  <button
-                    type="button"
-                    className={`workflow-item ${selectedId === workflow.id ? 'workflow-item-active' : ''}`}
-                    onClick={() => setSelectedId(workflow.id)}
-                  >
-                    <strong>{workflow.name}</strong>
-                    <span>
-                      {workflow.version} · {workflow.status}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {filtered.length > 0 ? (
+              <ul role="list" className="workflow-list">
+                {filtered.map((workflow) => (
+                  <li key={workflow.id}>
+                    <button
+                      type="button"
+                      className={`workflow-item ${selectedId === workflow.id ? 'workflow-item-active' : ''}`}
+                      onClick={() => setSelectedId(workflow.id)}
+                    >
+                      <strong>{workflow.name}</strong>
+                      <span>
+                        {workflow.version} - {workflow.status}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="empty-inline">
+                <strong>No workflows available</strong>
+                <p>Create your first workflow, import BPMN, or start from a template.</p>
+              </div>
+            )}
           </article>
 
           <article className="panel designer-canvas-panel">
@@ -795,19 +795,21 @@ export function WorkflowDesigner() {
                   {bpmnNodes.map((node) => {
                     const hasError = invalidElementIds.has(node.id);
                     return (
-                      <li
-                        key={node.id}
-                        className={`canvas-node ${hasError ? 'canvas-node-invalid' : ''} ${selectedNodeId === node.id ? 'canvas-node-selected' : ''}`}
-                        aria-label={`${node.name} ${NODE_TYPE_LABEL[node.type]}`}
-                        onClick={() => setSelectedNodeId(node.id)}
-                      >
-                        <div>
-                          <strong>{node.name}</strong>
-                          <span>
-                            {NODE_TYPE_LABEL[node.type]} · {node.id}
-                          </span>
-                        </div>
-                        {hasError ? <span className="validation-chip">Validation Error</span> : null}
+                      <li key={node.id}>
+                        <button
+                          type="button"
+                          className={`canvas-node ${hasError ? 'canvas-node-invalid' : ''} ${selectedNodeId === node.id ? 'canvas-node-selected' : ''}`}
+                          aria-label={`${node.name} ${NODE_TYPE_LABEL[node.type]}`}
+                          onClick={() => setSelectedNodeId(node.id)}
+                        >
+                          <div>
+                            <strong>{node.name}</strong>
+                            <span>
+                              {NODE_TYPE_LABEL[node.type]} - {node.id}
+                            </span>
+                          </div>
+                          {hasError ? <span className="validation-chip">Validation Error</span> : null}
+                        </button>
                       </li>
                     );
                   })}
@@ -1003,8 +1005,7 @@ export function WorkflowDesigner() {
               )}
             </section>
           </article>
-        </section>
-      )}
+      </section>
     </section>
   );
 }

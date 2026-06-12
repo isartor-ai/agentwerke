@@ -1,0 +1,193 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Autofac Prime refined execution monitoring dashboard mockup</title>
+  <desc>Figma-ready desktop mockup based on docs/design/DESIGN.md and the inspected Autofac Prime dashboard.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0e0e0f; }
+      .shell { fill: #131314; }
+      .panel { fill: #201f20; stroke: #3a494a; stroke-width: 1; }
+      .panel-soft { fill: #1c1b1c; stroke: rgba(58, 73, 74, 0.55); stroke-width: 1; }
+      .cyan { fill: #00dce5; }
+      .cyan-stroke { stroke: #00dce5; }
+      .lime { fill: #c3f400; }
+      .orange { fill: #ffb4a2; }
+      .error { fill: #ffb4ab; }
+      .muted { fill: #849495; }
+      .text { fill: #e5e2e3; }
+      .strong { fill: #ffffff; }
+      .mono { font-family: "JetBrains Mono", "SFMono-Regular", monospace; }
+      .sans { font-family: Inter, Arial, sans-serif; }
+      .h1 { font-size: 24px; font-weight: 700; }
+      .h2 { font-size: 16px; font-weight: 700; }
+      .body { font-size: 14px; font-weight: 400; }
+      .meta { font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+      .small { font-size: 12px; }
+      .kpi { font-size: 30px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" class="bg"/>
+
+  <rect x="0" y="0" width="256" height="900" class="shell"/>
+  <line x1="256" y1="0" x2="256" y2="900" stroke="#3a494a" stroke-opacity=".6"/>
+  <rect x="20" y="21" width="42" height="42" rx="4" fill="#00dce5" fill-opacity=".16" stroke="#00dce5" stroke-opacity=".55"/>
+  <text x="31" y="49" class="mono cyan" font-size="18">AF</text>
+  <text x="76" y="38" class="sans strong" font-size="18" font-weight="700">Autofac Prime</text>
+  <text x="76" y="60" class="mono muted" font-size="12">v2.4.0-stable</text>
+  <line x1="16" y1="84" x2="240" y2="84" stroke="#3a494a" stroke-opacity=".45"/>
+
+  <rect x="16" y="101" width="224" height="36" rx="4" class="cyan"/>
+  <text x="63" y="124" class="sans" fill="#0e0e0f" font-size="14" font-weight="700">Deploy Workflow</text>
+
+  <rect x="12" y="161" width="232" height="40" rx="4" fill="#00dce5" fill-opacity=".10"/>
+  <rect x="12" y="161" width="4" height="40" rx="2" class="cyan"/>
+  <text x="28" y="186" class="sans cyan" font-size="14" font-weight="700">Dashboard</text>
+  <text x="28" y="230" class="sans muted" font-size="14">Advanced Dashboard</text>
+  <text x="28" y="274" class="sans muted" font-size="14">Workflow Editor</text>
+  <text x="28" y="318" class="sans muted" font-size="14">Agent Config</text>
+  <text x="28" y="362" class="sans muted" font-size="14">Integrations</text>
+  <text x="28" y="406" class="sans muted" font-size="14">Approval Queue</text>
+  <circle cx="220" cy="401" r="11" class="orange"/>
+  <text x="216" y="405" class="mono" fill="#131314" font-size="11" font-weight="700">3</text>
+  <text x="28" y="450" class="sans muted" font-size="14">Component Library</text>
+  <line x1="0" y1="774" x2="256" y2="774" stroke="#3a494a" stroke-opacity=".45"/>
+  <text x="28" y="810" class="mono muted" font-size="12">Docs</text>
+  <text x="28" y="846" class="mono muted" font-size="12">Support</text>
+  <text x="73" y="881" class="mono muted" font-size="10">SYSTEM_ACTIVE_V1.0</text>
+
+  <rect x="280" y="24" width="384" height="34" rx="4" fill="#131314" stroke="#3a494a"/>
+  <text x="320" y="46" class="sans muted" font-size="14">Search logs, agents, workflows...</text>
+  <circle cx="1234" cy="38" r="4" class="orange"/>
+  <line x1="1257" y1="24" x2="1257" y2="58" stroke="#3a494a" stroke-opacity=".65"/>
+  <circle cx="1290" cy="41" r="16" fill="#004f53" stroke="#00dce5"/>
+  <text x="1282" y="46" class="mono cyan" font-size="12" font-weight="700">AP</text>
+  <text x="1322" y="46" class="mono muted" font-size="12">operator_prime</text>
+  <line x1="280" y1="74" x2="1416" y2="74" stroke="#3a494a" stroke-opacity=".6"/>
+
+  <text x="280" y="124" class="sans strong h1">Execution Monitoring</text>
+  <text x="280" y="150" class="sans muted body">Real-time observability and throughput metrics of active agent cohorts.</text>
+  <rect x="1256" y="99" width="76" height="30" rx="4" fill="#131314" stroke="#3a494a"/>
+  <text x="1283" y="119" class="sans strong small">Sync</text>
+  <rect x="1344" y="99" width="72" height="30" rx="4" class="cyan"/>
+  <text x="1366" y="119" class="sans" fill="#0e0e0f" font-size="12" font-weight="700">Filter</text>
+
+  <rect x="280" y="180" width="750" height="260" rx="4" class="panel"/>
+  <text x="326" y="219" class="sans strong h2">Performance Metrics</text>
+  <rect x="914" y="201" width="88" height="26" rx="4" fill="#131314" stroke="#3a494a" stroke-opacity=".6"/>
+  <circle cx="928" cy="214" r="4" class="lime"/>
+  <text x="942" y="218" class="mono muted" font-size="11">Last 24h</text>
+  <line x1="300" y1="242" x2="1010" y2="242" stroke="#3a494a" stroke-opacity=".45"/>
+  <line x1="526" y1="258" x2="526" y2="378" stroke="#3a494a" stroke-opacity=".45"/>
+  <line x1="766" y1="258" x2="766" y2="378" stroke="#3a494a" stroke-opacity=".45"/>
+  <text x="300" y="292" class="mono muted meta">THROUGHPUT</text>
+  <text x="300" y="329" class="sans strong kpi">1,248</text>
+  <text x="387" y="328" class="mono text small">ops/m</text>
+  <text x="300" y="351" class="mono lime small">+12% vs avg</text>
+  <text x="558" y="292" class="mono muted meta">AGENT SUCCESS</text>
+  <text x="558" y="329" class="sans strong kpi">99.8%</text>
+  <text x="558" y="352" class="mono muted small">across all clusters</text>
+  <text x="798" y="292" class="mono muted meta">DEPLOY FREQ</text>
+  <text x="798" y="329" class="sans strong kpi">42</text>
+  <text x="847" y="328" class="mono text small">/day</text>
+  <text x="798" y="352" class="mono cyan small">View latency detail -></text>
+  <line x1="300" y1="394" x2="1010" y2="394" stroke="#3a494a" stroke-opacity=".45"/>
+  <text x="747" y="415" class="mono cyan small">Switch to Advanced Monitoring Dashboard -></text>
+
+  <rect x="1052" y="180" width="364" height="260" rx="4" class="panel"/>
+  <text x="1097" y="219" class="sans strong h2">System Health</text>
+  <line x1="1072" y1="242" x2="1396" y2="242" stroke="#3a494a" stroke-opacity=".45"/>
+  <rect x="1072" y="265" width="324" height="34" rx="4" class="panel-soft"/>
+  <circle cx="1084" cy="282" r="4" class="lime"/>
+  <text x="1098" y="287" class="mono strong small" font-weight="700">k8s-cluster-prod</text>
+  <rect x="1325" y="271" width="58" height="22" rx="4" fill="#c3f400" fill-opacity=".12" stroke="#c3f400" stroke-opacity=".5"/>
+  <text x="1335" y="286" class="mono lime" font-size="9" font-weight="700">HEALTHY</text>
+  <rect x="1072" y="321" width="324" height="34" rx="4" class="panel-soft"/>
+  <circle cx="1084" cy="338" r="4" class="lime"/>
+  <text x="1098" y="343" class="mono strong small" font-weight="700">docker-registry-01</text>
+  <rect x="1325" y="327" width="58" height="22" rx="4" fill="#c3f400" fill-opacity=".12" stroke="#c3f400" stroke-opacity=".5"/>
+  <text x="1335" y="342" class="mono lime" font-size="9" font-weight="700">HEALTHY</text>
+  <rect x="1072" y="377" width="324" height="34" rx="4" class="panel-soft"/>
+  <circle cx="1084" cy="394" r="4" class="error"/>
+  <text x="1098" y="399" class="mono strong small" font-weight="700">worker-node-x9</text>
+  <rect x="1320" y="383" width="63" height="22" rx="4" fill="#ffb4ab" fill-opacity=".12" stroke="#ffb4ab" stroke-opacity=".5"/>
+  <text x="1330" y="398" class="mono error" font-size="9" font-weight="700">DEGRADED</text>
+
+  <text x="280" y="483" class="sans strong" font-size="20" font-weight="700">Live Runs</text>
+  <rect x="1330" y="466" width="86" height="24" rx="4" fill="#131314" stroke="#3a494a"/>
+  <text x="1340" y="482" class="mono muted" font-size="11">Active: </text>
+  <text x="1390" y="482" class="mono lime" font-size="11">4</text>
+
+  <g>
+    <rect x="280" y="508" width="274" height="224" rx="4" class="panel" stroke="#00dce5" stroke-opacity=".65"/>
+    <rect x="298" y="526" width="92" height="22" rx="3" class="panel-soft"/>
+    <text x="327" y="541" class="mono strong" font-size="11" font-weight="700">WF-892A</text>
+    <rect x="482" y="526" width="54" height="22" rx="4" fill="#c3f400" fill-opacity=".12" stroke="#c3f400" stroke-opacity=".5"/>
+    <text x="493" y="541" class="mono lime" font-size="8" font-weight="700">RUNNING</text>
+    <text x="298" y="574" class="mono strong" font-size="14" font-weight="700">Data_Ingestion_Pipeline_v2</text>
+    <text x="298" y="594" class="mono muted" font-size="12">Data_Ingestion_Pipeline_v2</text>
+    <rect x="298" y="635" width="238" height="78" rx="4" fill="#0e0e0f" stroke="#3a494a" stroke-opacity=".45"/>
+    <text x="306" y="654" class="mono muted" font-size="10">10:42:01</text>
+    <text x="362" y="654" class="mono cyan" font-size="10" font-weight="700">INFO</text>
+    <text x="396" y="654" class="mono text" font-size="10">Extracting chunk...</text>
+    <text x="306" y="671" class="mono muted" font-size="10">10:42:05</text>
+    <text x="362" y="671" class="mono lime" font-size="10" font-weight="700">AGENT</text>
+    <text x="402" y="671" class="mono text" font-size="10">Worker assigned.</text>
+  </g>
+
+  <g>
+    <rect x="568" y="508" width="274" height="224" rx="4" class="panel" stroke="#00dce5" stroke-opacity=".65"/>
+    <rect x="586" y="526" width="92" height="22" rx="3" class="panel-soft"/>
+    <text x="615" y="541" class="mono strong" font-size="11" font-weight="700">WF-892B</text>
+    <rect x="770" y="526" width="54" height="22" rx="4" fill="#c3f400" fill-opacity=".12" stroke="#c3f400" stroke-opacity=".5"/>
+    <text x="781" y="541" class="mono lime" font-size="8" font-weight="700">RUNNING</text>
+    <text x="586" y="574" class="mono strong" font-size="14" font-weight="700">Model_Training_Epoch_Sync</text>
+    <text x="586" y="594" class="mono muted" font-size="12">Data_Ingestion_Pipeline_v2</text>
+    <rect x="586" y="635" width="238" height="78" rx="4" fill="#0e0e0f" stroke="#3a494a" stroke-opacity=".45"/>
+    <text x="594" y="654" class="mono muted" font-size="10">10:41:12</text>
+    <text x="650" y="654" class="mono cyan" font-size="10" font-weight="700">INFO</text>
+    <text x="684" y="654" class="mono text" font-size="10">Init tensor...</text>
+    <text x="594" y="671" class="mono muted" font-size="10">10:41:50</text>
+    <text x="650" y="671" class="mono lime" font-size="10" font-weight="700">MEM</text>
+    <text x="678" y="671" class="mono text" font-size="10">Allocating VRAM.</text>
+  </g>
+
+  <g>
+    <rect x="856" y="508" width="274" height="224" rx="4" class="panel" stroke="#ffb4ab" stroke-opacity=".65"/>
+    <rect x="874" y="526" width="92" height="22" rx="3" class="panel-soft"/>
+    <text x="903" y="541" class="mono strong" font-size="11" font-weight="700">WF-891F</text>
+    <rect x="1059" y="526" width="53" height="22" rx="4" fill="#ffb4ab" fill-opacity=".12" stroke="#ffb4ab" stroke-opacity=".5"/>
+    <text x="1071" y="541" class="mono error" font-size="8" font-weight="700">ERROR</text>
+    <text x="874" y="574" class="mono strong" font-size="14" font-weight="700">API_Gateway_Auth_Check</text>
+    <text x="874" y="594" class="mono muted" font-size="12">Data_Ingestion_Pipeline_v2</text>
+    <rect x="874" y="635" width="238" height="78" rx="4" fill="#0e0e0f" stroke="#3a494a" stroke-opacity=".45"/>
+    <text x="882" y="654" class="mono muted" font-size="10">10:39:22</text>
+    <text x="938" y="654" class="mono error" font-size="10" font-weight="700">ERR</text>
+    <text x="964" y="654" class="mono text" font-size="10">Timeout auth...</text>
+    <text x="882" y="671" class="mono muted" font-size="10">10:39:25</text>
+    <text x="938" y="671" class="mono muted" font-size="10" font-weight="700">SYS</text>
+    <text x="964" y="671" class="mono text" font-size="10">Retries exhausted.</text>
+  </g>
+
+  <g>
+    <rect x="1144" y="508" width="272" height="224" rx="4" class="panel"/>
+    <rect x="1162" y="526" width="92" height="22" rx="3" class="panel-soft"/>
+    <text x="1191" y="541" class="mono strong" font-size="11" font-weight="700">WF-893C</text>
+    <rect x="1344" y="526" width="54" height="22" rx="4" fill="#3a494a"/>
+    <text x="1355" y="541" class="mono text" font-size="8" font-weight="700">QUEUED</text>
+    <text x="1162" y="574" class="mono strong" font-size="14" font-weight="700">Nightly_DB_Backup</text>
+    <text x="1162" y="594" class="mono muted" font-size="12">Data_Ingestion_Pipeline_v2</text>
+    <rect x="1162" y="635" width="236" height="78" rx="4" fill="#0e0e0f" stroke="#3a494a" stroke-opacity=".45"/>
+    <text x="1170" y="654" class="mono muted" font-size="10">10:40:00</text>
+    <text x="1226" y="654" class="mono muted" font-size="10" font-weight="700">SYS</text>
+    <text x="1252" y="654" class="mono text" font-size="10">Waiting for pool...</text>
+  </g>
+
+  <rect x="280" y="756" width="1136" height="120" rx="4" class="panel"/>
+  <text x="326" y="794" class="sans strong h2">Global Log Stream</text>
+  <rect x="1236" y="773" width="160" height="26" rx="4" fill="#0e0e0f" stroke="#3a494a"/>
+  <text x="1250" y="790" class="mono cyan" font-size="10">+ Trigger Simulation Log</text>
+  <rect x="298" y="817" width="1100" height="42" rx="4" fill="#0e0e0f"/>
+  <text x="314" y="843" class="mono muted" font-size="12">10:45:01</text>
+  <text x="386" y="843" class="mono cyan" font-size="12" font-weight="700">[SYS]</text>
+  <text x="438" y="843" class="mono text" font-size="12">Cluster heartbeat OK. Route map updated. Container metrics flushed to TSDB.</text>
+</svg>

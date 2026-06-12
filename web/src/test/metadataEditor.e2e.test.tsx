@@ -16,8 +16,8 @@ vi.mock('../api/client', () => ({
 /**
  * E2E Test: Metadata Editor Complete Workflow
  * 
- * Scenario: Design workflow → select node → edit metadata → see validation errors
- * → fix errors → confirm clean state
+ * Scenario: Design workflow -> select node -> edit metadata -> see validation errors
+ * -> fix errors -> confirm clean state
  */
 describe('E2E: Metadata Editor Complete Workflow', () => {
   beforeEach(() => {
@@ -49,7 +49,7 @@ describe('E2E: Metadata Editor Complete Workflow', () => {
       };
     })();
 
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
     });

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import type { MockInstance } from 'vitest';
 import { apiClient } from '../api/client';
 import { WorkflowDesigner } from '../views/WorkflowDesigner';
 import { workflowsFixture } from './fixtures';
@@ -14,8 +15,8 @@ vi.mock('../api/client', () => ({
 }));
 
 describe('WorkflowDesigner integration', () => {
-  let createObjectUrlSpy: ReturnType<typeof vi.spyOn>;
-  let revokeObjectUrlSpy: ReturnType<typeof vi.spyOn>;
+  let createObjectUrlSpy: MockInstance<[obj: Blob | MediaSource], string>;
+  let revokeObjectUrlSpy: MockInstance<[url: string], void>;
   let hadCreateObjectUrl = false;
   let hadRevokeObjectUrl = false;
 
@@ -274,7 +275,7 @@ describe('WorkflowDesigner integration', () => {
       };
     })();
 
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
     });
@@ -328,7 +329,7 @@ describe('WorkflowDesigner integration', () => {
       };
     })();
 
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
     });

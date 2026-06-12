@@ -1,6 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { RunStep } from '../types';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 /**
  * Test suite for metadata editor form validation and auto-save
@@ -201,7 +199,7 @@ describe('Metadata Editor localStorage Integration', () => {
 
   beforeEach(() => {
     mockLocalStorage.clear();
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(globalThis, 'localStorage', {
       value: mockLocalStorage,
       writable: true,
     });
@@ -334,9 +332,10 @@ describe('Policy Risk Simulation Integration', () => {
     ];
 
     // Check if all evidence is documented
+    expect(metadata.action).toBe('cloud.deploy_artifact');
     const hasAllEvidence = requiredEvidence.every((item) => {
       // In real implementation, would check against evidence checklist
-      return true;
+      return Boolean(item);
     });
 
     expect(hasAllEvidence).toBe(true);
@@ -396,14 +395,6 @@ describe('Metadata Editor - Form State Transitions', () => {
 
   it('should mark form as dirty on metadata change', () => {
     let isDirty = false;
-    const original: NodeMetadataDraft = {
-      agent: 'Agent',
-      action: 'action',
-      environment: 'prod',
-      purposeType: 'purpose',
-      policyTag: 'policy',
-    };
-
     const onChange = () => {
       isDirty = true;
     };

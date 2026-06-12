@@ -26,9 +26,15 @@ export function AppShell({ auth }: AppShellProps) {
       </a>
       <aside className="sidebar" aria-label="Sidebar">
         <div className="sidebar-brand">
-          <strong>Autofac</strong>
-          <span>dev</span>
+          <div>
+            <strong>Autofac Prime</strong>
+            <span>v2.4.0-stable</span>
+          </div>
         </div>
+
+        <NavLink to="/workflows" className="sidebar-cta">
+          Deploy Workflow
+        </NavLink>
 
         <nav aria-label="Primary navigation">
           <ul role="list" className="nav-list">
@@ -67,8 +73,12 @@ export function AppShell({ auth }: AppShellProps) {
           <label htmlFor="global-search" className="sr-only">
             Search workflows and runs
           </label>
-          <input id="global-search" type="search" placeholder="Search workflows, runs" />
-          <div className="top-user">{user?.email ?? 'Guest'}</div>
+          <input id="global-search" type="search" placeholder="Search logs, agents, workflows..." />
+          <div className="top-operator">
+            <span className="operator-pulse" aria-hidden="true" />
+            <span className="avatar top-avatar">{user?.avatarInitials ?? 'GU'}</span>
+            <span className="top-user">{user?.email ?? 'Guest'}</span>
+          </div>
         </header>
 
         <main id="main-content" tabIndex={-1}>

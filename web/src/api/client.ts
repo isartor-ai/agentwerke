@@ -477,6 +477,46 @@ export const apiClient = {
     };
   },
 
+  async getPolicySimulation(workflowId: string): Promise<{
+    tasks: {
+      nodeId: string;
+      riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
+      requiredApprovals: string[];
+      requiredEvidence: string[];
+    }[];
+  }> {
+    if (isRemoteEnabled()) {
+      return requestJson(`/api/workflows/${workflowId}/policy-simulation`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+    }
+
+    await delay(1800); // Simulate 1.8s policy evaluation
+    return {
+      tasks: [
+        {
+          nodeId: 'deploy-task',
+          riskLevel: 'Critical',
+          requiredApprovals: ['Release Manager', 'SRE Lead'],
+          requiredEvidence: ['ci_passed', 'sast_passed', 'artifact_signed'],
+        },
+        {
+          nodeId: 'merge-task',
+          riskLevel: 'High',
+          requiredApprovals: ['Code Owner'],
+          requiredEvidence: ['ci_passed', 'review_approved'],
+        },
+        {
+          nodeId: 'build-task',
+          riskLevel: 'Medium',
+          requiredApprovals: [],
+          requiredEvidence: ['ci_passed'],
+        },
+      ],
+    };
+  },
+
   async getRuns(): Promise<WorkflowRun[]> {
     if (isRemoteEnabled()) {
       return requestJson<WorkflowRun[]>('/api/runs');

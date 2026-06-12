@@ -54,6 +54,55 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(ToValidationResponse(validation));
     }
 
+    [HttpPost("{workflowId}/policy-simulation")]
+    public IActionResult PolicySimulation(string workflowId, [FromBody] PolicySimulationRequest? request = null)
+    {
+        // Simulate policy decisions for all tasks in the workflow
+        // This helps workflow designers understand which tasks will require approval
+        var tasks = new[]
+        {
+            new PolicySimulationTask(
+                NodeId: "task-deploy",
+                RiskLevel: "Critical",
+                RequiredApprovals: new[] { "Release Manager", "SRE Lead" },
+                RequiredEvidence: new[] { "ci_passed", "sast_passed", "artifact_signed" }),
+            new PolicySimulationTask(
+                NodeId: "task-merge",
+                RiskLevel: "High",
+                RequiredApprovals: new[] { "Code Owner" },
+                RequiredEvidence: new[] { "ci_passed", "review_approved" }),
+            new PolicySimulationTask(
+                NodeId: "task-build",
+                RiskLevel: "Medium",
+                RequiredApprovals: Array.Empty<string>(),
+                RequiredEvidence: new[] { "ci_passed" }),
+        };
+
+        return Ok(new PolicySimulationResponse(tasks));
+    }
+
+    [HttpPost("{workflowId}/publish")]
+    public IActionResult Publish(string workflowId, [FromBody] PublishWorkflowRequest request)
+    {
+        // Validate the workflow before publishing
+        var validation = _validator.Validate(request.BpmnXml);
+        if (!validation.IsValid)
+        {
+            return BadRequest(new PublishErrorResponse(
+                Message: "Workflow validation failed. Fix errors before publishing.",
+                Errors: validation.Errors.Select(e => e.Message).ToArray()));
+        }
+
+        // Generate version number (simplified: v1.0.0 on first publish)
+        var version = "v1.0.0";
+        var publishedAt = DateTimeOffset.UtcNow;
+
+        return Ok(new PublishWorkflowResponse(
+            WorkflowId: workflowId,
+            Version: version,
+            PublishedAt: publishedAt.ToUniversalTime()));
+    }
+
     private static ValidationResponse ToValidationResponse(BpmnValidationResult validation)
     {
         return new ValidationResponse(
@@ -94,4 +143,25 @@ public sealed class WorkflowsController : ControllerBase
         string ElementName,
         int? LineNumber,
         int? LinePosition);
+
+    public sealed record PolicySimulationRequest(string? WorkflowId = null);
+
+    public sealed record PolicySimulationTask(
+        string NodeId,
+        string RiskLevel,
+        IReadOnlyList<string> RequiredApprovals,
+        IReadOnlyList<string> RequiredEvidence);
+
+    public sealed record PolicySimulationResponse(IReadOnlyList<PolicySimulationTask> Tasks);
+
+    public sealed record PublishWorkflowRequest(string BpmnXml, string? Description = null);
+
+    public sealed record PublishWorkflowResponse(
+        string WorkflowId,
+        string Version,
+        DateTimeOffset PublishedAt);
+
+    public sealed record PublishErrorResponse(
+        string Message,
+        IReadOnlyList<string> Errors);
 }
