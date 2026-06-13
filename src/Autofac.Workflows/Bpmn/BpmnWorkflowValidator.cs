@@ -40,7 +40,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                         ElementName: "document",
                         LineNumber: null,
                         LinePosition: null)
-                ]);
+                ],
+                warnings: Array.Empty<BpmnValidationWarning>());
         }
 
         XDocument document;
@@ -60,10 +61,12 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                         ElementName: "document",
                         LineNumber: ex.LineNumber,
                         LinePosition: ex.LinePosition)
-                ]);
+                ],
+                warnings: Array.Empty<BpmnValidationWarning>());
         }
 
         var errors = new List<BpmnValidationError>();
+        var warnings = new List<BpmnValidationWarning>();
         var bpmnNamespace = document.Root?.GetNamespaceOfPrefix("bpmn") ?? XNamespace.Get("http://www.omg.org/spec/BPMN/20100524/MODEL");
         var autofacNamespace = document.Root?.GetNamespaceOfPrefix("autofac") ?? XNamespace.Get("https://autofac.dev/bpmn/extensions/v1");
 
@@ -77,7 +80,14 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 LineNumber: null,
                 LinePosition: null));
 
-            return new BpmnValidationResult(definition: null, errors);
+            return new BpmnValidationResult(definition: null, errors, warnings);
+        }
+
+        if (string.IsNullOrWhiteSpace(process.Attribute("name")?.Value))
+        {
+            warnings.Add(CreateWarning(
+                process,
+                "Workflow process is missing a human-readable 'name' attribute. The UI will fall back to the process id."));
         }
 
         var nodes = new List<BpmnNodeDefinition>();
@@ -110,14 +120,22 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             AutofacTaskMetadata? metadata = null;
             AutofacApprovalMetadata? approvalMetadata = null;
 
+            if ((localName is "serviceTask" or "scriptTask" or "userTask") &&
+                string.IsNullOrWhiteSpace(element.Attribute("name")?.Value))
+            {
+                warnings.Add(CreateWarning(
+                    element,
+                    $"'{localName}' should define a descriptive 'name' attribute for clearer designer and run views."));
+            }
+
             switch (localName)
             {
                 case "serviceTask":
                 case "scriptTask":
-                    metadata = ValidateAgentTaskMetadata(element, autofacNamespace, errors);
+                    metadata = ValidateAgentTaskMetadata(element, autofacNamespace, errors, warnings);
                     break;
                 case "userTask":
-                    approvalMetadata = ValidateApprovalMetadata(element, autofacNamespace, errors);
+                    approvalMetadata = ValidateApprovalMetadata(element, autofacNamespace, errors, warnings);
                     break;
                 case "intermediateCatchEvent":
                     ValidateTimerEvent(element, errors);
@@ -140,17 +158,17 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             ProcessName: process.Attribute("name")?.Value,
             Nodes: nodes);
 
-        return new BpmnValidationResult(definition, errors);
+        return new BpmnValidationResult(definition, errors, warnings);
     }
 
     private static AutofacTaskMetadata? ValidateAgentTaskMetadata(
         XElement element,
         XNamespace autofacNamespace,
-        ICollection<BpmnValidationError> errors)
+        ICollection<BpmnValidationError> errors,
+        ICollection<BpmnValidationWarning> warnings)
     {
-        var agentTask = element
-            .Elements()
-            .FirstOrDefault(static child => child.Name.LocalName == "extensionElements")?
+        var extensionElements = GetExtensionElements(element);
+        var agentTask = extensionElements?
             .Elements(autofacNamespace + "agentTask")
             .FirstOrDefault();
 
@@ -160,6 +178,20 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 "Service/script task requires autofac:agentTask metadata under bpmn:extensionElements."));
             return null;
         }
+
+        if (extensionElements?.Elements(autofacNamespace + "approvalTask").Any() == true)
+        {
+            warnings.Add(CreateWarning(
+                element,
+                "Service/script task contains autofac:approvalTask metadata that will be ignored. Use autofac:agentTask for executable tasks."));
+        }
+
+        WarnOnUnexpectedAutofacExtensionElements(
+            extensionElements,
+            autofacNamespace,
+            element,
+            ["agentTask"],
+            warnings);
 
         var missingAttributes = new List<string>();
 
@@ -179,11 +211,39 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var requiresEvidence = (agentTask.Attribute("requiresEvidence")?.Value ?? string.Empty)
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
+        if (string.IsNullOrWhiteSpace(agentTask.Attribute("environment")?.Value))
+        {
+            warnings.Add(CreateWarning(
+                element,
+                "autofac:agentTask is missing optional 'environment' metadata. Add it to make execution context clearer."));
+        }
+
+        if (requiresEvidence.Length != requiresEvidence.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+        {
+            warnings.Add(CreateWarning(
+                element,
+                "autofac:agentTask 'requiresEvidence' contains duplicate entries. Duplicates will be ignored at runtime."));
+        }
+
         var maxRetries = ParseNonNegativeIntAttribute(agentTask, "maxRetries", element, errors);
         var retryBackoffSeconds = ParseNonNegativeIntAttribute(agentTask, "retryBackoffSeconds", element, errors);
         var failUntilAttempt = ParseNonNegativeIntAttribute(agentTask, "failUntilAttempt", element, errors);
         var timeoutSeconds = ParseNullableNonNegativeIntAttribute(agentTask, "timeoutSeconds", element, errors);
         var simulateTimeout = ParseBooleanAttribute(agentTask, "simulateTimeout", element, errors);
+
+        if (maxRetries > 0 && retryBackoffSeconds == 0)
+        {
+            warnings.Add(CreateWarning(
+                element,
+                "autofac:agentTask enables retries without a retryBackoffSeconds value. Retries will happen immediately."));
+        }
+
+        if (simulateTimeout && timeoutSeconds is null)
+        {
+            warnings.Add(CreateWarning(
+                element,
+                "autofac:agentTask sets simulateTimeout='true' without timeoutSeconds. Timeout simulation may be hard to reason about."));
+        }
 
         return new AutofacTaskMetadata(
             Agent: agent!,
@@ -202,11 +262,11 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
     private static AutofacApprovalMetadata? ValidateApprovalMetadata(
         XElement element,
         XNamespace autofacNamespace,
-        ICollection<BpmnValidationError> errors)
+        ICollection<BpmnValidationError> errors,
+        ICollection<BpmnValidationWarning> warnings)
     {
-        var approvalTask = element
-            .Elements()
-            .FirstOrDefault(static child => child.Name.LocalName == "extensionElements")?
+        var extensionElements = GetExtensionElements(element);
+        var approvalTask = extensionElements?
             .Elements(autofacNamespace + "approvalTask")
             .FirstOrDefault();
 
@@ -216,6 +276,20 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 "User task requires autofac:approvalTask metadata under bpmn:extensionElements."));
             return null;
         }
+
+        if (extensionElements?.Elements(autofacNamespace + "agentTask").Any() == true)
+        {
+            warnings.Add(CreateWarning(
+                element,
+                "User task contains autofac:agentTask metadata that will be ignored. Use autofac:approvalTask for approval gates."));
+        }
+
+        WarnOnUnexpectedAutofacExtensionElements(
+            extensionElements,
+            autofacNamespace,
+            element,
+            ["approvalTask"],
+            warnings);
 
         var missingAttributes = new List<string>();
         var purposeType = GetAttribute(approvalTask, "purposeType", missingAttributes);
@@ -232,6 +306,37 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         return new AutofacApprovalMetadata(
             PurposeType: purposeType!,
             PolicyTag: policyTag!);
+    }
+
+    private static XElement? GetExtensionElements(XElement element)
+    {
+        return element.Elements()
+            .FirstOrDefault(static child => child.Name.LocalName == "extensionElements");
+    }
+
+    private static void WarnOnUnexpectedAutofacExtensionElements(
+        XElement? extensionElements,
+        XNamespace autofacNamespace,
+        XElement ownerElement,
+        IReadOnlyCollection<string> allowedNames,
+        ICollection<BpmnValidationWarning> warnings)
+    {
+        if (extensionElements is null)
+        {
+            return;
+        }
+
+        foreach (var extensionElement in extensionElements.Elements().Where(child => child.Name.Namespace == autofacNamespace))
+        {
+            if (allowedNames.Contains(extensionElement.Name.LocalName))
+            {
+                continue;
+            }
+
+            warnings.Add(CreateWarning(
+                ownerElement,
+                $"Unexpected Autofac extension element '{extensionElement.Name.LocalName}' will be ignored for this BPMN node type."));
+        }
     }
 
     private static void ValidateTimerEvent(XElement element, ICollection<BpmnValidationError> errors)
@@ -339,6 +444,17 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
     {
         var lineInfo = (IXmlLineInfo)element;
         return new BpmnValidationError(
+            Message: message,
+            ElementId: element.Attribute("id")?.Value,
+            ElementName: element.Name.LocalName,
+            LineNumber: lineInfo.HasLineInfo() ? lineInfo.LineNumber : null,
+            LinePosition: lineInfo.HasLineInfo() ? lineInfo.LinePosition : null);
+    }
+
+    private static BpmnValidationWarning CreateWarning(XElement element, string message)
+    {
+        var lineInfo = (IXmlLineInfo)element;
+        return new BpmnValidationWarning(
             Message: message,
             ElementId: element.Attribute("id")?.Value,
             ElementName: element.Name.LocalName,

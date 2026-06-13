@@ -110,11 +110,20 @@ export interface BpmnValidationError {
   linePosition?: number | null;
 }
 
+export interface BpmnValidationWarning {
+  message: string;
+  elementId?: string | null;
+  elementName?: string | null;
+  lineNumber?: number | null;
+  linePosition?: number | null;
+}
+
 export interface WorkflowValidationResult {
   isValid: boolean;
   processId?: string;
   processName?: string;
   errors: BpmnValidationError[];
+  warnings: BpmnValidationWarning[];
 }
 
 export interface WorkflowPublishResult {

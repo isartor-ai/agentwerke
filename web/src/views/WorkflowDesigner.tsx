@@ -855,6 +855,23 @@ export function WorkflowDesigner() {
                   ) : (
                     <p>No validation errors.</p>
                   )}
+                  {validation.warnings.length > 0 ? (
+                    <>
+                      <p>
+                        Warnings: <strong>{validation.warnings.length}</strong>
+                      </p>
+                      <ul className="validation-list">
+                        {validation.warnings.map((item, index) => (
+                          <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`}>
+                            <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                            {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                            {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                            {item.linePosition ? `, col ${item.linePosition}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                 </div>
               ) : (
                 <p>Import and validate a BPMN file to see actionable errors.</p>

@@ -28,6 +28,7 @@ describe('WorkflowDesigner integration', () => {
         isValid: false,
         processId: 'DeployWorkflow',
         processName: 'Deploy Workflow',
+        warnings: [],
         errors: [
           {
             message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
@@ -43,6 +44,7 @@ describe('WorkflowDesigner integration', () => {
       isValid: false,
       processId: 'DeployWorkflow',
       processName: 'Deploy Workflow',
+      warnings: [],
       errors: [
         {
           message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
@@ -140,6 +142,47 @@ describe('WorkflowDesigner integration', () => {
       expect(screen.getByText('Invalid')).toBeInTheDocument();
       expect(screen.getByText(/requires autofac:agentTask metadata/i)).toBeInTheDocument();
       expect(screen.getByText(/at line 12, col 5/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows validation warnings without marking the workflow invalid', async () => {
+    vi.mocked(apiClient.validateBpmnWorkflow).mockResolvedValueOnce({
+      isValid: true,
+      processId: 'WarnFlow',
+      processName: 'Warn Flow',
+      errors: [],
+      warnings: [
+        {
+          message: "Workflow process is missing a human-readable 'name' attribute.",
+          elementName: 'process',
+          elementId: 'WarnFlow',
+          lineNumber: 2,
+          linePosition: 3,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Template Gallery')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('BPMN XML'), {
+      target: {
+        value:
+          '<?xml version="1.0" encoding="UTF-8"?>\n<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="WarnFlow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Valid')).toBeInTheDocument();
+      expect(screen.getByText('Warnings:')).toBeInTheDocument();
+      expect(screen.getByText(/human-readable 'name' attribute/i)).toBeInTheDocument();
     });
   });
 

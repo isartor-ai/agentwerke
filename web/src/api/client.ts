@@ -277,6 +277,7 @@ function toWorkflowValidationResultFromXml(xml: string): WorkflowValidationResul
   if (parserError) {
     return {
       isValid: false,
+      warnings: [],
       errors: [
         {
           message: 'Invalid XML payload.',
@@ -290,6 +291,7 @@ function toWorkflowValidationResultFromXml(xml: string): WorkflowValidationResul
   if (!process) {
     return {
       isValid: false,
+      warnings: [],
       errors: [
         {
           message: 'BPMN document must include a process element.',
@@ -325,6 +327,7 @@ function toWorkflowValidationResultFromXml(xml: string): WorkflowValidationResul
     processId: process.getAttribute('id') ?? undefined,
     processName: process.getAttribute('name') ?? undefined,
     errors,
+    warnings: [],
   };
 }
 

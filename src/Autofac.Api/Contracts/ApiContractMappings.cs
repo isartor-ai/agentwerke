@@ -53,7 +53,13 @@ internal static class ApiContractMappings
                 error.ElementId,
                 error.ElementName,
                 error.LineNumber,
-                error.LinePosition)).ToArray());
+                error.LinePosition)).ToArray(),
+            validation.Warnings.Select(warning => new ValidationWarningResponse(
+                warning.Message,
+                warning.ElementId,
+                warning.ElementName,
+                warning.LineNumber,
+                warning.LinePosition)).ToArray());
     }
 
     public static ImportWorkflowResponse ToImportWorkflowResponse(WorkflowImportResult result)
