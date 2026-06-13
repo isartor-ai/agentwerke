@@ -5,23 +5,23 @@ namespace Autofac.Workflows.Runtime;
 public interface IWorkflowRuntimeStore
 {
     Task<WorkflowRun> CreateRunAsync(
-        Guid workflowDefinitionId,
+        string workflowDefinitionId,
         string? initiator,
         CancellationToken cancellationToken);
 
-    Task<WorkflowRun?> GetRunAsync(Guid runId, CancellationToken cancellationToken);
+    Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(Guid runId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(string runId, CancellationToken cancellationToken);
 
     Task AppendEventAsync(
-        Guid runId,
-        string eventType,
-        string payloadJson,
+        string runId,
+        string type,
+        string message,
         CancellationToken cancellationToken);
 
     Task UpdateRunStatusAsync(
-        Guid runId,
+        string runId,
         string status,
-        DateTimeOffset? completedAtUtc,
+        string? completedAt,
         CancellationToken cancellationToken);
 }

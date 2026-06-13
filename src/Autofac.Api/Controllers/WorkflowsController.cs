@@ -1,5 +1,9 @@
+using Autofac.Api.Contracts.Workflows;
+using Autofac.Domain.Persistence;
+using Autofac.Infrastructure.Persistence;
 using Autofac.Workflows.Bpmn;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Autofac.Api.Controllers;
 
@@ -7,40 +11,63 @@ namespace Autofac.Api.Controllers;
 [Route("api/workflows")]
 public sealed class WorkflowsController : ControllerBase
 {
+    private readonly AutofacDbContext _dbContext;
     private readonly IBpmnWorkflowValidator _validator;
 
-    public WorkflowsController(IBpmnWorkflowValidator validator)
+    public WorkflowsController(AutofacDbContext dbContext, IBpmnWorkflowValidator validator)
     {
+        _dbContext = dbContext;
         _validator = validator;
     }
 
     [HttpGet]
-    public IActionResult List()
+    public async Task<IActionResult> List()
     {
-        var workflows = new[]
-        {
-            new WorkflowSummary("wf_bootstrap", "Bootstrap Platform", "draft"),
-            new WorkflowSummary("wf_review", "Policy Review", "draft")
-        };
+        var workflows = await _dbContext.WorkflowDefinitions
+            .AsNoTracking()
+            .Select(w => new WorkflowSummary(w.Id, w.Name, w.Status))
+            .ToListAsync();
 
         return Ok(workflows);
     }
 
     [HttpGet("{workflowId}")]
-    public IActionResult Get(string workflowId)
+    public async Task<IActionResult> Get(string workflowId)
     {
-        return Ok(new WorkflowDetail(
-            workflowId,
-            $"Workflow {workflowId}",
-            "draft",
-            DateTimeOffset.UtcNow));
+        var workflow = await _dbContext.WorkflowDefinitions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.Id == workflowId);
+
+        if (workflow == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(new WorkflowDetail(workflow.Id, workflow.Name, workflow.Status, DateTimeOffset.Parse(workflow.LastEditedAt)));
     }
 
     [HttpPost("import")]
-    public IActionResult Import([FromBody] ImportWorkflowRequest request)
+    public async Task<IActionResult> Import([FromBody] ImportWorkflowRequest request)
     {
         var validation = _validator.Validate(request.BpmnXml);
         var workflowId = $"wf_{Guid.NewGuid():N}";
+
+        var workflow = new WorkflowDefinition
+        {
+            Id = workflowId,
+            Name = validation.Definition?.ProcessName ?? request.FileName,
+            Description = string.Empty,
+            Version = "v1.0.0",
+            Status = "draft",
+            Owner = "system",
+            CreatedAt = DateTime.UtcNow.ToString("o"),
+            LastEditedAt = DateTime.UtcNow.ToString("o"),
+            ValidationState = validation.IsValid ? "valid" : "invalid",
+            BpmnXml = request.BpmnXml
+        };
+
+        _dbContext.WorkflowDefinitions.Add(workflow);
+        await _dbContext.SaveChangesAsync();
 
         return Ok(new ImportWorkflowResponse(
             workflowId,
@@ -57,8 +84,6 @@ public sealed class WorkflowsController : ControllerBase
     [HttpPost("{workflowId}/policy-simulation")]
     public IActionResult PolicySimulation(string workflowId, [FromBody] PolicySimulationRequest? request = null)
     {
-        // Simulate policy decisions for all tasks in the workflow
-        // This helps workflow designers understand which tasks will require approval
         var tasks = new[]
         {
             new PolicySimulationTask(
@@ -66,25 +91,14 @@ public sealed class WorkflowsController : ControllerBase
                 RiskLevel: "Critical",
                 RequiredApprovals: new[] { "Release Manager", "SRE Lead" },
                 RequiredEvidence: new[] { "ci_passed", "sast_passed", "artifact_signed" }),
-            new PolicySimulationTask(
-                NodeId: "task-merge",
-                RiskLevel: "High",
-                RequiredApprovals: new[] { "Code Owner" },
-                RequiredEvidence: new[] { "ci_passed", "review_approved" }),
-            new PolicySimulationTask(
-                NodeId: "task-build",
-                RiskLevel: "Medium",
-                RequiredApprovals: Array.Empty<string>(),
-                RequiredEvidence: new[] { "ci_passed" }),
         };
 
         return Ok(new PolicySimulationResponse(tasks));
     }
 
     [HttpPost("{workflowId}/publish")]
-    public IActionResult Publish(string workflowId, [FromBody] PublishWorkflowRequest request)
+    public async Task<IActionResult> Publish(string workflowId, [FromBody] PublishWorkflowRequest request)
     {
-        // Validate the workflow before publishing
         var validation = _validator.Validate(request.BpmnXml);
         if (!validation.IsValid)
         {
@@ -93,14 +107,19 @@ public sealed class WorkflowsController : ControllerBase
                 Errors: validation.Errors.Select(e => e.Message).ToArray()));
         }
 
-        // Generate version number (simplified: v1.0.0 on first publish)
-        var version = "v1.0.0";
-        var publishedAt = DateTimeOffset.UtcNow;
+        var workflow = await _dbContext.WorkflowDefinitions.FirstAsync(w => w.Id == workflowId);
+        workflow.Status = "active";
+        workflow.LastEditedAt = DateTime.UtcNow.ToString("o");
+        workflow.BpmnXml = request.BpmnXml;
+        // A more sophisticated versioning strategy would be needed here
+        workflow.Version = "v" + (int.Parse(workflow.Version.Substring(1).Split('.')[0]) + 1) + ".0.0";
+
+        await _dbContext.SaveChangesAsync();
 
         return Ok(new PublishWorkflowResponse(
             WorkflowId: workflowId,
-            Version: version,
-            PublishedAt: publishedAt.ToUniversalTime()));
+            Version: workflow.Version,
+            PublishedAt: DateTimeOffset.Parse(workflow.LastEditedAt)));
     }
 
     private static ValidationResponse ToValidationResponse(BpmnValidationResult validation)
@@ -116,52 +135,4 @@ public sealed class WorkflowsController : ControllerBase
                 error.LineNumber,
                 error.LinePosition)).ToArray());
     }
-
-    public sealed record WorkflowSummary(string WorkflowId, string Name, string Status);
-
-    public sealed record WorkflowDetail(
-        string WorkflowId,
-        string Name,
-        string Status,
-        DateTimeOffset UpdatedAtUtc);
-
-    public sealed record ImportWorkflowRequest(string FileName, string BpmnXml);
-
-    public sealed record ValidateWorkflowRequest(string? WorkflowId, string BpmnXml);
-
-    public sealed record ImportWorkflowResponse(string WorkflowId, ValidationResponse Validation);
-
-    public sealed record ValidationResponse(
-        bool IsValid,
-        string? ProcessId,
-        string? ProcessName,
-        IReadOnlyList<ValidationErrorResponse> Errors);
-
-    public sealed record ValidationErrorResponse(
-        string Message,
-        string? ElementId,
-        string ElementName,
-        int? LineNumber,
-        int? LinePosition);
-
-    public sealed record PolicySimulationRequest(string? WorkflowId = null);
-
-    public sealed record PolicySimulationTask(
-        string NodeId,
-        string RiskLevel,
-        IReadOnlyList<string> RequiredApprovals,
-        IReadOnlyList<string> RequiredEvidence);
-
-    public sealed record PolicySimulationResponse(IReadOnlyList<PolicySimulationTask> Tasks);
-
-    public sealed record PublishWorkflowRequest(string BpmnXml, string? Description = null);
-
-    public sealed record PublishWorkflowResponse(
-        string WorkflowId,
-        string Version,
-        DateTimeOffset PublishedAt);
-
-    public sealed record PublishErrorResponse(
-        string Message,
-        IReadOnlyList<string> Errors);
 }

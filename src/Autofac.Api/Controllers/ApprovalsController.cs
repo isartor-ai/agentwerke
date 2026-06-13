@@ -1,4 +1,7 @@
+using Autofac.Api.Contracts.Approvals;
+using Autofac.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Autofac.Api.Controllers;
 
@@ -6,66 +9,60 @@ namespace Autofac.Api.Controllers;
 [Route("api/approvals")]
 public sealed class ApprovalsController : ControllerBase
 {
-    [HttpGet]
-    public IActionResult List()
+    private readonly AutofacDbContext _dbContext;
+
+    public ApprovalsController(AutofacDbContext dbContext)
     {
-        var approvals = new[]
-        {
-            new ApprovalSummary(
-                Id: "apr-1001",
-                RunId: "run-0421",
-                WorkflowName: "GitHub PR Review",
-                ActionRequested: "Merge branch feature/auth-refactor to main",
-                Requester: "alice@example.com",
-                AgentName: "GitAgent",
-                PolicyRationale: "Policy requires review.",
-                RiskScore: 72,
-                RiskLevel: "high",
-                RiskFactors: new[] { "production" },
-                AffectedSystems: new[] { "production/api" },
-                SlaDeadline: DateTimeOffset.UtcNow.AddHours(2),
-                CreatedAt: DateTimeOffset.UtcNow.AddMinutes(-20),
-                Status: "pending",
-                Priority: "high")
-        };
+        _dbContext = dbContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> List()
+    {
+        var approvals = await _dbContext.ApprovalRequests
+            .AsNoTracking()
+            .Select(a => new ApprovalSummary(
+                a.Id,
+                a.RunId,
+                a.WorkflowName,
+                a.ActionRequested,
+                a.Requester,
+                a.AgentName,
+                a.PolicyRationale,
+                a.RiskScore,
+                a.RiskLevel,
+                a.RiskFactors,
+                a.AffectedSystems,
+                DateTimeOffset.Parse(a.SlaDeadline),
+                DateTimeOffset.Parse(a.CreatedAt),
+                a.Status,
+                a.Priority))
+            .ToListAsync();
 
         return Ok(approvals);
     }
 
     [HttpPost("{approvalId}/decision")]
-    public IActionResult Decide(string approvalId, [FromBody] ApprovalDecisionRequest request)
+    public async Task<IActionResult> Decide(string approvalId, [FromBody] ApprovalDecisionRequest request)
     {
+        var approval = await _dbContext.ApprovalRequests.FirstOrDefaultAsync(a => a.Id == approvalId);
+        if (approval == null)
+        {
+            return NotFound();
+        }
+
+        approval.Status = request.Decision;
+        approval.DecisionComment = request.Comment;
+        approval.DecidedAt = DateTime.UtcNow.ToString("o");
+        approval.DecidedBy = "api-user"; // In a real app, this would be the authenticated user
+
+        await _dbContext.SaveChangesAsync();
+
         return Accepted(new ApprovalDecisionResponse(
             ApprovalId: approvalId,
-            Status: request.Decision,
-            DecidedAt: DateTimeOffset.UtcNow,
-            DecidedBy: "api-user",
-            Comment: request.Comment));
+            Status: approval.Status,
+            DecidedAt: DateTimeOffset.Parse(approval.DecidedAt),
+            DecidedBy: approval.DecidedBy,
+            Comment: approval.DecisionComment));
     }
-
-    public sealed record ApprovalSummary(
-        string Id,
-        string RunId,
-        string WorkflowName,
-        string ActionRequested,
-        string Requester,
-        string AgentName,
-        string PolicyRationale,
-        int RiskScore,
-        string RiskLevel,
-        IReadOnlyList<string> RiskFactors,
-        IReadOnlyList<string> AffectedSystems,
-        DateTimeOffset SlaDeadline,
-        DateTimeOffset CreatedAt,
-        string Status,
-        string Priority);
-
-    public sealed record ApprovalDecisionRequest(string Decision, string? Comment);
-
-    public sealed record ApprovalDecisionResponse(
-        string ApprovalId,
-        string Status,
-        DateTimeOffset DecidedAt,
-        string DecidedBy,
-        string? Comment);
 }

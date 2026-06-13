@@ -9,13 +9,11 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
 
+    public DbSet<WorkflowRunStep> WorkflowRunSteps => Set<WorkflowRunStep>();
+
     public DbSet<WorkflowEvent> WorkflowEvents => Set<WorkflowEvent>();
 
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
-
-    public DbSet<PolicyDecision> PolicyDecisions => Set<PolicyDecision>();
-
-    public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,85 +21,83 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
         modelBuilder.Entity<WorkflowDefinition>(entity =>
         {
-            entity.ToTable("workflow_definitions");
+            entity.ToTable("workflows");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.WorkflowKey).HasMaxLength(128).IsRequired();
             entity.Property(e => e.Name).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(1024);
+            entity.Property(e => e.Version).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
-            entity.HasIndex(e => new { e.WorkflowKey, e.Version }).IsUnique();
+            entity.Property(e => e.Owner).HasMaxLength(128);
+            entity.Property(e => e.ValidationState).HasMaxLength(64);
+            entity.Property(e => e.Tags).HasColumnType("jsonb");
+            entity.Property(e => e.BpmnXml).IsRequired();
         });
 
         modelBuilder.Entity<WorkflowRun>(entity =>
         {
             entity.ToTable("workflow_runs");
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkflowId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.WorkflowName).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.WorkflowVersion).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
-            entity.Property(e => e.Initiator).HasMaxLength(128);
-            entity.HasOne(e => e.WorkflowDefinition)
-                .WithMany(e => e.Runs)
-                .HasForeignKey(e => e.WorkflowDefinitionId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(e => e.WorkflowDefinitionId);
-            entity.HasIndex(e => e.Status);
+            entity.Property(e => e.RiskLevel).HasMaxLength(64);
+            entity.Property(e => e.CurrentStep).HasMaxLength(256);
+            entity.Property(e => e.RequestedBy).HasMaxLength(128);
+            entity.Property(e => e.Tags).HasColumnType("jsonb");
+            entity.HasMany(e => e.Steps).WithOne().HasForeignKey("RunId");
+            entity.HasMany(e => e.Events).WithOne().HasForeignKey("RunId");
+        });
+
+        modelBuilder.Entity<WorkflowRunStep>(entity =>
+        {
+            entity.ToTable("workflow_run_steps");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Type).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.AgentName).HasMaxLength(128);
+            entity.OwnsOne(e => e.PolicyDecision, pd =>
+            {
+                pd.Property(p => p.Kind).HasMaxLength(64);
+                pd.Property(p => p.PolicyId).HasMaxLength(128);
+                pd.Property(p => p.PolicyName).HasMaxLength(256);
+                pd.Property(p => p.Rationale).HasMaxLength(1024);
+                pd.Property(p => p.RiskLevel).HasMaxLength(64);
+                pd.Property(p => p.RiskFactors).HasColumnType("jsonb");
+                pd.Property(p => p.Constraints).HasColumnType("jsonb");
+            });
         });
 
         modelBuilder.Entity<WorkflowEvent>(entity =>
         {
             entity.ToTable("workflow_events");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.EventType).HasMaxLength(128).IsRequired();
-            entity.Property(e => e.PayloadJson).HasColumnType("jsonb").IsRequired();
-            entity.HasOne(e => e.WorkflowRun)
-                .WithMany(e => e.Events)
-                .HasForeignKey(e => e.WorkflowRunId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(e => e.WorkflowRunId);
-            entity.HasIndex(e => e.CreatedAtUtc);
+            entity.Property(e => e.Type).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.Message).HasMaxLength(2048);
         });
 
         modelBuilder.Entity<ApprovalRequest>(entity =>
         {
             entity.ToTable("approval_requests");
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.ApprovalType).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.WorkflowName).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ActionRequested).HasMaxLength(1024).IsRequired();
+            entity.Property(e => e.Requester).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.AgentName).HasMaxLength(128);
+            entity.Property(e => e.PolicyRationale).HasMaxLength(2048);
+            entity.Property(e => e.RiskLevel).HasMaxLength(64);
+            entity.Property(e => e.RiskFactors).HasColumnType("jsonb");
+            entity.Property(e => e.AffectedSystems).HasColumnType("jsonb");
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
-            entity.Property(e => e.RequestedBy).HasMaxLength(128).IsRequired();
-            entity.HasOne(e => e.WorkflowRun)
-                .WithMany(e => e.Approvals)
-                .HasForeignKey(e => e.WorkflowRunId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(e => e.WorkflowRunId);
-            entity.HasIndex(e => e.Status);
+            entity.Property(e => e.Priority).HasMaxLength(64);
+            entity.Property(e => e.DecisionComment).HasMaxLength(2048);
+            entity.Property(e => e.DecidedBy).HasMaxLength(128);
         });
 
-        modelBuilder.Entity<PolicyDecision>(entity =>
-        {
-            entity.ToTable("policy_decisions");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.PolicyName).HasMaxLength(128).IsRequired();
-            entity.Property(e => e.Decision).HasMaxLength(64).IsRequired();
-            entity.Property(e => e.Reason).HasMaxLength(2048).IsRequired();
-            entity.Property(e => e.EvidenceJson).HasColumnType("jsonb").IsRequired();
-            entity.HasOne(e => e.WorkflowRun)
-                .WithMany(e => e.PolicyDecisions)
-                .HasForeignKey(e => e.WorkflowRunId)
-                .OnDelete(DeleteBehavior.SetNull);
-            entity.HasIndex(e => e.WorkflowRunId);
-            entity.HasIndex(e => e.EvaluatedAtUtc);
-        });
-
-        modelBuilder.Entity<AgentSession>(entity =>
-        {
-            entity.ToTable("agent_sessions");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.AgentName).HasMaxLength(128).IsRequired();
-            entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
-            entity.HasOne(e => e.WorkflowRun)
-                .WithMany(e => e.AgentSessions)
-                .HasForeignKey(e => e.WorkflowRunId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(e => e.WorkflowRunId);
-            entity.HasIndex(e => new { e.AgentName, e.Status });
-        });
+        // PolicyDecision is owned by WorkflowRunStep, so it doesn't need its own table.
+        // We also don't need a DbSet for it in the DbContext.
+        modelBuilder.Ignore<PolicyDecision>();
     }
 }

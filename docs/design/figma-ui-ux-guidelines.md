@@ -1,4 +1,4 @@
-# Autofac Prime UI/UX and Figma Handoff
+# Autofac UI/UX and Figma Handoff
 
 ## Source Inputs
 
@@ -41,7 +41,7 @@ The application should feel like an operational cockpit, not a marketing dashboa
 
 The refined screen is organized as:
 
-- App shell with Autofac Prime branding and deployment CTA.
+- App shell with Autofac branding and deployment CTA.
 - Top command bar with search, live environment state, and operator profile.
 - Performance Metrics panel for throughput, success rate, and deployment frequency.
 - System Health panel for runtime fabric state.
@@ -75,4 +75,3 @@ The refined screen is organized as:
 - App shell and navigation: `web/src/layout/AppShell.tsx`
 - Execution monitoring screen: `web/src/views/RunBoard.tsx`
 - Workflow canvas accessibility and empty states: `web/src/views/WorkflowDesigner.tsx`
-

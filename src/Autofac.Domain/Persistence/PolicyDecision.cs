@@ -1,20 +1,24 @@
+using System.Collections.Generic;
+
 namespace Autofac.Domain.Persistence;
 
 public sealed class PolicyDecision
 {
-    public Guid Id { get; set; }
+    public string Kind { get; set; } = "approve";
 
-    public Guid? WorkflowRunId { get; set; }
+    public string PolicyId { get; set; } = string.Empty;
 
     public string PolicyName { get; set; } = string.Empty;
 
-    public string Decision { get; set; } = string.Empty;
+    public string Rationale { get; set; } = string.Empty;
 
-    public string Reason { get; set; } = string.Empty;
+    public int RiskScore { get; set; }
 
-    public string EvidenceJson { get; set; } = "{}";
+    public string RiskLevel { get; set; } = "low";
 
-    public DateTimeOffset EvaluatedAtUtc { get; set; }
+    public List<string> RiskFactors { get; set; } = new();
 
-    public WorkflowRun? WorkflowRun { get; set; }
+    public string DecidedAt { get; set; } = string.Empty;
+
+    public List<string> Constraints { get; set; } = new();
 }

@@ -1,26 +1,36 @@
+using System.Collections.Generic;
+
 namespace Autofac.Domain.Persistence;
 
 public sealed class WorkflowRun
 {
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
-    public Guid WorkflowDefinitionId { get; set; }
+    public string WorkflowId { get; set; } = string.Empty;
 
-    public string Status { get; set; } = "created";
+    public string WorkflowName { get; set; } = string.Empty;
 
-    public string? Initiator { get; set; }
+    public string WorkflowVersion { get; set; } = string.Empty;
 
-    public DateTimeOffset StartedAtUtc { get; set; }
+    public string Status { get; set; } = "pending";
 
-    public DateTimeOffset? CompletedAtUtc { get; set; }
+    public string RiskLevel { get; set; } = "low";
 
-    public WorkflowDefinition WorkflowDefinition { get; set; } = null!;
+    public string CurrentStep { get; set; } = string.Empty;
 
-    public ICollection<WorkflowEvent> Events { get; set; } = new List<WorkflowEvent>();
+    public string RequestedBy { get; set; } = string.Empty;
 
-    public ICollection<ApprovalRequest> Approvals { get; set; } = new List<ApprovalRequest>();
+    public string StartedAt { get; set; } = string.Empty;
 
-    public ICollection<AgentSession> AgentSessions { get; set; } = new List<AgentSession>();
+    public string? CompletedAt { get; set; }
 
-    public ICollection<PolicyDecision> PolicyDecisions { get; set; } = new List<PolicyDecision>();
+    public int? DurationMs { get; set; }
+
+    public int PendingApprovals { get; set; }
+
+    public List<string> Tags { get; set; } = new();
+
+    public List<WorkflowRunStep> Steps { get; set; } = new();
+
+    public List<WorkflowEvent> Events { get; set; } = new();
 }

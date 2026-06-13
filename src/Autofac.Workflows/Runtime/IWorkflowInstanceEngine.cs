@@ -5,19 +5,19 @@ namespace Autofac.Workflows.Runtime;
 public interface IWorkflowInstanceEngine
 {
     Task<WorkflowExecutionState> StartAsync(
-        Guid workflowDefinitionId,
+        string workflowDefinitionId,
         BpmnWorkflowDefinition definition,
         string? initiator,
         CancellationToken cancellationToken);
 
     Task<WorkflowExecutionState> ResumeAsync(
-        Guid runId,
+        string runId,
         BpmnWorkflowDefinition definition,
         string? approvedBy,
         CancellationToken cancellationToken);
 
     Task<WorkflowExecutionState> RecoverAsync(
-        Guid runId,
+        string runId,
         BpmnWorkflowDefinition definition,
         CancellationToken cancellationToken);
 }

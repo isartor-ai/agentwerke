@@ -19,7 +19,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     public async Task<WorkflowExecutionState> StartAsync(
-        Guid workflowDefinitionId,
+        string workflowDefinitionId,
         BpmnWorkflowDefinition definition,
         string? initiator,
         CancellationToken cancellationToken)
@@ -43,7 +43,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     public async Task<WorkflowExecutionState> ResumeAsync(
-        Guid runId,
+        string runId,
         BpmnWorkflowDefinition definition,
         string? approvedBy,
         CancellationToken cancellationToken)
@@ -69,7 +69,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                 runId,
                 nodeId = checkpoint.WaitingOnNodeId,
                 approvedBy,
-                timestampUtc = DateTimeOffset.UtcNow
+                timestampUtc = DateTime.UtcNow.ToString("o")
             }),
             cancellationToken);
 
@@ -82,7 +82,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     public async Task<WorkflowExecutionState> RecoverAsync(
-        Guid runId,
+        string runId,
         BpmnWorkflowDefinition definition,
         CancellationToken cancellationToken)
     {
@@ -104,7 +104,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                 Status: CompletedStatus,
                 NextNodeIndex: checkpoint.NextNodeIndex,
                 WaitingOnNodeId: null,
-                CompletedAtUtc: checkpoint.CompletedAtUtc);
+                CompletedAt: checkpoint.CompletedAt);
         }
 
         if (string.Equals(checkpoint.Status, WaitingUserStatus, StringComparison.Ordinal))
@@ -114,7 +114,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                 Status: WaitingUserStatus,
                 NextNodeIndex: checkpoint.NextNodeIndex,
                 WaitingOnNodeId: checkpoint.WaitingOnNodeId,
-                CompletedAtUtc: checkpoint.CompletedAtUtc);
+                CompletedAt: checkpoint.CompletedAt);
         }
 
         return await AdvanceAsync(
@@ -126,7 +126,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     private async Task<WorkflowExecutionState> AdvanceAsync(
-        Guid runId,
+        string runId,
         BpmnWorkflowDefinition definition,
         int startIndex,
         string startStatus,
@@ -135,7 +135,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
         var nextIndex = startIndex;
         var status = startStatus;
 
-        await _store.UpdateRunStatusAsync(runId, RunningStatus, completedAtUtc: null, cancellationToken);
+        await _store.UpdateRunStatusAsync(runId, RunningStatus, completedAt: null, cancellationToken);
 
         while (nextIndex < definition.Nodes.Count)
         {
@@ -169,19 +169,19 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
 
                     if (serviceResult == ServiceExecutionResult.Failed)
                     {
-                        await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAtUtc: null, cancellationToken);
-                        await SaveCheckpointAsync(runId, FailedStatus, nextIndex, waitingOnNodeId: null, completedAtUtc: null, cancellationToken);
+                        await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
+                        await SaveCheckpointAsync(runId, FailedStatus, nextIndex, waitingOnNodeId: null, completedAt: null, cancellationToken);
 
                         return new WorkflowExecutionState(
                             RunId: runId,
                             Status: FailedStatus,
                             NextNodeIndex: nextIndex,
                             WaitingOnNodeId: null,
-                            CompletedAtUtc: null);
+                            CompletedAt: null);
                     }
 
                     nextIndex++;
-                    await SaveCheckpointAsync(runId, RunningStatus, nextIndex, waitingOnNodeId: null, completedAtUtc: null, cancellationToken);
+                    await SaveCheckpointAsync(runId, RunningStatus, nextIndex, waitingOnNodeId: null, completedAt: null, cancellationToken);
                     break;
                 case "userTask":
                     status = WaitingUserStatus;
@@ -198,15 +198,15 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                         }),
                         cancellationToken);
                     nextIndex++;
-                    await _store.UpdateRunStatusAsync(runId, status, completedAtUtc: null, cancellationToken);
-                    await SaveCheckpointAsync(runId, status, nextIndex, waitingOnNodeId: node.Id, completedAtUtc: null, cancellationToken);
+                    await _store.UpdateRunStatusAsync(runId, status, completedAt: null, cancellationToken);
+                    await SaveCheckpointAsync(runId, status, nextIndex, waitingOnNodeId: node.Id, completedAt: null, cancellationToken);
 
                     return new WorkflowExecutionState(
                         RunId: runId,
                         Status: status,
                         NextNodeIndex: nextIndex,
                         WaitingOnNodeId: node.Id,
-                        CompletedAtUtc: null);
+                        CompletedAt: null);
                 case "exclusiveGateway":
                     await _store.AppendEventAsync(
                         runId,
@@ -257,15 +257,15 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
 
                                 if (branchResult == ServiceExecutionResult.Failed)
                                 {
-                                    await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAtUtc: null, cancellationToken);
-                                    await SaveCheckpointAsync(runId, FailedStatus, nextIndex, waitingOnNodeId: null, completedAtUtc: null, cancellationToken);
+                                    await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
+                                    await SaveCheckpointAsync(runId, FailedStatus, nextIndex, waitingOnNodeId: null, completedAt: null, cancellationToken);
 
                                     return new WorkflowExecutionState(
                                         RunId: runId,
                                         Status: FailedStatus,
                                         NextNodeIndex: nextIndex,
                                         WaitingOnNodeId: null,
-                                        CompletedAtUtc: null);
+                                        CompletedAt: null);
                                 }
                             }
                             else if (branchNode.ElementName == "intermediateCatchEvent")
@@ -296,7 +296,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                             cancellationToken);
 
                         nextIndex = joinIndex + 1;
-                        await SaveCheckpointAsync(runId, RunningStatus, nextIndex, waitingOnNodeId: null, completedAtUtc: null, cancellationToken);
+                        await SaveCheckpointAsync(runId, RunningStatus, nextIndex, waitingOnNodeId: null, completedAt: null, cancellationToken);
                         break;
                     }
 
@@ -306,7 +306,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                 case "intermediateCatchEvent":
                     await ExecuteTimerEventAsync(runId, node, cancellationToken);
                     nextIndex++;
-                    await SaveCheckpointAsync(runId, RunningStatus, nextIndex, waitingOnNodeId: null, completedAtUtc: null, cancellationToken);
+                    await SaveCheckpointAsync(runId, RunningStatus, nextIndex, waitingOnNodeId: null, completedAt: null, cancellationToken);
                     break;
                 case "boundaryEvent":
                     await _store.AppendEventAsync(
@@ -324,24 +324,24 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                         Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex = nextIndex }),
                         cancellationToken);
 
-                    var completedAtUtc = DateTimeOffset.UtcNow;
+                    var completedAt = DateTime.UtcNow.ToString("o");
                     await _store.AppendEventAsync(
                         runId,
                         "run_completed",
-                        Serialize(new { runId, completedAtUtc }),
+                        Serialize(new { runId, completedAt }),
                         cancellationToken);
 
                     status = CompletedStatus;
                     nextIndex++;
-                    await _store.UpdateRunStatusAsync(runId, status, completedAtUtc, cancellationToken);
-                    await SaveCheckpointAsync(runId, status, nextIndex, waitingOnNodeId: null, completedAtUtc, cancellationToken);
+                    await _store.UpdateRunStatusAsync(runId, status, completedAt, cancellationToken);
+                    await SaveCheckpointAsync(runId, status, nextIndex, waitingOnNodeId: null, completedAt: completedAt, cancellationToken);
 
                     return new WorkflowExecutionState(
                         RunId: runId,
                         Status: status,
                         NextNodeIndex: nextIndex,
                         WaitingOnNodeId: null,
-                        CompletedAtUtc: completedAtUtc);
+                        CompletedAt: completedAt);
             }
         }
 
@@ -349,27 +349,27 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     private async Task SaveCheckpointAsync(
-        Guid runId,
+        string runId,
         string status,
         int nextNodeIndex,
         string? waitingOnNodeId,
-        DateTimeOffset? completedAtUtc,
+        string? completedAt,
         CancellationToken cancellationToken)
     {
         await _store.AppendEventAsync(
             runId,
             "checkpoint_saved",
-            Serialize(new CheckpointPayload(status, nextNodeIndex, waitingOnNodeId, completedAtUtc)),
+            Serialize(new CheckpointPayload(status, nextNodeIndex, waitingOnNodeId, completedAt)),
             cancellationToken);
     }
 
-    private async Task<CheckpointPayload?> GetCheckpointAsync(Guid runId, CancellationToken cancellationToken)
+    private async Task<CheckpointPayload?> GetCheckpointAsync(string runId, CancellationToken cancellationToken)
     {
         var events = await _store.ListRunEventsAsync(runId, cancellationToken);
 
         var checkpointEvent = events
-            .Where(static e => string.Equals(e.EventType, "checkpoint_saved", StringComparison.Ordinal))
-            .OrderBy(static e => e.CreatedAtUtc)
+            .Where(static e => string.Equals(e.Type, "checkpoint_saved", StringComparison.Ordinal))
+            .OrderBy(static e => e.CreatedAt)
             .LastOrDefault();
 
         if (checkpointEvent is null)
@@ -377,11 +377,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
             return null;
         }
 
-        return JsonSerializer.Deserialize<CheckpointPayload>(checkpointEvent.PayloadJson, SerializerOptions);
+        return JsonSerializer.Deserialize<CheckpointPayload>(checkpointEvent.Message, SerializerOptions);
     }
 
     private async Task ExecuteTimerEventAsync(
-        Guid runId,
+        string runId,
         BpmnNodeDefinition node,
         CancellationToken cancellationToken)
     {
@@ -394,7 +394,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
         await _store.AppendEventAsync(
             runId,
             "timer_fired",
-            Serialize(new { runId, nodeId = node.Id, firedAtUtc = DateTimeOffset.UtcNow }),
+            Serialize(new { runId, nodeId = node.Id, firedAt = DateTime.UtcNow.ToString("o") }),
             cancellationToken);
 
         await _store.AppendEventAsync(
@@ -405,7 +405,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     private async Task CompleteNodeAndCheckpointAsync(
-        Guid runId,
+        string runId,
         BpmnNodeDefinition node,
         int nodeIndex,
         CancellationToken cancellationToken)
@@ -416,11 +416,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
             Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex }),
             cancellationToken);
 
-        await SaveCheckpointAsync(runId, RunningStatus, nodeIndex + 1, waitingOnNodeId: null, completedAtUtc: null, cancellationToken);
+        await SaveCheckpointAsync(runId, RunningStatus, nodeIndex + 1, waitingOnNodeId: null, completedAt: null, cancellationToken);
     }
 
     private async Task<ServiceExecutionResult> ExecuteServiceTaskAsync(
-        Guid runId,
+        string runId,
         BpmnWorkflowDefinition definition,
         BpmnNodeDefinition node,
         int nodeIndex,
@@ -612,7 +612,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
         string Status,
         int NextNodeIndex,
         string? WaitingOnNodeId,
-        DateTimeOffset? CompletedAtUtc);
+        string? CompletedAt);
 
     private enum ServiceExecutionResult
     {

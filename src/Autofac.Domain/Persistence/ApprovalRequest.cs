@@ -1,20 +1,42 @@
+using System.Collections.Generic;
+
 namespace Autofac.Domain.Persistence;
 
 public sealed class ApprovalRequest
 {
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
-    public Guid WorkflowRunId { get; set; }
+    public string RunId { get; set; } = string.Empty;
 
-    public string ApprovalType { get; set; } = string.Empty;
+    public string WorkflowName { get; set; } = string.Empty;
+
+    public string ActionRequested { get; set; } = string.Empty;
+
+    public string Requester { get; set; } = string.Empty;
+
+    public string AgentName { get; set; } = string.Empty;
+
+    public string PolicyRationale { get; set; } = string.Empty;
+
+    public int RiskScore { get; set; }
+
+    public string RiskLevel { get; set; } = "low";
+
+    public List<string> RiskFactors { get; set; } = new();
+
+    public List<string> AffectedSystems { get; set; } = new();
+
+    public string SlaDeadline { get; set; } = string.Empty;
+
+    public string CreatedAt { get; set; } = string.Empty;
 
     public string Status { get; set; } = "pending";
 
-    public string RequestedBy { get; set; } = string.Empty;
+    public string Priority { get; set; } = "normal";
 
-    public DateTimeOffset RequestedAtUtc { get; set; }
+    public string? DecisionComment { get; set; }
 
-    public DateTimeOffset? ResolvedAtUtc { get; set; }
+    public string? DecidedAt { get; set; }
 
-    public WorkflowRun WorkflowRun { get; set; } = null!;
+    public string? DecidedBy { get; set; }
 }

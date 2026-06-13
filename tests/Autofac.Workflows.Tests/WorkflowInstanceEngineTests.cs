@@ -13,7 +13,7 @@ public sealed class WorkflowInstanceEngineTests
         var engine = new WorkflowInstanceEngine(store);
 
         var state = await engine.StartAsync(
-            workflowDefinitionId: Guid.NewGuid(),
+            workflowDefinitionId: Guid.NewGuid().ToString(),
             definition: CreateReferenceDefinition(),
             initiator: "system",
             cancellationToken: CancellationToken.None);
@@ -23,16 +23,16 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal(3, state.NextNodeIndex);
 
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
-        Assert.Contains(events, static e => e.EventType == "checkpoint_saved" && e.PayloadJson.Contains("\"status\":\"running\"", StringComparison.Ordinal));
-        Assert.Contains(events, static e => e.EventType == "checkpoint_saved" && e.PayloadJson.Contains("\"status\":\"waiting_user\"", StringComparison.Ordinal));
+        Assert.Contains(events, static e => e.Type == "checkpoint_saved" && e.Message.Contains("\"status\":\"running\"", StringComparison.Ordinal));
+        Assert.Contains(events, static e => e.Type == "checkpoint_saved" && e.Message.Contains("\"status\":\"waiting_user\"", StringComparison.Ordinal));
 
-        var eventTypes = events.Select(static e => e.EventType).ToList();
+        var eventTypes = events.Select(static e => e.Type).ToList();
         Assert.Contains("run_started", eventTypes);
         Assert.Contains("user_task_waiting", eventTypes);
         Assert.Contains(events, static e =>
-            e.EventType == "user_task_waiting" &&
-            e.PayloadJson.Contains("\"purposeType\":\"manual_review\"", StringComparison.Ordinal) &&
-            e.PayloadJson.Contains("\"policyTag\":\"human_approval_required\"", StringComparison.Ordinal));
+            e.Type == "user_task_waiting" &&
+            e.Message.Contains("\"purposeType\":\"manual_review\"", StringComparison.Ordinal) &&
+            e.Message.Contains("\"policyTag\":\"human_approval_required\"", StringComparison.Ordinal));
 
         var firstRunStarted = eventTypes.FindIndex(static t => string.Equals(t, "run_started", StringComparison.Ordinal));
         var firstUserTaskWaiting = eventTypes.FindIndex(static t => string.Equals(t, "user_task_waiting", StringComparison.Ordinal));
@@ -48,21 +48,21 @@ public sealed class WorkflowInstanceEngineTests
         var definition = CreateReferenceDefinition();
         var engine = new WorkflowInstanceEngine(store);
 
-        var started = await engine.StartAsync(Guid.NewGuid(), definition, "system", CancellationToken.None);
+        var started = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
         var resumed = await engine.ResumeAsync(started.RunId, definition, "reviewer", CancellationToken.None);
 
         Assert.Equal("completed", resumed.Status);
         Assert.Null(resumed.WaitingOnNodeId);
-        Assert.NotNull(resumed.CompletedAtUtc);
+        Assert.NotNull(resumed.CompletedAt);
 
         var persistedRun = await store.GetRunAsync(started.RunId, CancellationToken.None);
         Assert.NotNull(persistedRun);
         Assert.Equal("completed", persistedRun!.Status);
-        Assert.NotNull(persistedRun.CompletedAtUtc);
+        Assert.NotNull(persistedRun.CompletedAt);
 
         var events = await store.ListRunEventsAsync(started.RunId, CancellationToken.None);
-        Assert.Contains(events, static e => e.EventType == "user_task_completed");
-        Assert.Contains(events, static e => e.EventType == "run_completed");
+        Assert.Contains(events, static e => e.Type == "user_task_completed");
+        Assert.Contains(events, static e => e.Type == "run_completed");
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class WorkflowInstanceEngineTests
         var definition = CreateReferenceDefinition();
 
         var engine1 = new WorkflowInstanceEngine(store);
-        var started = await engine1.StartAsync(Guid.NewGuid(), definition, "system", CancellationToken.None);
+        var started = await engine1.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
 
         var engine2 = new WorkflowInstanceEngine(store);
         var recovered = await engine2.RecoverAsync(started.RunId, definition, CancellationToken.None);
@@ -103,19 +103,19 @@ public sealed class WorkflowInstanceEngineTests
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
-        var state = await engine.StartAsync(Guid.NewGuid(), definition, "system", CancellationToken.None);
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
 
         Assert.Equal("completed", state.Status);
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
-        Assert.Equal(3, events.Count(static e => e.EventType == "service_task_attempted"));
-        Assert.Equal(2, events.Count(static e => e.EventType == "retry_scheduled"));
+        Assert.Equal(3, events.Count(static e => e.Type == "service_task_attempted"));
+        Assert.Equal(2, events.Count(static e => e.Type == "retry_scheduled"));
         Assert.Contains(events, static e =>
-            e.EventType == "service_task_attempted" &&
-            e.PayloadJson.Contains("\"agent\":\"agent\"", StringComparison.Ordinal) &&
-            e.PayloadJson.Contains("\"action\":\"action\"", StringComparison.Ordinal) &&
-            e.PayloadJson.Contains("\"purposeType\":\"purpose\"", StringComparison.Ordinal) &&
-            e.PayloadJson.Contains("\"policyTag\":\"policy\"", StringComparison.Ordinal));
-        Assert.Contains(events, static e => e.EventType == "run_completed");
+            e.Type == "service_task_attempted" &&
+            e.Message.Contains("\"agent\":\"agent\"", StringComparison.Ordinal) &&
+            e.Message.Contains("\"action\":\"action\"", StringComparison.Ordinal) &&
+            e.Message.Contains("\"purposeType\":\"purpose\"", StringComparison.Ordinal) &&
+            e.Message.Contains("\"policyTag\":\"policy\"", StringComparison.Ordinal));
+        Assert.Contains(events, static e => e.Type == "run_completed");
     }
 
     [Fact]
@@ -140,13 +140,13 @@ public sealed class WorkflowInstanceEngineTests
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
-        var state = await engine.StartAsync(Guid.NewGuid(), definition, "system", CancellationToken.None);
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
 
         Assert.Equal("completed", state.Status);
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
-        Assert.Contains(events, static e => e.EventType == "timeout_triggered");
-        Assert.Contains(events, static e => e.EventType == "boundary_event_triggered");
-        Assert.Contains(events, static e => e.EventType == "run_completed");
+        Assert.Contains(events, static e => e.Type == "timeout_triggered");
+        Assert.Contains(events, static e => e.Type == "boundary_event_triggered");
+        Assert.Contains(events, static e => e.Type == "run_completed");
     }
 
     [Fact]
@@ -168,14 +168,14 @@ public sealed class WorkflowInstanceEngineTests
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
-        var state = await engine.StartAsync(Guid.NewGuid(), definition, "system", CancellationToken.None);
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
 
         Assert.Equal("completed", state.Status);
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
-        Assert.Contains(events, static e => e.EventType == "parallel_forked");
-        Assert.Equal(2, events.Count(static e => e.EventType == "parallel_branch_entered"));
-        Assert.Contains(events, static e => e.EventType == "parallel_joined");
-        Assert.Contains(events, static e => e.EventType == "run_completed");
+        Assert.Contains(events, static e => e.Type == "parallel_forked");
+        Assert.Equal(2, events.Count(static e => e.Type == "parallel_branch_entered"));
+        Assert.Contains(events, static e => e.Type == "parallel_joined");
+        Assert.Contains(events, static e => e.Type == "run_completed");
     }
 
     private static BpmnWorkflowDefinition CreateReferenceDefinition()
@@ -200,19 +200,18 @@ public sealed class WorkflowInstanceEngineTests
 
     private sealed class InMemoryWorkflowRuntimeStore : IWorkflowRuntimeStore
     {
-        private readonly Dictionary<Guid, WorkflowRun> _runs = [];
-        private readonly List<WorkflowEvent> _events = [];
+        private readonly Dictionary<string, WorkflowRun> _runs = [];
         private readonly object _sync = new();
 
-        public Task<WorkflowRun> CreateRunAsync(Guid workflowDefinitionId, string? initiator, CancellationToken cancellationToken)
+        public Task<WorkflowRun> CreateRunAsync(string workflowDefinitionId, string? initiator, CancellationToken cancellationToken)
         {
             var run = new WorkflowRun
             {
-                Id = Guid.NewGuid(),
-                WorkflowDefinitionId = workflowDefinitionId,
+                Id = Guid.NewGuid().ToString(),
+                WorkflowId = workflowDefinitionId,
                 Status = "created",
-                Initiator = initiator,
-                StartedAtUtc = DateTimeOffset.UtcNow
+                RequestedBy = initiator ?? "unknown",
+                StartedAt = DateTime.UtcNow.ToString("o")
             };
 
             lock (_sync)
@@ -223,7 +222,7 @@ public sealed class WorkflowInstanceEngineTests
             return Task.FromResult(run);
         }
 
-        public Task<WorkflowRun?> GetRunAsync(Guid runId, CancellationToken cancellationToken)
+        public Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken)
         {
             lock (_sync)
             {
@@ -232,38 +231,38 @@ public sealed class WorkflowInstanceEngineTests
             }
         }
 
-        public Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(Guid runId, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(string runId, CancellationToken cancellationToken)
         {
             lock (_sync)
             {
-                var events = _events
-                    .Where(runEvent => runEvent.WorkflowRunId == runId)
-                    .OrderBy(runEvent => runEvent.CreatedAtUtc)
-                    .ThenBy(runEvent => runEvent.Id)
-                    .ToList();
-
-                return Task.FromResult<IReadOnlyList<WorkflowEvent>>(events);
+                if (_runs.TryGetValue(runId, out var run))
+                {
+                    return Task.FromResult<IReadOnlyList<WorkflowEvent>>(run.Events.AsReadOnly());
+                }
+                return Task.FromResult<IReadOnlyList<WorkflowEvent>>(new List<WorkflowEvent>().AsReadOnly());
             }
         }
 
-        public Task AppendEventAsync(Guid runId, string eventType, string payloadJson, CancellationToken cancellationToken)
+        public Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken)
         {
             lock (_sync)
             {
-                _events.Add(new WorkflowEvent
+                if (_runs.TryGetValue(runId, out var run))
                 {
-                    Id = Guid.NewGuid(),
-                    WorkflowRunId = runId,
-                    EventType = eventType,
-                    PayloadJson = payloadJson,
-                    CreatedAtUtc = DateTimeOffset.UtcNow
-                });
+                    run.Events.Add(new WorkflowEvent
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Type = type,
+                        Message = message,
+                        CreatedAt = DateTime.UtcNow.ToString("o")
+                    });
+                }
             }
 
             return Task.CompletedTask;
         }
 
-        public Task UpdateRunStatusAsync(Guid runId, string status, DateTimeOffset? completedAtUtc, CancellationToken cancellationToken)
+        public Task UpdateRunStatusAsync(string runId, string status, string? completedAt, CancellationToken cancellationToken)
         {
             lock (_sync)
             {
@@ -273,7 +272,7 @@ public sealed class WorkflowInstanceEngineTests
                 }
 
                 run.Status = status;
-                run.CompletedAtUtc = completedAtUtc;
+                run.CompletedAt = completedAt;
             }
 
             return Task.CompletedTask;

@@ -14,17 +14,21 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
     }
 
     public async Task<WorkflowRun> CreateRunAsync(
-        Guid workflowDefinitionId,
+        string workflowDefinitionId,
         string? initiator,
         CancellationToken cancellationToken)
     {
+        var workflowDefinition = await _dbContext.WorkflowDefinitions.AsNoTracking().FirstAsync(x => x.Id == workflowDefinitionId, cancellationToken);
         var run = new WorkflowRun
         {
-            Id = Guid.NewGuid(),
-            WorkflowDefinitionId = workflowDefinitionId,
-            Status = "created",
-            Initiator = initiator,
-            StartedAtUtc = DateTimeOffset.UtcNow
+            Id = Guid.NewGuid().ToString(),
+            WorkflowId = workflowDefinitionId,
+            WorkflowName = workflowDefinition.Name,
+            WorkflowVersion = workflowDefinition.Version,
+            Status = "pending",
+            RequestedBy = initiator ?? "unknown",
+            StartedAt = DateTime.UtcNow.ToString("o"),
+            Tags = workflowDefinition.Tags
         };
 
         _dbContext.WorkflowRuns.Add(run);
@@ -32,53 +36,57 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         return run;
     }
 
-    public async Task<WorkflowRun?> GetRunAsync(Guid runId, CancellationToken cancellationToken)
+    public async Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken)
     {
         return await _dbContext.WorkflowRuns
             .AsNoTracking()
-            .FirstOrDefaultAsync(static run => run.Id == runId, cancellationToken);
+            .Include(r => r.Steps)
+            .Include(r => r.Events)
+            .FirstOrDefaultAsync(run => run.Id == runId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(Guid runId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(string runId, CancellationToken cancellationToken)
     {
-        return await _dbContext.WorkflowEvents
-            .AsNoTracking()
-            .Where(runEvent => runEvent.WorkflowRunId == runId)
-            .OrderBy(runEvent => runEvent.CreatedAtUtc)
-            .ThenBy(runEvent => runEvent.Id)
-            .ToListAsync(cancellationToken);
+        var run = await GetRunAsync(runId, cancellationToken);
+        return run?.Events.AsReadOnly() ?? new List<WorkflowEvent>().AsReadOnly();
     }
 
     public async Task AppendEventAsync(
-        Guid runId,
-        string eventType,
-        string payloadJson,
+        string runId,
+        string type,
+        string message,
         CancellationToken cancellationToken)
     {
+        var run = await _dbContext.WorkflowRuns.FirstAsync(r => r.Id == runId, cancellationToken);
         var runEvent = new WorkflowEvent
         {
-            Id = Guid.NewGuid(),
-            WorkflowRunId = runId,
-            EventType = eventType,
-            PayloadJson = payloadJson,
-            CreatedAtUtc = DateTimeOffset.UtcNow
+            Id = Guid.NewGuid().ToString(),
+            Type = type,
+            Message = message,
+            CreatedAt = DateTime.UtcNow.ToString("o")
         };
 
-        _dbContext.WorkflowEvents.Add(runEvent);
+        run.Events.Add(runEvent);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateRunStatusAsync(
-        Guid runId,
+        string runId,
         string status,
-        DateTimeOffset? completedAtUtc,
+        string? completedAt,
         CancellationToken cancellationToken)
     {
-        var run = await _dbContext.WorkflowRuns.FirstOrDefaultAsync(static r => r.Id == runId, cancellationToken)
+        var run = await _dbContext.WorkflowRuns.FirstAsync(r => r.Id == runId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow run '{runId}' does not exist.");
 
         run.Status = status;
-        run.CompletedAtUtc = completedAtUtc;
+        run.CompletedAt = completedAt;
+        if (completedAt != null)
+        {
+            var startedAt = DateTime.Parse(run.StartedAt);
+            var completedAtDate = DateTime.Parse(completedAt);
+            run.DurationMs = (int)(completedAtDate - startedAt).TotalMilliseconds;
+        }
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

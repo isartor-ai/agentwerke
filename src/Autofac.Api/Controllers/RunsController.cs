@@ -1,5 +1,10 @@
+using Autofac.Api.Contracts.Runs;
+using Autofac.Domain.Persistence;
+using Autofac.Infrastructure.Persistence;
 using Autofac.Storage.Artifacts;
+using Autofac.Workflows.Runtime;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Autofac.Api.Controllers;
 
@@ -7,44 +12,62 @@ namespace Autofac.Api.Controllers;
 [Route("api/runs")]
 public sealed class RunsController : ControllerBase
 {
+    private readonly AutofacDbContext _dbContext;
     private readonly IArtifactStorage _artifactStorage;
+    private readonly IWorkflowInstanceEngine _workflowEngine;
 
-    public RunsController(IArtifactStorage artifactStorage)
+    public RunsController(AutofacDbContext dbContext, IArtifactStorage artifactStorage, IWorkflowInstanceEngine workflowEngine)
     {
+        _dbContext = dbContext;
         _artifactStorage = artifactStorage;
+        _workflowEngine = workflowEngine;
     }
 
     [HttpGet]
-    public IActionResult List()
+    public async Task<IActionResult> List()
     {
-        var runs = new[]
-        {
-            new RunSummary("run_001", "wf_bootstrap", "running"),
-            new RunSummary("run_002", "wf_review", "completed")
-        };
+        var runs = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Select(r => new RunSummary(r.Id, r.WorkflowId, r.Status))
+            .ToListAsync();
 
         return Ok(runs);
     }
 
     [HttpGet("{runId}")]
-    public IActionResult Get(string runId)
+    public async Task<IActionResult> Get(string runId)
     {
-        return Ok(new RunDetail(
-            runId,
-            "wf_bootstrap",
-            "running",
-            DateTimeOffset.UtcNow.AddMinutes(-3)));
+        var run = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Include(r => r.Steps)
+            .Include(r => r.Events)
+            .FirstOrDefaultAsync(r => r.Id == runId);
+
+        if (run == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(run);
     }
 
     [HttpPost]
-    public IActionResult Start([FromBody] StartRunRequest request)
+    public async Task<IActionResult> Start([FromBody] StartRunRequest request)
     {
-        var runId = $"run_{Guid.NewGuid():N}";
+        var workflow = await _dbContext.WorkflowDefinitions.AsNoTracking().FirstOrDefaultAsync(w => w.Id == request.WorkflowId);
+        if (workflow == null)
+        {
+            return NotFound(new { message = $"Workflow with id '{request.WorkflowId}' not found." });
+        }
+
+        // This is a simplified start, in a real scenario we would have a more complex setup
+        // to parse the bpmn and pass it to the engine.
+        var run = await _workflowEngine.StartAsync(request.WorkflowId, new Workflows.Bpmn.BpmnWorkflowDefinition(workflow.Name, workflow.Name, new List<Workflows.Bpmn.BpmnNodeDefinition>()), "api", CancellationToken.None);
 
         return Accepted(new StartRunResponse(
-            runId,
+            run.RunId,
             request.WorkflowId,
-            "accepted"));
+            run.Status));
     }
 
     [HttpPost("{runId}/artifacts/{artifactName}")]
@@ -87,16 +110,4 @@ public sealed class RunsController : ControllerBase
         var stream = await _artifactStorage.OpenReadAsync(runId, artifactName, cancellationToken);
         return File(stream, "application/octet-stream", artifactName);
     }
-
-    public sealed record RunSummary(string RunId, string WorkflowId, string Status);
-
-    public sealed record RunDetail(
-        string RunId,
-        string WorkflowId,
-        string Status,
-        DateTimeOffset StartedAtUtc);
-
-    public sealed record StartRunRequest(string WorkflowId);
-
-    public sealed record StartRunResponse(string RunId, string WorkflowId, string Status);
 }
