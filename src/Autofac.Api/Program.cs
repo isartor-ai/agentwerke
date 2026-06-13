@@ -1,3 +1,4 @@
+using Autofac.Agents;
 using Autofac.Infrastructure;
 using Autofac.Storage;
 using Autofac.Workflows;
@@ -11,6 +12,7 @@ builder.Services.AddOpenApi("v1");
 builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
 builder.Services.AddAutofacWorkflows();
+builder.Services.AddAutofacAgents();
 
 var app = builder.Build();
 
