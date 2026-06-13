@@ -27,7 +27,12 @@ public sealed record WaitingApprovalInfo(
     string NodeId,
     string? NodeName,
     string PurposeType,
-    string PolicyTag);
+    string PolicyTag,
+    string? AgentName = null,
+    string RiskLevel = "low",
+    int RiskScore = 0,
+    IReadOnlyList<string>? RiskFactors = null,
+    IReadOnlyList<string>? AffectedSystems = null);
 
 // ── Primary service interface ─────────────────────────────────────────────────
 
@@ -74,6 +79,10 @@ public sealed record WorkflowRunnerResult(
 public interface IWorkflowRunRepository
 {
     Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken);
+    Task UpdateRunStatusAsync(string runId, string status, CancellationToken cancellationToken);
+    Task UpdateCurrentStepAsync(string runId, string? currentStep, CancellationToken cancellationToken);
+    Task IncrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
+    Task DecrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
 }
 
 public interface IApprovalRepository
