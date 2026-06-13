@@ -1,6 +1,6 @@
 using System;
-using System.Globalization;
 using System.Linq;
+using Autofac.Application.Workflows;
 using Autofac.Api.Contracts.Approvals;
 using Autofac.Api.Contracts.Runs;
 using Autofac.Api.Contracts.Workflows;
@@ -39,7 +39,38 @@ internal static class ApiContractMappings
             workflow.CreatedAt,
             workflow.LastEditedAt,
             workflow.ValidationState,
-            workflow.Tags.ToArray());
+            workflow.Tags.ToArray(),
+            workflow.BpmnXml);
+    }
+
+    public static ValidationResponse ToValidationResponse(WorkflowValidationResult validation)
+    {
+        return new ValidationResponse(
+            validation.IsValid,
+            validation.ProcessId,
+            validation.ProcessName,
+            validation.Errors.Select(error => new ValidationErrorResponse(
+                error.Message,
+                error.ElementId,
+                error.ElementName,
+                error.LineNumber,
+                error.LinePosition)).ToArray(),
+            validation.Warnings.Select(warning => new ValidationWarningResponse(
+                warning.Message,
+                warning.ElementId,
+                warning.ElementName,
+                warning.LineNumber,
+                warning.LinePosition)).ToArray());
+    }
+
+    public static ImportWorkflowResponse ToImportWorkflowResponse(WorkflowImportResult result)
+    {
+        return new ImportWorkflowResponse(result.WorkflowId, ToValidationResponse(result.Validation));
+    }
+
+    public static PublishWorkflowResponse ToPublishWorkflowResponse(WorkflowPublishResult result)
+    {
+        return new PublishWorkflowResponse(result.WorkflowId, result.Version, result.PublishedAt);
     }
 
     public static RunSummary ToRunSummary(WorkflowRun run)

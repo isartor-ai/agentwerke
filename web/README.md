@@ -33,8 +33,9 @@ React + TypeScript frontend for the Autofac operations cockpit.
 
 - VITE_API_BASE_URL
   - Optional.
-  - When omitted, the app uses mock fixtures so it can run offline.
-  - When set, the typed API client will call the configured backend.
+  - When omitted, workflow-designer `/api/workflows*` requests use the local Vite proxy targeting `http://localhost:5232`.
+  - When set, the typed API client will call the configured backend directly.
+  - Non-workflow cockpit surfaces still use local mock fixtures when no backend base URL is configured.
 
 Example:
 

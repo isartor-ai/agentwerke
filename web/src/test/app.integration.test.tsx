@@ -8,6 +8,7 @@ vi.mock('../api/client', () => ({
     getRuns: vi.fn(),
     getRun: vi.fn(),
     getWorkflows: vi.fn(),
+    getWorkflow: vi.fn(),
     getApprovals: vi.fn(),
     decideApproval: vi.fn(),
   },
@@ -18,6 +19,11 @@ describe('App integration', () => {
     vi.mocked(apiClient.getRuns).mockResolvedValue(runsFixture);
     vi.mocked(apiClient.getRun).mockResolvedValue(runsFixture[0]);
     vi.mocked(apiClient.getWorkflows).mockResolvedValue(workflowsFixture);
+    vi.mocked(apiClient.getWorkflow).mockImplementation(async (id: string) => ({
+      ...(workflowsFixture.find((workflow) => workflow.id === id) ?? workflowsFixture[0]),
+      bpmnXml:
+        '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="AppFlow" name="App Flow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>',
+    }));
     vi.mocked(apiClient.getApprovals).mockResolvedValue(approvalsFixture);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     window.history.pushState({}, '', '/runs');

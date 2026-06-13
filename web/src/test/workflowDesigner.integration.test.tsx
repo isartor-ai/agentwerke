@@ -8,6 +8,8 @@ import { workflowsFixture } from './fixtures';
 vi.mock('../api/client', () => ({
   apiClient: {
     getWorkflows: vi.fn(),
+    getWorkflow: vi.fn(),
+    importWorkflowDefinition: vi.fn(),
     uploadBpmnWorkflow: vi.fn(),
     validateBpmnWorkflow: vi.fn(),
     publishWorkflowDefinition: vi.fn(),
@@ -22,12 +24,28 @@ describe('WorkflowDesigner integration', () => {
 
   beforeEach(() => {
     vi.mocked(apiClient.getWorkflows).mockResolvedValue(workflowsFixture);
+    vi.mocked(apiClient.getWorkflow).mockImplementation(async (id: string) => ({
+      ...(workflowsFixture.find((workflow) => workflow.id === id) ?? workflowsFixture[0]),
+      bpmnXml:
+        '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="PersistedFlow" name="Persisted Flow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>',
+    }));
+    vi.mocked(apiClient.importWorkflowDefinition).mockResolvedValue({
+      workflowId: 'wf-import-1',
+      validation: {
+        isValid: true,
+        processId: 'DeployWorkflow',
+        processName: 'Deploy Workflow',
+        warnings: [],
+        errors: [],
+      },
+    });
     vi.mocked(apiClient.uploadBpmnWorkflow).mockResolvedValue({
       workflowId: 'wf-import-1',
       validation: {
         isValid: false,
         processId: 'DeployWorkflow',
         processName: 'Deploy Workflow',
+        warnings: [],
         errors: [
           {
             message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
@@ -43,6 +61,7 @@ describe('WorkflowDesigner integration', () => {
       isValid: false,
       processId: 'DeployWorkflow',
       processName: 'Deploy Workflow',
+      warnings: [],
       errors: [
         {
           message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
@@ -115,6 +134,23 @@ describe('WorkflowDesigner integration', () => {
     });
   });
 
+  it('loads persisted BPMN xml for the selected workflow', async () => {
+    render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getWorkflow)).toHaveBeenCalledWith('wf-001');
+      expect((screen.getByLabelText('BPMN XML') as HTMLTextAreaElement).value).toContain(
+        'PersistedFlow',
+      );
+    });
+  });
+
   it('imports BPMN and shows actionable validation errors', async () => {
     render(
       <MemoryRouter>
@@ -123,6 +159,9 @@ describe('WorkflowDesigner integration', () => {
     );
 
     expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getWorkflow)).toHaveBeenCalledWith('wf-001');
+    });
 
     const file = new File(
       ['<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"></bpmn:definitions>'],
@@ -136,10 +175,52 @@ describe('WorkflowDesigner integration', () => {
     });
 
     await waitFor(() => {
+      expect(vi.mocked(apiClient.uploadBpmnWorkflow)).toHaveBeenCalledWith(file);
       expect(screen.getByText('Status:')).toBeInTheDocument();
       expect(screen.getByText('Invalid')).toBeInTheDocument();
       expect(screen.getByText(/requires autofac:agentTask metadata/i)).toBeInTheDocument();
       expect(screen.getByText(/at line 12, col 5/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows validation warnings without marking the workflow invalid', async () => {
+    vi.mocked(apiClient.validateBpmnWorkflow).mockResolvedValueOnce({
+      isValid: true,
+      processId: 'WarnFlow',
+      processName: 'Warn Flow',
+      errors: [],
+      warnings: [
+        {
+          message: "Workflow process is missing a human-readable 'name' attribute.",
+          elementName: 'process',
+          elementId: 'WarnFlow',
+          lineNumber: 2,
+          linePosition: 3,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Template Gallery')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('BPMN XML'), {
+      target: {
+        value:
+          '<?xml version="1.0" encoding="UTF-8"?>\n<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="WarnFlow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Valid')).toBeInTheDocument();
+      expect(screen.getByText('Warnings:')).toBeInTheDocument();
+      expect(screen.getByText(/human-readable 'name' attribute/i)).toBeInTheDocument();
     });
   });
 
@@ -254,6 +335,32 @@ describe('WorkflowDesigner integration', () => {
     await waitFor(() => {
       expect(screen.getByRole('region', { name: 'BPMN diff view' })).toBeInTheDocument();
       expect(screen.getAllByText(/bpmn:definitions/i).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('imports and publishes a template draft before showing persisted status', async () => {
+    render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Template Gallery')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Build Artifact')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.importWorkflowDefinition)).toHaveBeenCalled();
+      expect(vi.mocked(apiClient.publishWorkflowDefinition)).toHaveBeenCalledWith(
+        expect.objectContaining({ workflowId: 'wf-import-1' }),
+      );
+      expect(screen.getByText(/Published as v2.3.2/i)).toBeInTheDocument();
     });
   });
 

@@ -7,6 +7,8 @@ import { apiClient } from '../api/client';
 vi.mock('../api/client', () => ({
   apiClient: {
     getWorkflows: vi.fn(),
+    getWorkflow: vi.fn(),
+    importWorkflowDefinition: vi.fn(),
     uploadBpmnWorkflow: vi.fn(),
     validateBpmnWorkflow: vi.fn(),
     publishWorkflowDefinition: vi.fn(),
@@ -22,8 +24,17 @@ vi.mock('../api/client', () => ({
 describe('E2E: Metadata Editor Complete Workflow', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getWorkflows).mockResolvedValue([]);
+    vi.mocked(apiClient.importWorkflowDefinition).mockResolvedValue({
+      workflowId: 'wf-import-1',
+      validation: {
+        isValid: true,
+        warnings: [],
+        errors: [],
+      },
+    });
     vi.mocked(apiClient.validateBpmnWorkflow).mockResolvedValue({
       isValid: true,
+      warnings: [],
       errors: [],
     });
     vi.mocked(apiClient.publishWorkflowDefinition).mockResolvedValue({

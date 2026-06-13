@@ -45,6 +45,7 @@ public sealed class BpmnWorkflowValidatorTests
 
         Assert.True(result.IsValid);
         Assert.Empty(result.Errors);
+        Assert.Empty(result.Warnings);
         Assert.NotNull(result.Definition);
         Assert.Equal("DeployWorkflow", result.Definition!.ProcessId);
 
@@ -134,5 +135,62 @@ public sealed class BpmnWorkflowValidatorTests
         Assert.Contains(result.Errors, error =>
             error.ElementId == "BoundaryTimeout" &&
             error.Message.Contains("Boundary event must define", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_WhenAutofacMetadataHasNonBlockingIssues_ReturnsActionableWarnings()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="WarnFlow">
+                <bpmn:serviceTask id="DeployTask">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="DeploymentAgent"
+                      action="cloud.deploy_artifact"
+                      purposeType="production_deployment"
+                      policyTag="production_deployment_gateway"
+                      requiresEvidence="ci_passed,ci_passed"
+                      maxRetries="2"
+                      simulateTimeout="true" />
+                    <autofac:approvalTask
+                      purposeType="production_deployment"
+                      policyTag="human_approval_required" />
+                    <autofac:notify channel="slack" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:userTask id="ApprovalTask">
+                  <bpmn:extensionElements>
+                    <autofac:approvalTask
+                      purposeType="production_deployment"
+                      policyTag="human_approval_required" />
+                  </bpmn:extensionElements>
+                </bpmn:userTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        Assert.NotEmpty(result.Warnings);
+        Assert.Contains(result.Warnings, warning =>
+            warning.ElementName == "process" &&
+            warning.Message.Contains("missing a human-readable 'name' attribute", StringComparison.Ordinal));
+        Assert.Contains(result.Warnings, warning =>
+            warning.ElementId == "DeployTask" &&
+            warning.Message.Contains("autofac:approvalTask metadata", StringComparison.Ordinal));
+        Assert.Contains(result.Warnings, warning =>
+            warning.ElementId == "DeployTask" &&
+            warning.Message.Contains("duplicate entries", StringComparison.Ordinal));
+        Assert.Contains(result.Warnings, warning =>
+            warning.ElementId == "DeployTask" &&
+            warning.Message.Contains("simulateTimeout='true' without timeoutSeconds", StringComparison.Ordinal));
+        Assert.Contains(result.Warnings, warning =>
+            warning.ElementId == "DeployTask" &&
+            warning.Message.Contains("Unexpected Autofac extension element 'notify'", StringComparison.Ordinal));
     }
 }

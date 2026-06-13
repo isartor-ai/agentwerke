@@ -230,7 +230,7 @@ The following API endpoints need to be implemented in the `Autofac.Api` project.
     *   **Response**: `{ workflowId: string; version: string; publishedAt: string }`
     *   **Logic**:
         1.  Update the `Workflow` record with the new BPMN XML.
-        2.  Increment the version number.
+        2.  Apply the MVP versioning rule: drafts start at `v1.0.0`, and each successful publish bumps the major version to `vN.0.0`.
         3.  Change the status to `active`.
         4.  Return the workflow ID, the new version, and the publish date.
 

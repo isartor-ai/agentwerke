@@ -12,4 +12,5 @@ public sealed record WorkflowDetail(
     string CreatedAt,
     string LastEditedAt,
     string ValidationState,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    string BpmnXml);

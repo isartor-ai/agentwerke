@@ -408,7 +408,12 @@ export function WorkflowDesigner() {
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [workflowDetailLoading, setWorkflowDetailLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nextSelectionValidationRef = useRef<{
+    validation: WorkflowValidationResult;
+    workflowId: string;
+  } | null>(null);
 
   // Auto-save: BPMN XML
   const { recovered: recoveredXml } = useAutoSave(
@@ -444,13 +449,13 @@ export function WorkflowDesigner() {
     }
   }, [recoveredXml, recoveredMetadata, recoveredLastPublished]);
 
-  const loadWorkflows = async () => {
+  const loadWorkflows = async (preferredWorkflowId?: string | null) => {
     setLoading(true);
     setError(null);
     try {
       const data = await apiClient.getWorkflows();
       setWorkflows(data);
-      setSelectedId((current) => current ?? data[0]?.id ?? null);
+      setSelectedId((current) => preferredWorkflowId ?? current ?? data[0]?.id ?? null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unknown error');
     } finally {
@@ -461,6 +466,59 @@ export function WorkflowDesigner() {
   useEffect(() => {
     loadWorkflows();
   }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadWorkflowDetail = async () => {
+      setWorkflowDetailLoading(true);
+      setValidationError(null);
+      try {
+        const workflowDetail = await apiClient.getWorkflow(selectedId);
+        if (!workflowDetail || isCancelled) {
+          return;
+        }
+
+        setWorkflows((current) =>
+          current.map((workflow) =>
+            workflow.id === workflowDetail.id ? workflowDetail : workflow,
+          ),
+        );
+        const pendingValidation = nextSelectionValidationRef.current;
+        if (pendingValidation?.workflowId === workflowDetail.id) {
+          setValidation(pendingValidation.validation);
+          nextSelectionValidationRef.current = null;
+        } else {
+          setValidation(null);
+        }
+        setSelectedTemplateId(null);
+        setSelectedNodeId(null);
+        setPublishMessage(null);
+        setBpmnXml(workflowDetail.bpmnXml ?? '');
+        setLastPublishedXml(workflowDetail.bpmnXml ?? '');
+      } catch (detailError) {
+        if (!isCancelled) {
+          setValidationError(
+            detailError instanceof Error ? detailError.message : 'Unable to load workflow detail.',
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setWorkflowDetailLoading(false);
+        }
+      }
+    };
+
+    void loadWorkflowDetail();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedId]);
 
   const filtered = useMemo(() => {
     const query = search.toLowerCase();
@@ -567,8 +625,10 @@ export function WorkflowDesigner() {
       return;
     }
 
+    setSelectedId(null);
     setSelectedTemplateId(templateId);
     setBpmnXml(template.xml);
+    setLastPublishedXml('');
     setSelectedNodeId(null);
     setValidation(null);
     setValidationError(null);
@@ -603,12 +663,23 @@ export function WorkflowDesigner() {
     setValidationError(null);
     try {
       const uploaded = await apiClient.uploadBpmnWorkflow(file);
-      const xml = await readFileAsText(file);
-      setBpmnXml(xml);
-      setSelectedNodeId(null);
       setValidation(uploaded.validation);
+      try {
+        const xml = await readFileAsText(file);
+        setBpmnXml(xml);
+        setLastPublishedXml(xml);
+      } catch {
+        setValidationError('Uploaded BPMN, but could not load a local preview of the file.');
+      }
+      setSelectedTemplateId(null);
+      setSelectedNodeId(null);
       if (uploaded.workflowId) {
-        setSelectedId((current) => current ?? uploaded.workflowId);
+        nextSelectionValidationRef.current = {
+          validation: uploaded.validation,
+          workflowId: uploaded.workflowId,
+        };
+        setSelectedId(uploaded.workflowId);
+        await loadWorkflows(uploaded.workflowId);
       }
     } catch (uploadError) {
       setValidationError(uploadError instanceof Error ? uploadError.message : 'BPMN import failed.');
@@ -649,11 +720,33 @@ export function WorkflowDesigner() {
     }
 
     try {
+      let workflowId = selectedId;
+      if (!workflowId) {
+        const draftName = selectedTemplateId
+          ? `${normalizeFileName(selectedTemplateId)}.bpmn`
+          : 'workflow.bpmn';
+        const imported = await apiClient.importWorkflowDefinition({
+          fileName: draftName,
+          bpmnXml,
+        });
+
+        workflowId = imported.workflowId;
+        setValidation(imported.validation);
+        nextSelectionValidationRef.current = {
+          validation: imported.validation,
+          workflowId,
+        };
+        setSelectedId(workflowId);
+        await loadWorkflows(workflowId);
+      }
+
       const publishResult = await apiClient.publishWorkflowDefinition({
-        workflowId: selectedWorkflow?.id,
+        workflowId,
         bpmnXml,
+        description: selectedWorkflow?.description,
       });
       setLastPublishedXml(bpmnXml);
+      setSelectedTemplateId(null);
       setPublishMessage(
         `Published as ${publishResult.version} at ${new Date(publishResult.publishedAt).toLocaleString()}.`,
       );
@@ -667,7 +760,7 @@ export function WorkflowDesigner() {
         // Ignore localStorage errors
       }
       
-      await loadWorkflows();
+      await loadWorkflows(workflowId);
     } catch (publishError) {
       setPublishMessage(
         publishError instanceof Error ? publishError.message : 'Failed to publish workflow.',
@@ -828,6 +921,7 @@ export function WorkflowDesigner() {
 
             <section className="panel validation-panel" aria-label="BPMN validation results">
               <h3>Validation Results</h3>
+              {workflowDetailLoading ? <p>Loading persisted workflow detail...</p> : null}
               {validationLoading ? <p>Validating BPMN...</p> : null}
               {validationError ? <p className="validation-error">{validationError}</p> : null}
 
@@ -855,6 +949,23 @@ export function WorkflowDesigner() {
                   ) : (
                     <p>No validation errors.</p>
                   )}
+                  {validation.warnings.length > 0 ? (
+                    <>
+                      <p>
+                        Warnings: <strong>{validation.warnings.length}</strong>
+                      </p>
+                      <ul className="validation-list">
+                        {validation.warnings.map((item, index) => (
+                          <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`}>
+                            <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                            {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                            {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                            {item.linePosition ? `, col ${item.linePosition}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                 </div>
               ) : (
                 <p>Import and validate a BPMN file to see actionable errors.</p>
