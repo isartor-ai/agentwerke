@@ -12,10 +12,12 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IWorkflowRuntimeStore _store;
+    private readonly IServiceTaskExecutor _serviceTaskExecutor;
 
-    public WorkflowInstanceEngine(IWorkflowRuntimeStore store)
+    public WorkflowInstanceEngine(IWorkflowRuntimeStore store, IServiceTaskExecutor serviceTaskExecutor)
     {
         _store = store;
+        _serviceTaskExecutor = serviceTaskExecutor;
     }
 
     public async Task<WorkflowExecutionState> StartAsync(
@@ -429,10 +431,32 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
         var metadata = node.Metadata;
         var maxRetries = metadata?.MaxRetries ?? 0;
         var retryBackoffSeconds = metadata?.RetryBackoffSeconds ?? 0;
-        var failUntilAttempt = metadata?.FailUntilAttempt ?? 0;
         var simulateTimeout = metadata?.SimulateTimeout ?? false;
         var timeoutSeconds = metadata?.TimeoutSeconds;
         var boundaryNode = FindBoundaryNodeAfter(definition, nodeIndex);
+
+        var step = await _store.CreateStepAsync(
+            runId,
+            node.Id,
+            node.Name,
+            node.ElementName,
+            metadata?.Agent,
+            cancellationToken);
+
+        if (simulateTimeout && boundaryNode is not null)
+        {
+            await _store.AppendEventAsync(runId, "timer_scheduled",
+                Serialize(new { runId, nodeId = node.Id, timeoutSeconds = timeoutSeconds ?? 0 }), cancellationToken);
+            await _store.AppendEventAsync(runId, "timeout_triggered",
+                Serialize(new { runId, nodeId = node.Id, boundaryNodeId = boundaryNode.Id }), cancellationToken);
+            await _store.AppendEventAsync(runId, "boundary_event_triggered",
+                Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }), cancellationToken);
+            await _store.AppendEventAsync(runId, "node_completed",
+                Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex, reason = "timeout_boundary" }), cancellationToken);
+
+            await _store.UpdateStepStatusAsync(step.Id, "timed_out", output: null, DateTime.UtcNow.ToString("o"), cancellationToken);
+            return ServiceExecutionResult.Completed;
+        }
 
         var attempt = 1;
         while (true)
@@ -444,6 +468,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                 {
                     runId,
                     nodeId = node.Id,
+                    stepId = step.Id,
                     attempt,
                     maxRetries,
                     agent = metadata?.Agent,
@@ -455,87 +480,45 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
                 }),
                 cancellationToken);
 
-            if (simulateTimeout && boundaryNode is not null)
+            var outcome = await _serviceTaskExecutor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken);
+
+            if (!outcome.Succeeded)
             {
-                await _store.AppendEventAsync(
-                    runId,
-                    "timer_scheduled",
-                    Serialize(new { runId, nodeId = node.Id, timeoutSeconds = timeoutSeconds ?? 0 }),
-                    cancellationToken);
-
-                await _store.AppendEventAsync(
-                    runId,
-                    "timeout_triggered",
-                    Serialize(new { runId, nodeId = node.Id, boundaryNodeId = boundaryNode.Id }),
-                    cancellationToken);
-
-                await _store.AppendEventAsync(
-                    runId,
-                    "boundary_event_triggered",
-                    Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }),
-                    cancellationToken);
-
-                await _store.AppendEventAsync(
-                    runId,
-                    "node_completed",
-                    Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex, reason = "timeout_boundary" }),
-                    cancellationToken);
-
-                return ServiceExecutionResult.Completed;
-            }
-
-            if (attempt <= failUntilAttempt)
-            {
-                await _store.AppendEventAsync(
-                    runId,
-                    "service_task_failed",
-                    Serialize(new { runId, nodeId = node.Id, attempt, reason = "simulated_failure" }),
+                await _store.AppendEventAsync(runId, "service_task_failed",
+                    Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempt, reason = outcome.FailureReason ?? "execution_error" }),
                     cancellationToken);
 
                 if (attempt <= maxRetries)
                 {
-                    await _store.AppendEventAsync(
-                        runId,
-                        "retry_scheduled",
+                    await _store.AppendEventAsync(runId, "retry_scheduled",
                         Serialize(new { runId, nodeId = node.Id, nextAttempt = attempt + 1, retryBackoffSeconds }),
                         cancellationToken);
-
                     attempt++;
                     continue;
                 }
 
                 if (boundaryNode is not null)
                 {
-                    await _store.AppendEventAsync(
-                        runId,
-                        "boundary_event_triggered",
-                        Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }),
-                        cancellationToken);
-
-                    await _store.AppendEventAsync(
-                        runId,
-                        "node_completed",
-                        Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex, reason = "retry_exhausted_boundary" }),
-                        cancellationToken);
-
+                    await _store.AppendEventAsync(runId, "boundary_event_triggered",
+                        Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }), cancellationToken);
+                    await _store.AppendEventAsync(runId, "node_completed",
+                        Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex, reason = "retry_exhausted_boundary" }), cancellationToken);
+                    await _store.UpdateStepStatusAsync(step.Id, FailedStatus, outcome.FailureReason, DateTime.UtcNow.ToString("o"), cancellationToken);
                     return ServiceExecutionResult.Completed;
                 }
 
-                await _store.AppendEventAsync(
-                    runId,
-                    "service_task_retry_exhausted",
-                    Serialize(new { runId, nodeId = node.Id, attempts = attempt }),
-                    cancellationToken);
-
+                await _store.AppendEventAsync(runId, "service_task_retry_exhausted",
+                    Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempts = attempt }), cancellationToken);
+                await _store.UpdateStepStatusAsync(step.Id, FailedStatus, outcome.FailureReason, DateTime.UtcNow.ToString("o"), cancellationToken);
                 return ServiceExecutionResult.Failed;
             }
 
-            await _store.AppendEventAsync(
-                runId,
-                "node_completed",
-                Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex }),
+            await _store.AppendEventAsync(runId, "agent_output_recorded",
+                Serialize(new { runId, nodeId = node.Id, stepId = step.Id, agent = metadata?.Agent, outputLength = outcome.Output?.Length ?? 0 }),
                 cancellationToken);
-
+            await _store.AppendEventAsync(runId, "node_completed",
+                Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex }), cancellationToken);
+            await _store.UpdateStepStatusAsync(step.Id, CompletedStatus, outcome.Output, DateTime.UtcNow.ToString("o"), cancellationToken);
             return ServiceExecutionResult.Completed;
         }
     }

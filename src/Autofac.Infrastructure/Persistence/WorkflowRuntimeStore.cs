@@ -89,4 +89,42 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         }
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<WorkflowRunStep> CreateStepAsync(
+        string runId,
+        string nodeId,
+        string? nodeName,
+        string nodeType,
+        string? agentName,
+        CancellationToken cancellationToken)
+    {
+        var run = await _dbContext.WorkflowRuns.FirstAsync(r => r.Id == runId, cancellationToken);
+        var step = new WorkflowRunStep
+        {
+            Id = $"step_{Guid.NewGuid():N}",
+            Name = nodeName ?? nodeId,
+            Type = nodeType,
+            Status = "running",
+            StartedAt = DateTime.UtcNow.ToString("o"),
+            AgentName = agentName
+        };
+
+        run.Steps.Add(step);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return step;
+    }
+
+    public async Task UpdateStepStatusAsync(
+        string stepId,
+        string status,
+        string? output,
+        string? completedAt,
+        CancellationToken cancellationToken)
+    {
+        var step = await _dbContext.WorkflowRunSteps.FirstAsync(s => s.Id == stepId, cancellationToken);
+        step.Status = status;
+        step.Output = output;
+        step.CompletedAt = completedAt;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

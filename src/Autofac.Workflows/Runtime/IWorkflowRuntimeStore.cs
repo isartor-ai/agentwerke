@@ -24,4 +24,19 @@ public interface IWorkflowRuntimeStore
         string status,
         string? completedAt,
         CancellationToken cancellationToken);
+
+    Task<WorkflowRunStep> CreateStepAsync(
+        string runId,
+        string nodeId,
+        string? nodeName,
+        string nodeType,
+        string? agentName,
+        CancellationToken cancellationToken);
+
+    Task UpdateStepStatusAsync(
+        string stepId,
+        string status,
+        string? output,
+        string? completedAt,
+        CancellationToken cancellationToken);
 }
