@@ -40,6 +40,7 @@ export interface Workflow {
   createdAt: string;
   validationState: 'valid' | 'invalid' | 'pending';
   tags: string[];
+  bpmnXml?: string;
 }
 
 export interface RunStep {

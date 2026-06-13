@@ -39,7 +39,8 @@ internal static class ApiContractMappings
             workflow.CreatedAt,
             workflow.LastEditedAt,
             workflow.ValidationState,
-            workflow.Tags.ToArray());
+            workflow.Tags.ToArray(),
+            workflow.BpmnXml);
     }
 
     public static ValidationResponse ToValidationResponse(WorkflowValidationResult validation)

@@ -8,6 +8,7 @@ import type {
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const WORKFLOW_API_BASE_URL = API_BASE_URL ?? '';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -24,69 +25,6 @@ const policyEscalate: PolicyDecision = {
   decidedAt: new Date(now - 6 * 60_000).toISOString(),
   constraints: ['Require approval from release-manager role'],
 };
-
-const mockWorkflows: Workflow[] = [
-  {
-    id: 'wf-001',
-    name: 'GitHub PR Review',
-    description: 'Automated code review and guarded merge workflow.',
-    version: 'v2.3.1',
-    status: 'active',
-    owner: 'platform-eng',
-    createdAt: new Date(now - 30 * 86_400_000).toISOString(),
-    lastEditedAt: new Date(now - 24 * 3_600_000).toISOString(),
-    validationState: 'valid',
-    tags: ['github', 'production'],
-  },
-  {
-    id: 'wf-002',
-    name: 'Dependency Vulnerability Patch',
-    description: 'Patch vulnerable dependencies and open remediation PRs.',
-    version: 'v1.0.4',
-    status: 'active',
-    owner: 'secops',
-    createdAt: new Date(now - 15 * 86_400_000).toISOString(),
-    lastEditedAt: new Date(now - 12 * 3_600_000).toISOString(),
-    validationState: 'valid',
-    tags: ['security'],
-  },
-  {
-    id: 'wf-003',
-    name: 'Incident Response Runbook',
-    description: 'Production incident triage and remediation workflow.',
-    version: 'v3.1.0',
-    status: 'active',
-    owner: 'sre',
-    createdAt: new Date(now - 60 * 86_400_000).toISOString(),
-    lastEditedAt: new Date(now - 48 * 3_600_000).toISOString(),
-    validationState: 'valid',
-    tags: ['incident', 'critical'],
-  },
-  {
-    id: 'wf-004',
-    name: 'Infra Sandbox Provisioning',
-    description: 'Provision ephemeral sandboxes for validation runs.',
-    version: 'v1.2.0',
-    status: 'draft',
-    owner: 'platform-eng',
-    createdAt: new Date(now - 10 * 86_400_000).toISOString(),
-    lastEditedAt: new Date(now - 6 * 3_600_000).toISOString(),
-    validationState: 'pending',
-    tags: ['sandbox'],
-  },
-  {
-    id: 'wf-005',
-    name: 'DB Schema Migration Audit',
-    description: 'Validate and audit schema migration plans.',
-    version: 'v0.9.0',
-    status: 'archived',
-    owner: 'data-eng',
-    createdAt: new Date(now - 120 * 86_400_000).toISOString(),
-    lastEditedAt: new Date(now - 96 * 3_600_000).toISOString(),
-    validationState: 'invalid',
-    tags: ['database', 'compliance'],
-  },
-];
 
 const mockRuns: WorkflowRun[] = [
   {
@@ -270,67 +208,6 @@ const mockRuns: WorkflowRun[] = [
   },
 ];
 
-function toWorkflowValidationResultFromXml(xml: string): WorkflowValidationResult {
-  const parser = new DOMParser();
-  const parsed = parser.parseFromString(xml, 'application/xml');
-  const parserError = parsed.querySelector('parsererror');
-  if (parserError) {
-    return {
-      isValid: false,
-      warnings: [],
-      errors: [
-        {
-          message: 'Invalid XML payload.',
-          elementName: 'document',
-        },
-      ],
-    };
-  }
-
-  const process = parsed.getElementsByTagName('bpmn:process')[0] ?? parsed.getElementsByTagName('process')[0];
-  if (!process) {
-    return {
-      isValid: false,
-      warnings: [],
-      errors: [
-        {
-          message: 'BPMN document must include a process element.',
-          elementName: 'process',
-        },
-      ],
-    };
-  }
-
-  const xmlText = xml.toLowerCase();
-  const hasAgentTask = xmlText.includes('autofac:agenttask');
-  const hasApprovalTask = xmlText.includes('autofac:approvaltask');
-
-  const errors = [] as WorkflowValidationResult['errors'];
-  if (!hasAgentTask) {
-    errors.push({
-      message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
-      elementName: 'serviceTask',
-      elementId: null,
-    });
-  }
-
-  if (!hasApprovalTask && xmlText.includes('usertask')) {
-    errors.push({
-      message: 'User task requires autofac:approvalTask metadata under extensionElements.',
-      elementName: 'userTask',
-      elementId: null,
-    });
-  }
-
-  return {
-    isValid: errors.length === 0,
-    processId: process.getAttribute('id') ?? undefined,
-    processName: process.getAttribute('name') ?? undefined,
-    errors,
-    warnings: [],
-  };
-}
-
 const mockApprovals: ApprovalRequest[] = [
   {
     id: 'apr-1001',
@@ -392,92 +269,74 @@ function isRemoteEnabled(): boolean {
   return Boolean(API_BASE_URL);
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+async function requestJson<T>(path: string, init?: RequestInit, baseUrl: string = API_BASE_URL ?? ''): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed for ${path}: ${response.status}`);
+    const errorText = await response.text();
+    const errorMessage = extractErrorMessage(errorText) ?? `Request failed for ${path}: ${response.status}`;
+    throw new Error(errorMessage);
   }
 
   return (await response.json()) as T;
 }
 
-export const apiClient = {
-  async getWorkflows(): Promise<Workflow[]> {
-    if (isRemoteEnabled()) {
-      return requestJson<Workflow[]>('/api/workflows');
-    }
+function extractErrorMessage(errorText: string): string | null {
+  if (!errorText.trim()) {
+    return null;
+  }
 
-    await delay(120);
-    return mockWorkflows;
+  try {
+    const parsed = JSON.parse(errorText) as { message?: string; title?: string };
+    return parsed.message ?? parsed.title ?? errorText;
+  } catch {
+    return errorText;
+  }
+}
+
+export const apiClient = {
+  async importWorkflowDefinition(payload: {
+    fileName: string;
+    bpmnXml: string;
+  }): Promise<{ workflowId: string; validation: WorkflowValidationResult }> {
+    return requestJson<{ workflowId: string; validation: WorkflowValidationResult }>('/api/workflows/import', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, WORKFLOW_API_BASE_URL);
+  },
+
+  async getWorkflows(): Promise<Workflow[]> {
+    return requestJson<Workflow[]>('/api/workflows', undefined, WORKFLOW_API_BASE_URL);
   },
 
   async getWorkflow(id: string): Promise<Workflow | undefined> {
-    if (isRemoteEnabled()) {
-      return requestJson<Workflow>(`/api/workflows/${id}`);
-    }
-
-    await delay(120);
-    return mockWorkflows.find((workflow) => workflow.id === id);
+    return requestJson<Workflow>(`/api/workflows/${id}`, undefined, WORKFLOW_API_BASE_URL);
   },
 
   async uploadBpmnWorkflow(file: File): Promise<{ workflowId: string; validation: WorkflowValidationResult }> {
     const xml = await file.text();
-
-    if (isRemoteEnabled()) {
-      return requestJson<{ workflowId: string; validation: WorkflowValidationResult }>('/api/workflows/import', {
-        method: 'POST',
-        body: JSON.stringify({ fileName: file.name, bpmnXml: xml }),
-      });
-    }
-
-    await delay(140);
-    const validation = toWorkflowValidationResultFromXml(xml);
-    return {
-      workflowId: `wf-import-${Date.now()}`,
-      validation,
-    };
+    return this.importWorkflowDefinition({ fileName: file.name, bpmnXml: xml });
   },
 
   async validateBpmnWorkflow(payload: { workflowId?: string; bpmnXml: string }): Promise<WorkflowValidationResult> {
-    if (isRemoteEnabled()) {
-      return requestJson<WorkflowValidationResult>('/api/workflows/validate', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    }
-
-    await delay(120);
-    return toWorkflowValidationResultFromXml(payload.bpmnXml);
+    return requestJson<WorkflowValidationResult>('/api/workflows/validate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, WORKFLOW_API_BASE_URL);
   },
 
   async publishWorkflowDefinition(payload: {
     workflowId?: string;
     bpmnXml: string;
+    description?: string;
   }): Promise<WorkflowPublishResult> {
-    if (isRemoteEnabled()) {
-      return requestJson<WorkflowPublishResult>(`/api/workflows/${payload.workflowId ?? 'draft'}/publish`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    }
-
-    await delay(140);
-    const workflow = mockWorkflows.find((item) => item.id === payload.workflowId) ?? mockWorkflows[0];
-    const [major, minor, patch] = workflow.version.replace(/^v/, '').split('.').map((part) => Number(part) || 0);
-    const nextVersion = `v${major}.${minor}.${patch + 1}`;
-    workflow.version = nextVersion;
-    workflow.status = 'active';
-    workflow.lastEditedAt = new Date().toISOString();
-
-    return {
-      workflowId: workflow.id,
-      version: nextVersion,
-      publishedAt: new Date().toISOString(),
-    };
+    return requestJson<WorkflowPublishResult>(`/api/workflows/${payload.workflowId}/publish`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, WORKFLOW_API_BASE_URL);
   },
 
   async getPolicySimulation(workflowId: string): Promise<{
