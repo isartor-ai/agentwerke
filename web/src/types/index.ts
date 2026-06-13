@@ -59,14 +59,25 @@ export interface RunStep {
 export interface RunEvent {
   id: string;
   type:
+    | 'run_started'
+    | 'checkpoint_saved'
     | 'node_entered'
     | 'node_completed'
+    | 'user_task_completed'
+    | 'user_task_waiting'
+    | 'gateway_evaluated'
+    | 'parallel_forked'
+    | 'parallel_branch_entered'
+    | 'parallel_joined'
+    | 'boundary_event_registered'
+    | 'service_task_attempted'
+    | 'service_task_failed'
+    | 'service_task_retry_exhausted'
     | 'retry_scheduled'
+    | 'timer_scheduled'
+    | 'timer_fired'
     | 'timeout_triggered'
     | 'boundary_event_triggered'
-    | 'parallel_forked'
-    | 'parallel_joined'
-    | 'user_task_waiting'
     | 'run_completed'
     | 'info';
   message: string;

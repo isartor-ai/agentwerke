@@ -96,8 +96,5 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.DecidedBy).HasMaxLength(128);
         });
 
-        // PolicyDecision is owned by WorkflowRunStep, so it doesn't need its own table.
-        // We also don't need a DbSet for it in the DbContext.
-        modelBuilder.Ignore<PolicyDecision>();
     }
 }

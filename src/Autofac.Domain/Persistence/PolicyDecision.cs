@@ -4,7 +4,7 @@ namespace Autofac.Domain.Persistence;
 
 public sealed class PolicyDecision
 {
-    public string Kind { get; set; } = "approve";
+    public string Kind { get; set; } = "allow";
 
     public string PolicyId { get; set; } = string.Empty;
 

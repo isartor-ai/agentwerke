@@ -1,9 +1,20 @@
-using System;
+using System.Collections.Generic;
 
 namespace Autofac.Api.Contracts.Runs;
 
 public sealed record RunDetail(
-    string RunId,
+    string Id,
     string WorkflowId,
+    string WorkflowName,
+    string WorkflowVersion,
     string Status,
-    DateTimeOffset StartedAtUtc);
+    string RiskLevel,
+    string? CurrentStep,
+    string RequestedBy,
+    string StartedAt,
+    string? CompletedAt,
+    int? DurationMs,
+    int PendingApprovals,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<RunEvent> Events,
+    IReadOnlyList<RunStep> Steps);

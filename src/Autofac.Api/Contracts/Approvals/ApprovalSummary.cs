@@ -15,7 +15,10 @@ public sealed record ApprovalSummary(
     string RiskLevel,
     IReadOnlyList<string> RiskFactors,
     IReadOnlyList<string> AffectedSystems,
-    DateTimeOffset SlaDeadline,
-    DateTimeOffset CreatedAt,
+    string SlaDeadline,
+    string CreatedAt,
     string Status,
-    string Priority);
+    string Priority,
+    string? DecisionComment = null,
+    string? DecidedBy = null,
+    string? DecidedAt = null);

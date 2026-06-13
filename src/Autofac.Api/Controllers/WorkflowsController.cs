@@ -1,3 +1,4 @@
+using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Workflows;
 using Autofac.Domain.Persistence;
 using Autofac.Infrastructure.Persistence;
@@ -25,10 +26,9 @@ public sealed class WorkflowsController : ControllerBase
     {
         var workflows = await _dbContext.WorkflowDefinitions
             .AsNoTracking()
-            .Select(w => new WorkflowSummary(w.Id, w.Name, w.Status))
             .ToListAsync();
 
-        return Ok(workflows);
+        return Ok(workflows.Select(ApiContractMappings.ToWorkflowSummary).ToList());
     }
 
     [HttpGet("{workflowId}")]
@@ -43,7 +43,7 @@ public sealed class WorkflowsController : ControllerBase
             return NotFound();
         }
 
-        return Ok(new WorkflowDetail(workflow.Id, workflow.Name, workflow.Status, DateTimeOffset.Parse(workflow.LastEditedAt)));
+        return Ok(ApiContractMappings.ToWorkflowDetail(workflow));
     }
 
     [HttpPost("import")]
@@ -119,7 +119,7 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(new PublishWorkflowResponse(
             WorkflowId: workflowId,
             Version: workflow.Version,
-            PublishedAt: DateTimeOffset.Parse(workflow.LastEditedAt)));
+            PublishedAt: workflow.LastEditedAt));
     }
 
     private static ValidationResponse ToValidationResponse(BpmnValidationResult validation)

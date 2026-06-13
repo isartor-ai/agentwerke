@@ -1,3 +1,4 @@
+using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Runs;
 using Autofac.Domain.Persistence;
 using Autofac.Infrastructure.Persistence;
@@ -28,10 +29,10 @@ public sealed class RunsController : ControllerBase
     {
         var runs = await _dbContext.WorkflowRuns
             .AsNoTracking()
-            .Select(r => new RunSummary(r.Id, r.WorkflowId, r.Status))
+            .Include(r => r.Events)
             .ToListAsync();
 
-        return Ok(runs);
+        return Ok(runs.Select(ApiContractMappings.ToRunSummary).ToList());
     }
 
     [HttpGet("{runId}")]
@@ -48,7 +49,7 @@ public sealed class RunsController : ControllerBase
             return NotFound();
         }
 
-        return Ok(run);
+        return Ok(ApiContractMappings.ToRunDetail(run));
     }
 
     [HttpPost]
@@ -67,7 +68,7 @@ public sealed class RunsController : ControllerBase
         return Accepted(new StartRunResponse(
             run.RunId,
             request.WorkflowId,
-            run.Status));
+            ApiContractMappings.NormalizeRunStatus(run.Status)));
     }
 
     [HttpPost("{runId}/artifacts/{artifactName}")]

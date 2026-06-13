@@ -1,3 +1,4 @@
+using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Approvals;
 using Autofac.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -21,25 +22,24 @@ public sealed class ApprovalsController : ControllerBase
     {
         var approvals = await _dbContext.ApprovalRequests
             .AsNoTracking()
-            .Select(a => new ApprovalSummary(
-                a.Id,
-                a.RunId,
-                a.WorkflowName,
-                a.ActionRequested,
-                a.Requester,
-                a.AgentName,
-                a.PolicyRationale,
-                a.RiskScore,
-                a.RiskLevel,
-                a.RiskFactors,
-                a.AffectedSystems,
-                DateTimeOffset.Parse(a.SlaDeadline),
-                DateTimeOffset.Parse(a.CreatedAt),
-                a.Status,
-                a.Priority))
             .ToListAsync();
 
-        return Ok(approvals);
+        return Ok(approvals.Select(ApiContractMappings.ToApprovalSummary).ToList());
+    }
+
+    [HttpGet("{approvalId}")]
+    public async Task<IActionResult> Get(string approvalId)
+    {
+        var approval = await _dbContext.ApprovalRequests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == approvalId);
+
+        if (approval == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(ApiContractMappings.ToApprovalSummary(approval));
     }
 
     [HttpPost("{approvalId}/decision")]
@@ -51,7 +51,20 @@ public sealed class ApprovalsController : ControllerBase
             return NotFound();
         }
 
-        approval.Status = request.Decision;
+        var resolvedStatus = request.Decision switch
+        {
+            "approve" => "approved",
+            "reject" => "rejected",
+            "escalate" => "escalated",
+            _ => null
+        };
+
+        if (resolvedStatus is null)
+        {
+            return BadRequest(new { message = $"Unsupported approval decision '{request.Decision}'." });
+        }
+
+        approval.Status = resolvedStatus;
         approval.DecisionComment = request.Comment;
         approval.DecidedAt = DateTime.UtcNow.ToString("o");
         approval.DecidedBy = "api-user"; // In a real app, this would be the authenticated user
@@ -61,8 +74,8 @@ public sealed class ApprovalsController : ControllerBase
         return Accepted(new ApprovalDecisionResponse(
             ApprovalId: approvalId,
             Status: approval.Status,
-            DecidedAt: DateTimeOffset.Parse(approval.DecidedAt),
-            DecidedBy: approval.DecidedBy,
+            DecidedAt: approval.DecidedAt,
+            DecidedBy: approval.DecidedBy ?? string.Empty,
             Comment: approval.DecisionComment));
     }
 }
