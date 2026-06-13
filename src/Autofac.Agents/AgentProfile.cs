@@ -27,8 +27,10 @@ public static class AgentRegistry
             Category = "devops",
             Skills =
             [
-                new AgentSkillRef("deploy", "Deploy", "Deploy artefacts to an environment", ["deploy", "rollback", "promote"]),
-                new AgentSkillRef("health-check", "Health Check", "Verify deployment health", ["health-check", "verify"])
+                new AgentSkillRef("deploy", "Deploy", "Deploy artefacts to an environment",
+                    ["deploy", "rollback", "promote"], SkillManifestId: "shipping-and-launch"),
+                new AgentSkillRef("health-check", "Health Check", "Verify deployment health",
+                    ["health-check", "verify"])
             ],
             SupportedEnvironments = ["staging", "production", "dev"],
             SupportedPolicyTags = ["deploy-staging", "deploy-production", "deploy-rollback"]
@@ -41,8 +43,10 @@ public static class AgentRegistry
             Category = "security",
             Skills =
             [
-                new AgentSkillRef("secret-rotation", "Secret Rotation", "Rotate credentials and secrets", ["rotate-secrets", "revoke-credentials"]),
-                new AgentSkillRef("vuln-scan", "Vulnerability Scan", "Run SAST/DAST and dependency scans", ["scan", "audit"])
+                new AgentSkillRef("secret-rotation", "Secret Rotation", "Rotate credentials and secrets",
+                    ["rotate-secrets", "revoke-credentials"], SkillManifestId: "security-and-hardening"),
+                new AgentSkillRef("vuln-scan", "Vulnerability Scan", "Run SAST/DAST and dependency scans",
+                    ["scan", "audit"], SkillManifestId: "security-and-hardening")
             ],
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["secret-rotation", "security-scan", "compliance-check"]
@@ -55,8 +59,10 @@ public static class AgentRegistry
             Category = "infrastructure",
             Skills =
             [
-                new AgentSkillRef("provision", "Provision", "Create or update infrastructure resources", ["provision", "configure", "teardown"]),
-                new AgentSkillRef("scale", "Scale", "Scale compute resources up or down", ["scale-up", "scale-down"])
+                new AgentSkillRef("provision", "Provision", "Create or update infrastructure resources",
+                    ["provision", "configure", "teardown"], SkillManifestId: "incremental-implementation"),
+                new AgentSkillRef("scale", "Scale", "Scale compute resources up or down",
+                    ["scale-up", "scale-down"])
             ],
             SupportedEnvironments = ["aws", "gcp", "azure"],
             SupportedPolicyTags = ["infra-change", "scale-event", "resource-provision"]
@@ -69,8 +75,10 @@ public static class AgentRegistry
             Category = "quality",
             Skills =
             [
-                new AgentSkillRef("run-tests", "Run Tests", "Execute test suites and collect results", ["run-tests", "run-integration-tests", "run-e2e"]),
-                new AgentSkillRef("coverage", "Coverage", "Measure and report code coverage", ["coverage-report"])
+                new AgentSkillRef("run-tests", "Run Tests", "Execute test suites and collect results",
+                    ["run-tests", "run-integration-tests", "run-e2e"], SkillManifestId: "test-driven-development"),
+                new AgentSkillRef("coverage", "Coverage", "Measure and report code coverage",
+                    ["coverage-report"], SkillManifestId: "test-driven-development")
             ],
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["test-gate", "quality-check"]

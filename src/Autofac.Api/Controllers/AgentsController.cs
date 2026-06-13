@@ -21,7 +21,8 @@ public sealed class AgentsController : ControllerBase
                 skillId = s.SkillId,
                 name = s.Name,
                 description = s.Description,
-                supportedActions = s.SupportedActions
+                supportedActions = s.SupportedActions,
+                skillManifestId = s.SkillManifestId
             }),
             supportedEnvironments = p.SupportedEnvironments,
             supportedPolicyTags = p.SupportedPolicyTags

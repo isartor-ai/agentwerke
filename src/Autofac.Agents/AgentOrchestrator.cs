@@ -1,3 +1,4 @@
+using Autofac.Agents.Skills;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
 
@@ -10,7 +11,14 @@ namespace Autofac.Agents;
 /// </summary>
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
-    public async Task<AgentTaskOutcome> ExecuteAsync(
+    private readonly ISkillRepository _skillRepository;
+
+    public AgentOrchestrator(ISkillRepository skillRepository)
+    {
+        _skillRepository = skillRepository;
+    }
+
+    public Task<AgentTaskOutcome> ExecuteAsync(
         string runId,
         string stepId,
         BpmnNodeDefinition node,
@@ -20,11 +28,26 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         var metadata = node.Metadata;
         if (metadata is null)
         {
-            return new AgentTaskOutcome(
+            return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
-                FailureReason: "Service task is missing autofac:agentTask metadata.");
+                FailureReason: "Service task is missing autofac:agentTask metadata."));
         }
+
+        // Honour the BPMN test-scenario flags so existing fixtures keep working.
+        if (attempt <= metadata.FailUntilAttempt)
+        {
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: $"Simulated failure on attempt {attempt} (failUntilAttempt={metadata.FailUntilAttempt})"));
+        }
+
+        var profile = AgentRegistry.Find(metadata.Agent);
+        var matchedSkillRef = ResolveSkillRef(profile, metadata.Action);
+        var skillManifest = matchedSkillRef?.SkillManifestId is not null
+            ? _skillRepository.FindById(matchedSkillRef.SkillManifestId)
+            : null;
 
         var request = new AgentExecutionRequest(
             RunId: runId,
@@ -39,26 +62,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             RequiresEvidence: metadata.RequiresEvidence,
             Attempt: attempt);
 
-        return await SimulateExecutionAsync(request, metadata, cancellationToken);
-    }
-
-    private static Task<AgentTaskOutcome> SimulateExecutionAsync(
-        AgentExecutionRequest request,
-        AutofacTaskMetadata metadata,
-        CancellationToken cancellationToken)
-    {
-        // Honour the BPMN test-scenario flags so existing BPMN fixtures keep working.
-        var att = request.Attempt;
-        if (att <= metadata.FailUntilAttempt)
-        {
-            return Task.FromResult(new AgentTaskOutcome(
-                Succeeded: false,
-                Output: null,
-                FailureReason: $"Simulated failure on attempt {att} (failUntilAttempt={metadata.FailUntilAttempt})"));
-        }
-
-        var profile = AgentRegistry.Find(request.AgentName);
-        var output = BuildSimulatedOutput(request, profile);
+        var output = BuildExecutionOutput(request, profile, matchedSkillRef, skillManifest);
 
         return Task.FromResult(new AgentTaskOutcome(
             Succeeded: true,
@@ -66,22 +70,49 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             FailureReason: null));
     }
 
-    private static string BuildSimulatedOutput(AgentExecutionRequest request, AgentProfile? profile)
+    private static AgentSkillRef? ResolveSkillRef(AgentProfile? profile, string action)
     {
-        var skillName = profile?.Skills
-            .FirstOrDefault(s => s.SupportedActions.Contains(request.Action, StringComparer.OrdinalIgnoreCase))
-            ?.Name ?? request.Action;
+        if (profile is null)
+        {
+            return null;
+        }
+
+        return profile.Skills.FirstOrDefault(s =>
+            s.SupportedActions.Contains(action, StringComparer.OrdinalIgnoreCase))
+            ?? profile.Skills.FirstOrDefault();
+    }
+
+    private static string BuildExecutionOutput(
+        AgentExecutionRequest request,
+        AgentProfile? profile,
+        AgentSkillRef? skillRef,
+        SkillManifest? manifest)
+    {
+        var skillLine = manifest is not null
+            ? $"{manifest.Name} (id={manifest.SkillId} fingerprint={manifest.Fingerprint[..12]}…)"
+            : skillRef?.Name ?? request.Action;
+
+        var contextSection = manifest is not null
+            ? $"""
+
+              skill_context:
+                id: {manifest.SkillId}
+                name: {manifest.Name}
+                fingerprint: {manifest.Fingerprint}
+                source: {manifest.FilePath}
+              """
+            : string.Empty;
 
         return $"""
             agent: {request.AgentName}
-            skill: {skillName}
+            skill: {skillLine}
             action: {request.Action}
             environment: {request.Environment ?? "unspecified"}
             purpose: {request.PurposeType}
             policy: {request.PolicyTag}
             attempt: {request.Attempt}
             status: completed
-            timestamp: {DateTimeOffset.UtcNow:o}
+            timestamp: {DateTimeOffset.UtcNow:o}{contextSection}
             """;
     }
 }
