@@ -68,16 +68,105 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         if (string.Equals(state.Status, WaitingUserStatus, StringComparison.Ordinal) &&
             state.WaitingOnNodeId is not null)
         {
-            var node = definition.Nodes.FirstOrDefault(n =>
-                string.Equals(n.Id, state.WaitingOnNodeId, StringComparison.Ordinal));
+            var nodeIndex = definition.Nodes
+                .Select((n, i) => (node: n, index: i))
+                .FirstOrDefault(x => string.Equals(x.node.Id, state.WaitingOnNodeId, StringComparison.Ordinal));
+
+            var node = nodeIndex.node;
+
+            var agentName = FindPrecedingAgentName(definition, nodeIndex.index);
+            var riskLevel = InferRiskLevel(node?.ApprovalMetadata?.PolicyTag);
+            var riskScore = RiskLevelToScore(riskLevel);
+            var riskFactors = BuildRiskFactors(node?.ApprovalMetadata?.PolicyTag, node?.ApprovalMetadata?.PurposeType);
+            var affectedSystems = BuildAffectedSystems(definition, nodeIndex.index);
 
             waitingApproval = new WaitingApprovalInfo(
                 NodeId: state.WaitingOnNodeId,
                 NodeName: node?.Name,
                 PurposeType: node?.ApprovalMetadata?.PurposeType ?? string.Empty,
-                PolicyTag: node?.ApprovalMetadata?.PolicyTag ?? string.Empty);
+                PolicyTag: node?.ApprovalMetadata?.PolicyTag ?? string.Empty,
+                AgentName: agentName,
+                RiskLevel: riskLevel,
+                RiskScore: riskScore,
+                RiskFactors: riskFactors,
+                AffectedSystems: affectedSystems);
         }
 
         return new WorkflowRunnerResult(state.RunId, state.Status, waitingApproval);
+    }
+
+    private static string? FindPrecedingAgentName(BpmnWorkflowDefinition definition, int userTaskIndex)
+    {
+        for (var i = userTaskIndex - 1; i >= 0; i--)
+        {
+            var node = definition.Nodes[i];
+            if ((node.ElementName is "serviceTask" or "scriptTask") && node.Metadata?.Agent is not null)
+            {
+                return node.Metadata.Agent;
+            }
+        }
+
+        return null;
+    }
+
+    private static string InferRiskLevel(string? policyTag)
+    {
+        if (string.IsNullOrWhiteSpace(policyTag))
+        {
+            return "low";
+        }
+
+        var tag = policyTag.ToLowerInvariant();
+        if (tag.Contains("critical") || tag.Contains("prod") || tag.Contains("secret") || tag.Contains("credential"))
+        {
+            return "high";
+        }
+
+        if (tag.Contains("deploy") || tag.Contains("access") || tag.Contains("permission") || tag.Contains("infra"))
+        {
+            return "medium";
+        }
+
+        return "low";
+    }
+
+    private static int RiskLevelToScore(string riskLevel) => riskLevel switch
+    {
+        "high" => 75,
+        "medium" => 45,
+        _ => 15
+    };
+
+    private static IReadOnlyList<string> BuildRiskFactors(string? policyTag, string? purposeType)
+    {
+        var factors = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(policyTag))
+        {
+            factors.Add($"Policy tag: {policyTag}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(purposeType))
+        {
+            factors.Add($"Purpose: {purposeType}");
+        }
+
+        return factors.AsReadOnly();
+    }
+
+    private static IReadOnlyList<string> BuildAffectedSystems(BpmnWorkflowDefinition definition, int userTaskIndex)
+    {
+        var systems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < userTaskIndex; i++)
+        {
+            var node = definition.Nodes[i];
+            if (node.Metadata?.Environment is not null)
+            {
+                systems.Add(node.Metadata.Environment);
+            }
+        }
+
+        return systems.ToList().AsReadOnly();
     }
 }

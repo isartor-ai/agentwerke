@@ -5,8 +5,8 @@ namespace Autofac.Application.Workflows;
 public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationService
 {
     private const string ActiveStatus = "active";
-    private const string WaitingUserStatus = "waiting_user";
     private const string PendingApprovalStatus = "pending";
+    private const string CancelledStatus = "cancelled";
 
     private readonly IWorkflowDefinitionRepository _definitionRepository;
     private readonly IWorkflowRunner _runner;
@@ -47,6 +47,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
 
         if (result.WaitingApproval is not null)
         {
+            await _runRepository.UpdateCurrentStepAsync(result.RunId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
+            await _runRepository.IncrementPendingApprovalsAsync(result.RunId, cancellationToken);
             await CreateApprovalRequestAsync(
                 result.RunId,
                 workflow.Name,
@@ -97,10 +99,13 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         approval.DecidedBy = decidedBy;
 
         await _approvalRepository.SaveChangesAsync(cancellationToken);
+        await _runRepository.DecrementPendingApprovalsAsync(command.RunId, cancellationToken);
 
         if (!string.Equals(resolvedStatus, "approved", StringComparison.Ordinal))
         {
-            return new ResumeRunResult(command.RunId, run.Status, WaitingApproval: null);
+            await _runRepository.UpdateRunStatusAsync(command.RunId, CancelledStatus, cancellationToken);
+            await _runRepository.UpdateCurrentStepAsync(command.RunId, null, cancellationToken);
+            return new ResumeRunResult(command.RunId, CancelledStatus, WaitingApproval: null);
         }
 
         var result = await _runner.ResumeAsync(
@@ -111,12 +116,18 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
 
         if (result.WaitingApproval is not null)
         {
+            await _runRepository.UpdateCurrentStepAsync(result.RunId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
+            await _runRepository.IncrementPendingApprovalsAsync(result.RunId, cancellationToken);
             await CreateApprovalRequestAsync(
                 result.RunId,
                 workflow.Name,
                 run.RequestedBy,
                 result.WaitingApproval,
                 cancellationToken);
+        }
+        else
+        {
+            await _runRepository.UpdateCurrentStepAsync(result.RunId, null, cancellationToken);
         }
 
         return new ResumeRunResult(result.RunId, result.Status, result.WaitingApproval);
@@ -141,6 +152,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             var existingApproval = await _approvalRepository.GetPendingApprovalForRunAsync(runId, cancellationToken);
             if (existingApproval is null)
             {
+                await _runRepository.UpdateCurrentStepAsync(runId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
+                await _runRepository.IncrementPendingApprovalsAsync(runId, cancellationToken);
                 await CreateApprovalRequestAsync(
                     runId,
                     workflow.Name,
@@ -157,7 +170,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         string runId,
         string workflowName,
         string requester,
-        WaitingApprovalInfo waitingApproval,
+        WaitingApprovalInfo waiting,
         CancellationToken cancellationToken)
     {
         var slaDeadline = DateTimeOffset.UtcNow.AddHours(24).ToString("o");
@@ -166,19 +179,28 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             Id = $"apr_{Guid.NewGuid():N}",
             RunId = runId,
             WorkflowName = workflowName,
-            ActionRequested = waitingApproval.NodeName ?? waitingApproval.PurposeType,
+            ActionRequested = waiting.NodeName ?? waiting.PurposeType,
             Requester = requester,
-            AgentName = string.Empty,
-            PolicyRationale = waitingApproval.PolicyTag,
-            RiskScore = 0,
-            RiskLevel = "low",
+            AgentName = waiting.AgentName ?? string.Empty,
+            PolicyRationale = waiting.PolicyTag,
+            RiskScore = waiting.RiskScore,
+            RiskLevel = waiting.RiskLevel,
+            RiskFactors = waiting.RiskFactors?.ToList() ?? [],
+            AffectedSystems = waiting.AffectedSystems?.ToList() ?? [],
             SlaDeadline = slaDeadline,
             CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
             Status = PendingApprovalStatus,
-            Priority = "normal"
+            Priority = DeriveApprovalPriority(waiting.RiskLevel),
         };
 
         await _approvalRepository.AddApprovalAsync(approval, cancellationToken);
         await _approvalRepository.SaveChangesAsync(cancellationToken);
     }
+
+    private static string DeriveApprovalPriority(string riskLevel) => riskLevel switch
+    {
+        "critical" or "high" => "urgent",
+        "medium" => "normal",
+        _ => "low"
+    };
 }
