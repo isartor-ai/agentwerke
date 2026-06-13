@@ -1,5 +1,6 @@
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Approvals;
+using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,10 +12,14 @@ namespace Autofac.Api.Controllers;
 public sealed class ApprovalsController : ControllerBase
 {
     private readonly AutofacDbContext _dbContext;
+    private readonly IWorkflowRunOrchestrationService _orchestrationService;
 
-    public ApprovalsController(AutofacDbContext dbContext)
+    public ApprovalsController(
+        AutofacDbContext dbContext,
+        IWorkflowRunOrchestrationService orchestrationService)
     {
         _dbContext = dbContext;
+        _orchestrationService = orchestrationService;
     }
 
     [HttpGet]
@@ -45,37 +50,49 @@ public sealed class ApprovalsController : ControllerBase
     [HttpPost("{approvalId}/decision")]
     public async Task<IActionResult> Decide(string approvalId, [FromBody] ApprovalDecisionRequest request)
     {
-        var approval = await _dbContext.ApprovalRequests.FirstOrDefaultAsync(a => a.Id == approvalId);
-        if (approval == null)
-        {
-            return NotFound();
-        }
-
-        var resolvedStatus = request.Decision switch
-        {
-            "approve" => "approved",
-            "reject" => "rejected",
-            "escalate" => "escalated",
-            _ => null
-        };
-
-        if (resolvedStatus is null)
+        var validDecisions = new[] { "approve", "reject", "escalate" };
+        if (!validDecisions.Contains(request.Decision, StringComparer.Ordinal))
         {
             return BadRequest(new { message = $"Unsupported approval decision '{request.Decision}'." });
         }
 
-        approval.Status = resolvedStatus;
-        approval.DecisionComment = request.Comment;
-        approval.DecidedAt = DateTime.UtcNow.ToString("o");
-        approval.DecidedBy = "api-user"; // In a real app, this would be the authenticated user
+        try
+        {
+            var approval = await _dbContext.ApprovalRequests
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == approvalId);
 
-        await _dbContext.SaveChangesAsync();
+            if (approval == null)
+            {
+                return NotFound();
+            }
 
-        return Accepted(new ApprovalDecisionResponse(
-            ApprovalId: approvalId,
-            Status: approval.Status,
-            DecidedAt: approval.DecidedAt,
-            DecidedBy: approval.DecidedBy ?? string.Empty,
-            Comment: approval.DecisionComment));
+            await _orchestrationService.ResumeRunAsync(
+                new ResumeRunCommand(
+                    RunId: approval.RunId,
+                    ApprovalId: approvalId,
+                    Decision: request.Decision,
+                    Comment: request.Comment,
+                    DecidedBy: "api-user"),
+                HttpContext.RequestAborted);
+
+            var updated = await _dbContext.ApprovalRequests
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == approvalId);
+
+            return Accepted(ApiContractMappings.ToApprovalDecisionResponse(approvalId, updated!));
+        }
+        catch (ApprovalNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (ApprovalNotPendingException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (WorkflowRunNotFoundException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
     }
 }
