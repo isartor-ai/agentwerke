@@ -15,4 +15,5 @@ public interface IServiceTaskExecutor
 public sealed record AgentTaskOutcome(
     bool Succeeded,
     string? Output,
-    string? FailureReason);
+    string? FailureReason,
+    IReadOnlyDictionary<string, string>? Artifacts = null);
