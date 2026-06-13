@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Autofac.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Autofac.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AutofacDbContext))]
-    partial class AutofacDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260612144519_InitialSchema")]
+    partial class InitialSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -310,61 +313,6 @@ namespace Autofac.Infrastructure.Persistence.Migrations
                     b.HasOne("Autofac.Domain.Persistence.WorkflowRun", null)
                         .WithMany("Steps")
                         .HasForeignKey("RunId");
-
-                    b.OwnsOne("Autofac.Domain.Persistence.PolicyDecision", "PolicyDecision", b1 =>
-                        {
-                            b1.Property<string>("WorkflowRunStepId")
-                                .HasColumnType("text");
-
-                            b1.PrimitiveCollection<List<string>>("Constraints")
-                                .IsRequired()
-                                .HasColumnType("jsonb");
-
-                            b1.Property<string>("DecidedAt")
-                                .IsRequired()
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Kind")
-                                .IsRequired()
-                                .HasMaxLength(64)
-                                .HasColumnType("character varying(64)");
-
-                            b1.Property<string>("PolicyId")
-                                .IsRequired()
-                                .HasMaxLength(128)
-                                .HasColumnType("character varying(128)");
-
-                            b1.Property<string>("PolicyName")
-                                .IsRequired()
-                                .HasMaxLength(256)
-                                .HasColumnType("character varying(256)");
-
-                            b1.Property<string>("Rationale")
-                                .IsRequired()
-                                .HasMaxLength(1024)
-                                .HasColumnType("character varying(1024)");
-
-                            b1.PrimitiveCollection<List<string>>("RiskFactors")
-                                .IsRequired()
-                                .HasColumnType("jsonb");
-
-                            b1.Property<string>("RiskLevel")
-                                .IsRequired()
-                                .HasMaxLength(64)
-                                .HasColumnType("character varying(64)");
-
-                            b1.Property<int>("RiskScore")
-                                .HasColumnType("integer");
-
-                            b1.HasKey("WorkflowRunStepId");
-
-                            b1.ToTable("workflow_run_steps", "autofac");
-
-                            b1.WithOwner()
-                                .HasForeignKey("WorkflowRunStepId");
-                        });
-
-                    b.Navigation("PolicyDecision");
                 });
 
             modelBuilder.Entity("Autofac.Domain.Persistence.WorkflowRun", b =>

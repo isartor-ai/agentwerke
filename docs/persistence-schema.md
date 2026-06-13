@@ -1,66 +1,100 @@
-# Persistence Schema (Phase 1)
+# Persistence Schema
 
 ## Overview
-The initial PostgreSQL schema is managed by EF Core migrations from `Autofac.Infrastructure`.
-The default schema name is `autofac`.
+
+Autofac currently uses EF Core migrations in `src/Autofac.Infrastructure` with the default PostgreSQL schema `autofac`.
+
+The model stores timestamps as ISO-8601 strings in text columns and uses `jsonb` for list-valued fields.
 
 ## Tables
 
-### workflow_definitions
-- `id` (uuid, PK)
-- `workflow_key` (varchar(128), required)
-- `name` (varchar(256), required)
-- `version` (int, required)
-- `status` (varchar(64), required)
-- `created_at_utc` (timestamptz, required)
-- `updated_at_utc` (timestamptz, required)
-- Unique index: `(workflow_key, version)`
+### workflows
+
+- `Id` (text, PK)
+- `Name` (varchar(256), required)
+- `Description` (varchar(1024), required)
+- `Version` (varchar(64), required)
+- `Status` (varchar(64), required)
+- `Owner` (varchar(128), required)
+- `CreatedAt` (text, required)
+- `LastEditedAt` (text, required)
+- `ValidationState` (varchar(64), required)
+- `Tags` (jsonb, required)
+- `BpmnXml` (text, required)
 
 ### workflow_runs
-- `id` (uuid, PK)
-- `workflow_definition_id` (uuid, FK -> workflow_definitions.id)
-- `status` (varchar(64), required)
-- `initiator` (varchar(128), nullable)
-- `started_at_utc` (timestamptz, required)
-- `completed_at_utc` (timestamptz, nullable)
+
+- `Id` (text, PK)
+- `WorkflowId` (varchar(128), required)
+- `WorkflowName` (varchar(256), required)
+- `WorkflowVersion` (varchar(64), required)
+- `Status` (varchar(64), required)
+- `RiskLevel` (varchar(64), required)
+- `CurrentStep` (varchar(256), required)
+- `RequestedBy` (varchar(128), required)
+- `StartedAt` (text, required)
+- `CompletedAt` (text, nullable)
+- `DurationMs` (integer, nullable)
+- `PendingApprovals` (integer, required)
+- `Tags` (jsonb, required)
+
+### workflow_run_steps
+
+- `Id` (text, PK)
+- `RunId` (text, FK -> workflow_runs.Id)
+- `Name` (varchar(256), required)
+- `Type` (varchar(128), required)
+- `Status` (varchar(64), required)
+- `StartedAt` (text, nullable)
+- `CompletedAt` (text, nullable)
+- `AgentName` (varchar(128), nullable)
+- `Output` (text, nullable)
+- `PolicyDecision_Kind` (varchar(64), nullable)
+- `PolicyDecision_PolicyId` (varchar(128), nullable)
+- `PolicyDecision_PolicyName` (varchar(256), nullable)
+- `PolicyDecision_Rationale` (varchar(1024), nullable)
+- `PolicyDecision_RiskScore` (integer, nullable)
+- `PolicyDecision_RiskLevel` (varchar(64), nullable)
+- `PolicyDecision_RiskFactors` (jsonb, nullable)
+- `PolicyDecision_DecidedAt` (text, nullable)
+- `PolicyDecision_Constraints` (jsonb, nullable)
 
 ### workflow_events
-- `id` (uuid, PK)
-- `workflow_run_id` (uuid, FK -> workflow_runs.id)
-- `event_type` (varchar(128), required)
-- `payload_json` (jsonb, required)
-- `created_at_utc` (timestamptz, required)
+
+- `Id` (text, PK)
+- `RunId` (text, FK -> workflow_runs.Id)
+- `Type` (varchar(128), required)
+- `Message` (varchar(2048), required)
+- `CreatedAt` (text, required)
 
 ### approval_requests
-- `id` (uuid, PK)
-- `workflow_run_id` (uuid, FK -> workflow_runs.id)
-- `approval_type` (varchar(128), required)
-- `status` (varchar(64), required)
-- `requested_by` (varchar(128), required)
-- `requested_at_utc` (timestamptz, required)
-- `resolved_at_utc` (timestamptz, nullable)
 
-### policy_decisions
-- `id` (uuid, PK)
-- `workflow_run_id` (uuid, nullable FK -> workflow_runs.id)
-- `policy_name` (varchar(128), required)
-- `decision` (varchar(64), required)
-- `reason` (varchar(2048), required)
-- `evidence_json` (jsonb, required)
-- `evaluated_at_utc` (timestamptz, required)
+- `Id` (text, PK)
+- `RunId` (varchar(128), required)
+- `WorkflowName` (varchar(256), required)
+- `ActionRequested` (varchar(1024), required)
+- `Requester` (varchar(128), required)
+- `AgentName` (varchar(128), required)
+- `PolicyRationale` (varchar(2048), required)
+- `RiskScore` (integer, required)
+- `RiskLevel` (varchar(64), required)
+- `RiskFactors` (jsonb, required)
+- `AffectedSystems` (jsonb, required)
+- `SlaDeadline` (text, required)
+- `CreatedAt` (text, required)
+- `Status` (varchar(64), required)
+- `Priority` (varchar(64), required)
+- `DecisionComment` (varchar(2048), nullable)
+- `DecidedAt` (text, nullable)
+- `DecidedBy` (varchar(128), nullable)
 
-### agent_sessions
-- `id` (uuid, PK)
-- `workflow_run_id` (uuid, FK -> workflow_runs.id)
-- `agent_name` (varchar(128), required)
-- `status` (varchar(64), required)
-- `started_at_utc` (timestamptz, required)
-- `ended_at_utc` (timestamptz, nullable)
+## Notes
 
-## Migration Commands
-- Add migration:
+- `PolicyDecision` is an owned type on `workflow_run_steps`, so it does not have its own table.
+- `approval_requests` is intentionally modeled as a standalone table without a foreign key back to `workflow_runs` in the current EF model.
+- To add a migration:
   - `dotnet ef migrations add <Name> --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`
-- List migrations:
+- To list migrations:
   - `dotnet ef migrations list --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`
-- Generate SQL script:
+- To generate an idempotent SQL script:
   - `dotnet ef migrations script --idempotent --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`

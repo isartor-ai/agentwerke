@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Autofac.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Autofac.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AutofacDbContext))]
-    partial class AutofacDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613093755_AddWorkflowRunStepPolicyDecision")]
+    partial class AddWorkflowRunStepPolicyDecision
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

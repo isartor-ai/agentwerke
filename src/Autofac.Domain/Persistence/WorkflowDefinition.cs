@@ -2,19 +2,25 @@ namespace Autofac.Domain.Persistence;
 
 public sealed class WorkflowDefinition
 {
-    public Guid Id { get; set; }
-
-    public string WorkflowKey { get; set; } = string.Empty;
+    public string Id { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
 
-    public int Version { get; set; }
+    public string Description { get; set; } = string.Empty;
+
+    public string Version { get; set; } = string.Empty;
 
     public string Status { get; set; } = "draft";
 
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    public string Owner { get; set; } = string.Empty;
 
-    public DateTimeOffset UpdatedAtUtc { get; set; }
+    public string CreatedAt { get; set; } = string.Empty;
 
-    public ICollection<WorkflowRun> Runs { get; set; } = new List<WorkflowRun>();
+    public string LastEditedAt { get; set; } = string.Empty;
+
+    public string ValidationState { get; set; } = "pending";
+
+    public List<string> Tags { get; set; } = new();
+
+    public string BpmnXml { get; set; } = string.Empty;
 }

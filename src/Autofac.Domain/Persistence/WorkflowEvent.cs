@@ -2,15 +2,11 @@ namespace Autofac.Domain.Persistence;
 
 public sealed class WorkflowEvent
 {
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
-    public Guid WorkflowRunId { get; set; }
+    public string Type { get; set; } = string.Empty;
 
-    public string EventType { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 
-    public string PayloadJson { get; set; } = "{}";
-
-    public DateTimeOffset CreatedAtUtc { get; set; }
-
-    public WorkflowRun WorkflowRun { get; set; } = null!;
+    public string CreatedAt { get; set; } = string.Empty;
 }
