@@ -1,9 +1,8 @@
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Runs;
-using Autofac.Domain.Persistence;
+using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
 using Autofac.Storage.Artifacts;
-using Autofac.Workflows.Runtime;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,13 +14,16 @@ public sealed class RunsController : ControllerBase
 {
     private readonly AutofacDbContext _dbContext;
     private readonly IArtifactStorage _artifactStorage;
-    private readonly IWorkflowInstanceEngine _workflowEngine;
+    private readonly IWorkflowRunOrchestrationService _orchestrationService;
 
-    public RunsController(AutofacDbContext dbContext, IArtifactStorage artifactStorage, IWorkflowInstanceEngine workflowEngine)
+    public RunsController(
+        AutofacDbContext dbContext,
+        IArtifactStorage artifactStorage,
+        IWorkflowRunOrchestrationService orchestrationService)
     {
         _dbContext = dbContext;
         _artifactStorage = artifactStorage;
-        _workflowEngine = workflowEngine;
+        _orchestrationService = orchestrationService;
     }
 
     [HttpGet]
@@ -55,20 +57,43 @@ public sealed class RunsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Start([FromBody] StartRunRequest request)
     {
-        var workflow = await _dbContext.WorkflowDefinitions.AsNoTracking().FirstOrDefaultAsync(w => w.Id == request.WorkflowId);
-        if (workflow == null)
+        try
+        {
+            var result = await _orchestrationService.StartRunAsync(
+                new StartRunCommand(request.WorkflowId, Initiator: "api"),
+                HttpContext.RequestAborted);
+
+            return Accepted(new StartRunResponse(
+                result.RunId,
+                result.WorkflowId,
+                ApiContractMappings.NormalizeRunStatus(result.Status)));
+        }
+        catch (WorkflowNotFoundException)
         {
             return NotFound(new { message = $"Workflow with id '{request.WorkflowId}' not found." });
         }
+        catch (WorkflowNotPublishedException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 
-        // This is a simplified start, in a real scenario we would have a more complex setup
-        // to parse the bpmn and pass it to the engine.
-        var run = await _workflowEngine.StartAsync(request.WorkflowId, new Workflows.Bpmn.BpmnWorkflowDefinition(workflow.Name, workflow.Name, new List<Workflows.Bpmn.BpmnNodeDefinition>()), "api", CancellationToken.None);
-
-        return Accepted(new StartRunResponse(
-            run.RunId,
-            request.WorkflowId,
-            ApiContractMappings.NormalizeRunStatus(run.Status)));
+    [HttpPost("{runId}/recover")]
+    public async Task<IActionResult> Recover(string runId)
+    {
+        try
+        {
+            var result = await _orchestrationService.RecoverRunAsync(runId, HttpContext.RequestAborted);
+            return Accepted(new { runId = result.RunId, status = ApiContractMappings.NormalizeRunStatus(result.Status) });
+        }
+        catch (WorkflowRunNotFoundException)
+        {
+            return NotFound(new { message = $"Run '{runId}' not found." });
+        }
+        catch (WorkflowNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{runId}/artifacts/{artifactName}")]
