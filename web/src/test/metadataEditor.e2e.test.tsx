@@ -24,6 +24,7 @@ describe('E2E: Metadata Editor Complete Workflow', () => {
     vi.mocked(apiClient.getWorkflows).mockResolvedValue([]);
     vi.mocked(apiClient.validateBpmnWorkflow).mockResolvedValue({
       isValid: true,
+      warnings: [],
       errors: [],
     });
     vi.mocked(apiClient.publishWorkflowDefinition).mockResolvedValue({

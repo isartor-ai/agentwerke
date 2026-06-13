@@ -24,6 +24,12 @@ public sealed class WorkflowValidationService : IWorkflowValidationService
                 error.ElementId,
                 error.ElementName ?? "document",
                 error.LineNumber,
-                error.LinePosition)).ToArray());
+                error.LinePosition)).ToArray(),
+            validation.Warnings.Select(warning => new WorkflowValidationWarning(
+                warning.Message,
+                warning.ElementId,
+                warning.ElementName ?? "document",
+                warning.LineNumber,
+                warning.LinePosition)).ToArray());
     }
 }

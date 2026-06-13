@@ -6,4 +6,5 @@ public sealed record ValidationResponse(
     bool IsValid,
     string? ProcessId,
     string? ProcessName,
-    IReadOnlyList<ValidationErrorResponse> Errors);
+    IReadOnlyList<ValidationErrorResponse> Errors,
+    IReadOnlyList<ValidationWarningResponse> Warnings);

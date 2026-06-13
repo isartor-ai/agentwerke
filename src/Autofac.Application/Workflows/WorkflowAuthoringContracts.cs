@@ -28,11 +28,19 @@ public sealed record WorkflowValidationError(
     int? LineNumber,
     int? LinePosition);
 
+public sealed record WorkflowValidationWarning(
+    string Message,
+    string? ElementId,
+    string ElementName,
+    int? LineNumber,
+    int? LinePosition);
+
 public sealed record WorkflowValidationResult(
     bool IsValid,
     string? ProcessId,
     string? ProcessName,
-    IReadOnlyList<WorkflowValidationError> Errors);
+    IReadOnlyList<WorkflowValidationError> Errors,
+    IReadOnlyList<WorkflowValidationWarning> Warnings);
 
 public interface IWorkflowAuthoringService
 {

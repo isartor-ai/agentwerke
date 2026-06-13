@@ -12,7 +12,8 @@ public sealed class WorkflowAuthoringServiceTests
             true,
             "process-invoice",
             "Invoice Approval",
-            Array.Empty<WorkflowValidationError>());
+            Array.Empty<WorkflowValidationError>(),
+            Array.Empty<WorkflowValidationWarning>());
         var repository = new InMemoryWorkflowDefinitionRepository();
         var validator = new StubWorkflowValidationService(validation);
         var service = new WorkflowAuthoringService(repository, validator);
@@ -57,7 +58,8 @@ public sealed class WorkflowAuthoringServiceTests
             true,
             "process-invoice",
             "Invoice Approval",
-            Array.Empty<WorkflowValidationError>());
+            Array.Empty<WorkflowValidationError>(),
+            Array.Empty<WorkflowValidationWarning>());
         var repository = new InMemoryWorkflowDefinitionRepository(workflow);
         var validator = new StubWorkflowValidationService(validation);
         var service = new WorkflowAuthoringService(repository, validator);
@@ -102,7 +104,8 @@ public sealed class WorkflowAuthoringServiceTests
                     "document",
                     null,
                     null)
-            ]);
+            ],
+            Array.Empty<WorkflowValidationWarning>());
         var validator = new StubWorkflowValidationService(validation);
         var service = new WorkflowAuthoringService(repository, validator);
 
