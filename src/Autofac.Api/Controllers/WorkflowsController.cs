@@ -1,10 +1,7 @@
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Workflows;
-using Autofac.Domain.Persistence;
-using Autofac.Infrastructure.Persistence;
-using Autofac.Workflows.Bpmn;
+using Autofac.Application.Workflows;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Autofac.Api.Controllers;
 
@@ -12,31 +9,24 @@ namespace Autofac.Api.Controllers;
 [Route("api/workflows")]
 public sealed class WorkflowsController : ControllerBase
 {
-    private readonly AutofacDbContext _dbContext;
-    private readonly IBpmnWorkflowValidator _validator;
+    private readonly IWorkflowAuthoringService _workflowAuthoringService;
 
-    public WorkflowsController(AutofacDbContext dbContext, IBpmnWorkflowValidator validator)
+    public WorkflowsController(IWorkflowAuthoringService workflowAuthoringService)
     {
-        _dbContext = dbContext;
-        _validator = validator;
+        _workflowAuthoringService = workflowAuthoringService;
     }
 
     [HttpGet]
     public async Task<IActionResult> List()
     {
-        var workflows = await _dbContext.WorkflowDefinitions
-            .AsNoTracking()
-            .ToListAsync();
-
+        var workflows = await _workflowAuthoringService.ListWorkflowsAsync();
         return Ok(workflows.Select(ApiContractMappings.ToWorkflowSummary).ToList());
     }
 
     [HttpGet("{workflowId}")]
     public async Task<IActionResult> Get(string workflowId)
     {
-        var workflow = await _dbContext.WorkflowDefinitions
-            .AsNoTracking()
-            .FirstOrDefaultAsync(w => w.Id == workflowId);
+        var workflow = await _workflowAuthoringService.GetWorkflowAsync(workflowId);
 
         if (workflow == null)
         {
@@ -49,36 +39,17 @@ public sealed class WorkflowsController : ControllerBase
     [HttpPost("import")]
     public async Task<IActionResult> Import([FromBody] ImportWorkflowRequest request)
     {
-        var validation = _validator.Validate(request.BpmnXml);
-        var workflowId = $"wf_{Guid.NewGuid():N}";
+        var result = await _workflowAuthoringService.ImportWorkflowAsync(
+            new ImportWorkflowCommand(request.FileName, request.BpmnXml));
 
-        var workflow = new WorkflowDefinition
-        {
-            Id = workflowId,
-            Name = validation.Definition?.ProcessName ?? request.FileName,
-            Description = string.Empty,
-            Version = "v1.0.0",
-            Status = "draft",
-            Owner = "system",
-            CreatedAt = DateTime.UtcNow.ToString("o"),
-            LastEditedAt = DateTime.UtcNow.ToString("o"),
-            ValidationState = validation.IsValid ? "valid" : "invalid",
-            BpmnXml = request.BpmnXml
-        };
-
-        _dbContext.WorkflowDefinitions.Add(workflow);
-        await _dbContext.SaveChangesAsync();
-
-        return Ok(new ImportWorkflowResponse(
-            workflowId,
-            ToValidationResponse(validation)));
+        return Ok(ApiContractMappings.ToImportWorkflowResponse(result));
     }
 
     [HttpPost("validate")]
     public IActionResult Validate([FromBody] ValidateWorkflowRequest request)
     {
-        var validation = _validator.Validate(request.BpmnXml);
-        return Ok(ToValidationResponse(validation));
+        var validation = _workflowAuthoringService.ValidateWorkflow(request.BpmnXml);
+        return Ok(ApiContractMappings.ToValidationResponse(validation));
     }
 
     [HttpPost("{workflowId}/policy-simulation")]
@@ -99,40 +70,23 @@ public sealed class WorkflowsController : ControllerBase
     [HttpPost("{workflowId}/publish")]
     public async Task<IActionResult> Publish(string workflowId, [FromBody] PublishWorkflowRequest request)
     {
-        var validation = _validator.Validate(request.BpmnXml);
-        if (!validation.IsValid)
+        try
+        {
+            var result = await _workflowAuthoringService.PublishWorkflowAsync(
+                workflowId,
+                new PublishWorkflowCommand(request.BpmnXml, request.Description));
+
+            return Ok(ApiContractMappings.ToPublishWorkflowResponse(result));
+        }
+        catch (WorkflowValidationException ex)
         {
             return BadRequest(new PublishErrorResponse(
-                Message: "Workflow validation failed. Fix errors before publishing.",
-                Errors: validation.Errors.Select(e => e.Message).ToArray()));
+                Message: ex.Message,
+                Errors: ex.Validation.Errors.Select(error => error.Message).ToArray()));
         }
-
-        var workflow = await _dbContext.WorkflowDefinitions.FirstAsync(w => w.Id == workflowId);
-        workflow.Status = "active";
-        workflow.LastEditedAt = DateTime.UtcNow.ToString("o");
-        workflow.BpmnXml = request.BpmnXml;
-        // A more sophisticated versioning strategy would be needed here
-        workflow.Version = "v" + (int.Parse(workflow.Version.Substring(1).Split('.')[0]) + 1) + ".0.0";
-
-        await _dbContext.SaveChangesAsync();
-
-        return Ok(new PublishWorkflowResponse(
-            WorkflowId: workflowId,
-            Version: workflow.Version,
-            PublishedAt: workflow.LastEditedAt));
-    }
-
-    private static ValidationResponse ToValidationResponse(BpmnValidationResult validation)
-    {
-        return new ValidationResponse(
-            IsValid: validation.IsValid,
-            ProcessId: validation.Definition?.ProcessId,
-            ProcessName: validation.Definition?.ProcessName,
-            Errors: validation.Errors.Select(error => new ValidationErrorResponse(
-                error.Message,
-                error.ElementId,
-                error.ElementName,
-                error.LineNumber,
-                error.LinePosition)).ToArray());
+        catch (WorkflowNotFoundException)
+        {
+            return NotFound();
+        }
     }
 }

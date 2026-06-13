@@ -1,4 +1,6 @@
+using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
+using Autofac.Infrastructure.Workflows;
 using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +24,9 @@ public static class DependencyInjection
         services.AddDbContext<AutofacDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
+        services.AddScoped<IWorkflowValidationService, WorkflowValidationService>();
+        services.AddScoped<IWorkflowAuthoringService, WorkflowAuthoringService>();
         services.AddScoped<IWorkflowRuntimeStore, WorkflowRuntimeStore>();
 
         return services;
