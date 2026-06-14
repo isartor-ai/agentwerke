@@ -305,6 +305,7 @@ public sealed class WorkflowInstanceEngineTests
 
         public Task UpdateStepStatusAsync(
             string stepId, string status, string? output, string? completedAt,
+            PolicyDecision? policyDecision,
             CancellationToken cancellationToken)
         {
             return Task.CompletedTask;

@@ -185,6 +185,7 @@ public sealed class WorkflowExternalActionTests
             string status,
             string? output,
             string? completedAt,
+            PolicyDecision? policyDecision,
             CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
