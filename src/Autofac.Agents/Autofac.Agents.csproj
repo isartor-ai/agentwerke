@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\Autofac.AgentSecOps\Autofac.AgentSecOps.csproj" />
     <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
     <ProjectReference Include="..\Autofac.Domain\Autofac.Domain.csproj" />
     <ProjectReference Include="..\Autofac.Integrations\Autofac.Integrations.csproj" />

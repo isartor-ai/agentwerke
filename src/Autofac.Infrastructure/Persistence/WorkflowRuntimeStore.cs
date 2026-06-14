@@ -119,12 +119,14 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         string status,
         string? output,
         string? completedAt,
+        PolicyDecision? policyDecision,
         CancellationToken cancellationToken)
     {
         var step = await _dbContext.WorkflowRunSteps.FirstAsync(s => s.Id == stepId, cancellationToken);
         step.Status = status;
         step.Output = output;
         step.CompletedAt = completedAt;
+        step.PolicyDecision = policyDecision;
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }
