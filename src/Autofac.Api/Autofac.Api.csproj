@@ -15,6 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Autofac.Api.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
     <ProjectReference Include="..\Autofac.Infrastructure\Autofac.Infrastructure.csproj" />
     <ProjectReference Include="..\Autofac.Workflows\Autofac.Workflows.csproj" />

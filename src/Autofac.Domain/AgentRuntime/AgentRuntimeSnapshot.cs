@@ -12,6 +12,8 @@ public sealed record AgentRuntimeSnapshot
 
     public string? Action { get; init; }
 
+    public AgentPromptSnapshot? Prompt { get; init; }
+
     public AgentRuntimeContract Contract { get; init; } = new();
 
     public IReadOnlyList<AgentSkillUsageRecord> Skills { get; init; } = [];
@@ -24,6 +26,18 @@ public sealed record AgentRuntimeSnapshot
 
     public AgentPermissionDecisionRecord? PermissionDecision { get; init; }
 }
+
+public sealed record AgentPromptSnapshot(
+    string FinalPrompt,
+    string RenderedAt,
+    IReadOnlyList<AgentPromptSectionSnapshot> Sections,
+    IReadOnlyDictionary<string, string> Variables,
+    IReadOnlyList<string> SourceFiles);
+
+public sealed record AgentPromptSectionSnapshot(
+    string Name,
+    string Content,
+    string Source);
 
 public sealed record AgentSkillUsageRecord
 {

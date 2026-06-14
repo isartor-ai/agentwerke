@@ -8,6 +8,7 @@ using Autofac.Domain.Persistence;
 using Autofac.Storage.Artifacts;
 using RunPolicyDecision = Autofac.Api.Contracts.Runs.PolicyDecision;
 using DomainPolicyDecision = Autofac.Domain.Persistence.PolicyDecision;
+using DomainPromptSnapshot = Autofac.Domain.AgentRuntime.AgentPromptSnapshot;
 
 namespace Autofac.Api.Contracts;
 
@@ -171,7 +172,8 @@ internal static class ApiContractMappings
             step.AgentName,
             step.Output,
             Error: null,
-            PolicyDecision: step.PolicyDecision is null ? null : ToPolicyDecision(step.PolicyDecision));
+            PolicyDecision: step.PolicyDecision is null ? null : ToPolicyDecision(step.PolicyDecision),
+            PromptSnapshot: step.RuntimeSnapshot?.Prompt is null ? null : ToPromptSnapshot(step.RuntimeSnapshot.Prompt));
     }
 
     public static string NormalizeRunStatus(string status)
@@ -211,5 +213,18 @@ internal static class ApiContractMappings
             artifact.Name,
             artifact.SizeBytes,
             artifact.LastModifiedAt);
+    }
+
+    private static PromptSnapshot ToPromptSnapshot(DomainPromptSnapshot snapshot)
+    {
+        return new PromptSnapshot(
+            snapshot.FinalPrompt,
+            snapshot.RenderedAt,
+            snapshot.Sections.Select(static section => new PromptSection(
+                section.Name,
+                section.Content,
+                section.Source)).ToArray(),
+            snapshot.Variables,
+            snapshot.SourceFiles.ToArray());
     }
 }
