@@ -86,6 +86,7 @@ export function RunDetail() {
   const runApprovals = useMemo(() => run?.approvals ?? [], [run]);
 
   const renderTabContent = () => {
+    if (!run) return null;
     switch (activeTab) {
       case 'Summary':
         return (
@@ -263,7 +264,13 @@ export function RunDetail() {
 
       <section className="run-detail-grid">
         <div className="run-detail-left">
-          <BpmnRunGraph steps={run.steps ?? []} />
+          <BpmnRunGraph
+            steps={run.steps ?? []}
+            currentStep={run.currentStep}
+            runStatus={run.status}
+            selectedStepId={expandedStepId}
+            onSelectStep={(id) => setExpandedStepId((prev) => (prev === id ? null : id))}
+          />
           <StepTimeline
             steps={run.steps ?? []}
             expandedStepId={expandedStepId}
