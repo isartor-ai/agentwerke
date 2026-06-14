@@ -1,3 +1,4 @@
+using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.AgentSecOps;
 using Autofac.Integrations;
@@ -53,8 +54,10 @@ public sealed class PolicyEvaluationServiceTests
         var policyService = new StubPolicyEvaluationService("reject");
         var gitHub = new RecordingGitHubConnector();
         var sandbox = new StubSandboxExecutor();
+        var assembler = new AgentPromptAssembler();
         var orchestrator = new AgentOrchestrator(
             skills,
+            assembler,
             policyService,
             gitHub,
             sandbox,
@@ -88,6 +91,57 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal("reject", outcome.PolicyDecision?.Kind);
         Assert.Equal(0, gitHub.CreateBranchCalls);
         Assert.Equal(0, gitHub.CreatePullRequestCalls);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenPromptAssemblyFails_ReturnsClearFailureReason()
+    {
+        var skills = new SkillRepository(Array.Empty<SkillManifest>());
+        var policyService = new StubPolicyEvaluationService("allow");
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var assembler = new AgentPromptAssembler();
+        var orchestrator = new AgentOrchestrator(
+            skills,
+            assembler,
+            policyService,
+            gitHub,
+            sandbox,
+            Options.Create(new SandboxOptions()),
+            Options.Create(new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    BranchPrefix = "autofac/run-"
+                }
+            }));
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "cloud.deploy_artifact",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Prompt = new Domain.AgentRuntime.AgentPromptContract
+                        {
+                            Inline = "Deploy {{missing_value}} now."
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("Prompt assembly failed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class StubPolicyEvaluationService : IPolicyEvaluationService

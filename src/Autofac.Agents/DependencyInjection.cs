@@ -1,3 +1,4 @@
+using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Sandboxes;
 using Autofac.Workflows.Runtime;
@@ -25,6 +26,7 @@ public static class DependencyInjection
         var repository = new SkillRepository(manifests);
 
         services.AddSingleton<ISkillRepository>(repository);
+        services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
         services.AddAutofacSandboxes(configuration);
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();
 
