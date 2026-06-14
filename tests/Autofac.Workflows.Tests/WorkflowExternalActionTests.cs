@@ -1,3 +1,4 @@
+using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
@@ -187,6 +188,7 @@ public sealed class WorkflowExternalActionTests
             string? output,
             string? completedAt,
             PolicyDecision? policyDecision,
+            AgentRuntimeSnapshot? runtimeSnapshot,
             CancellationToken cancellationToken)
         {
             return Task.CompletedTask;

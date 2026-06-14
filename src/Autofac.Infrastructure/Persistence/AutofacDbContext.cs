@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,6 +7,8 @@ namespace Autofac.Infrastructure.Persistence;
 
 public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options) : DbContext(options)
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
 
     public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
@@ -60,6 +64,11 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Type).HasMaxLength(128).IsRequired();
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.AgentName).HasMaxLength(128);
+            entity.Property(e => e.RuntimeSnapshot)
+                .HasConversion(
+                    snapshot => SerializeRuntimeSnapshot(snapshot),
+                    json => DeserializeRuntimeSnapshot(json))
+                .HasColumnType("jsonb");
             entity.OwnsOne(e => e.PolicyDecision, pd =>
             {
                 pd.Property(p => p.Kind).HasMaxLength(64);
@@ -113,4 +122,12 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Outcome).HasMaxLength(64).IsRequired();
         });
     }
+
+    private static string? SerializeRuntimeSnapshot(AgentRuntimeSnapshot? snapshot) =>
+        snapshot is null ? null : JsonSerializer.Serialize(snapshot, JsonOptions);
+
+    private static AgentRuntimeSnapshot? DeserializeRuntimeSnapshot(string? json) =>
+        string.IsNullOrWhiteSpace(json)
+            ? null
+            : JsonSerializer.Deserialize<AgentRuntimeSnapshot>(json, JsonOptions);
 }

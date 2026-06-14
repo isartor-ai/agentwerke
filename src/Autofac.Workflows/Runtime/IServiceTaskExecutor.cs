@@ -1,3 +1,4 @@
+using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
 
@@ -19,7 +20,8 @@ public sealed record AgentTaskOutcome(
     string? FailureReason,
     IReadOnlyDictionary<string, string>? Artifacts = null,
     IReadOnlyList<ExternalActionRecord>? ExternalActions = null,
-    PolicyDecision? PolicyDecision = null);
+    PolicyDecision? PolicyDecision = null,
+    AgentRuntimeSnapshot? RuntimeSnapshot = null);
 
 public sealed record ExternalActionRecord(
     string Provider,

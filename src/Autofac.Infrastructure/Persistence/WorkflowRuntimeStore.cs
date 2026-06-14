@@ -1,4 +1,5 @@
 using Autofac.Domain.Persistence;
+using Autofac.Domain.AgentRuntime;
 using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
 
@@ -122,6 +123,7 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         string? output,
         string? completedAt,
         PolicyDecision? policyDecision,
+        AgentRuntimeSnapshot? runtimeSnapshot,
         CancellationToken cancellationToken)
     {
         var step = await _dbContext.WorkflowRunSteps.FirstAsync(s => s.Id == stepId, cancellationToken);
@@ -129,6 +131,7 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         step.Output = output;
         step.CompletedAt = completedAt;
         step.PolicyDecision = policyDecision;
+        step.RuntimeSnapshot = runtimeSnapshot;
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

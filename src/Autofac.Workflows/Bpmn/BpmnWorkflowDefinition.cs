@@ -1,3 +1,5 @@
+using Autofac.Domain.AgentRuntime;
+
 namespace Autofac.Workflows.Bpmn;
 
 public sealed record BpmnWorkflowDefinition(
@@ -23,7 +25,8 @@ public sealed record AutofacTaskMetadata(
     int RetryBackoffSeconds = 0,
     int FailUntilAttempt = 0,
     bool SimulateTimeout = false,
-    int? TimeoutSeconds = null);
+    int? TimeoutSeconds = null,
+    AgentRuntimeContract? RuntimeContract = null);
 
 public sealed record AutofacApprovalMetadata(
     string PurposeType,

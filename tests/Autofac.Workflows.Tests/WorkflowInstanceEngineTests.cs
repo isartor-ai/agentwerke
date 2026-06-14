@@ -1,3 +1,4 @@
+using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
@@ -179,6 +180,32 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Contains(events, static e => e.Type == "run_completed");
     }
 
+    [Fact]
+    public async Task StartAsync_WhenServiceTaskReturnsRuntimeSnapshot_PersistsSnapshotOnStep()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new RuntimeSnapshotServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "RuntimeSnapshotFlow",
+            ProcessName: "Runtime Snapshot Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AutofacTaskMetadata("deploy-agent", "deploy", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        var persistedRun = await store.GetRunAsync(state.RunId, CancellationToken.None);
+        var serviceStep = Assert.Single(persistedRun!.Steps);
+        Assert.Equal("completed", serviceStep.Status);
+        Assert.NotNull(serviceStep.RuntimeSnapshot);
+        Assert.Equal("deploy-agent", serviceStep.RuntimeSnapshot!.AgentName);
+        Assert.Equal(AgentPermissionLevels.ReadWrite, serviceStep.RuntimeSnapshot.Contract.Permissions.Level);
+    }
+
     private static BpmnWorkflowDefinition CreateReferenceDefinition()
     {
         return new BpmnWorkflowDefinition(
@@ -307,8 +334,25 @@ public sealed class WorkflowInstanceEngineTests
         public Task UpdateStepStatusAsync(
             string stepId, string status, string? output, string? completedAt,
             PolicyDecision? policyDecision,
+            AgentRuntimeSnapshot? runtimeSnapshot,
             CancellationToken cancellationToken)
         {
+            lock (_sync)
+            {
+                var step = _runs.Values
+                    .SelectMany(static run => run.Steps)
+                    .FirstOrDefault(step => string.Equals(step.Id, stepId, StringComparison.Ordinal));
+
+                if (step is not null)
+                {
+                    step.Status = status;
+                    step.Output = output;
+                    step.CompletedAt = completedAt;
+                    step.PolicyDecision = policyDecision;
+                    step.RuntimeSnapshot = runtimeSnapshot;
+                }
+            }
+
             return Task.CompletedTask;
         }
     }
@@ -333,6 +377,34 @@ public sealed class WorkflowInstanceEngineTests
                 Succeeded: true,
                 Output: "no-op executor",
                 FailureReason: null));
+        }
+    }
+
+    private sealed class RuntimeSnapshotServiceTaskExecutor : IServiceTaskExecutor
+    {
+        public Task<AgentTaskOutcome> ExecuteAsync(
+            string runId, string stepId, BpmnNodeDefinition node,
+            int attempt, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: true,
+                Output: "runtime snapshot executor",
+                FailureReason: null,
+                RuntimeSnapshot: new AgentRuntimeSnapshot
+                {
+                    RunId = runId,
+                    StepId = stepId,
+                    NodeId = node.Id,
+                    AgentName = node.Metadata?.Agent,
+                    Action = node.Metadata?.Action,
+                    Contract = new AgentRuntimeContract
+                    {
+                        Permissions = new AgentPermissionContract
+                        {
+                            Level = AgentPermissionLevels.ReadWrite
+                        }
+                    }
+                }));
         }
     }
 }
