@@ -17,6 +17,9 @@ export function ApprovalsDashboard() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ApprovalRequest['status']>('pending');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [submittingDecision, setSubmittingDecision] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,22 +60,51 @@ export function ApprovalsDashboard() {
       return;
     }
 
-    await apiClient.decideApproval(selectedApproval.id, decision, decisionComment);
-    setDecisionComment('');
-    setSelectedId(null);
-    await loadApprovals();
+    try {
+      setSubmittingDecision(true);
+      setError(null);
+      await apiClient.decideApproval(selectedApproval.id, decision, decisionComment);
+      setDecisionComment('');
+      setSelectedId(null);
+      await loadApprovals();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Unable to submit approval decision.');
+    } finally {
+      setSubmittingDecision(false);
+    }
   };
 
-  const sortedPending = useMemo(() => {
-    return [...pending].sort((a, b) => {
+  const filteredApprovals = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return approvals.filter((approval) => {
+      const statusMatches = statusFilter === 'all' || approval.status === statusFilter;
+      const queryMatches =
+        query.length === 0 ||
+        approval.workflowName.toLowerCase().includes(query) ||
+        approval.actionRequested.toLowerCase().includes(query) ||
+        approval.requester.toLowerCase().includes(query) ||
+        approval.agentName.toLowerCase().includes(query);
+
+      return statusMatches && queryMatches;
+    });
+  }, [approvals, searchTerm, statusFilter]);
+
+  const sortedApprovals = useMemo(() => {
+    return [...filteredApprovals].sort((a, b) => {
       const priorityWeight: Record<ApprovalRequest['priority'], number> = {
         urgent: 3,
         high: 2,
         normal: 1,
       };
-      return priorityWeight[b.priority] - priorityWeight[a.priority];
+      const statusWeight = (approval: ApprovalRequest) => (approval.status === 'pending' ? 1 : 0);
+      return (
+        statusWeight(b) - statusWeight(a) ||
+        priorityWeight[b.priority] - priorityWeight[a.priority] ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
     });
-  }, [pending]);
+  }, [filteredApprovals]);
 
   if (loading) {
     return <LoadingState message="Loading approvals" />;
@@ -101,11 +133,48 @@ export function ApprovalsDashboard() {
         <KpiCard label="Total" value={approvals.length} accent="pending" />
       </section>
 
-      {sortedPending.length === 0 ? (
-        <EmptyState title="No pending approvals" description="Approval queue is currently clear." />
+      <section className="filter-bar" aria-label="Approval filters">
+        <div>
+          <span className="filter-title">Status</span>
+          <div className="chip-group" role="group" aria-label="Approval status filters">
+            {(['pending', 'approved', 'rejected', 'escalated'] as const).map((status) => (
+              <button
+                key={status}
+                type="button"
+                className={`chip ${statusFilter === status ? 'chip-active' : ''}`}
+                onClick={() => setStatusFilter(status)}
+              >
+                {status.replace('_', ' ')}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`chip ${statusFilter === 'all' ? 'chip-active' : ''}`}
+              onClick={() => setStatusFilter('all')}
+            >
+              all
+            </button>
+          </div>
+        </div>
+        <div>
+          <span className="filter-title">Search</span>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Find workflow, action, requester, or agent"
+          />
+        </div>
+      </section>
+
+      {sortedApprovals.length === 0 ? (
+        <EmptyState
+          title="No approvals found"
+          description="Try a different status filter or search query."
+        />
       ) : (
         <div className="approval-list">
-          {sortedPending.map((approval) => (
+          {sortedApprovals.map((approval) => (
             <article key={approval.id} className="panel approval-card">
               <div className="approval-card-head">
                 <strong>{approval.workflowName}</strong>
@@ -124,7 +193,11 @@ export function ApprovalsDashboard() {
                 ))}
               </div>
               <div className="approval-footer">
-                <span>{minutesRemaining(approval.slaDeadline)}m remaining</span>
+                <span>
+                  {approval.status === 'pending'
+                    ? `${minutesRemaining(approval.slaDeadline)}m remaining`
+                    : `Decision status: ${approval.status}`}
+                </span>
                 <button type="button" className="btn btn-secondary" onClick={() => setSelectedId(approval.id)}>
                   Review
                 </button>
@@ -141,6 +214,7 @@ export function ApprovalsDashboard() {
       >
         {selectedApproval ? (
           <div className="drawer-body">
+            {error ? <p>{error}</p> : null}
             <p>
               <strong>Action:</strong> {selectedApproval.actionRequested}
             </p>
@@ -169,13 +243,28 @@ export function ApprovalsDashboard() {
             />
 
             <div className="action-row">
-              <button type="button" className="btn btn-primary" onClick={() => submitDecision('approve')}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={submittingDecision || selectedApproval.status !== 'pending'}
+                onClick={() => submitDecision('approve')}
+              >
                 Approve
               </button>
-              <button type="button" className="btn btn-danger" onClick={() => submitDecision('reject')}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={submittingDecision || selectedApproval.status !== 'pending'}
+                onClick={() => submitDecision('reject')}
+              >
                 Reject
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => submitDecision('escalate')}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={submittingDecision || selectedApproval.status !== 'pending'}
+                onClick={() => submitDecision('escalate')}
+              >
                 Escalate
               </button>
             </div>

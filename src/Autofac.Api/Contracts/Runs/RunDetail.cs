@@ -1,3 +1,4 @@
+using Autofac.Api.Contracts.Approvals;
 using System.Collections.Generic;
 
 namespace Autofac.Api.Contracts.Runs;
@@ -17,4 +18,6 @@ public sealed record RunDetail(
     int PendingApprovals,
     IReadOnlyList<string> Tags,
     IReadOnlyList<RunEvent> Events,
-    IReadOnlyList<RunStep> Steps);
+    IReadOnlyList<RunStep> Steps,
+    IReadOnlyList<RunArtifact> Artifacts,
+    IReadOnlyList<ApprovalSummary> Approvals);

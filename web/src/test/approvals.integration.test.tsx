@@ -42,4 +42,21 @@ describe('ApprovalsDashboard integration', () => {
       );
     });
   });
+
+  it('filters to decided approvals and shows their status history', async () => {
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Approvals')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'approved' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Incident Recovery')).toBeInTheDocument();
+      expect(screen.queryByText('GitHub PR Review')).not.toBeInTheDocument();
+      expect(screen.getByText('Decision status: approved')).toBeInTheDocument();
+    });
+  });
 });

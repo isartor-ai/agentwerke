@@ -64,6 +64,12 @@ export interface RunEvent {
   createdAt: string;
 }
 
+export interface RunArtifact {
+  name: string;
+  sizeBytes: number;
+  lastModifiedAt: string;
+}
+
 export interface WorkflowRun {
   id: string;
   workflowId: string;
@@ -79,6 +85,8 @@ export interface WorkflowRun {
   pendingApprovals: number;
   steps?: RunStep[];
   events?: RunEvent[];
+  artifacts?: RunArtifact[];
+  approvals?: ApprovalRequest[];
   tags: string[];
 }
 
