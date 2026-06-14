@@ -1,0 +1,122 @@
+###############################################################################
+# Autofac — Manual test stack
+#
+# Brings up: Postgres, API, Web UI, and WireMock (GitHub stub).
+# No real credentials needed. Agent tasks use simulated output.
+#
+# Start:
+#   docker compose -f docker/docker-compose.manual.yml up --build
+#
+# Stop and remove volumes:
+#   docker compose -f docker/docker-compose.manual.yml down -v
+#
+# Ports:
+#   http://localhost:3002   Web UI
+#   http://localhost:8081   API  (e.g. http://localhost:8081/api/health/live)
+#   http://localhost:9090   WireMock admin (optional inspection)
+###############################################################################
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autofac_manual
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_manual"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: build
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_manual;Username=postgres;Password=postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # WireMock stubs GitHub API calls so no real PAT is required.
+  # Admin UI: http://localhost:9090/__admin/mappings
+  wiremock:
+    image: wiremock/wiremock:3.10.0
+    command: --port 8080
+    ports:
+      - "9090:8080"
+    volumes:
+      - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_manual;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      # Skills directory empty → agent tasks run as simulated no-op (succeed immediately)
+      Agents__Skills__SkillsDirectory: ""
+      # Docker sandbox disabled → service tasks complete with simulated output, no containers spawned
+      Sandboxes__Docker__Enabled: "false"
+      # Route GitHub API calls through WireMock — no real token needed
+      Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
+      Integrations__GitHub__PersonalAccessToken: "mock-token"
+      Integrations__GitHub__RepositoryOwner: "mock-owner"
+      Integrations__GitHub__RepositoryName: "mock-repo"
+      Integrations__Jira__WebhookSecret: ""
+      Integrations__GitHub__WebhookSecret: ""
+    volumes:
+      - api_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      wiremock:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  api_storage:
