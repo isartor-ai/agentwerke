@@ -173,7 +173,20 @@ internal static class ApiContractMappings
             step.Output,
             Error: null,
             PolicyDecision: step.PolicyDecision is null ? null : ToPolicyDecision(step.PolicyDecision),
-            PromptSnapshot: step.RuntimeSnapshot?.Prompt is null ? null : ToPromptSnapshot(step.RuntimeSnapshot.Prompt));
+            PromptSnapshot: step.RuntimeSnapshot?.Prompt is null ? null : ToPromptSnapshot(step.RuntimeSnapshot.Prompt),
+            Skills: step.RuntimeSnapshot?.Skills.Select(static skill => new SkillAuditRecord(
+                skill.SkillId,
+                skill.Name,
+                skill.Description,
+                skill.Version,
+                skill.Fingerprint,
+                skill.InvocationRules.ToArray(),
+                skill.RequiredFiles.ToArray(),
+                skill.OptionalTools.ToArray(),
+                skill.Source,
+                skill.Available,
+                skill.Selected,
+                skill.Invoked)).ToArray() ?? []);
     }
 
     public static string NormalizeRunStatus(string status)

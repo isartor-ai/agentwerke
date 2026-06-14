@@ -11,4 +11,19 @@ public sealed record RunStep(
     string? Output,
     string? Error,
     PolicyDecision? PolicyDecision,
-    PromptSnapshot? PromptSnapshot);
+    PromptSnapshot? PromptSnapshot,
+    IReadOnlyList<SkillAuditRecord> Skills);
+
+public sealed record SkillAuditRecord(
+    string SkillId,
+    string? Name,
+    string? Description,
+    string? Version,
+    string? Fingerprint,
+    IReadOnlyList<string> InvocationRules,
+    IReadOnlyList<string> RequiredFiles,
+    IReadOnlyList<string> OptionalTools,
+    string Source,
+    bool Available,
+    bool Selected,
+    bool Invoked);

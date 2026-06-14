@@ -63,13 +63,27 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
 
         if (request.Skill is not null)
         {
+            var invocationRules = request.Skill.InvocationRules.Count == 0
+                ? "none declared"
+                : string.Join(", ", request.Skill.InvocationRules);
+            var requiredFiles = request.Skill.RequiredFiles.Count == 0
+                ? "none declared"
+                : string.Join(", ", request.Skill.RequiredFiles);
+            var optionalTools = request.Skill.OptionalTools.Count == 0
+                ? "none declared"
+                : string.Join(", ", request.Skill.OptionalTools);
+
             sections.Add(new AgentPromptSectionSnapshot(
                 Name: "skill_context",
                 Content: $"""
                     Skill: {request.Skill.Name}
                     SkillId: {request.Skill.SkillId}
                     Description: {request.Skill.Description}
+                    Version: {request.Skill.Version ?? "unspecified"}
                     Fingerprint: {request.Skill.Fingerprint}
+                    InvocationRules: {invocationRules}
+                    RequiredFiles: {requiredFiles}
+                    OptionalTools: {optionalTools}
 
                     {request.Skill.Content}
                     """,
