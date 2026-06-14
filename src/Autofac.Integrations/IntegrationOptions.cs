@@ -26,10 +26,45 @@ public sealed class JiraOptions
 public sealed class GitHubOptions
 {
     /// <summary>
+    /// Base URL for the GitHub REST API.
+    /// </summary>
+    public string ApiBaseUrl { get; set; } = "https://api.github.com/";
+
+    /// <summary>
     /// Shared secret for X-Hub-Signature-256 validation.
     /// Leave empty to skip validation.
     /// </summary>
     public string WebhookSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Repository owner used for outbound branch / pull request actions.
+    /// </summary>
+    public string RepositoryOwner { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Repository name used for outbound branch / pull request actions.
+    /// </summary>
+    public string RepositoryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Personal access token or GitHub App token used for outbound API calls.
+    /// </summary>
+    public string PersonalAccessToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Default base branch for Autofac-created branches and pull requests.
+    /// </summary>
+    public string DefaultBaseBranch { get; set; } = "main";
+
+    /// <summary>
+    /// Prefix for deterministic Autofac-created branch names.
+    /// </summary>
+    public string BranchPrefix { get; set; } = "autofac/run-";
+
+    /// <summary>
+    /// Create pull requests as drafts by default for MVP safety.
+    /// </summary>
+    public bool CreateDraftPullRequests { get; set; } = true;
 
     /// <summary>
     /// GitHub issue actions that trigger workflow runs.

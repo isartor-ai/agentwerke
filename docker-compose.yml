@@ -1,0 +1,76 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autofac
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: src/Autofac.Api/Dockerfile
+      target: build        # uses the SDK stage — dotnet-ef already restored
+    working_dir: /repo
+    command: dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Autofac.Api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      Agents__Skills__SkillsDirectory: /app/skills
+      Sandboxes__Docker__Enabled: "false"
+      Sandboxes__Docker__DockerEndpoint: "unix:///var/run/docker.sock"
+    volumes:
+      - api_storage:/app/storage
+      - ./.github/skills:/app/skills:ro
+      # Uncomment to enable Docker sandbox (also set Sandboxes__Docker__Enabled=true above):
+      # - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Point the SPA at the nginx proxy path (empty = relative URLs handled by nginx)
+        VITE_API_BASE_URL: ""
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  api_storage:

@@ -482,6 +482,25 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
 
             var outcome = await _serviceTaskExecutor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken);
 
+            foreach (var action in outcome.ExternalActions ?? [])
+            {
+                await _store.AppendEventAsync(runId, "external_action_recorded",
+                    Serialize(new
+                    {
+                        runId,
+                        nodeId = node.Id,
+                        stepId = step.Id,
+                        provider = action.Provider,
+                        action = action.Action,
+                        status = action.Status,
+                        resourceId = action.ResourceId,
+                        resourceUrl = action.ResourceUrl,
+                        summary = action.Summary,
+                        attempt
+                    }),
+                    cancellationToken);
+            }
+
             if (!outcome.Succeeded)
             {
                 await _store.AppendEventAsync(runId, "service_task_failed",

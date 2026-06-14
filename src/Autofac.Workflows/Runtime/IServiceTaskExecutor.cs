@@ -16,4 +16,13 @@ public sealed record AgentTaskOutcome(
     bool Succeeded,
     string? Output,
     string? FailureReason,
-    IReadOnlyDictionary<string, string>? Artifacts = null);
+    IReadOnlyDictionary<string, string>? Artifacts = null,
+    IReadOnlyList<ExternalActionRecord>? ExternalActions = null);
+
+public sealed record ExternalActionRecord(
+    string Provider,
+    string Action,
+    string Status,
+    string? ResourceId = null,
+    string? ResourceUrl = null,
+    string? Summary = null);

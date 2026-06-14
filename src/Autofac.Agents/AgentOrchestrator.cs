@@ -1,4 +1,5 @@
 using Autofac.Agents.Skills;
+using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
@@ -14,17 +15,25 @@ namespace Autofac.Agents;
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
     private readonly ISkillRepository _skillRepository;
+    private readonly IGitHubConnector _gitHubConnector;
+    private readonly string _gitHubBranchPrefix;
     private readonly ISandboxExecutor _sandbox;
     private readonly SandboxOptions _sandboxOptions;
 
     public AgentOrchestrator(
         ISkillRepository skillRepository,
+        IGitHubConnector gitHubConnector,
         ISandboxExecutor sandbox,
-        IOptions<SandboxOptions> sandboxOptions)
+        IOptions<SandboxOptions> sandboxOptions,
+        IOptions<IntegrationOptions> integrationOptions)
     {
         _skillRepository = skillRepository;
+        _gitHubConnector = gitHubConnector;
         _sandbox = sandbox;
         _sandboxOptions = sandboxOptions.Value;
+        _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
+            ? "autofac/run-"
+            : integrationOptions.Value.GitHub.BranchPrefix;
     }
 
     public async Task<AgentTaskOutcome> ExecuteAsync(
@@ -58,6 +67,11 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             ? _skillRepository.FindById(matchedSkillRef.SkillManifestId)
             : null;
 
+        if (IsGitHubAction(metadata.Action))
+        {
+            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, cancellationToken);
+        }
+
         if (_sandboxOptions.Enabled)
         {
             return await RunInSandboxAsync(runId, stepId, metadata, attempt, skillManifest, cancellationToken);
@@ -82,6 +96,120 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Succeeded: true,
             Output: output,
             FailureReason: null);
+    }
+
+    private async Task<AgentTaskOutcome> RunGitHubActionAsync(
+        string runId,
+        string stepId,
+        BpmnNodeDefinition node,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        CancellationToken cancellationToken)
+    {
+        var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
+
+        try
+        {
+            if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
+            {
+                var branch = await _gitHubConnector.CreateBranchAsync(
+                    new CreateGitHubBranchCommand(branchName, BaseBranch: null),
+                    cancellationToken);
+
+                return new AgentTaskOutcome(
+                    Succeeded: true,
+                    Output: $"""
+                        provider: github
+                        action: create_branch
+                        status: completed
+                        branch: {branch.BranchName}
+                        base: {branch.BaseBranch}
+                        url: {branch.BranchUrl}
+                        sha: {branch.CommitSha}
+                        existing: {branch.AlreadyExisted}
+                        """,
+                    FailureReason: null,
+                    ExternalActions:
+                    [
+                        new ExternalActionRecord(
+                            Provider: "github",
+                            Action: "create_branch",
+                            Status: branch.AlreadyExisted ? "already_exists" : "completed",
+                            ResourceId: branch.BranchName,
+                            ResourceUrl: branch.BranchUrl,
+                            Summary: $"GitHub branch {branch.BranchName}")
+                    ]);
+            }
+
+            var ensuredBranch = await _gitHubConnector.CreateBranchAsync(
+                new CreateGitHubBranchCommand(branchName, BaseBranch: null),
+                cancellationToken);
+
+            var title = node.Name is { Length: > 0 }
+                ? $"Autofac: {node.Name}"
+                : $"Autofac run {runId}";
+            var body = BuildPullRequestBody(runId, stepId, metadata, attempt);
+            var pullRequest = await _gitHubConnector.CreatePullRequestAsync(
+                new CreateGitHubPullRequestCommand(
+                    RunId: runId,
+                    StepId: stepId,
+                    Attempt: attempt,
+                    HeadBranch: branchName,
+                    BaseBranch: null,
+                    Title: title,
+                    Body: body,
+                    CommitMessage: $"Autofac evidence for run {runId}, step {stepId}"),
+                cancellationToken);
+
+            return new AgentTaskOutcome(
+                Succeeded: true,
+                Output: $"""
+                    provider: github
+                    action: create_pull_request
+                    status: completed
+                    branch: {ensuredBranch.BranchName}
+                    branch_existing: {ensuredBranch.AlreadyExisted}
+                    pull_request: #{pullRequest.Number}
+                    url: {pullRequest.PullRequestUrl}
+                    marker: {pullRequest.MarkerPath}
+                    existing: {pullRequest.AlreadyExisted}
+                    """,
+                FailureReason: null,
+                ExternalActions:
+                [
+                    new ExternalActionRecord(
+                        Provider: "github",
+                        Action: "create_branch",
+                        Status: ensuredBranch.AlreadyExisted ? "already_exists" : "completed",
+                        ResourceId: ensuredBranch.BranchName,
+                        ResourceUrl: ensuredBranch.BranchUrl,
+                        Summary: $"GitHub branch {ensuredBranch.BranchName}"),
+                    new ExternalActionRecord(
+                        Provider: "github",
+                        Action: "create_pull_request",
+                        Status: pullRequest.AlreadyExisted ? "already_exists" : "completed",
+                        ResourceId: pullRequest.Number.ToString(),
+                        ResourceUrl: pullRequest.PullRequestUrl,
+                        Summary: $"GitHub pull request #{pullRequest.Number}")
+                ]);
+        }
+        catch (Exception ex)
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: ex.Message,
+                ExternalActions:
+                [
+                    new ExternalActionRecord(
+                        Provider: "github",
+                        Action: metadata.Action,
+                        Status: "failed",
+                        ResourceId: branchName,
+                        ResourceUrl: null,
+                        Summary: ex.Message)
+                ]);
+        }
     }
 
     private async Task<AgentTaskOutcome> RunInSandboxAsync(
@@ -129,6 +257,49 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         return profile.Skills.FirstOrDefault(s =>
             s.SupportedActions.Contains(action, StringComparer.OrdinalIgnoreCase))
             ?? profile.Skills.FirstOrDefault();
+    }
+
+    private static bool IsGitHubAction(string action) =>
+        string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(action, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(action, "github.create_pr", StringComparison.OrdinalIgnoreCase);
+
+    private static string BuildBranchName(string runId, string branchPrefix)
+    {
+        var normalized = new string(runId
+            .ToLowerInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+            .ToArray())
+            .Trim('-');
+
+        return $"{branchPrefix}{normalized}";
+    }
+
+    private static string BuildPullRequestBody(
+        string runId,
+        string stepId,
+        AutofacTaskMetadata metadata,
+        int attempt)
+    {
+        var evidence = metadata.RequiresEvidence.Count == 0
+            ? "- none declared"
+            : string.Join('\n', metadata.RequiresEvidence.Select(static item => $"- {item}"));
+
+        return $"""
+            Generated by Autofac.
+
+            - run: {runId}
+            - step: {stepId}
+            - agent: {metadata.Agent}
+            - action: {metadata.Action}
+            - environment: {metadata.Environment ?? "unspecified"}
+            - purpose: {metadata.PurposeType}
+            - policy: {metadata.PolicyTag}
+            - attempt: {attempt}
+
+            Evidence requirements:
+            {evidence}
+            """;
     }
 
     private static string BuildSimulatedOutput(
