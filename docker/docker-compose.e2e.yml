@@ -1,0 +1,162 @@
+###############################################################################
+# Autofac E2E test stack
+#
+# Core profile (default API + workflow tests, built-in BPMN engine):
+#   docker compose -f docker/docker-compose.e2e.yml --profile core up --build --abort-on-container-exit
+#
+# Camunda profile (adds Zeebe 8 for the issue-#69 spike):
+#   docker compose -f docker/docker-compose.e2e.yml --profile camunda up --build --abort-on-container-exit
+#
+# Both profiles can run together:
+#   docker compose -f docker/docker-compose.e2e.yml --profile core --profile camunda up --build --abort-on-container-exit
+#
+# What gets mocked
+# ----------------
+# • GitHub API  → WireMock (catch-all 200), so no real PAT is needed.
+# • Agent LLM   → Sandbox is disabled; AgentOrchestrator falls back to the
+#                  no-op skill path that returns success immediately.
+###############################################################################
+
+services:
+
+  # ── Shared infrastructure (always started) ──────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: autofac_e2e
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: build
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_e2e;Username=postgres;Password=postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # WireMock — stubs external HTTP calls so tests need no real credentials.
+  # Mapping file: tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json
+  wiremock:
+    image: wiremock/wiremock:3.10.0
+    command: --port 8080
+    volumes:
+      - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github.json:ro
+    healthcheck:
+      # WireMock 3.10+ admin endpoint returns {"status":"healthy"}
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_e2e;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      Agents__Skills__SkillsDirectory: ""
+      Sandboxes__Docker__Enabled: "false"
+      # Route GitHub API calls through WireMock — no real token needed
+      Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
+      Integrations__GitHub__PersonalAccessToken: "mock-token"
+      Integrations__GitHub__RepositoryOwner: "mock-owner"
+      Integrations__GitHub__RepositoryName: "mock-repo"
+      Integrations__Jira__WebhookSecret: ""
+      Integrations__GitHub__WebhookSecret: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      wiremock:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ── Core E2E tests (built-in BPMN engine) ───────────────────────────────────
+
+  e2e-tests:
+    profiles: [core]
+    build:
+      context: ..
+      dockerfile: docker/e2e/Dockerfile
+    environment:
+      AUTOFAC_API_URL: "http://api:8080"
+      CAMUNDA_ENABLED: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── Camunda 8 spike (issue #69) ─────────────────────────────────────────────
+  #
+  # Zeebe 8.6 self-managed, no Elasticsearch/Operate.
+  # The REST gateway (port 8088) is used by the spike tests to verify:
+  #   1. The topology endpoint responds → Zeebe is reachable
+  #   2. A BPMN process can be submitted for deployment
+  #
+  # The autofac-specific extension elements in e2e-simple.bpmn are expected to
+  # be rejected by Zeebe (400) — that is an acceptable spike result and proves
+  # the gateway is reachable. A real integration would strip/translate the
+  # autofac:agentTask extensions before deploying to Zeebe.
+  #
+  # Memory: Zeebe needs ~1 GB; set Docker Desktop to ≥ 3 GB.
+
+  zeebe:
+    profiles: [camunda]
+    image: camunda/zeebe:8.6.6
+    environment:
+      # Remove the default Elasticsearch exporter that camunda/zeebe ships with.
+      # Setting ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_CLASSNAME= (empty string) causes
+      # ClassNotFoundException; replacing the exporters map via SPRING_APPLICATION_JSON avoids that.
+      # The REST API (/v2/topology etc.) is served by Zeebe's Tomcat on port 8080 by default
+      # (same server as the actuator) — no extra config needed to enable it.
+      - >-
+        SPRING_APPLICATION_JSON={"zeebe":{"broker":{"exporters":{}}}}
+    ports:
+      - "26500:26500"   # gRPC gateway
+      - "8088:8080"     # REST API (Zeebe internal port 8080 exposed on host as 8088 for spike tests)
+    healthcheck:
+      # camunda/zeebe has no curl/wget. Check that the monitoring port 9600
+      # (0x2580 hex) is in LISTEN state in /proc/net/tcp6 — this comes up
+      # only after the broker transitions to LEADER.
+      test: ["CMD-SHELL", "grep -q ':2580 ' /proc/net/tcp6"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+
+  e2e-tests-camunda:
+    profiles: [camunda]
+    build:
+      context: ..
+      dockerfile: docker/e2e/Dockerfile
+    environment:
+      AUTOFAC_API_URL: "http://api:8080"
+      CAMUNDA_ENABLED: "true"
+      ZEEBE_REST_URL: "http://zeebe:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+      zeebe:
+        condition: service_healthy

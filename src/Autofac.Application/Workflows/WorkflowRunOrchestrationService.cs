@@ -1,4 +1,7 @@
+using Autofac.Application.Observability;
 using Autofac.Domain.Persistence;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Autofac.Application.Workflows;
 
@@ -12,17 +15,29 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     private readonly IWorkflowRunner _runner;
     private readonly IWorkflowRunRepository _runRepository;
     private readonly IApprovalRepository _approvalRepository;
+    private readonly IAuditRepository _auditRepository;
+    private readonly ICorrelationContext _correlationContext;
+    private readonly IWorkflowMetrics _metrics;
+    private readonly ILogger<WorkflowRunOrchestrationService> _logger;
 
     public WorkflowRunOrchestrationService(
         IWorkflowDefinitionRepository definitionRepository,
         IWorkflowRunner runner,
         IWorkflowRunRepository runRepository,
-        IApprovalRepository approvalRepository)
+        IApprovalRepository approvalRepository,
+        IAuditRepository auditRepository,
+        ICorrelationContext correlationContext,
+        IWorkflowMetrics metrics,
+        ILogger<WorkflowRunOrchestrationService> logger)
     {
         _definitionRepository = definitionRepository;
         _runner = runner;
         _runRepository = runRepository;
         _approvalRepository = approvalRepository;
+        _auditRepository = auditRepository;
+        _correlationContext = correlationContext;
+        _metrics = metrics;
+        _logger = logger;
     }
 
     public async Task<StartRunResult> StartRunAsync(
@@ -30,6 +45,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var correlationId = _correlationContext.CorrelationId;
 
         var workflow = await _definitionRepository.GetAsync(command.WorkflowId, cancellationToken)
             ?? throw new WorkflowNotFoundException(command.WorkflowId);
@@ -39,11 +56,19 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             throw new WorkflowNotPublishedException(command.WorkflowId, workflow.Status);
         }
 
+        _logger.LogInformation(
+            "Starting workflow run. WorkflowId={WorkflowId} Initiator={Initiator} CorrelationId={CorrelationId}",
+            command.WorkflowId, command.Initiator, correlationId);
+
+        _metrics.RunStarted(command.WorkflowId, workflow.Name);
+        var sw = Stopwatch.StartNew();
+
         var result = await _runner.StartAsync(
             command.WorkflowId,
             workflow.BpmnXml,
             command.Initiator,
-            cancellationToken);
+            cancellationToken,
+            correlationId);
 
         if (command.Trigger is not null)
         {
@@ -59,6 +84,9 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             await _runRepository.AppendEventAsync(result.RunId, "trigger_fired", msg, cancellationToken);
         }
 
+        sw.Stop();
+        _metrics.RunCompleted(command.WorkflowId, workflow.Name, sw.Elapsed.TotalMilliseconds);
+
         if (result.WaitingApproval is not null)
         {
             await _runRepository.UpdateCurrentStepAsync(result.RunId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
@@ -68,8 +96,22 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
                 workflow.Name,
                 command.Initiator ?? "unknown",
                 result.WaitingApproval,
+                correlationId,
                 cancellationToken);
+            _metrics.ApprovalCreated(result.WaitingApproval.RiskLevel);
         }
+
+        await WriteAuditAsync(
+            runId: result.RunId,
+            correlationId: correlationId,
+            actorType: "system",
+            actor: command.Initiator ?? "unknown",
+            action: "workflow.start",
+            resourceType: "workflow",
+            resourceId: command.WorkflowId,
+            outcome: "success",
+            details: null,
+            cancellationToken);
 
         return new StartRunResult(
             result.RunId,
@@ -83,6 +125,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var correlationId = _correlationContext.CorrelationId;
 
         var approval = await _approvalRepository.GetApprovalAsync(command.ApprovalId, cancellationToken)
             ?? throw new ApprovalNotFoundException(command.ApprovalId);
@@ -115,6 +159,24 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         await _approvalRepository.SaveChangesAsync(cancellationToken);
         await _runRepository.DecrementPendingApprovalsAsync(command.RunId, cancellationToken);
 
+        _logger.LogInformation(
+            "Approval decision recorded. RunId={RunId} ApprovalId={ApprovalId} Decision={Decision} DecidedBy={DecidedBy} CorrelationId={CorrelationId}",
+            command.RunId, command.ApprovalId, command.Decision, decidedBy, correlationId);
+
+        _metrics.ApprovalDecided(command.Decision, approval.RiskLevel ?? "low");
+
+        await WriteAuditAsync(
+            runId: command.RunId,
+            correlationId: correlationId,
+            actorType: "user",
+            actor: decidedBy,
+            action: $"approval.{command.Decision}",
+            resourceType: "approval",
+            resourceId: command.ApprovalId,
+            outcome: resolvedStatus,
+            details: command.Comment,
+            cancellationToken);
+
         if (!string.Equals(resolvedStatus, "approved", StringComparison.Ordinal))
         {
             await _runRepository.UpdateRunStatusAsync(command.RunId, CancelledStatus, cancellationToken);
@@ -137,6 +199,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
                 workflow.Name,
                 run.RequestedBy,
                 result.WaitingApproval,
+                correlationId,
                 cancellationToken);
         }
         else
@@ -159,6 +222,10 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         var workflow = await _definitionRepository.GetAsync(run.WorkflowId, cancellationToken)
             ?? throw new WorkflowNotFoundException(run.WorkflowId);
 
+        _logger.LogInformation(
+            "Recovering workflow run. RunId={RunId} WorkflowId={WorkflowId}",
+            runId, run.WorkflowId);
+
         var result = await _runner.RecoverAsync(runId, workflow.BpmnXml, cancellationToken);
 
         if (result.WaitingApproval is not null)
@@ -173,6 +240,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
                     workflow.Name,
                     run.RequestedBy,
                     result.WaitingApproval,
+                    run.CorrelationId,
                     cancellationToken);
             }
         }
@@ -185,6 +253,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         string workflowName,
         string requester,
         WaitingApprovalInfo waiting,
+        string? correlationId,
         CancellationToken cancellationToken)
     {
         var slaDeadline = DateTimeOffset.UtcNow.AddHours(24).ToString("o");
@@ -209,6 +278,37 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
 
         await _approvalRepository.AddApprovalAsync(approval, cancellationToken);
         await _approvalRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task WriteAuditAsync(
+        string runId,
+        string? correlationId,
+        string actorType,
+        string actor,
+        string action,
+        string resourceType,
+        string resourceId,
+        string outcome,
+        string? details,
+        CancellationToken cancellationToken)
+    {
+        var record = new AuditRecord
+        {
+            Id = $"aud_{Guid.NewGuid():N}",
+            RunId = runId,
+            CorrelationId = correlationId,
+            ActorType = actorType,
+            Actor = actor,
+            Action = action,
+            ResourceType = resourceType,
+            ResourceId = resourceId,
+            Outcome = outcome,
+            Details = details,
+            Timestamp = DateTimeOffset.UtcNow.ToString("o")
+        };
+
+        await _auditRepository.AddAsync(record, cancellationToken);
+        await _auditRepository.SaveChangesAsync(cancellationToken);
     }
 
     private static string DeriveApprovalPriority(string riskLevel) => riskLevel switch

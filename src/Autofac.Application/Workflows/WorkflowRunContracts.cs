@@ -70,7 +70,8 @@ public interface IWorkflowRunner
         string workflowDefinitionId,
         string bpmnXml,
         string? initiator,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? correlationId = null);
 
     Task<WorkflowRunnerResult> ResumeAsync(
         string runId,

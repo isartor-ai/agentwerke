@@ -16,7 +16,8 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
     public async Task<WorkflowRun> CreateRunAsync(
         string workflowDefinitionId,
         string? initiator,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? correlationId = null)
     {
         var workflowDefinition = await _dbContext.WorkflowDefinitions.AsNoTracking().FirstAsync(x => x.Id == workflowDefinitionId, cancellationToken);
         var run = new WorkflowRun
@@ -28,7 +29,8 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
             Status = "pending",
             RequestedBy = initiator ?? "unknown",
             StartedAt = DateTime.UtcNow.ToString("o"),
-            Tags = workflowDefinition.Tags
+            Tags = workflowDefinition.Tags,
+            CorrelationId = correlationId
         };
 
         _dbContext.WorkflowRuns.Add(run);

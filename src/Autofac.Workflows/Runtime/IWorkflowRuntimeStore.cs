@@ -7,7 +7,8 @@ public interface IWorkflowRuntimeStore
     Task<WorkflowRun> CreateRunAsync(
         string workflowDefinitionId,
         string? initiator,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? correlationId = null);
 
     Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken);
 

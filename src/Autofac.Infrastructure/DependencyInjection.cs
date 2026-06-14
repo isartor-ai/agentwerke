@@ -1,3 +1,4 @@
+using Autofac.Application.Observability;
 using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
 using Autofac.Infrastructure.Workflows;
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IApprovalRepository, ApprovalRepository>();
         services.AddScoped<IWorkflowRunner, WorkflowRunnerAdapter>();
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
+        services.AddScoped<IAuditRepository, AuditRepository>();
 
         return services;
     }

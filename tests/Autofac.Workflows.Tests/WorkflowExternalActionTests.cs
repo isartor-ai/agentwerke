@@ -1,6 +1,7 @@
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Autofac.Workflows.Tests;
 
@@ -10,7 +11,7 @@ public sealed class WorkflowExternalActionTests
     public async Task StartAsync_WhenServiceTaskReturnsExternalActions_RecordsConnectorEvents()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new ExternalActionServiceTaskExecutor());
+        var engine = new WorkflowInstanceEngine(store, new ExternalActionServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var state = await engine.StartAsync(
             Guid.NewGuid().ToString(),
@@ -77,7 +78,7 @@ public sealed class WorkflowExternalActionTests
         private readonly Dictionary<string, WorkflowRun> _runs = [];
         private readonly object _sync = new();
 
-        public Task<WorkflowRun> CreateRunAsync(string workflowDefinitionId, string? initiator, CancellationToken cancellationToken)
+        public Task<WorkflowRun> CreateRunAsync(string workflowDefinitionId, string? initiator, CancellationToken cancellationToken, string? correlationId = null)
         {
             var run = new WorkflowRun
             {

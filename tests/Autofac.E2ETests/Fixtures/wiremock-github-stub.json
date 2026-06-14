@@ -1,0 +1,16 @@
+{
+  "mappings": [
+    {
+      "name": "GitHub API catch-all",
+      "request": {
+        "method": "ANY",
+        "urlPattern": "/.*"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": "{\"id\":1,\"number\":1,\"html_url\":\"https://github.com/mock/repo/issues/1\",\"state\":\"open\"}"
+      }
+    }
+  ]
+}
