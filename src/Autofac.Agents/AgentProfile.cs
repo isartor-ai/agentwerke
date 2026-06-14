@@ -82,6 +82,30 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["test-gate", "quality-check"]
+        },
+        ["github-agent"] = new AgentProfile
+        {
+            AgentId = "github-agent",
+            Name = "GitHub Agent",
+            Description = "Creates branches and pull requests in the configured GitHub repository.",
+            Category = "integration",
+            Skills =
+            [
+                new AgentSkillRef(
+                    "github-branching",
+                    "GitHub Branching",
+                    "Create deterministic Autofac branches for workflow runs",
+                    ["github.create_branch"],
+                    SkillManifestId: "git-workflow-and-versioning"),
+                new AgentSkillRef(
+                    "github-pr",
+                    "GitHub Pull Request",
+                    "Open draft pull requests with Autofac run evidence",
+                    ["github.create_pull_request", "github.create_pr"],
+                    SkillManifestId: "git-workflow-and-versioning")
+            ],
+            SupportedEnvironments = ["github"],
+            SupportedPolicyTags = ["repo-change", "pull-request", "branch-create"]
         }
     };
 

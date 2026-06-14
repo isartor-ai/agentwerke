@@ -1,0 +1,14 @@
+**/.git
+**/.gitignore
+**/bin
+**/obj
+**/*.user
+**/.vs
+**/.idea
+**/node_modules
+web/dist
+web/.vite
+docs
+*.md
+tests/
+.claude/

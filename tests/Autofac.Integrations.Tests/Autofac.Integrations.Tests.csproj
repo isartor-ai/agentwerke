@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -15,12 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
+    <ProjectReference Include="..\..\src\Autofac.Integrations\Autofac.Integrations.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Autofac.Workflows\Autofac.Workflows.csproj" />
-    <ProjectReference Include="..\..\src\Autofac.Domain\Autofac.Domain.csproj" />
+    <Using Include="Xunit" />
   </ItemGroup>
 
 </Project>

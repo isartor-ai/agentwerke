@@ -1,0 +1,74 @@
+namespace Autofac.Integrations;
+
+public sealed class IntegrationOptions
+{
+    public const string Section = "Integrations";
+
+    public JiraOptions Jira { get; set; } = new();
+    public GitHubOptions GitHub { get; set; } = new();
+}
+
+public sealed class JiraOptions
+{
+    /// <summary>
+    /// Shared secret used to validate the X-Hub-Signature header.
+    /// Leave empty to skip signature validation (development only).
+    /// </summary>
+    public string WebhookSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Jira webhook events that trigger workflow runs.
+    /// Defaults to "jira:issue_created".
+    /// </summary>
+    public List<string> TriggerEvents { get; set; } = ["jira:issue_created"];
+}
+
+public sealed class GitHubOptions
+{
+    /// <summary>
+    /// Base URL for the GitHub REST API.
+    /// </summary>
+    public string ApiBaseUrl { get; set; } = "https://api.github.com/";
+
+    /// <summary>
+    /// Shared secret for X-Hub-Signature-256 validation.
+    /// Leave empty to skip validation.
+    /// </summary>
+    public string WebhookSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Repository owner used for outbound branch / pull request actions.
+    /// </summary>
+    public string RepositoryOwner { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Repository name used for outbound branch / pull request actions.
+    /// </summary>
+    public string RepositoryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Personal access token or GitHub App token used for outbound API calls.
+    /// </summary>
+    public string PersonalAccessToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Default base branch for Autofac-created branches and pull requests.
+    /// </summary>
+    public string DefaultBaseBranch { get; set; } = "main";
+
+    /// <summary>
+    /// Prefix for deterministic Autofac-created branch names.
+    /// </summary>
+    public string BranchPrefix { get; set; } = "autofac/run-";
+
+    /// <summary>
+    /// Create pull requests as drafts by default for MVP safety.
+    /// </summary>
+    public bool CreateDraftPullRequests { get; set; } = true;
+
+    /// <summary>
+    /// GitHub issue actions that trigger workflow runs.
+    /// Defaults to "opened".
+    /// </summary>
+    public List<string> TriggerActions { get; set; } = ["opened"];
+}
