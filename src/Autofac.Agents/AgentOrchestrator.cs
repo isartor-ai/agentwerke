@@ -1,3 +1,4 @@
+using Autofac.AgentSecOps;
 using Autofac.Agents.Skills;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
@@ -15,6 +16,7 @@ namespace Autofac.Agents;
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
     private readonly ISkillRepository _skillRepository;
+    private readonly IPolicyEvaluationService _policyEvaluationService;
     private readonly IGitHubConnector _gitHubConnector;
     private readonly string _gitHubBranchPrefix;
     private readonly ISandboxExecutor _sandbox;
@@ -22,12 +24,14 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
     public AgentOrchestrator(
         ISkillRepository skillRepository,
+        IPolicyEvaluationService policyEvaluationService,
         IGitHubConnector gitHubConnector,
         ISandboxExecutor sandbox,
         IOptions<SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
         _skillRepository = skillRepository;
+        _policyEvaluationService = policyEvaluationService;
         _gitHubConnector = gitHubConnector;
         _sandbox = sandbox;
         _sandboxOptions = sandboxOptions.Value;
@@ -66,15 +70,32 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         var skillManifest = matchedSkillRef?.SkillManifestId is not null
             ? _skillRepository.FindById(matchedSkillRef.SkillManifestId)
             : null;
+        var policyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
+            AgentName: metadata.Agent,
+            Action: metadata.Action,
+            Environment: metadata.Environment,
+            PurposeType: metadata.PurposeType,
+            PolicyTag: metadata.PolicyTag,
+            RequiresEvidence: metadata.RequiresEvidence,
+            Attempt: attempt));
+
+        if (!string.Equals(policyDecision.Kind, "allow", StringComparison.OrdinalIgnoreCase))
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: policyDecision.Rationale,
+                PolicyDecision: policyDecision);
+        }
 
         if (IsGitHubAction(metadata.Action))
         {
-            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, cancellationToken);
+            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, policyDecision, cancellationToken);
         }
 
         if (_sandboxOptions.Enabled)
         {
-            return await RunInSandboxAsync(runId, stepId, metadata, attempt, skillManifest, cancellationToken);
+            return await RunInSandboxAsync(runId, stepId, metadata, attempt, skillManifest, policyDecision, cancellationToken);
         }
 
         var request = new AgentExecutionRequest(
@@ -95,7 +116,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         return new AgentTaskOutcome(
             Succeeded: true,
             Output: output,
-            FailureReason: null);
+            FailureReason: null,
+            PolicyDecision: policyDecision);
     }
 
     private async Task<AgentTaskOutcome> RunGitHubActionAsync(
@@ -104,6 +126,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
         int attempt,
+        Domain.Persistence.PolicyDecision policyDecision,
         CancellationToken cancellationToken)
     {
         var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
@@ -129,6 +152,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         existing: {branch.AlreadyExisted}
                         """,
                     FailureReason: null,
+                    PolicyDecision: policyDecision,
                     ExternalActions:
                     [
                         new ExternalActionRecord(
@@ -175,6 +199,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     existing: {pullRequest.AlreadyExisted}
                     """,
                 FailureReason: null,
+                PolicyDecision: policyDecision,
                 ExternalActions:
                 [
                     new ExternalActionRecord(
@@ -199,6 +224,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Succeeded: false,
                 Output: null,
                 FailureReason: ex.Message,
+                PolicyDecision: policyDecision,
                 ExternalActions:
                 [
                     new ExternalActionRecord(
@@ -218,6 +244,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         AutofacTaskMetadata metadata,
         int attempt,
         SkillManifest? skillManifest,
+        Domain.Persistence.PolicyDecision policyDecision,
         CancellationToken cancellationToken)
     {
         var sandboxRequest = new SandboxExecutionRequest(
@@ -238,7 +265,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Succeeded: false,
                 Output: result.Logs,
                 FailureReason: result.FailureReason,
-                Artifacts: result.Artifacts);
+                Artifacts: result.Artifacts,
+                PolicyDecision: policyDecision);
         }
 
         var output = BuildSandboxOutput(sandboxRequest, result, skillManifest);
@@ -247,7 +275,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Succeeded: true,
             Output: output,
             FailureReason: null,
-            Artifacts: result.Artifacts);
+            Artifacts: result.Artifacts,
+            PolicyDecision: policyDecision);
     }
 
     private static AgentSkillRef? ResolveSkillRef(AgentProfile? profile, string action)

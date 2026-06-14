@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Autofac.Agents\Autofac.Agents.csproj" />
+    <ProjectReference Include="..\..\src\Autofac.AgentSecOps\Autofac.AgentSecOps.csproj" />
   </ItemGroup>
 
 </Project>
