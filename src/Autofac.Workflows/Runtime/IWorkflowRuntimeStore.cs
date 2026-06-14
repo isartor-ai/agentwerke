@@ -38,5 +38,6 @@ public interface IWorkflowRuntimeStore
         string status,
         string? output,
         string? completedAt,
+        PolicyDecision? policyDecision,
         CancellationToken cancellationToken);
 }

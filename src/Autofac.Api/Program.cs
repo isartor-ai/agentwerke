@@ -1,4 +1,5 @@
 using Autofac.Agents;
+using Autofac.AgentSecOps;
 using Autofac.Infrastructure;
 using Autofac.Integrations;
 using Autofac.Storage;
@@ -13,6 +14,7 @@ builder.Services.AddOpenApi("v1");
 builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
 builder.Services.AddAutofacWorkflows();
+builder.Services.AddAutofacAgentSecOps();
 builder.Services.AddAutofacAgents(builder.Configuration);
 builder.Services.AddAutofacIntegrations(builder.Configuration);
 

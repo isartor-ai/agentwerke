@@ -5,6 +5,7 @@ using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Autofac.Infrastructure;
 
@@ -21,8 +22,12 @@ public static class DependencyInjection
             throw new InvalidOperationException("Connection string 'Postgres' is not configured.");
         }
 
+        var dataSource = new NpgsqlDataSourceBuilder(connectionString)
+            .EnableDynamicJson()
+            .Build();
+
         services.AddDbContext<AutofacDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(dataSource));
 
         services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
         services.AddScoped<IWorkflowValidationService, WorkflowValidationService>();

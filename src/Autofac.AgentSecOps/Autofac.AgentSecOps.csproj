@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
     <ProjectReference Include="..\Autofac.Domain\Autofac.Domain.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.1" />
   </ItemGroup>
 
   <PropertyGroup>
