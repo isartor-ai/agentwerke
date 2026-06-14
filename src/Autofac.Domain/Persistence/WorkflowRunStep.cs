@@ -1,3 +1,5 @@
+using Autofac.Domain.AgentRuntime;
+
 namespace Autofac.Domain.Persistence;
 
 public sealed class WorkflowRunStep
@@ -19,4 +21,6 @@ public sealed class WorkflowRunStep
     public string? Output { get; set; }
 
     public PolicyDecision? PolicyDecision { get; set; }
+
+    public AgentRuntimeSnapshot? RuntimeSnapshot { get; set; }
 }

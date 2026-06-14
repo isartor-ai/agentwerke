@@ -1,3 +1,4 @@
+using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 
 namespace Autofac.Workflows.Runtime;
@@ -40,5 +41,6 @@ public interface IWorkflowRuntimeStore
         string? output,
         string? completedAt,
         PolicyDecision? policyDecision,
+        AgentRuntimeSnapshot? runtimeSnapshot,
         CancellationToken cancellationToken);
 }
