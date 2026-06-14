@@ -9,9 +9,9 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
     private const string WaitingUserStatus = "waiting_user";
 
     private readonly IBpmnWorkflowValidator _validator;
-    private readonly IWorkflowInstanceEngine _engine;
+    private readonly IWorkflowEngineAdapter _engine;
 
-    public WorkflowRunnerAdapter(IBpmnWorkflowValidator validator, IWorkflowInstanceEngine engine)
+    public WorkflowRunnerAdapter(IBpmnWorkflowValidator validator, IWorkflowEngineAdapter engine)
     {
         _validator = validator;
         _engine = engine;
@@ -24,7 +24,9 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         CancellationToken cancellationToken)
     {
         var definition = ParseOrThrow(bpmnXml);
-        var state = await _engine.StartAsync(workflowDefinitionId, definition, initiator, cancellationToken);
+        var state = await _engine.StartAsync(
+            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator),
+            cancellationToken);
         return ToResult(state, definition);
     }
 
@@ -35,7 +37,9 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         CancellationToken cancellationToken)
     {
         var definition = ParseOrThrow(bpmnXml);
-        var state = await _engine.ResumeAsync(runId, definition, approvedBy, cancellationToken);
+        var state = await _engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(runId, definition, approvedBy),
+            cancellationToken);
         return ToResult(state, definition);
     }
 
@@ -45,7 +49,9 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         CancellationToken cancellationToken)
     {
         var definition = ParseOrThrow(bpmnXml);
-        var state = await _engine.RecoverAsync(runId, definition, cancellationToken);
+        var state = await _engine.RecoverAsync(
+            new WorkflowEngineRecoverRequest(runId, definition),
+            cancellationToken);
         return ToResult(state, definition);
     }
 
