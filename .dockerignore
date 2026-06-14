@@ -6,8 +6,8 @@
 **/.vs
 **/.idea
 **/node_modules
-web/dist
-web/.vite
+**/dist
+**/.vite
 docs
 *.md
 tests/
