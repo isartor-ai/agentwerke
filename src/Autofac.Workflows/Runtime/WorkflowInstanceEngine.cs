@@ -3,7 +3,7 @@ using Autofac.Workflows.Bpmn;
 
 namespace Autofac.Workflows.Runtime;
 
-public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
+public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 {
     private const string RunningStatus = "running";
     private const string WaitingUserStatus = "waiting_user";
@@ -20,12 +20,50 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
         _serviceTaskExecutor = serviceTaskExecutor;
     }
 
-    public async Task<WorkflowExecutionState> StartAsync(
+    public string EngineId => "in-process";
+
+    public Task<WorkflowExecutionState> StartAsync(
         string workflowDefinitionId,
         BpmnWorkflowDefinition definition,
         string? initiator,
         CancellationToken cancellationToken)
     {
+        return StartAsync(
+            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator),
+            cancellationToken);
+    }
+
+    public Task<WorkflowExecutionState> ResumeAsync(
+        string runId,
+        BpmnWorkflowDefinition definition,
+        string? approvedBy,
+        CancellationToken cancellationToken)
+    {
+        return ResumeAsync(
+            new WorkflowEngineResumeRequest(runId, definition, approvedBy),
+            cancellationToken);
+    }
+
+    public Task<WorkflowExecutionState> RecoverAsync(
+        string runId,
+        BpmnWorkflowDefinition definition,
+        CancellationToken cancellationToken)
+    {
+        return RecoverAsync(
+            new WorkflowEngineRecoverRequest(runId, definition),
+            cancellationToken);
+    }
+
+    public async Task<WorkflowExecutionState> StartAsync(
+        WorkflowEngineStartRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var workflowDefinitionId = request.WorkflowDefinitionId;
+        var definition = request.Definition;
+        var initiator = request.Initiator;
+
         ValidateDefinition(definition);
 
         var run = await _store.CreateRunAsync(workflowDefinitionId, initiator, cancellationToken);
@@ -45,11 +83,15 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     public async Task<WorkflowExecutionState> ResumeAsync(
-        string runId,
-        BpmnWorkflowDefinition definition,
-        string? approvedBy,
+        WorkflowEngineResumeRequest request,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var runId = request.RunId;
+        var definition = request.Definition;
+        var approvedBy = request.ApprovedBy;
+
         ValidateDefinition(definition);
 
         var checkpoint = await GetCheckpointAsync(runId, cancellationToken);
@@ -84,10 +126,14 @@ public sealed class WorkflowInstanceEngine : IWorkflowInstanceEngine
     }
 
     public async Task<WorkflowExecutionState> RecoverAsync(
-        string runId,
-        BpmnWorkflowDefinition definition,
+        WorkflowEngineRecoverRequest request,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var runId = request.RunId;
+        var definition = request.Definition;
+
         ValidateDefinition(definition);
 
         _ = await _store.GetRunAsync(runId, cancellationToken)

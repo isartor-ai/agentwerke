@@ -1,0 +1,34 @@
+# Camunda 8 Spike
+
+This spike captures the minimum mapping Autofac needs to keep the current MVP runtime swappable while aligning to the long-term Camunda 8 direction.
+
+## Goal
+
+Prove that Autofac's current MVP execution slice can be represented behind a Camunda 8-oriented adapter boundary without rewriting application orchestration logic.
+
+## Mapped MVP Slice
+
+| Autofac concern | Camunda 8 construct | Status |
+| --- | --- | --- |
+| Agent-backed service task | Service task + job worker | viable |
+| Human approval step | User task | viable |
+| Retry / wait timer | Intermediate timer catch event or timer boundary event | viable |
+| Manual/API start | None start event + engine start call | viable |
+| Message-driven start | Message start event | viable |
+| Webhook-driven start | HTTP webhook inbound connector | viable |
+
+## Notes
+
+- Autofac should keep BPMN parsing, task metadata extraction, policy, and approval semantics in Autofac-owned code.
+- Camunda should own execution scheduling, waiting states, and job/user-task orchestration once the runtime backend is swapped.
+- Service-task execution should be projected onto Camunda job types so the Agent Orchestrator can act as the controlled worker layer.
+- Webhook starts are best treated as inbound connector configuration rather than hand-built HTTP endpoints inside the engine adapter.
+
+## Primary References
+
+- Camunda 8 BPMN coverage: https://docs.camunda.io/docs/components/modeler/bpmn/bpmn-coverage/
+- Camunda 8 service tasks: https://docs.camunda.io/docs/components/modeler/bpmn/service-tasks/
+- Camunda 8 user tasks: https://docs.camunda.io/docs/components/modeler/bpmn/user-tasks/
+- Camunda 8 timer events: https://docs.camunda.io/docs/components/modeler/bpmn/timer-events/
+- Camunda 8 message events: https://docs.camunda.io/docs/components/modeler/bpmn/message-events/
+- Camunda 8 HTTP webhook connector: https://docs.camunda.io/docs/components/connectors/protocol/http-webhook/
