@@ -1,4 +1,5 @@
 using Autofac.Agents.Skills;
+using Autofac.Sandboxes;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         var repository = new SkillRepository(manifests);
 
         services.AddSingleton<ISkillRepository>(repository);
+        services.AddAutofacSandboxes(configuration);
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();
 
         return services;
