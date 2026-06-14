@@ -5,6 +5,7 @@ using Autofac.Api.Contracts.Approvals;
 using Autofac.Api.Contracts.Runs;
 using Autofac.Api.Contracts.Workflows;
 using Autofac.Domain.Persistence;
+using Autofac.Storage.Artifacts;
 using RunPolicyDecision = Autofac.Api.Contracts.Runs.PolicyDecision;
 using DomainPolicyDecision = Autofac.Domain.Persistence.PolicyDecision;
 
@@ -95,7 +96,10 @@ internal static class ApiContractMappings
                 .ToArray());
     }
 
-    public static RunDetail ToRunDetail(WorkflowRun run)
+    public static RunDetail ToRunDetail(
+        WorkflowRun run,
+        IReadOnlyList<ApprovalRequest> approvals,
+        IReadOnlyList<ArtifactDescriptor> artifacts)
     {
         return new RunDetail(
             run.Id,
@@ -112,13 +116,15 @@ internal static class ApiContractMappings
             run.PendingApprovals,
             run.Tags.ToArray(),
             run.Events
-                .OrderBy(static item => item.CreatedAt, StringComparer.Ordinal)
+                .OrderByDescending(static item => item.CreatedAt, StringComparer.Ordinal)
                 .Select(ToRunEvent)
                 .ToArray(),
             run.Steps
                 .OrderBy(static item => item.StartedAt ?? item.CompletedAt ?? item.Id, StringComparer.Ordinal)
                 .Select(ToRunStep)
-                .ToArray());
+                .ToArray(),
+            artifacts.Select(ToRunArtifact).ToArray(),
+            approvals.Select(ToApprovalSummary).ToArray());
     }
 
     public static ApprovalSummary ToApprovalSummary(ApprovalRequest approval)
@@ -197,5 +203,13 @@ internal static class ApiContractMappings
             decision.RiskFactors.ToArray(),
             decision.DecidedAt,
             decision.Constraints.ToArray());
+    }
+
+    private static RunArtifact ToRunArtifact(ArtifactDescriptor artifact)
+    {
+        return new RunArtifact(
+            artifact.Name,
+            artifact.SizeBytes,
+            artifact.LastModifiedAt);
     }
 }

@@ -7,15 +7,19 @@ import { runsFixture } from './fixtures';
 vi.mock('../api/client', () => ({
   apiClient: {
     getRun: vi.fn(),
+    getRunArtifactDownloadUrl: vi.fn(),
   },
 }));
 
 describe('RunDetail integration', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getRun).mockResolvedValue(runsFixture[0]);
+    vi.mocked(apiClient.getRunArtifactDownloadUrl).mockImplementation(
+      (runId, artifactName) => `/api/runs/${runId}/artifacts/${artifactName}`,
+    );
   });
 
-  it('renders run detail tabs and opens cancel dialog', async () => {
+  it('renders live run detail tabs with artifacts and approvals', async () => {
     render(
       <MemoryRouter initialEntries={['/runs/run-0421']}>
         <Routes>
@@ -32,7 +36,17 @@ describe('RunDetail integration', () => {
     expect(screen.getByText('Timeout boundary triggered on security scan.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Policy' }));
-    expect(screen.getByText('Content for Policy will be expanded in later phases.')).toBeInTheDocument();
+    expect(screen.getAllByText('Requires human approval.').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    expect(screen.getByText('scan-report.json')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Download' })).toHaveAttribute(
+      'href',
+      '/api/runs/run-0421/artifacts/scan-report.json',
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Approvals' }));
+    expect(screen.getByText('Merge branch feature/auth-refactor to main')).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole('button', {

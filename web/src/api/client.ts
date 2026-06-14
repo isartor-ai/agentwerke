@@ -40,6 +40,10 @@ function extractErrorMessage(errorText: string): string | null {
 }
 
 export const apiClient = {
+  getRunArtifactDownloadUrl(runId: string, artifactName: string): string {
+    return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactName)}`;
+  },
+
   async importWorkflowDefinition(payload: {
     fileName: string;
     bpmnXml: string;

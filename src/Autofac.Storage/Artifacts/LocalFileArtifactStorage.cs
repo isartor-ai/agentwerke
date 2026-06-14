@@ -11,6 +11,34 @@ public sealed class LocalFileArtifactStorage : IArtifactStorage
         _rootPath = Path.GetFullPath(options.Value.RootPath);
     }
 
+    public Task<IReadOnlyList<ArtifactDescriptor>> ListAsync(
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var directory = BuildRunDirectory(runId);
+        if (!Directory.Exists(directory))
+        {
+            return Task.FromResult<IReadOnlyList<ArtifactDescriptor>>(Array.Empty<ArtifactDescriptor>());
+        }
+
+        var artifacts = Directory
+            .EnumerateFiles(directory)
+            .Select(path =>
+            {
+                var file = new FileInfo(path);
+                return new ArtifactDescriptor(
+                    file.Name,
+                    file.Length,
+                    file.LastWriteTimeUtc.ToString("o"));
+            })
+            .OrderByDescending(static item => item.LastModifiedAt, StringComparer.Ordinal)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<ArtifactDescriptor>>(artifacts);
+    }
+
     public async Task SaveAsync(
         string runId,
         string artifactName,
@@ -72,6 +100,12 @@ public sealed class LocalFileArtifactStorage : IArtifactStorage
         var safeRunId = Sanitize(runId);
         var safeName = Sanitize(artifactName);
         return Path.Combine(_rootPath, safeRunId, safeName);
+    }
+
+    private string BuildRunDirectory(string runId)
+    {
+        var safeRunId = Sanitize(runId);
+        return Path.Combine(_rootPath, safeRunId);
     }
 
     private static string Sanitize(string input)

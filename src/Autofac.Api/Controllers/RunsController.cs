@@ -51,7 +51,15 @@ public sealed class RunsController : ControllerBase
             return NotFound();
         }
 
-        return Ok(ApiContractMappings.ToRunDetail(run));
+        var approvals = await _dbContext.ApprovalRequests
+            .AsNoTracking()
+            .Where(a => a.RunId == runId)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+
+        var artifacts = await _artifactStorage.ListAsync(runId, HttpContext.RequestAborted);
+
+        return Ok(ApiContractMappings.ToRunDetail(run, approvals, artifacts));
     }
 
     [HttpPost]
