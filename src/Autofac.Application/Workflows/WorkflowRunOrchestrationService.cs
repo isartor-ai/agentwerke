@@ -45,6 +45,20 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             command.Initiator,
             cancellationToken);
 
+        if (command.Trigger is not null)
+        {
+            var t = command.Trigger;
+            var msg = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                source = t.Source,
+                eventType = t.EventType,
+                externalId = t.ExternalId,
+                externalUrl = t.ExternalUrl,
+                title = t.Title
+            });
+            await _runRepository.AppendEventAsync(result.RunId, "trigger_fired", msg, cancellationToken);
+        }
+
         if (result.WaitingApproval is not null)
         {
             await _runRepository.UpdateCurrentStepAsync(result.RunId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
