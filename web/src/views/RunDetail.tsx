@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { AgentDetailPanel } from '../components/AgentDetailPanel';
+import { BpmnRunGraph } from '../components/BpmnRunGraph';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -8,7 +10,6 @@ import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
-import { BpmnRunGraph } from '../components/BpmnRunGraph';
 import type { WorkflowRun } from '../types';
 
 const tabs = ['Summary', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
@@ -30,6 +31,8 @@ export function RunDetail() {
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
+  // panelStepId drives AgentDetailPanel; only set by BPMN graph clicks (not initial load)
+  const [panelStepId, setPanelStepId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -77,6 +80,11 @@ export function RunDetail() {
     }
     return run.steps.find((step) => step.id === expandedStepId) ?? null;
   }, [expandedStepId, run]);
+
+  const panelStep = useMemo(() => {
+    if (!run || !panelStepId || !run.steps) return null;
+    return run.steps.find((step) => step.id === panelStepId) ?? null;
+  }, [panelStepId, run]);
 
   const policySteps = useMemo(
     () => (run?.steps ?? []).filter((step) => Boolean(step.policyDecision)),
@@ -268,8 +276,17 @@ export function RunDetail() {
             steps={run.steps ?? []}
             currentStep={run.currentStep}
             runStatus={run.status}
-            selectedStepId={expandedStepId}
-            onSelectStep={(id) => setExpandedStepId((prev) => (prev === id ? null : id))}
+            selectedStepId={panelStepId}
+            onSelectStep={(id) => {
+              const next = panelStepId === id ? null : id;
+              setPanelStepId(next);
+              if (next) setExpandedStepId(next);
+            }}
+          />
+          <AgentDetailPanel
+            step={panelStep}
+            events={run.events ?? []}
+            onClose={() => setPanelStepId(null)}
           />
           <StepTimeline
             steps={run.steps ?? []}
