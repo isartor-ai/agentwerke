@@ -51,6 +51,14 @@ export function RunDetail() {
     loadRun();
   }, [loadRun]);
 
+  useEffect(() => {
+    if (!run || run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') {
+      return;
+    }
+    const timer = setInterval(loadRun, 10_000);
+    return () => clearInterval(timer);
+  }, [loadRun, run?.status]);
+
   const selectedStep = useMemo(() => {
     if (!run || !expandedStepId || !run.steps) {
       return null;

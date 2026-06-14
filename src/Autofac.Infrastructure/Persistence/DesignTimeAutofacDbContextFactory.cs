@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Npgsql;
 
 namespace Autofac.Infrastructure.Persistence;
 
@@ -7,14 +8,16 @@ public sealed class DesignTimeAutofacDbContextFactory : IDesignTimeDbContextFact
 {
     public AutofacDbContext CreateDbContext(string[] args)
     {
-        // Allow the connection string to be overridden at migration time via an
-        // environment variable (useful in Docker / CI).
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__Postgres")
             ?? "Host=localhost;Port=5432;Database=autofac;Username=postgres;Password=postgres";
 
+        var dataSource = new NpgsqlDataSourceBuilder(connectionString)
+            .EnableDynamicJson()
+            .Build();
+
         var optionsBuilder = new DbContextOptionsBuilder<AutofacDbContext>();
-        optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.UseNpgsql(dataSource);
         return new AutofacDbContext(optionsBuilder.Options);
     }
 }

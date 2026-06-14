@@ -35,6 +35,8 @@ export function ApprovalsDashboard() {
 
   useEffect(() => {
     loadApprovals();
+    const timer = setInterval(loadApprovals, 15_000);
+    return () => clearInterval(timer);
   }, []);
 
   const selectedApproval = approvals.find((item) => item.id === selectedId) ?? null;

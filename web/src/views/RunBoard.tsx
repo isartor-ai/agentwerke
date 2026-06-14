@@ -73,6 +73,8 @@ export function RunBoard() {
 
   useEffect(() => {
     loadRuns();
+    const timer = setInterval(loadRuns, 15_000);
+    return () => clearInterval(timer);
   }, []);
 
   const filteredRuns = useMemo(() => {
@@ -317,7 +319,7 @@ export function RunBoard() {
                 <h2>Log Stream</h2>
               </div>
               <button type="button" className="btn btn-secondary" onClick={loadRuns}>
-                Trigger Simulation Log
+                Refresh
               </button>
             </div>
             <div className="global-log-stream">
