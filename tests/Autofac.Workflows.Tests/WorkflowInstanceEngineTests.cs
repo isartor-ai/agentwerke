@@ -1,6 +1,7 @@
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Autofac.Workflows.Tests;
 
@@ -10,7 +11,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_ForReferenceWorkflow_ProgressesDeterministicallyToUserTaskCheckpoint()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var state = await engine.StartAsync(
             workflowDefinitionId: Guid.NewGuid().ToString(),
@@ -46,7 +47,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         var store = new InMemoryWorkflowRuntimeStore();
         var definition = CreateReferenceDefinition();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var started = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
         var resumed = await engine.ResumeAsync(started.RunId, definition, "reviewer", CancellationToken.None);
@@ -71,10 +72,10 @@ public sealed class WorkflowInstanceEngineTests
         var store = new InMemoryWorkflowRuntimeStore();
         var definition = CreateReferenceDefinition();
 
-        var engine1 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine1 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
         var started = await engine1.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
 
-        var engine2 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine2 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
         var recovered = await engine2.RecoverAsync(started.RunId, definition, CancellationToken.None);
 
         Assert.Equal(started.RunId, recovered.RunId);
@@ -87,7 +88,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskHasRetries_CompletesAfterRetrySequence()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "RetryFlow",
@@ -122,7 +123,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskTimeoutTriggersBoundary_ContinuesToCompletion()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "TimeoutFlow",
@@ -153,7 +154,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenParallelGatewayExists_ExecutesParallelSectionAndJoins()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor());
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "ParallelFlow",
@@ -203,7 +204,7 @@ public sealed class WorkflowInstanceEngineTests
         private readonly Dictionary<string, WorkflowRun> _runs = [];
         private readonly object _sync = new();
 
-        public Task<WorkflowRun> CreateRunAsync(string workflowDefinitionId, string? initiator, CancellationToken cancellationToken)
+        public Task<WorkflowRun> CreateRunAsync(string workflowDefinitionId, string? initiator, CancellationToken cancellationToken, string? correlationId = null)
         {
             var run = new WorkflowRun
             {

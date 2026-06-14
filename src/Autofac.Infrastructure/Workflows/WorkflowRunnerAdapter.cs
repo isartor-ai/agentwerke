@@ -21,11 +21,12 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         string workflowDefinitionId,
         string bpmnXml,
         string? initiator,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? correlationId = null)
     {
         var definition = ParseOrThrow(bpmnXml);
         var state = await _engine.StartAsync(
-            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator),
+            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator, correlationId),
             cancellationToken);
         return ToResult(state, definition);
     }

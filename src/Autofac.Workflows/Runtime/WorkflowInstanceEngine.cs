@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Autofac.Workflows.Bpmn;
+using Microsoft.Extensions.Logging;
 
 namespace Autofac.Workflows.Runtime;
 
@@ -13,11 +14,16 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
     private readonly IWorkflowRuntimeStore _store;
     private readonly IServiceTaskExecutor _serviceTaskExecutor;
+    private readonly ILogger<WorkflowInstanceEngine> _logger;
 
-    public WorkflowInstanceEngine(IWorkflowRuntimeStore store, IServiceTaskExecutor serviceTaskExecutor)
+    public WorkflowInstanceEngine(
+        IWorkflowRuntimeStore store,
+        IServiceTaskExecutor serviceTaskExecutor,
+        ILogger<WorkflowInstanceEngine> logger)
     {
         _store = store;
         _serviceTaskExecutor = serviceTaskExecutor;
+        _logger = logger;
     }
 
     public string EngineId => "in-process";
@@ -26,10 +32,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         string workflowDefinitionId,
         BpmnWorkflowDefinition definition,
         string? initiator,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? correlationId = null)
     {
         return StartAsync(
-            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator),
+            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator, correlationId),
             cancellationToken);
     }
 
@@ -63,15 +70,20 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         var workflowDefinitionId = request.WorkflowDefinitionId;
         var definition = request.Definition;
         var initiator = request.Initiator;
+        var correlationId = request.CorrelationId;
 
         ValidateDefinition(definition);
 
-        var run = await _store.CreateRunAsync(workflowDefinitionId, initiator, cancellationToken);
+        var run = await _store.CreateRunAsync(workflowDefinitionId, initiator, cancellationToken, correlationId);
+
+        _logger.LogInformation(
+            "Workflow run started. RunId={RunId} WorkflowId={WorkflowId} Initiator={Initiator} CorrelationId={CorrelationId}",
+            run.Id, workflowDefinitionId, initiator, correlationId);
 
         await _store.AppendEventAsync(
             run.Id,
             "run_started",
-            Serialize(new { runId = run.Id, workflowDefinitionId, initiator }),
+            Serialize(new { runId = run.Id, workflowDefinitionId, initiator, correlationId }),
             cancellationToken);
 
         return await AdvanceAsync(
@@ -217,6 +229,10 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
                     if (serviceResult == ServiceExecutionResult.Failed)
                     {
+                        _logger.LogWarning(
+                            "Workflow run failed at service task. RunId={RunId} NodeId={NodeId}",
+                            runId, node.Id);
+
                         await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
                         await SaveCheckpointAsync(runId, FailedStatus, nextIndex, waitingOnNodeId: null, completedAt: null, cancellationToken);
 
@@ -378,6 +394,10 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         "run_completed",
                         Serialize(new { runId, completedAt }),
                         cancellationToken);
+
+                    _logger.LogInformation(
+                        "Workflow run completed. RunId={RunId} CompletedAt={CompletedAt}",
+                        runId, completedAt);
 
                     status = CompletedStatus;
                     nextIndex++;

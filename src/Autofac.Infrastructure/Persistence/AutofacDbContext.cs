@@ -15,6 +15,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
 
+    public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("autofac");
@@ -45,6 +47,7 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.CurrentStep).HasMaxLength(256);
             entity.Property(e => e.RequestedBy).HasMaxLength(128);
             entity.Property(e => e.Tags).HasColumnType("jsonb");
+            entity.Property(e => e.CorrelationId).HasMaxLength(128);
             entity.HasMany(e => e.Steps).WithOne().HasForeignKey("RunId");
             entity.HasMany(e => e.Events).WithOne().HasForeignKey("RunId");
         });
@@ -96,5 +99,18 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.DecidedBy).HasMaxLength(128);
         });
 
+        modelBuilder.Entity<AuditRecord>(entity =>
+        {
+            entity.ToTable("audit_records");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.CorrelationId).HasMaxLength(128);
+            entity.Property(e => e.ActorType).HasMaxLength(32).IsRequired();
+            entity.Property(e => e.Actor).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Action).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ResourceType).HasMaxLength(128);
+            entity.Property(e => e.ResourceId).HasMaxLength(256);
+            entity.Property(e => e.Outcome).HasMaxLength(64).IsRequired();
+        });
     }
 }

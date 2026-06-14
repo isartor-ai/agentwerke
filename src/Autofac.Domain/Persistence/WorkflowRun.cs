@@ -30,6 +30,8 @@ public sealed class WorkflowRun
 
     public List<string> Tags { get; set; } = new();
 
+    public string? CorrelationId { get; set; }
+
     public List<WorkflowRunStep> Steps { get; set; } = new();
 
     public List<WorkflowEvent> Events { get; set; } = new();

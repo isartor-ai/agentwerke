@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:autofac="https://autofac.ai/bpmn"
+                  id="e2e-simple-defs"
+                  targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
+
+  <bpmn:process id="e2e-simple" name="E2E Simple Workflow" isExecutable="true">
+
+    <bpmn:startEvent id="Start" name="Start"/>
+
+    <bpmn:serviceTask id="RunAnalysis" name="Run Analysis">
+      <bpmn:extensionElements>
+        <autofac:agentTask
+          agent="security-analyst"
+          action="run-analysis"
+          environment="ci"
+          purposeType="security-scan"
+          policyTag="standard"
+          requiresEvidence=""/>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="ApproveDeployment" name="Approve Deployment">
+      <bpmn:extensionElements>
+        <autofac:approvalTask
+          purposeType="human-approval"
+          policyTag="standard-deploy"/>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End" name="End"/>
+
+  </bpmn:process>
+</bpmn:definitions>
