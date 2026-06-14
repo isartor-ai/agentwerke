@@ -12,7 +12,7 @@ builder.Services.AddOpenApi("v1");
 builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
 builder.Services.AddAutofacWorkflows();
-builder.Services.AddAutofacAgents();
+builder.Services.AddAutofacAgents(builder.Configuration);
 
 var app = builder.Build();
 

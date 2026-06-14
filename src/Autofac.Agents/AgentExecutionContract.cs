@@ -29,4 +29,9 @@ public sealed record AgentSkillRef(
     string SkillId,
     string Name,
     string Description,
-    IReadOnlyList<string> SupportedActions);
+    IReadOnlyList<string> SupportedActions,
+    /// <summary>
+    /// Optional directory-name ID of a Markdown skill file to load.
+    /// When set, the skill content and fingerprint participate in execution context.
+    /// </summary>
+    string? SkillManifestId = null);
