@@ -35,6 +35,10 @@ public sealed class SkillsController : ControllerBase
             skillId = skill.SkillId,
             name = skill.Name,
             description = skill.Description,
+            version = skill.Version,
+            invocationRules = skill.InvocationRules,
+            requiredFiles = skill.RequiredFiles,
+            optionalTools = skill.OptionalTools,
             fingerprint = skill.Fingerprint,
             filePath = skill.FilePath,
             content = skill.Content
@@ -46,6 +50,10 @@ public sealed class SkillsController : ControllerBase
         skillId = skill.SkillId,
         name = skill.Name,
         description = skill.Description,
+        version = skill.Version,
+        invocationRules = skill.InvocationRules,
+        requiredFiles = skill.RequiredFiles,
+        optionalTools = skill.OptionalTools,
         fingerprint = skill.Fingerprint,
         filePath = skill.FilePath
     };

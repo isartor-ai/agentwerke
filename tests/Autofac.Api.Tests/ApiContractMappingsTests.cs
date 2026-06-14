@@ -47,7 +47,25 @@ public sealed class ApiContractMappingsTests
                             {
                                 ["environment"] = "staging"
                             },
-                            SourceFiles: ["inline:task_prompt"])
+                            SourceFiles: ["inline:task_prompt"]),
+                        Skills =
+                        [
+                            new AgentSkillUsageRecord
+                            {
+                                SkillId = "shipping-and-launch",
+                                Name = "Shipping and Launch",
+                                Description = "Ship changes safely.",
+                                Version = "1.2.0",
+                                Fingerprint = new string('a', 64),
+                                InvocationRules = ["deploy", "release"],
+                                RequiredFiles = ["checklist.md"],
+                                OptionalTools = ["rg"],
+                                Source = "runtime-contract",
+                                Available = true,
+                                Selected = true,
+                                Invoked = true
+                            }
+                        ]
                     }
                 }
             ]
@@ -60,5 +78,9 @@ public sealed class ApiContractMappingsTests
         Assert.Equal("assembled prompt", step.PromptSnapshot!.FinalPrompt);
         Assert.Equal("staging", step.PromptSnapshot.Variables["environment"]);
         Assert.Single(step.PromptSnapshot.Sections);
+        var skill = Assert.Single(step.Skills);
+        Assert.Equal("shipping-and-launch", skill.SkillId);
+        Assert.True(skill.Invoked);
+        Assert.Equal("runtime-contract", skill.Source);
     }
 }

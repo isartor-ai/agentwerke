@@ -50,7 +50,7 @@ public sealed class PolicyEvaluationServiceTests
     [Fact]
     public async Task AgentOrchestrator_WhenPolicyRejects_DoesNotInvokeGitHubConnector()
     {
-        var skills = new SkillRepository(Array.Empty<SkillManifest>());
+        var skills = new SkillRepository(CreateKnownSkills());
         var policyService = new StubPolicyEvaluationService("reject");
         var gitHub = new RecordingGitHubConnector();
         var sandbox = new StubSandboxExecutor();
@@ -96,7 +96,7 @@ public sealed class PolicyEvaluationServiceTests
     [Fact]
     public async Task AgentOrchestrator_WhenPromptAssemblyFails_ReturnsClearFailureReason()
     {
-        var skills = new SkillRepository(Array.Empty<SkillManifest>());
+        var skills = new SkillRepository(CreateKnownSkills());
         var policyService = new StubPolicyEvaluationService("allow");
         var gitHub = new RecordingGitHubConnector();
         var sandbox = new StubSandboxExecutor();
@@ -143,6 +143,197 @@ public sealed class PolicyEvaluationServiceTests
         Assert.False(outcome.Succeeded);
         Assert.Contains("Prompt assembly failed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenRuntimeContractSelectsSkill_TracksAvailableAndInvokedSkills()
+    {
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow");
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Skills =
+                        [
+                            new Domain.AgentRuntime.AgentSkillContract
+                            {
+                                SkillId = "security-and-hardening",
+                                Required = true
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        var snapshot = outcome.RuntimeSnapshot!;
+        Assert.Equal("security-and-hardening", Assert.Single(snapshot.Skills, static s => s.Invoked).SkillId);
+        Assert.Contains(snapshot.Skills, static s => s.SkillId == "shipping-and-launch" && s.Available && !s.Invoked);
+        Assert.Contains(snapshot.Skills, static s => s.SkillId == "security-and-hardening" && s.Selected && s.Invoked && s.Source == "runtime-contract");
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenRuntimeContractReferencesUnknownSkill_FailsEarly()
+    {
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow");
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Skills =
+                        [
+                            new Domain.AgentRuntime.AgentSkillContract
+                            {
+                                SkillId = "does-not-exist"
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("unknown skill", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenRuntimeContractRequestsMismatchedSkillVersion_FailsEarly()
+    {
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow");
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Skills =
+                        [
+                            new Domain.AgentRuntime.AgentSkillContract
+                            {
+                                SkillId = "shipping-and-launch",
+                                Version = "9.9.9"
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("loaded version", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static AgentOrchestrator CreateOrchestrator(IReadOnlyList<SkillManifest> manifests, string policyKind)
+    {
+        return new AgentOrchestrator(
+            new SkillRepository(manifests),
+            new AgentPromptAssembler(),
+            new StubPolicyEvaluationService(policyKind),
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor(),
+            Options.Create(new SandboxOptions()),
+            Options.Create(new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    BranchPrefix = "autofac/run-"
+                }
+            }));
+    }
+
+    private static SkillManifest[] CreateKnownSkills() =>
+    [
+        new(
+            SkillId: "shipping-and-launch",
+            Name: "Shipping and Launch",
+            Description: "Ship changes safely.",
+            Version: "1.0.0",
+            InvocationRules: ["deploy", "release"],
+            RequiredFiles: [],
+            OptionalTools: ["git"],
+            Content: "Always validate the deploy.",
+            Fingerprint: new string('a', 64),
+            FilePath: "/skills/shipping-and-launch/SKILL.md"),
+        new(
+            SkillId: "security-and-hardening",
+            Name: "Security and Hardening",
+            Description: "Protect sensitive operations.",
+            Version: "2.1.0",
+            InvocationRules: ["security", "credentials"],
+            RequiredFiles: [],
+            OptionalTools: ["rg"],
+            Content: "Review security-sensitive changes carefully.",
+            Fingerprint: new string('b', 64),
+            FilePath: "/skills/security-and-hardening/SKILL.md"),
+        new(
+            SkillId: "test-driven-development",
+            Name: "Test Driven Development",
+            Description: "Write tests first.",
+            Version: "1.4.0",
+            InvocationRules: ["tests"],
+            RequiredFiles: [],
+            OptionalTools: ["dotnet test"],
+            Content: "Start with a failing test.",
+            Fingerprint: new string('c', 64),
+            FilePath: "/skills/test-driven-development/SKILL.md"),
+        new(
+            SkillId: "git-workflow-and-versioning",
+            Name: "Git Workflow and Versioning",
+            Description: "Keep branches clean and traceable.",
+            Version: "1.1.0",
+            InvocationRules: ["branching", "pr"],
+            RequiredFiles: [],
+            OptionalTools: ["git"],
+            Content: "Use intentional commits.",
+            Fingerprint: new string('d', 64),
+            FilePath: "/skills/git-workflow-and-versioning/SKILL.md"),
+        new(
+            SkillId: "incremental-implementation",
+            Name: "Incremental Implementation",
+            Description: "Ship work in small slices.",
+            Version: "1.3.0",
+            InvocationRules: ["incremental"],
+            RequiredFiles: [],
+            OptionalTools: ["rg"],
+            Content: "Land changes step by step.",
+            Fingerprint: new string('e', 64),
+            FilePath: "/skills/incremental-implementation/SKILL.md")
+    ];
 
     private sealed class StubPolicyEvaluationService : IPolicyEvaluationService
     {

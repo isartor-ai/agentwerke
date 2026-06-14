@@ -45,7 +45,23 @@ public sealed record AgentSkillUsageRecord
 
     public string? Name { get; init; }
 
+    public string? Description { get; init; }
+
+    public string? Version { get; init; }
+
     public string? Fingerprint { get; init; }
+
+    public IReadOnlyList<string> InvocationRules { get; init; } = [];
+
+    public IReadOnlyList<string> RequiredFiles { get; init; } = [];
+
+    public IReadOnlyList<string> OptionalTools { get; init; } = [];
+
+    public string Source { get; init; } = "agent-profile";
+
+    public bool Available { get; init; } = true;
+
+    public bool Invoked { get; init; }
 
     public bool Selected { get; init; } = true;
 }

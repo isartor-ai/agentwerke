@@ -72,9 +72,25 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
         var profile = AgentRegistry.Find(metadata.Agent);
         var matchedSkillRef = ResolveSkillRef(profile, metadata.Action);
-        var skillManifest = matchedSkillRef?.SkillManifestId is not null
-            ? _skillRepository.FindById(matchedSkillRef.SkillManifestId)
-            : null;
+        var skillResolution = ResolveSkills(profile, matchedSkillRef, metadata.RuntimeContract);
+        if (!skillResolution.Succeeded)
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: skillResolution.FailureReason,
+                RuntimeSnapshot: BuildRuntimeSnapshot(
+                    runId,
+                    stepId,
+                    node,
+                    metadata,
+                    attempt,
+                    null,
+                    skillResolution.AuditSkills,
+                    CreateEmptyPromptSnapshot()));
+        }
+
+        var skillManifest = skillResolution.PrimarySkill;
         var promptAssembly = _promptAssembler.Assemble(new AgentPromptAssemblyRequest(
             RunId: runId,
             StepId: stepId,
@@ -98,6 +114,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             metadata,
             attempt,
             skillManifest,
+            skillResolution.AuditSkills,
             promptAssembly.PromptSnapshot);
 
         if (!promptAssembly.Succeeded)
@@ -374,6 +391,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         AutofacTaskMetadata metadata,
         int attempt,
         SkillManifest? skillManifest,
+        IReadOnlyList<AgentSkillUsageRecord> auditSkills,
         AgentPromptSnapshot promptSnapshot)
     {
         return new AgentRuntimeSnapshot
@@ -385,17 +403,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Action = metadata.Action,
             Prompt = promptSnapshot,
             Contract = metadata.RuntimeContract ?? new AgentRuntimeContract(),
-            Skills = skillManifest is null
-                ? []
-                : [
-                    new AgentSkillUsageRecord
-                    {
-                        SkillId = skillManifest.SkillId,
-                        Name = skillManifest.Name,
-                        Fingerprint = skillManifest.Fingerprint,
-                        Selected = true
-                    }
-                ],
+            Skills = auditSkills,
             PermissionDecision = new AgentPermissionDecisionRecord
             {
                 Allowed = true,
@@ -473,6 +481,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
               skill_context:
                 id: {manifest.SkillId}
                 name: {manifest.Name}
+                version: {manifest.Version ?? "unspecified"}
                 fingerprint: {manifest.Fingerprint}
                 source: {manifest.FilePath}
               """
@@ -503,6 +512,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
               skill_context:
                 id: {manifest.SkillId}
                 name: {manifest.Name}
+                version: {manifest.Version ?? "unspecified"}
                 fingerprint: {manifest.Fingerprint}
               """
             : string.Empty;
@@ -531,5 +541,128 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         return string.Join('\n', logs
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => $"  {l}"));
+    }
+
+    private SkillResolution ResolveSkills(
+        AgentProfile? profile,
+        AgentSkillRef? matchedSkillRef,
+        AgentRuntimeContract? runtimeContract)
+    {
+        var availableSkills = new Dictionary<string, ResolvedSkill>(StringComparer.OrdinalIgnoreCase);
+
+        if (profile is not null)
+        {
+            foreach (var skillRef in profile.Skills)
+            {
+                if (string.IsNullOrWhiteSpace(skillRef.SkillManifestId))
+                {
+                    continue;
+                }
+
+                var manifest = _skillRepository.FindById(skillRef.SkillManifestId);
+                if (manifest is null)
+                {
+                    return SkillResolution.Fail(
+                        $"Agent profile '{profile.AgentId}' references missing skill manifest '{skillRef.SkillManifestId}' for action '{skillRef.SkillId}'.");
+                }
+
+                availableSkills[manifest.SkillId] = new ResolvedSkill(manifest, "agent-profile", Selected: false, Invoked: false);
+            }
+        }
+
+        var explicitSelections = new List<ResolvedSkill>();
+        foreach (var contractSkill in runtimeContract?.Skills ?? [])
+        {
+            var manifest = _skillRepository.FindByReference(contractSkill.SkillId)
+                ?? (string.IsNullOrWhiteSpace(contractSkill.Name) ? null : _skillRepository.FindByReference(contractSkill.Name));
+
+            if (manifest is null)
+            {
+                return SkillResolution.Fail(
+                    $"Runtime contract references unknown skill '{contractSkill.SkillId}'. Check the skill id/name or publish the skill before running.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(contractSkill.Version) &&
+                !string.Equals(contractSkill.Version, manifest.Version, StringComparison.OrdinalIgnoreCase))
+            {
+                return SkillResolution.Fail(
+                    $"Runtime contract requested skill '{contractSkill.SkillId}' version '{contractSkill.Version}', but loaded version is '{manifest.Version ?? "unspecified"}'.");
+            }
+
+            var resolved = new ResolvedSkill(manifest, "runtime-contract", Selected: contractSkill.Required, Invoked: false);
+            availableSkills[manifest.SkillId] = resolved;
+            explicitSelections.Add(resolved);
+        }
+
+        ResolvedSkill? primarySkill = null;
+        if (explicitSelections.Count > 0)
+        {
+            primarySkill = explicitSelections.FirstOrDefault(static skill => skill.Selected) ?? explicitSelections[0];
+        }
+        else if (matchedSkillRef?.SkillManifestId is not null)
+        {
+            var manifest = _skillRepository.FindById(matchedSkillRef.SkillManifestId);
+            if (manifest is null)
+            {
+                return SkillResolution.Fail(
+                    $"Agent profile action '{matchedSkillRef.SkillId}' references unknown skill manifest '{matchedSkillRef.SkillManifestId}'.");
+            }
+
+            primarySkill = new ResolvedSkill(manifest, "agent-profile", Selected: true, Invoked: true);
+            availableSkills[manifest.SkillId] = primarySkill;
+        }
+
+        if (primarySkill is not null)
+        {
+            availableSkills[primarySkill.Manifest.SkillId] = primarySkill with { Selected = true, Invoked = true };
+        }
+
+        var auditSkills = availableSkills.Values
+            .OrderBy(static skill => skill.Manifest.SkillId, StringComparer.OrdinalIgnoreCase)
+            .Select(static skill => new AgentSkillUsageRecord
+            {
+                SkillId = skill.Manifest.SkillId,
+                Name = skill.Manifest.Name,
+                Description = skill.Manifest.Description,
+                Version = skill.Manifest.Version,
+                Fingerprint = skill.Manifest.Fingerprint,
+                InvocationRules = skill.Manifest.InvocationRules,
+                RequiredFiles = skill.Manifest.RequiredFiles,
+                OptionalTools = skill.Manifest.OptionalTools,
+                Source = skill.Source,
+                Available = true,
+                Invoked = skill.Invoked,
+                Selected = skill.Selected
+            })
+            .ToArray();
+
+        return SkillResolution.Success(primarySkill?.Manifest, auditSkills);
+    }
+
+    private static AgentPromptSnapshot CreateEmptyPromptSnapshot() =>
+        new(
+            FinalPrompt: string.Empty,
+            RenderedAt: DateTimeOffset.UtcNow.ToString("o"),
+            Sections: [],
+            Variables: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            SourceFiles: []);
+
+    private sealed record ResolvedSkill(
+        SkillManifest Manifest,
+        string Source,
+        bool Selected,
+        bool Invoked);
+
+    private sealed record SkillResolution(
+        bool Succeeded,
+        SkillManifest? PrimarySkill,
+        IReadOnlyList<AgentSkillUsageRecord> AuditSkills,
+        string? FailureReason)
+    {
+        public static SkillResolution Success(SkillManifest? primarySkill, IReadOnlyList<AgentSkillUsageRecord> auditSkills) =>
+            new(true, primarySkill, auditSkills, null);
+
+        public static SkillResolution Fail(string failureReason) =>
+            new(false, null, [], failureReason);
     }
 }

@@ -37,6 +37,10 @@ public sealed class AgentPromptAssemblerTests
                 SkillId: "shipping-and-launch",
                 Name: "Shipping and Launch",
                 Description: "Ship safely.",
+                Version: "1.0.0",
+                InvocationRules: ["deploy", "verify"],
+                RequiredFiles: ["checklists/release.md"],
+                OptionalTools: ["rg", "git"],
                 Content: "Always verify health checks.",
                 Fingerprint: new string('a', 64),
                 FilePath: "/skills/shipping-and-launch/SKILL.md")));
@@ -46,6 +50,8 @@ public sealed class AgentPromptAssemblerTests
         Assert.Contains(result.PromptSnapshot.Sections, static s => s.Name == "task_prompt");
         Assert.Contains(result.PromptSnapshot.Sections, static s => s.Name == "skill_context");
         Assert.Contains(result.PromptSnapshot.Sections, static s => s.Name == "runtime_context");
+        Assert.Contains("Version: 1.0.0", result.PromptSnapshot.FinalPrompt);
+        Assert.Contains("OptionalTools: rg, git", result.PromptSnapshot.FinalPrompt);
     }
 
     [Fact]
