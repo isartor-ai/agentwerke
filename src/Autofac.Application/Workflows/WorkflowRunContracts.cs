@@ -4,7 +4,20 @@ namespace Autofac.Application.Workflows;
 
 // ── Commands & Results ────────────────────────────────────────────────────────
 
-public sealed record StartRunCommand(string WorkflowId, string? Initiator);
+public sealed record StartRunCommand(
+    string WorkflowId,
+    string? Initiator,
+    /// <summary>Optional metadata from an inbound integration trigger (Jira, GitHub, etc.).</summary>
+    TriggerMetadata? Trigger = null);
+
+/// <summary>Source metadata recorded when a workflow is started by an external webhook.</summary>
+public sealed record TriggerMetadata(
+    string Source,
+    string EventType,
+    string ExternalId,
+    string? ExternalUrl,
+    string? Title,
+    string? Body);
 
 public sealed record StartRunResult(
     string RunId,
@@ -83,6 +96,7 @@ public interface IWorkflowRunRepository
     Task UpdateCurrentStepAsync(string runId, string? currentStep, CancellationToken cancellationToken);
     Task IncrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
     Task DecrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
+    Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken);
 }
 
 public interface IApprovalRepository

@@ -53,4 +53,18 @@ public sealed class WorkflowRunRepository : IWorkflowRunRepository
         run.PendingApprovals = Math.Max(0, run.PendingApprovals - 1);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken)
+    {
+        var run = await _dbContext.WorkflowRuns.FirstOrDefaultAsync(r => r.Id == runId, cancellationToken)
+            ?? throw new InvalidOperationException($"Workflow run '{runId}' not found.");
+        run.Events.Add(new WorkflowEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            Type = type,
+            Message = message,
+            CreatedAt = DateTime.UtcNow.ToString("o")
+        });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

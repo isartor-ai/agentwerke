@@ -1,5 +1,6 @@
 using Autofac.Agents;
 using Autofac.Infrastructure;
+using Autofac.Integrations;
 using Autofac.Storage;
 using Autofac.Workflows;
 
@@ -13,6 +14,7 @@ builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
 builder.Services.AddAutofacWorkflows();
 builder.Services.AddAutofacAgents(builder.Configuration);
+builder.Services.AddAutofacIntegrations(builder.Configuration);
 
 var app = builder.Build();
 
