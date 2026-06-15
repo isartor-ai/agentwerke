@@ -222,11 +222,26 @@ internal static class ApiContractMappings
             AgentName: snapshot.AgentName,
             Action: snapshot.Action,
             PromptInline: snapshot.Prompt?.FinalPrompt ?? contract.Prompt?.Inline,
+            Prompt: snapshot.Prompt is null ? null : new PromptSnapshot(
+                snapshot.Prompt.FinalPrompt,
+                snapshot.Prompt.RenderedAt,
+                snapshot.Prompt.Sections
+                    .Select(static s => new PromptSection(s.Name, s.Content, s.Source))
+                    .ToArray(),
+                snapshot.Prompt.Variables,
+                snapshot.Prompt.SourceFiles.ToArray()),
             Skills: snapshot.Skills
-                .Select(static s => new RunStepSkillUsage(s.SkillId, s.Name, s.Selected, s.Fingerprint))
+                .Select(static s => new RunStepSkillUsage(s.SkillId, s.Name, s.Selected, s.Fingerprint, s.Invoked, s.Source))
                 .ToArray(),
             Tools: contract.Tools
                 .Select(static t => new RunStepToolInfo(t.Name, t.Category))
+                .ToArray(),
+            ToolInvocations: snapshot.ToolInvocations
+                .Select(static t => new RunStepToolInvocation(
+                    t.ToolName, t.Category, t.Status,
+                    t.PolicyDecisionId, t.PolicyDecisionKind,
+                    t.InputSummary, t.OutputSummary, t.ErrorMessage,
+                    t.ArtifactNames.ToArray(), t.DurationMs))
                 .ToArray(),
             McpServers: contract.McpServers
                 .Select(static m => m.Name)
