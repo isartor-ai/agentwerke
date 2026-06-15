@@ -91,6 +91,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         }
 
         var nodes = new List<BpmnNodeDefinition>();
+        var sequenceFlows = new List<BpmnSequenceFlow>();
+
         var candidates = process.Descendants().Where(element =>
             element.Name.Namespace == bpmnNamespace &&
             element.Attribute("id") is not null);
@@ -98,6 +100,19 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         foreach (var element in candidates)
         {
             var localName = element.Name.LocalName;
+
+            if (localName == "sequenceFlow")
+            {
+                var sfId = element.Attribute("id")?.Value ?? string.Empty;
+                var src = element.Attribute("sourceRef")?.Value ?? string.Empty;
+                var tgt = element.Attribute("targetRef")?.Value ?? string.Empty;
+                var conditionEl = element.Elements()
+                    .FirstOrDefault(static c => c.Name.LocalName == "conditionExpression");
+                var condition = conditionEl?.Value?.Trim();
+                sequenceFlows.Add(new BpmnSequenceFlow(sfId, src, tgt, string.IsNullOrEmpty(condition) ? null : condition));
+                continue;
+            }
+
             if (!SupportedElementNames.Contains(localName))
             {
                 if (element.Name.Namespace == bpmnNamespace && element.Attribute("id") is not null)
@@ -155,10 +170,13 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 TimerDuration: timerDuration));
         }
 
+        ValidateSequenceFlows(nodes, sequenceFlows, errors);
+
         var definition = new BpmnWorkflowDefinition(
             ProcessId: process.Attribute("id")?.Value ?? "unknown-process",
             ProcessName: process.Attribute("name")?.Value,
-            Nodes: nodes);
+            Nodes: nodes,
+            SequenceFlows: sequenceFlows.Count > 0 ? sequenceFlows : null);
 
         return new BpmnValidationResult(definition, errors, warnings);
     }
@@ -353,6 +371,36 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
 
         var timeDuration = timerDef.Elements().FirstOrDefault(static c => c.Name.LocalName == "timeDuration");
         return timeDuration?.Value?.Trim();
+    }
+
+    private static void ValidateSequenceFlows(
+        IReadOnlyList<BpmnNodeDefinition> nodes,
+        IReadOnlyList<BpmnSequenceFlow> sequenceFlows,
+        ICollection<BpmnValidationError> errors)
+    {
+        if (sequenceFlows.Count == 0)
+            return;
+
+        var nodeIds = nodes.Select(static n => n.Id).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var flow in sequenceFlows)
+        {
+            if (!string.IsNullOrEmpty(flow.SourceRef) && !nodeIds.Contains(flow.SourceRef))
+            {
+                errors.Add(new BpmnValidationError(
+                    $"Sequence flow '{flow.Id}' references unknown source node '{flow.SourceRef}'.",
+                    ElementId: flow.Id, ElementName: "sequenceFlow",
+                    LineNumber: null, LinePosition: null));
+            }
+
+            if (!string.IsNullOrEmpty(flow.TargetRef) && !nodeIds.Contains(flow.TargetRef))
+            {
+                errors.Add(new BpmnValidationError(
+                    $"Sequence flow '{flow.Id}' references unknown target node '{flow.TargetRef}'.",
+                    ElementId: flow.Id, ElementName: "sequenceFlow",
+                    LineNumber: null, LinePosition: null));
+            }
+        }
     }
 
     private static void ValidateBoundaryEvent(XElement element, ICollection<BpmnValidationError> errors)

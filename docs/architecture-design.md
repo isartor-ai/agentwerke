@@ -561,60 +561,42 @@ Autofac's engine choice should optimize for:
 - strong observability and production operations on Kubernetes
 - low migration risk between MVP and long-term platform evolution
 
-#### Decision
+#### Decision (Revised — Phase D, 2026-06-15)
 
-Autofac should use Camunda 8 as the strategic BPMN execution engine.
+**Autofac adopts the in-process `WorkflowInstanceEngine` as the strategic BPMN execution engine.** The Camunda 8 option evaluated above has been formally set aside.
 
-This recommendation is based on the following architectural fit:
-- Camunda 8's Zeebe runtime is explicitly positioned as the process automation engine for distributed execution and low-latency scale.
-- Its job-worker execution pattern maps naturally to Autofac agent tasks, where agents act as controlled workers rather than code embedded inside the engine.
-- The Camunda ecosystem also aligns well with the React-side BPMN modeling path because the broader `bpmn-js` and Camunda modeler ecosystem is already widely used for browser-based BPMN experiences.
-- Treating Camunda 8 as a dedicated orchestration runtime fits a C# platform better than embedding a Java engine directly into the core backend.
+Rationale:
+- The `IWorkflowEngineAdapter` boundary is fully in place and preserves engine optionality; the concrete engine is an implementation detail behind it.
+- An in-process C# engine eliminates operational complexity (no Java runtime, no Zeebe cluster to manage) and drastically simplifies development, testing, and deployment.
+- Phase C (durable async backbone with outbox queue, crash recovery, and real timer scheduling) was designed and implemented for the in-process engine; the investment is already made.
+- `bpmn-js` still drives the design-side experience — the editor is engine-agnostic; BPMN XML is the interchange format regardless of which engine executes it.
+- Camunda 8 remains a viable future option if scale or BPMN breadth requirements change; the adapter seam is preserved for that migration.
 
-#### Short-Term Strategy
+#### Engine Strategy
 
-For MVP and the first implementation phase:
-- use a React BPMN designer based on `bpmn-js`
-- model for the Camunda 8 execution subset only
-- run Camunda 8 Self-Managed as a separate orchestration service in Kubernetes
-- keep Autofac custom semantics in extension metadata and task configuration, not in engine-forked BPMN behavior
-- implement Autofac agent tasks as Camunda service-task or job-worker style execution adapters behind the Agent Orchestrator
+- `WorkflowInstanceEngine` (`EngineId = "in-process"`) is the single execution engine.
+- It executes the supported BPMN subset (`startEvent`, `serviceTask`, `userTask`, `exclusiveGateway`, `parallelGateway`, `intermediateCatchEvent`, `boundaryEvent`, `endEvent`) and is extended as new constructs are needed.
+- Sequence flows (`<sequenceFlow>`) are parsed and used for graph-based traversal; the engine falls back to node-list order when flows are absent (test mode).
+- Exclusive gateway condition evaluation supports `true`/`false` literal conditions; full expression evaluation (FEEL/JUEL) is deferred to a future phase when a process-variable store is introduced.
+- Compensation and rollback is not yet implemented; it is tracked as a Phase E concern.
+- The `IWorkflowEngineAdapter` seam is preserved. A Camunda 8 or other adapter can be introduced behind it at any time without changing the orchestration service or API contracts.
 
-This keeps the first release practical and avoids a future engine migration between MVP and scale-out production.
+#### Impact on the Architecture
 
-#### Long-Term Strategy
-
-For the longer-term platform:
-- keep Camunda 8 as the default orchestration engine for production workflow execution
-- preserve an internal `Workflow Engine Adapter` boundary so Autofac business services do not depend directly on vendor-specific engine APIs
-- isolate engine-specific BPMN extensions to the modeling and execution adapter layer
-- evaluate Flowable only as a secondary engine option if future requirements demand broader BPMN construct coverage or a more traditional BPM use case than Autofac's primary agent-orchestration model
-
-In other words, the long-term strategy is not "switch engines later"; it is "standardize on Camunda 8, but contain engine coupling so Autofac retains optionality."
-
-#### Explicit Non-Recommendations
-
-- Do not use different engines for short-term and long-term production execution. BPMN models are engine-specific enough that this would create avoidable migration cost.
-- Do not embed a Java BPMN engine directly into the C# backend. The cross-runtime coupling would complicate deployment, upgrades, and operational ownership.
-- Do not overuse vendor-specific BPMN extensions in the core domain model. Keep Autofac concepts mapped through its own workflow abstraction.
-
-#### Impact on the Existing Architecture
-
-The architecture in this document should therefore be interpreted as:
-- `Workflow Runtime Engine` = Camunda 8 Self-Managed orchestration runtime behind an Autofac adapter
-- `Workflow Service` and `BPMN Engine Adapter` = Autofac-owned layer that translates platform concepts to engine-specific deployment and runtime APIs
-- `Agent Orchestrator` = the controlled worker execution layer for Autofac agent tasks
-- `React BPMN UI` = `bpmn-js`-based editor with Autofac custom components constrained to the supported execution model
+- `Workflow Runtime Engine` = `WorkflowInstanceEngine` (in-process, C#)
+- `BPMN Engine Adapter` = `WorkflowRunnerAdapter` (parses BPMN, resolves definitions, delegates to engine)
+- `React BPMN UI` = `bpmn-js`-based editor — unchanged; BPMN XML remains the design artifact
+- Zeebe/Camunda references in E2E `docker-compose` are vestigial; they should be removed when the E2E stack is next revised
 
 ## 15. Key Architectural Decisions
 
-### Decision 1: BPMN-Centric Orchestration
+### Decision 1: BPMN-Centric Orchestration with In-Process Engine
 
 Why:
 - aligns with business-readable workflow modeling
 - supports auditability and lifecycle visibility
 - allows custom Autofac nodes for agent and governance behavior
-- now resolved with Camunda 8 as the default execution engine behind an adapter layer
+- resolved with `WorkflowInstanceEngine` (in-process C#) as the default execution engine behind `IWorkflowEngineAdapter`; Camunda 8 evaluated but set aside (see §14.1)
 
 ### Decision 2: Separate Workflow Engine and Agent Orchestrator
 
@@ -712,7 +694,7 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 | --- | --- | --- |
 | `Autofac.Domain` | Persistence entities, agent-runtime contracts, policy decisions | Solid |
 | `Autofac.Application` | Run orchestration service, authoring service, observability + run contracts | Solid |
-| `Autofac.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary, Camunda spike | Core works; engine is custom |
+| `Autofac.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary | Solid; graph-based traversal, sequence flow parsing |
 | `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Rich, but execution is simulated |
 | `Autofac.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
 | `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; placeholder workload |
@@ -727,7 +709,7 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 ### 21.2 What Actually Works End-to-End
 
 - **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer.
-- **Workflow execution** via the custom in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (with retry + boundary timeout), user/approval tasks, exclusive gateways, parallel gateways (executed sequentially), intermediate/boundary timer events (fire immediately), and end events. State is checkpointed as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`.
+- **Workflow execution** via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`.
 - **Policy enforcement** at the Tool Gateway (`ToolGateway`): allow/deny lists, permission-level checks, input validation, and `PolicyEvaluationService` evaluation before every tool call — the single control point envisioned in Decision 3.
 - **Agent runtime assembly**: skill resolution from markdown manifests (`SkillRepository`/`MarkdownSkillLoader`), prompt assembly with full prompt snapshots, hook execution (`HookGateway` with `before/after_agent_run`), MCP tool sessions (`McpToolSessionFactory`), and a complete `AgentRuntimeSnapshot` persisted per step.
 - **GitHub delivery**: real branch creation, marker-file commit, and pull-request creation via `GitHubConnector`.
@@ -741,10 +723,10 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 These are the load-bearing gaps between the running system and the target architecture:
 
 1. **Agent execution is simulated.** `AgentOrchestrator.BuildSimulatedOutput` produces deterministic text; there is **no LLM/model client** anywhere in the solution. The Docker sandbox runs a fixed shell entrypoint that writes `result.json` — it does not invoke a model.
-2. **The engine is not Camunda 8.** Decision 1/Section 14.1 commit to Camunda 8 + Zeebe, but the runtime is a bespoke in-process engine. Only a `Camunda8SpikeAnalyzer` (analysis spike) references Camunda. The `IWorkflowEngineAdapter` seam exists, so this is swappable — but unimplemented.
-3. **No asynchronous backbone.** Runs execute **synchronously inside the HTTP request** (`WorkflowRunOrchestrationService.StartRunAsync` awaits the whole advance). There is no message bus, job queue, or background worker, so long-running/parallel/timed workflows are not truly durable or distributed.
+2. ~~**The engine is not Camunda 8.**~~ **Resolved (Phase D).** The in-process `WorkflowInstanceEngine` is the formally adopted strategic engine. The `Camunda8SpikeAnalyzer` dead code has been removed. Decision 1 has been updated. See §14.1.
+3. ~~**No asynchronous backbone.**~~ **Resolved (Phase C).** `WorkflowRunOrchestrationService.StartRunAsync` now creates a `pending` run and enqueues an outbox entry; the API returns 202 immediately. `RunDispatchWorker` (BackgroundService) polls the `run_outbox` table every 2 s, executes via `WorkflowRunExecutor`, and handles crash recovery on startup.
 4. **Authentication/RBAC is stubbed.** `AuthController` returns `501 Not Implemented`; there is no SSO, no token validation, and no role enforcement on controllers.
-5. **Timers and parallelism are simulated.** Timer events fire immediately; parallel branches run sequentially in list order.
+5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
 6. **One outbound connector.** Only GitHub exists; Jira, Slack, Teams, email, CI/CD, and cloud-action connectors from Sections 6.7/10 are absent.
 7. **No distributed tracing.** OpenTelemetry is wired for **metrics only** — no `WithTracing`/OTLP exporter, so cross-service trace correlation (Section 12) is unmet.
 8. **No Kubernetes footprint.** Only `docker-compose`; no Helm charts or K8s manifests despite the K8s-first deployment view (Section 13).
@@ -756,13 +738,13 @@ These are the load-bearing gaps between the running system and the target archit
 | Capability (target) | As-built | Gap severity | Notes |
 | --- | --- | --- | --- |
 | BPMN modeling (bpmn-js) | Implemented | — | Designer + validation + publish work |
-| BPMN execution engine | Custom in-process engine | **High** | Adapter seam exists; Camunda not wired |
+| BPMN execution engine | In-process engine (graph-based, node-ID checkpoints) | — | **Resolved (Phase D)**: in-process engine adopted; Camunda spike removed |
 | Agent task execution (LLM) | Simulated only | **Critical** | No model client; blocks the core value prop |
 | Tool Gateway + policy | Implemented | — | Strong; single control point in place |
 | Sandbox isolation | Container lifecycle real; workload placeholder | High | network=none, mem/cpu limits applied |
 | Human approvals | Implemented | — | Create/decide/resume + audit |
 | Policy engine | Hardcoded MVP rules | Medium | Needs policy-as-data + store |
-| Async coordination / bus | None (synchronous in-request) | **High** | Durability + scale risk |
+| Async coordination / outbox | Postgres outbox + BackgroundService worker | — | **Resolved (Phase C)**: 202-async API; crash recovery; timer scheduling |
 | AuthN / RBAC / SSO | Stubbed (501) | **Critical** | Endpoints unauthenticated |
 | Secret management | Config/env only | High | No vault/secret provider |
 | Connectors | GitHub only | Medium | Jira/Slack/Teams/email/CI-CD missing |
@@ -772,7 +754,7 @@ These are the load-bearing gaps between the running system and the target archit
 | Artifact storage | Local filesystem | Medium | No S3/blob driver |
 | Plugin runtime | Missing | Low (MVP) | Deferred per Section 17 |
 | Deployment | docker-compose | Medium | No K8s/Helm |
-| Timers / true parallelism | Simulated | Medium | Tied to engine choice |
+| Timers / true parallelism | Real timer scheduling (Phase C); sequential branches (Phase D standalone) | Low | Parallel concurrency available via Phase C `Task.WhenAll` |
 
 **Critical path:** the two `Critical` items (real LLM execution and authentication) gate any production or pilot use. The `High` items (engine durability/async backbone, sandbox workload, secrets) gate trustworthy multi-step autonomous runs.
 
@@ -809,13 +791,19 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 *Exit:* workflows survive process restarts, timers genuinely delay, and the API returns immediately while work proceeds in the background.
 
-### Phase D — Engine decision: commit or revise (High)
+### Phase D — Engine decision: commit or revise (High) ✅ DONE
 
-1. **Decide explicitly**: either (a) implement the Camunda 8/Zeebe adapter behind `IWorkflowEngineAdapter` per Section 14.1, or (b) formally adopt the in-process engine as the strategic choice and update Decision 1. Do not leave the doc and code contradicting each other.
-2. If Camunda: stand up Zeebe (the e2e compose already references it), implement job-worker dispatch for `serviceTask`, and map approvals to user tasks/messages. Keep Autofac semantics in metadata, not engine forks.
-3. If in-process: harden the engine — graph-based execution (not list-index), proper sequence-flow/condition evaluation, and compensation/rollback.
+1. **Decision made**: in-process `WorkflowInstanceEngine` is the strategic engine. Decision 1 and §14.1 updated. Camunda 8 option documented and set aside.
+2. **Dead code removed**: `Camunda8SpikeAnalyzer` and its tests deleted; `DependencyInjection.cs` cleaned up.
+3. **Engine hardened**:
+   - `BpmnSequenceFlow` added to `BpmnWorkflowDefinition`; `BpmnWorkflowValidator` now parses `<sequenceFlow>` and `<conditionExpression>` elements and validates source/target references.
+   - `WorkflowInstanceEngine` refactored to graph-based traversal via `FlowGraph` (node map + outgoing-flows map). When sequence flows are absent (tests), `FlowGraph` infers linear edges from node order.
+   - Exclusive gateway evaluates `ConditionExpression` (`true`/`false` literals; first matching or default); full FEEL/JUEL deferred to Phase E.
+   - Parallel gateway fork: branch node IDs come from outgoing sequence flows (not list position). Branch sub-traversal follows edges to the join.
+   - Checkpoint stores `string? NextNodeId` (node ID, not list index); recovery resolves by node map lookup — resilient to node reordering in future BPMN revisions.
+   - Compensation/rollback: documented as Phase E concern; engine emits `compensation_not_supported` when it would be needed (not yet implemented).
 
-*Exit:* a single, documented engine strategy with matching code.
+*Exit criterion met:* a single, documented engine strategy with matching code; docs and runtime no longer contradict each other.
 
 ### Phase E — Connector and policy breadth (Medium)
 

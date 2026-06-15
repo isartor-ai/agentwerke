@@ -5,7 +5,14 @@ namespace Autofac.Workflows.Bpmn;
 public sealed record BpmnWorkflowDefinition(
     string ProcessId,
     string? ProcessName,
-    IReadOnlyList<BpmnNodeDefinition> Nodes);
+    IReadOnlyList<BpmnNodeDefinition> Nodes,
+    IReadOnlyList<BpmnSequenceFlow>? SequenceFlows = null);
+
+public sealed record BpmnSequenceFlow(
+    string Id,
+    string SourceRef,
+    string TargetRef,
+    string? ConditionExpression = null);
 
 public sealed record BpmnNodeDefinition(
     string Id,
