@@ -15,13 +15,34 @@ public static class DependencyInjection
             configuration.GetSection(IntegrationOptions.Section).Bind(o));
 
         services.AddScoped<ITriggerRouter, TagBasedTriggerRouter>();
-        services.AddHttpClient<IGitHubConnector, GitHubConnector>((sp, client) =>
+        services.AddHttpClient<GitHubConnector>((sp, client) =>
         {
             var options = sp.GetRequiredService<IOptions<IntegrationOptions>>().Value.GitHub;
             client.BaseAddress = new Uri(options.ApiBaseUrl);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Autofac/1.0");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         });
+        services.AddScoped<IGitHubConnector>(sp => sp.GetRequiredService<GitHubConnector>());
+        services.AddScoped<IConnector>(sp => sp.GetRequiredService<GitHubConnector>());
+
+        services.AddHttpClient<JiraConnector>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<IntegrationOptions>>().Value.Jira;
+            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        });
+        services.AddScoped<IJiraConnector>(sp => sp.GetRequiredService<JiraConnector>());
+        services.AddScoped<IConnector>(sp => sp.GetRequiredService<JiraConnector>());
+
+        services.AddHttpClient<SlackConnector>();
+        services.AddScoped<ISlackConnector>(sp => sp.GetRequiredService<SlackConnector>());
+        services.AddScoped<IConnector>(sp => sp.GetRequiredService<SlackConnector>());
+
+        services.AddHttpClient<TeamsConnector>();
+        services.AddScoped<ITeamsConnector>(sp => sp.GetRequiredService<TeamsConnector>());
+        services.AddScoped<IConnector>(sp => sp.GetRequiredService<TeamsConnector>());
+
+        services.AddScoped<IConnectorRegistry, ConnectorRegistry>();
 
         return services;
     }
