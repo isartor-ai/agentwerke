@@ -22,6 +22,8 @@ public sealed record AgentRuntimeSnapshot
 
     public IReadOnlyList<AgentHookExecutionRecord> HookExecutions { get; init; } = [];
 
+    public IReadOnlyList<AgentSubAgentExecutionRecord> SubAgentRuns { get; init; } = [];
+
     public IReadOnlyList<AgentArtifactRecord> Artifacts { get; init; } = [];
 
     public AgentPermissionDecisionRecord? PermissionDecision { get; init; }
@@ -115,6 +117,41 @@ public sealed record AgentArtifactRecord
     public string? Uri { get; init; }
 
     public string? ContentType { get; init; }
+}
+
+public sealed record AgentSubAgentExecutionRecord
+{
+    public required string RunId { get; init; }
+
+    public required string ParentRunId { get; init; }
+
+    public required string ParentStepId { get; init; }
+
+    public required string AgentName { get; init; }
+
+    public required string Action { get; init; }
+
+    public string Status { get; init; } = "pending";
+
+    public int Depth { get; init; }
+
+    public string PermissionLevel { get; init; } = AgentPermissionLevels.ReadOnly;
+
+    public string FailureBehavior { get; init; } = AgentSubAgentFailureBehaviors.FailParent;
+
+    public string CorrelationId { get; init; } = string.Empty;
+
+    public string StartedAt { get; init; } = string.Empty;
+
+    public string? CompletedAt { get; init; }
+
+    public string? OutputSummary { get; init; }
+
+    public string? FailureReason { get; init; }
+
+    public IReadOnlyList<string> ArtifactNames { get; init; } = [];
+
+    public IReadOnlyList<string> EventMessages { get; init; } = [];
 }
 
 public sealed record AgentPermissionDecisionRecord

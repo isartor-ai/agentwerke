@@ -206,7 +206,24 @@ internal static class ApiContractMappings
                 hook.Blocking,
                 hook.OutputSummary,
                 hook.ErrorMessage,
-                hook.DurationMs)).ToArray() ?? []);
+                hook.DurationMs)).ToArray() ?? [],
+            SubAgentRuns: step.RuntimeSnapshot?.SubAgentRuns.Select(static child => new SubAgentRunRecord(
+                child.RunId,
+                child.ParentRunId,
+                child.ParentStepId,
+                child.AgentName,
+                child.Action,
+                child.Status,
+                child.Depth,
+                child.PermissionLevel,
+                child.FailureBehavior,
+                child.CorrelationId,
+                child.StartedAt,
+                child.CompletedAt,
+                child.OutputSummary,
+                child.FailureReason,
+                child.ArtifactNames.ToArray(),
+                child.EventMessages.ToArray())).ToArray() ?? []);
     }
 
     public static string NormalizeRunStatus(string status)

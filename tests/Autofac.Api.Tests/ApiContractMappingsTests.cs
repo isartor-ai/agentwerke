@@ -93,6 +93,27 @@ public sealed class ApiContractMappingsTests
                                 OutputSummary = "validated",
                                 DurationMs = 5
                             }
+                        ],
+                        SubAgentRuns =
+                        [
+                            new AgentSubAgentExecutionRecord
+                            {
+                                RunId = "child-1",
+                                ParentRunId = "run-1",
+                                ParentStepId = "step-1",
+                                AgentName = "review-agent",
+                                Action = "review",
+                                Status = "completed",
+                                Depth = 1,
+                                PermissionLevel = AgentPermissionLevels.ReadWrite,
+                                FailureBehavior = AgentSubAgentFailureBehaviors.FailParent,
+                                CorrelationId = "run-1/step-1/child-1",
+                                StartedAt = "2026-06-15T00:00:00.0000000+00:00",
+                                CompletedAt = "2026-06-15T00:00:01.0000000+00:00",
+                                OutputSummary = "child output",
+                                ArtifactNames = ["subagents/child-1/response.txt"],
+                                EventMessages = ["spawned", "completed"]
+                            }
                         ]
                     }
                 }
@@ -117,5 +138,8 @@ public sealed class ApiContractMappingsTests
         var hook = Assert.Single(step.HookExecutions);
         Assert.Equal("policy-guard", hook.HookName);
         Assert.True(hook.Blocking);
+        var child = Assert.Single(step.SubAgentRuns);
+        Assert.Equal("review-agent", child.AgentName);
+        Assert.Single(child.ArtifactNames);
     }
 }
