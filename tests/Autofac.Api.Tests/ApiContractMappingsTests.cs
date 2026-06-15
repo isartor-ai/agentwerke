@@ -102,17 +102,15 @@ public sealed class ApiContractMappingsTests
         var detail = ApiContractMappings.ToRunDetail(run, Array.Empty<ApprovalRequest>(), Array.Empty<Autofac.Storage.Artifacts.ArtifactDescriptor>());
 
         var step = Assert.Single(detail.Steps);
-        Assert.NotNull(step.RuntimeSnapshot);
-        var snap = step.RuntimeSnapshot!;
-        Assert.NotNull(snap.Prompt);
-        Assert.Equal("assembled prompt", snap.Prompt!.FinalPrompt);
-        Assert.Equal("staging", snap.Prompt.Variables["environment"]);
-        Assert.Single(snap.Prompt.Sections);
-        var skill = Assert.Single(snap.Skills);
+        Assert.NotNull(step.PromptSnapshot);
+        Assert.Equal("assembled prompt", step.PromptSnapshot!.FinalPrompt);
+        Assert.Equal("staging", step.PromptSnapshot.Variables["environment"]);
+        Assert.Single(step.PromptSnapshot.Sections);
+        var skill = Assert.Single(step.Skills);
         Assert.Equal("shipping-and-launch", skill.SkillId);
         Assert.True(skill.Invoked);
         Assert.Equal("runtime-contract", skill.Source);
-        var tool = Assert.Single(snap.ToolInvocations);
+        var tool = Assert.Single(step.ToolInvocations);
         Assert.Equal("github.create_pull_request", tool.ToolName);
         Assert.Equal("allow", tool.PolicyDecisionKind);
         Assert.Single(tool.ArtifactNames);

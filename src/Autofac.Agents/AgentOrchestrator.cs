@@ -2,6 +2,7 @@ using System.Text;
 using Autofac.AgentSecOps;
 using Autofac.Agents.Hooks;
 using Autofac.Agents.Mcp;
+using Autofac.Agents.Models;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
@@ -32,6 +33,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly IMcpToolSessionFactory _mcpToolSessionFactory;
     private readonly IToolRegistry _toolRegistry;
     private readonly IToolGateway _toolGateway;
+    private readonly IAgentModelRunner _modelRunner;
     private readonly string _gitHubBranchPrefix;
     private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
     private readonly IArtifactStorage _artifactStorage;
@@ -44,6 +46,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         IMcpToolSessionFactory mcpToolSessionFactory,
         IToolRegistry toolRegistry,
         IToolGateway toolGateway,
+        IAgentModelRunner modelRunner,
         IArtifactStorage artifactStorage,
         IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
@@ -55,6 +58,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _mcpToolSessionFactory = mcpToolSessionFactory;
         _toolRegistry = toolRegistry;
         _toolGateway = toolGateway;
+        _modelRunner = modelRunner;
         _artifactStorage = artifactStorage;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
@@ -245,39 +249,48 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 cancellationToken);
         }
 
-        var request = new AgentExecutionRequest(
+        var modelRunRequest = new ModelRunRequest(
             RunId: runId,
             StepId: stepId,
-            NodeId: node.Id,
-            NodeName: node.Name,
             AgentName: metadata.Agent,
             Action: metadata.Action,
             Environment: metadata.Environment,
             PurposeType: metadata.PurposeType,
             PolicyTag: metadata.PolicyTag,
             RequiresEvidence: metadata.RequiresEvidence,
-            Attempt: attempt);
+            Attempt: attempt,
+            PromptSnapshot: promptAssembly.PromptSnapshot,
+            Contract: metadata.RuntimeContract ?? new AgentRuntimeContract());
 
-        var simulatedOutput = BuildSimulatedOutput(request, profile, matchedSkillRef, skillManifest);
+        var modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
 
-        return await FinalizeOutcomeAsync(
-            node,
-            metadata,
-            attempt,
-            new AgentTaskOutcome(
-            Succeeded: true,
-            Output: simulatedOutput,
-            FailureReason: null,
+        var permissionDecision = new AgentPermissionDecisionRecord
+        {
+            Allowed = modelResult.Succeeded,
+            Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+            Rationale = modelResult.FailureReason ?? policyDecision.Rationale
+        };
+
+        var enrichedSnapshot = runtimeSnapshot with
+        {
+            ToolInvocations = runtimeSnapshot.ToolInvocations.Concat(modelResult.ToolInvocations).ToArray(),
+            Artifacts = runtimeSnapshot.Artifacts.Concat(MapArtifacts(modelResult.Artifacts)).ToArray(),
+            PermissionDecision = permissionDecision,
+            TokenUsage = modelResult.TokenUsage
+        };
+
+        var outcome = new AgentTaskOutcome(
+            Succeeded: modelResult.Succeeded,
+            Output: modelResult.Output,
+            FailureReason: modelResult.FailureReason,
             PolicyDecision: policyDecision,
-            RuntimeSnapshot: runtimeSnapshot with
-            {
-                PermissionDecision = new AgentPermissionDecisionRecord
-                {
-                    Allowed = true,
-                    Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
-                    Rationale = policyDecision.Rationale
-                }
-            }),
+            RuntimeSnapshot: enrichedSnapshot,
+            Artifacts: modelResult.Artifacts);
+
+        return await MaybeOffloadOutputAsync(
+            runId,
+            stepId,
+            await FinalizeOutcomeAsync(node, metadata, attempt, outcome, cancellationToken),
             cancellationToken);
     }
 
@@ -567,42 +580,6 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
             Evidence requirements:
             {evidence}
-            """;
-    }
-
-    private static string BuildSimulatedOutput(
-        AgentExecutionRequest request,
-        AgentProfile? profile,
-        AgentSkillRef? skillRef,
-        SkillManifest? manifest)
-    {
-        var skillLine = manifest is not null
-            ? $"{manifest.Name} (id={manifest.SkillId} fingerprint={manifest.Fingerprint[..12]}…)"
-            : skillRef?.Name ?? request.Action;
-
-        var contextSection = manifest is not null
-            ? $"""
-
-              skill_context:
-                id: {manifest.SkillId}
-                name: {manifest.Name}
-                version: {manifest.Version ?? "unspecified"}
-                fingerprint: {manifest.Fingerprint}
-                source: {manifest.FilePath}
-              """
-            : string.Empty;
-
-        return $"""
-            agent: {request.AgentName}
-            skill: {skillLine}
-            action: {request.Action}
-            environment: {request.Environment ?? "unspecified"}
-            purpose: {request.PurposeType}
-            policy: {request.PolicyTag}
-            attempt: {request.Attempt}
-            status: completed
-            mode: simulated
-            timestamp: {DateTimeOffset.UtcNow:o}{contextSection}
             """;
     }
 

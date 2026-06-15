@@ -1,4 +1,5 @@
 using Autofac.Agents.Hooks;
+using Autofac.Agents.Models;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
@@ -6,6 +7,7 @@ using Autofac.Agents.Mcp;
 using Autofac.AgentSecOps;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
+using Autofac.Storage.Artifacts;
 using Autofac.Workflows.Bpmn;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -71,6 +73,8 @@ public sealed class PolicyEvaluationServiceTests
                 new SandboxExecutionTool(sandbox)
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
+            new NullAgentModelRunner(),
+            new NullArtifactStorage(),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -123,6 +127,8 @@ public sealed class PolicyEvaluationServiceTests
                 new SandboxExecutionTool(sandbox)
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
+            new NullAgentModelRunner(),
+            new NullArtifactStorage(),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -836,6 +842,8 @@ public sealed class PolicyEvaluationServiceTests
             mcpSessionFactory ?? new StubMcpToolSessionFactory(),
             registry,
             new ToolGateway(registry, policyService),
+            new NullAgentModelRunner(),
+            new NullArtifactStorage(),
             Options.Create(new SandboxOptions
             {
                 Enabled = sandboxEnabled
@@ -929,6 +937,18 @@ public sealed class PolicyEvaluationServiceTests
             Fingerprint: new string('e', 64),
             FilePath: "/skills/incremental-implementation/SKILL.md")
     ];
+
+    private sealed class NullArtifactStorage : Autofac.Storage.Artifacts.IArtifactStorage
+    {
+        public Task<IReadOnlyList<Autofac.Storage.Artifacts.ArtifactDescriptor>> ListAsync(string runId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Autofac.Storage.Artifacts.ArtifactDescriptor>>([]);
+        public Task SaveAsync(string runId, string artifactName, Stream content, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+        public Task<Stream> OpenReadAsync(string runId, string artifactName, CancellationToken cancellationToken) =>
+            Task.FromResult<Stream>(Stream.Null);
+        public Task<bool> ExistsAsync(string runId, string artifactName, CancellationToken cancellationToken) =>
+            Task.FromResult(false);
+    }
 
     private sealed class StubPolicyEvaluationService : IPolicyEvaluationService
     {

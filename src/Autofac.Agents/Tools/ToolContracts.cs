@@ -3,6 +3,17 @@ using Autofac.Workflows.Runtime;
 
 namespace Autofac.Agents.Tools;
 
+public interface IToolSchemaProvider
+{
+    IReadOnlyList<ToolSchemaParameter> GetParameters();
+}
+
+public sealed record ToolSchemaParameter(
+    string Name,
+    string Type,
+    string Description,
+    bool Required = false);
+
 public interface IAgentTool
 {
     string Name { get; }

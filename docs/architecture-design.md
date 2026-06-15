@@ -1,8 +1,11 @@
 # Autofac Architecture Design
 
-Version: Draft v0.1
+Version: Draft v0.2
 Status: Working Draft
+Last reviewed: 2026-06-15
 Related Document: `docs/functional-specification.md`
+
+> **Reader's note.** Sections 1–20 describe the **target architecture** (the north star). Sections 21–24 were added after a full source review on 2026-06-15 and describe the **as-built reality**, the **gap analysis**, the **implementation roadmap**, and **future enhancements**. Where the target and the as-built state diverge, Section 21 is authoritative for "what exists today."
 
 ## 1. Purpose
 
@@ -694,3 +697,163 @@ The BPMN engine recommendation above is based on current primary-source document
 Autofac should be implemented as a workflow-first, cloud-native orchestration platform with strong separation between workflow state management, agent execution, policy enforcement, integration handling, and observability.
 
 The C4 views in this document show Autofac as a governed execution fabric sitting between human operators, enterprise systems, LLM-based agents, and deployment infrastructure. Its strength comes from combining BPMN process clarity, secure agent runtime controls, and complete operational visibility in one software factory platform.
+
+---
+
+## 21. Current Implementation Status (As-Built)
+
+This section reflects the codebase as of 2026-06-15. It is the authoritative description of what exists today.
+
+### 21.1 Solution Topology
+
+The backend is a layered C# solution (`net9.0`) with clean dependency direction (Domain ← Application ← Infrastructure/Workflows/Agents ← Api):
+
+| Project | Role | Maturity |
+| --- | --- | --- |
+| `Autofac.Domain` | Persistence entities, agent-runtime contracts, policy decisions | Solid |
+| `Autofac.Application` | Run orchestration service, authoring service, observability + run contracts | Solid |
+| `Autofac.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary, Camunda spike | Core works; engine is custom |
+| `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Rich, but execution is simulated |
+| `Autofac.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
+| `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; placeholder workload |
+| `Autofac.Integrations` | GitHub connector, webhook ingestion + signature validation + tag-based trigger routing | GitHub only |
+| `Autofac.Infrastructure` | EF Core + PostgreSQL (Npgsql), repositories, runtime store, 8 migrations | Solid |
+| `Autofac.Storage` | Artifact storage abstraction + local filesystem implementation | Solid (local only) |
+| `Autofac.Observability` | Prometheus metrics, JSON console logs, correlation middleware | Metrics + logs only |
+| `Autofac.Api` | ASP.NET Core controllers, contract mapping, OpenAPI | Solid; unauthenticated |
+
+Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites.
+
+### 21.2 What Actually Works End-to-End
+
+- **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer.
+- **Workflow execution** via the custom in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (with retry + boundary timeout), user/approval tasks, exclusive gateways, parallel gateways (executed sequentially), intermediate/boundary timer events (fire immediately), and end events. State is checkpointed as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`.
+- **Policy enforcement** at the Tool Gateway (`ToolGateway`): allow/deny lists, permission-level checks, input validation, and `PolicyEvaluationService` evaluation before every tool call — the single control point envisioned in Decision 3.
+- **Agent runtime assembly**: skill resolution from markdown manifests (`SkillRepository`/`MarkdownSkillLoader`), prompt assembly with full prompt snapshots, hook execution (`HookGateway` with `before/after_agent_run`), MCP tool sessions (`McpToolSessionFactory`), and a complete `AgentRuntimeSnapshot` persisted per step.
+- **GitHub delivery**: real branch creation, marker-file commit, and pull-request creation via `GitHubConnector`.
+- **Approvals + audit**: approval requests created at user-task gates, decided through `ApprovalsController`, with run resume on approval and `AuditRecord` written for governance.
+- **Inbound triggers**: GitHub/Jira webhook ingestion with HMAC signature validation and tag-based workflow routing (`TagBasedTriggerRouter`).
+- **Observability**: workflow/step/approval/webhook metrics exported on `/metrics` (Prometheus), structured JSON logs, and correlation-ID propagation.
+- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web.
+
+### 21.3 Honest Limitations
+
+These are the load-bearing gaps between the running system and the target architecture:
+
+1. **Agent execution is simulated.** `AgentOrchestrator.BuildSimulatedOutput` produces deterministic text; there is **no LLM/model client** anywhere in the solution. The Docker sandbox runs a fixed shell entrypoint that writes `result.json` — it does not invoke a model.
+2. **The engine is not Camunda 8.** Decision 1/Section 14.1 commit to Camunda 8 + Zeebe, but the runtime is a bespoke in-process engine. Only a `Camunda8SpikeAnalyzer` (analysis spike) references Camunda. The `IWorkflowEngineAdapter` seam exists, so this is swappable — but unimplemented.
+3. **No asynchronous backbone.** Runs execute **synchronously inside the HTTP request** (`WorkflowRunOrchestrationService.StartRunAsync` awaits the whole advance). There is no message bus, job queue, or background worker, so long-running/parallel/timed workflows are not truly durable or distributed.
+4. **Authentication/RBAC is stubbed.** `AuthController` returns `501 Not Implemented`; there is no SSO, no token validation, and no role enforcement on controllers.
+5. **Timers and parallelism are simulated.** Timer events fire immediately; parallel branches run sequentially in list order.
+6. **One outbound connector.** Only GitHub exists; Jira, Slack, Teams, email, CI/CD, and cloud-action connectors from Sections 6.7/10 are absent.
+7. **No distributed tracing.** OpenTelemetry is wired for **metrics only** — no `WithTracing`/OTLP exporter, so cross-service trace correlation (Section 12) is unmet.
+8. **No Kubernetes footprint.** Only `docker-compose`; no Helm charts or K8s manifests despite the K8s-first deployment view (Section 13).
+9. **Policy is code, not data.** `PolicyEvaluationService` hardcodes MVP rules (secret-access deny, prod-deploy/merge escalate). No policy store, versioning, or admin authoring.
+10. **No plugin runtime.** The Plugin Runtime container (Section 6.8) and secret manager (Section 9) are not implemented; credentials come from configuration/env only.
+
+## 22. Gap Analysis
+
+| Capability (target) | As-built | Gap severity | Notes |
+| --- | --- | --- | --- |
+| BPMN modeling (bpmn-js) | Implemented | — | Designer + validation + publish work |
+| BPMN execution engine | Custom in-process engine | **High** | Adapter seam exists; Camunda not wired |
+| Agent task execution (LLM) | Simulated only | **Critical** | No model client; blocks the core value prop |
+| Tool Gateway + policy | Implemented | — | Strong; single control point in place |
+| Sandbox isolation | Container lifecycle real; workload placeholder | High | network=none, mem/cpu limits applied |
+| Human approvals | Implemented | — | Create/decide/resume + audit |
+| Policy engine | Hardcoded MVP rules | Medium | Needs policy-as-data + store |
+| Async coordination / bus | None (synchronous in-request) | **High** | Durability + scale risk |
+| AuthN / RBAC / SSO | Stubbed (501) | **Critical** | Endpoints unauthenticated |
+| Secret management | Config/env only | High | No vault/secret provider |
+| Connectors | GitHub only | Medium | Jira/Slack/Teams/email/CI-CD missing |
+| Observability — metrics | Implemented (Prometheus) | — | Good coverage |
+| Observability — tracing | Missing | Medium | Metrics-only OTel |
+| Persistence | EF Core + Postgres | — | 8 migrations, solid |
+| Artifact storage | Local filesystem | Medium | No S3/blob driver |
+| Plugin runtime | Missing | Low (MVP) | Deferred per Section 17 |
+| Deployment | docker-compose | Medium | No K8s/Helm |
+| Timers / true parallelism | Simulated | Medium | Tied to engine choice |
+
+**Critical path:** the two `Critical` items (real LLM execution and authentication) gate any production or pilot use. The `High` items (engine durability/async backbone, sandbox workload, secrets) gate trustworthy multi-step autonomous runs.
+
+## 23. Implementation Roadmap
+
+A phased plan ordered by dependency and risk. Each phase is independently shippable and leaves the system in a working state.
+
+### Phase A — Make agents real (Critical, ~highest value)
+
+**Goal:** replace simulation with governed LLM execution.
+
+1. Add an `Autofac.Agents.Models` abstraction: `ILanguageModelClient` with a provider-agnostic request/response (messages, tools, max-tokens, stop). Implement a first provider (Anthropic Claude) behind it; keep the interface so OpenAI/Azure are drop-in.
+2. Wire the client into `AgentOrchestrator`: feed the assembled `PromptSnapshot` + resolved skills + allowed tools into a tool-use loop, routing every tool call through the existing `ToolGateway` (policy stays authoritative).
+3. Run the loop **inside the Docker sandbox** workload (replace the placeholder entrypoint with an agent runner image), or, as an interim step, in-process behind the sandbox interface. Capture token usage, tool invocations, and artifacts into `AgentRuntimeSnapshot`.
+4. Add model-call metrics (latency, tokens, cost) and redaction of secrets from prompts/outputs.
+
+*Exit:* a service task drives a real model that reads context, calls policy-gated tools, and produces non-deterministic output with full snapshot capture.
+
+### Phase B — Authentication, authorization, and secrets (Critical)
+
+1. Replace the stub `AuthController` with OIDC/JWT bearer validation (`AddAuthentication().AddJwtBearer`), configurable issuer/audience for enterprise SSO.
+2. Introduce a role model (e.g. `Viewer`, `Operator`, `Approver`, `Admin`) and apply `[Authorize]` policies per controller/endpoint — especially run start, approval decisions, and workflow publish.
+3. Add a secret-provider abstraction (`ISecretStore`) with a first implementation (env/file for dev, then a vault driver). Route `GitHubOptions.PersonalAccessToken` and future connector creds through it.
+4. Enforce that approval decisions record the authenticated principal, not `api-user`.
+
+*Exit:* every state-changing endpoint requires an authenticated, authorized principal; credentials are not read from plain config in production.
+
+### Phase C — Durable, asynchronous execution backbone (High)
+
+1. Introduce a background worker: move `_runner.StartAsync`/`ResumeAsync` off the request thread into a hosted service that consumes a durable queue (start with an outbox table in Postgres; graduate to a message bus).
+2. Add a run supervisor that auto-invokes `RecoverAsync` for runs left `running` after a crash (there is already a recovery path — make it automatic).
+3. Implement real timer scheduling (persisted due-time + a timer dispatcher) so intermediate/boundary timer events actually wait.
+4. Make parallel gateways execute branches concurrently with a join barrier.
+
+*Exit:* workflows survive process restarts, timers genuinely delay, and the API returns immediately while work proceeds in the background.
+
+### Phase D — Engine decision: commit or revise (High)
+
+1. **Decide explicitly**: either (a) implement the Camunda 8/Zeebe adapter behind `IWorkflowEngineAdapter` per Section 14.1, or (b) formally adopt the in-process engine as the strategic choice and update Decision 1. Do not leave the doc and code contradicting each other.
+2. If Camunda: stand up Zeebe (the e2e compose already references it), implement job-worker dispatch for `serviceTask`, and map approvals to user tasks/messages. Keep Autofac semantics in metadata, not engine forks.
+3. If in-process: harden the engine — graph-based execution (not list-index), proper sequence-flow/condition evaluation, and compensation/rollback.
+
+*Exit:* a single, documented engine strategy with matching code.
+
+### Phase E — Connector and policy breadth (Medium)
+
+1. Generalize the connector contract (one interface, policy-evaluable, secret-aware, emits audit/metrics) and add Jira (intake/trigger) and Slack/Teams (notifications) next.
+2. Move policy from code to data: a versioned policy store + evaluation over rules, with an admin authoring surface. Keep `PolicyEvaluationService` as the evaluator.
+3. Add a blob/S3 artifact driver behind `IArtifactStorage`.
+
+*Exit:* new connectors and policies are added as configuration/data, not core-code changes.
+
+### Phase F — Production observability and deployment (Medium)
+
+1. Add OpenTelemetry tracing (`WithTracing` + OTLP) and propagate the existing correlation ID into spans; instrument engine, orchestrator, tool gateway, and connectors.
+2. Author Helm charts / K8s manifests for api, web, worker, Postgres, and (if chosen) Zeebe; add the execution namespace for ephemeral sandbox pods.
+3. Add SLO dashboards and alerting on the metrics already emitted (run failure rate, approval wait time, step latency).
+
+*Exit:* a request can be traced end-to-end and the platform deploys to Kubernetes.
+
+### Sequencing summary
+
+```
+A (agents real) ─┐
+B (auth/secrets)─┼─► C (async backbone) ─► D (engine decision) ─► E (breadth) ─► F (prod ops)
+                 │
+   A and B can proceed in parallel; both are prerequisites for a credible pilot.
+```
+
+## 24. Future Enhancements (Beyond the Roadmap)
+
+Forward-looking proposals to capture now, sequence later:
+
+- **Multi-agent coordination.** Sub-agent delegation is modeled in the contract (`AgentSubAgentContract`) but not executed. Add planner/worker decomposition with depth limits and per-sub-agent policy scoping.
+- **Cost and budget governance.** Per-run / per-workflow token and dollar budgets enforced at the model client, with policy escalation when a run exceeds budget.
+- **Policy simulation & dry-run.** Extend the existing `PolicySimulation` API into a full "what would happen" preview across a whole workflow before publish.
+- **Evidence and compliance packs.** Bundle run artifacts, approvals, policy decisions, and traces into an exportable, signed evidence package per delivery (supports audit/regulated use).
+- **Replay and time-travel debugging.** Use the event-sourced run history to deterministically replay a run for debugging and post-incident review.
+- **Skill marketplace + versioning.** Promote skills from on-disk markdown to a versioned, governed registry with provenance (fingerprints already exist on `SkillManifest`).
+- **Human-in-the-loop richness.** Inline diff review for PRs, partial approvals, and delegation/escalation chains beyond the current single-decision gate.
+- **Connector health & circuit breaking.** Per-connector health, retry budgets, and dead-letter handling (Section 10 design rules) once more than one connector exists.
+- **Model routing & fallback.** Route by task type/risk to different models, with automatic fallback and quality gates.
+- **Workflow templates & golden paths.** Curated, validated BPMN templates for the common SDLC flows (Jira→spec→code→PR→test→deploy) to lower authoring friction.
+- **Tenancy & isolation.** Multi-tenant data partitioning and per-tenant secret/policy scoping for shared-platform deployments.
