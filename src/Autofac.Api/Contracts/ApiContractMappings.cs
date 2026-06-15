@@ -186,7 +186,18 @@ internal static class ApiContractMappings
                 skill.Source,
                 skill.Available,
                 skill.Selected,
-                skill.Invoked)).ToArray() ?? []);
+                skill.Invoked)).ToArray() ?? [],
+            ToolInvocations: step.RuntimeSnapshot?.ToolInvocations.Select(static tool => new ToolInvocationRecord(
+                tool.ToolName,
+                tool.Category,
+                tool.Status,
+                tool.PolicyDecisionId,
+                tool.PolicyDecisionKind,
+                tool.InputSummary,
+                tool.OutputSummary,
+                tool.ErrorMessage,
+                tool.ArtifactNames.ToArray(),
+                tool.DurationMs)).ToArray() ?? []);
     }
 
     public static string NormalizeRunStatus(string status)

@@ -12,7 +12,8 @@ public sealed record RunStep(
     string? Error,
     PolicyDecision? PolicyDecision,
     PromptSnapshot? PromptSnapshot,
-    IReadOnlyList<SkillAuditRecord> Skills);
+    IReadOnlyList<SkillAuditRecord> Skills,
+    IReadOnlyList<ToolInvocationRecord> ToolInvocations);
 
 public sealed record SkillAuditRecord(
     string SkillId,
@@ -27,3 +28,15 @@ public sealed record SkillAuditRecord(
     bool Available,
     bool Selected,
     bool Invoked);
+
+public sealed record ToolInvocationRecord(
+    string ToolName,
+    string Category,
+    string Status,
+    string? PolicyDecisionId,
+    string? PolicyDecisionKind,
+    string? InputSummary,
+    string? OutputSummary,
+    string? ErrorMessage,
+    IReadOnlyList<string> ArtifactNames,
+    int? DurationMs);
