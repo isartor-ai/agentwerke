@@ -8,5 +8,7 @@ public interface ISkillRepository
     /// <summary>Find by the frontmatter 'name:' value.</summary>
     SkillManifest? FindByName(string name);
 
+    SkillManifest? FindByReference(string skillIdOrName);
+
     IReadOnlyList<SkillManifest> All();
 }

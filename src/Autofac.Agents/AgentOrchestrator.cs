@@ -1,7 +1,9 @@
 using Autofac.AgentSecOps;
+using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
+using Autofac.Agents.Tools;
+using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
-using Autofac.Sandboxes;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
@@ -16,24 +18,24 @@ namespace Autofac.Agents;
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
     private readonly ISkillRepository _skillRepository;
+    private readonly IAgentPromptAssembler _promptAssembler;
     private readonly IPolicyEvaluationService _policyEvaluationService;
-    private readonly IGitHubConnector _gitHubConnector;
+    private readonly IToolGateway _toolGateway;
     private readonly string _gitHubBranchPrefix;
-    private readonly ISandboxExecutor _sandbox;
-    private readonly SandboxOptions _sandboxOptions;
+    private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
 
     public AgentOrchestrator(
         ISkillRepository skillRepository,
+        IAgentPromptAssembler promptAssembler,
         IPolicyEvaluationService policyEvaluationService,
-        IGitHubConnector gitHubConnector,
-        ISandboxExecutor sandbox,
-        IOptions<SandboxOptions> sandboxOptions,
+        IToolGateway toolGateway,
+        IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
         _skillRepository = skillRepository;
+        _promptAssembler = promptAssembler;
         _policyEvaluationService = policyEvaluationService;
-        _gitHubConnector = gitHubConnector;
-        _sandbox = sandbox;
+        _toolGateway = toolGateway;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
             ? "autofac/run-"
@@ -67,9 +69,66 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
         var profile = AgentRegistry.Find(metadata.Agent);
         var matchedSkillRef = ResolveSkillRef(profile, metadata.Action);
-        var skillManifest = matchedSkillRef?.SkillManifestId is not null
-            ? _skillRepository.FindById(matchedSkillRef.SkillManifestId)
-            : null;
+        var skillResolution = ResolveSkills(profile, matchedSkillRef, metadata.RuntimeContract);
+        if (!skillResolution.Succeeded)
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: skillResolution.FailureReason,
+                RuntimeSnapshot: BuildRuntimeSnapshot(
+                    runId,
+                    stepId,
+                    node,
+                    metadata,
+                    attempt,
+                    null,
+                    skillResolution.AuditSkills,
+                    CreateEmptyPromptSnapshot()));
+        }
+
+        var skillManifest = skillResolution.PrimarySkill;
+        var promptAssembly = _promptAssembler.Assemble(new AgentPromptAssemblyRequest(
+            RunId: runId,
+            StepId: stepId,
+            NodeId: node.Id,
+            NodeName: node.Name,
+            AgentName: metadata.Agent,
+            AgentDescription: profile?.Description,
+            AgentCategory: profile?.Category,
+            Action: metadata.Action,
+            Environment: metadata.Environment,
+            PurposeType: metadata.PurposeType,
+            PolicyTag: metadata.PolicyTag,
+            Attempt: attempt,
+            RequiresEvidence: metadata.RequiresEvidence,
+            Prompt: metadata.RuntimeContract?.Prompt,
+            Skill: skillManifest));
+        var runtimeSnapshot = BuildRuntimeSnapshot(
+            runId,
+            stepId,
+            node,
+            metadata,
+            attempt,
+            skillManifest,
+            skillResolution.AuditSkills,
+            promptAssembly.PromptSnapshot);
+
+        if (!promptAssembly.Succeeded)
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+            FailureReason: promptAssembly.FailureReason,
+            RuntimeSnapshot: runtimeSnapshot);
+        }
+
+        var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt);
+        if (toolRequest is not null)
+        {
+            return await RunViaToolGatewayAsync(toolRequest, metadata, runtimeSnapshot, cancellationToken);
+        }
+
         var policyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
             AgentName: metadata.Agent,
             Action: metadata.Action,
@@ -85,17 +144,16 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Succeeded: false,
                 Output: null,
                 FailureReason: policyDecision.Rationale,
-                PolicyDecision: policyDecision);
-        }
-
-        if (IsGitHubAction(metadata.Action))
-        {
-            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, policyDecision, cancellationToken);
-        }
-
-        if (_sandboxOptions.Enabled)
-        {
-            return await RunInSandboxAsync(runId, stepId, metadata, attempt, skillManifest, policyDecision, cancellationToken);
+                PolicyDecision: policyDecision,
+                RuntimeSnapshot: runtimeSnapshot with
+                {
+                    PermissionDecision = new AgentPermissionDecisionRecord
+                    {
+                        Allowed = false,
+                        Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                        Rationale = policyDecision.Rationale
+                    }
+                });
         }
 
         var request = new AgentExecutionRequest(
@@ -117,166 +175,146 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Succeeded: true,
             Output: output,
             FailureReason: null,
-            PolicyDecision: policyDecision);
+            PolicyDecision: policyDecision,
+            RuntimeSnapshot: runtimeSnapshot with
+            {
+                PermissionDecision = new AgentPermissionDecisionRecord
+                {
+                    Allowed = true,
+                    Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                    Rationale = policyDecision.Rationale
+                }
+            });
     }
 
-    private async Task<AgentTaskOutcome> RunGitHubActionAsync(
+    private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(
+        ToolGatewayRequest request,
+        AutofacTaskMetadata metadata,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        CancellationToken cancellationToken)
+    {
+        var result = await _toolGateway.ExecuteAsync(request, cancellationToken);
+        var updatedSnapshot = runtimeSnapshot with
+        {
+            ToolInvocations = runtimeSnapshot.ToolInvocations.Concat([result.Invocation]).ToArray(),
+            Artifacts = runtimeSnapshot.Artifacts.Concat(MapArtifacts(result.Artifacts)).ToArray(),
+            PermissionDecision = new AgentPermissionDecisionRecord
+            {
+                Allowed = result.Succeeded,
+                Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                Rationale = result.FailureReason ?? result.PolicyDecision?.Rationale ?? $"Tool '{request.ToolName}' completed."
+            }
+        };
+
+        return new AgentTaskOutcome(
+            Succeeded: result.Succeeded,
+            Output: result.Output,
+            FailureReason: result.FailureReason,
+            Artifacts: result.Artifacts,
+            ExternalActions: result.ExternalActions,
+            PolicyDecision: result.PolicyDecision,
+            RuntimeSnapshot: updatedSnapshot);
+    }
+
+    private ToolGatewayRequest? BuildToolGatewayRequest(
+        string runId,
+        string stepId,
+        BpmnNodeDefinition node,
+        AutofacTaskMetadata metadata,
+        int attempt)
+    {
+        var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
+        if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
+        {
+            var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
+            return CreateToolRequest(
+                ToolName: metadata.Action,
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["branch_name"] = branchName
+                });
+        }
+
+        if (IsGitHubPullRequestAction(metadata.Action))
+        {
+            var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
+            return CreateToolRequest(
+                ToolName: "github.create_pull_request",
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["run_id"] = runId,
+                    ["step_id"] = stepId,
+                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["head_branch"] = branchName,
+                    ["title"] = node.Name is { Length: > 0 } ? $"Autofac: {node.Name}" : $"Autofac run {runId}",
+                    ["body"] = BuildPullRequestBody(runId, stepId, metadata, attempt),
+                    ["commit_message"] = $"Autofac evidence for run {runId}, step {stepId}"
+                });
+        }
+
+        if (_sandboxOptions.Enabled)
+        {
+            return CreateToolRequest(
+                ToolName: "sandbox.execute",
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["agent_name"] = metadata.Agent,
+                    ["action"] = metadata.Action,
+                    ["environment"] = metadata.Environment ?? string.Empty,
+                    ["purpose_type"] = metadata.PurposeType,
+                    ["policy_tag"] = metadata.PolicyTag,
+                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                });
+        }
+
+        return null;
+    }
+
+    private static AgentRuntimeSnapshot BuildRuntimeSnapshot(
         string runId,
         string stepId,
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
         int attempt,
-        Domain.Persistence.PolicyDecision policyDecision,
-        CancellationToken cancellationToken)
-    {
-        var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
-
-        try
-        {
-            if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
-            {
-                var branch = await _gitHubConnector.CreateBranchAsync(
-                    new CreateGitHubBranchCommand(branchName, BaseBranch: null),
-                    cancellationToken);
-
-                return new AgentTaskOutcome(
-                    Succeeded: true,
-                    Output: $"""
-                        provider: github
-                        action: create_branch
-                        status: completed
-                        branch: {branch.BranchName}
-                        base: {branch.BaseBranch}
-                        url: {branch.BranchUrl}
-                        sha: {branch.CommitSha}
-                        existing: {branch.AlreadyExisted}
-                        """,
-                    FailureReason: null,
-                    PolicyDecision: policyDecision,
-                    ExternalActions:
-                    [
-                        new ExternalActionRecord(
-                            Provider: "github",
-                            Action: "create_branch",
-                            Status: branch.AlreadyExisted ? "already_exists" : "completed",
-                            ResourceId: branch.BranchName,
-                            ResourceUrl: branch.BranchUrl,
-                            Summary: $"GitHub branch {branch.BranchName}")
-                    ]);
-            }
-
-            var ensuredBranch = await _gitHubConnector.CreateBranchAsync(
-                new CreateGitHubBranchCommand(branchName, BaseBranch: null),
-                cancellationToken);
-
-            var title = node.Name is { Length: > 0 }
-                ? $"Autofac: {node.Name}"
-                : $"Autofac run {runId}";
-            var body = BuildPullRequestBody(runId, stepId, metadata, attempt);
-            var pullRequest = await _gitHubConnector.CreatePullRequestAsync(
-                new CreateGitHubPullRequestCommand(
-                    RunId: runId,
-                    StepId: stepId,
-                    Attempt: attempt,
-                    HeadBranch: branchName,
-                    BaseBranch: null,
-                    Title: title,
-                    Body: body,
-                    CommitMessage: $"Autofac evidence for run {runId}, step {stepId}"),
-                cancellationToken);
-
-            return new AgentTaskOutcome(
-                Succeeded: true,
-                Output: $"""
-                    provider: github
-                    action: create_pull_request
-                    status: completed
-                    branch: {ensuredBranch.BranchName}
-                    branch_existing: {ensuredBranch.AlreadyExisted}
-                    pull_request: #{pullRequest.Number}
-                    url: {pullRequest.PullRequestUrl}
-                    marker: {pullRequest.MarkerPath}
-                    existing: {pullRequest.AlreadyExisted}
-                    """,
-                FailureReason: null,
-                PolicyDecision: policyDecision,
-                ExternalActions:
-                [
-                    new ExternalActionRecord(
-                        Provider: "github",
-                        Action: "create_branch",
-                        Status: ensuredBranch.AlreadyExisted ? "already_exists" : "completed",
-                        ResourceId: ensuredBranch.BranchName,
-                        ResourceUrl: ensuredBranch.BranchUrl,
-                        Summary: $"GitHub branch {ensuredBranch.BranchName}"),
-                    new ExternalActionRecord(
-                        Provider: "github",
-                        Action: "create_pull_request",
-                        Status: pullRequest.AlreadyExisted ? "already_exists" : "completed",
-                        ResourceId: pullRequest.Number.ToString(),
-                        ResourceUrl: pullRequest.PullRequestUrl,
-                        Summary: $"GitHub pull request #{pullRequest.Number}")
-                ]);
-        }
-        catch (Exception ex)
-        {
-            return new AgentTaskOutcome(
-                Succeeded: false,
-                Output: null,
-                FailureReason: ex.Message,
-                PolicyDecision: policyDecision,
-                ExternalActions:
-                [
-                    new ExternalActionRecord(
-                        Provider: "github",
-                        Action: metadata.Action,
-                        Status: "failed",
-                        ResourceId: branchName,
-                        ResourceUrl: null,
-                        Summary: ex.Message)
-                ]);
-        }
-    }
-
-    private async Task<AgentTaskOutcome> RunInSandboxAsync(
-        string runId,
-        string stepId,
-        AutofacTaskMetadata metadata,
-        int attempt,
         SkillManifest? skillManifest,
-        Domain.Persistence.PolicyDecision policyDecision,
-        CancellationToken cancellationToken)
+        IReadOnlyList<AgentSkillUsageRecord> auditSkills,
+        AgentPromptSnapshot promptSnapshot)
     {
-        var sandboxRequest = new SandboxExecutionRequest(
-            RunId: runId,
-            StepId: stepId,
-            AgentName: metadata.Agent,
-            Action: metadata.Action,
-            Environment: metadata.Environment,
-            PurposeType: metadata.PurposeType,
-            PolicyTag: metadata.PolicyTag,
-            Attempt: attempt);
-
-        var result = await _sandbox.ExecuteAsync(sandboxRequest, cancellationToken);
-
-        if (!result.Succeeded)
+        return new AgentRuntimeSnapshot
         {
-            return new AgentTaskOutcome(
-                Succeeded: false,
-                Output: result.Logs,
-                FailureReason: result.FailureReason,
-                Artifacts: result.Artifacts,
-                PolicyDecision: policyDecision);
-        }
-
-        var output = BuildSandboxOutput(sandboxRequest, result, skillManifest);
-
-        return new AgentTaskOutcome(
-            Succeeded: true,
-            Output: output,
-            FailureReason: null,
-            Artifacts: result.Artifacts,
-            PolicyDecision: policyDecision);
+            RunId = runId,
+            StepId = stepId,
+            NodeId = node.Id,
+            AgentName = metadata.Agent,
+            Action = metadata.Action,
+            Prompt = promptSnapshot,
+            Contract = metadata.RuntimeContract ?? new AgentRuntimeContract(),
+            Skills = auditSkills,
+            PermissionDecision = new AgentPermissionDecisionRecord
+            {
+                Allowed = true,
+                Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                Rationale = $"Prompt rendered for attempt {attempt}."
+            }
+        };
     }
 
     private static AgentSkillRef? ResolveSkillRef(AgentProfile? profile, string action)
@@ -288,10 +326,13 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             ?? profile.Skills.FirstOrDefault();
     }
 
-    private static bool IsGitHubAction(string action) =>
-        string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+    private static bool IsGitHubPullRequestAction(string action) =>
         string.Equals(action, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.create_pr", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsGitHubAction(string action) =>
+        string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+        IsGitHubPullRequestAction(action);
 
     private static string BuildBranchName(string runId, string branchPrefix)
     {
@@ -347,6 +388,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
               skill_context:
                 id: {manifest.SkillId}
                 name: {manifest.Name}
+                version: {manifest.Version ?? "unspecified"}
                 fingerprint: {manifest.Fingerprint}
                 source: {manifest.FilePath}
               """
@@ -366,44 +408,167 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             """;
     }
 
-    private static string BuildSandboxOutput(
-        SandboxExecutionRequest request,
-        SandboxExecutionResult result,
-        SkillManifest? manifest)
+    private SkillResolution ResolveSkills(
+        AgentProfile? profile,
+        AgentSkillRef? matchedSkillRef,
+        AgentRuntimeContract? runtimeContract)
     {
-        var skillContext = manifest is not null
-            ? $"""
+        var availableSkills = new Dictionary<string, ResolvedSkill>(StringComparer.OrdinalIgnoreCase);
 
-              skill_context:
-                id: {manifest.SkillId}
-                name: {manifest.Name}
-                fingerprint: {manifest.Fingerprint}
-              """
-            : string.Empty;
+        if (profile is not null)
+        {
+            foreach (var skillRef in profile.Skills)
+            {
+                if (string.IsNullOrWhiteSpace(skillRef.SkillManifestId))
+                {
+                    continue;
+                }
 
-        return $"""
-            agent: {request.AgentName}
-            action: {request.Action}
-            environment: {request.Environment ?? "unspecified"}
-            purpose: {request.PurposeType}
-            policy: {request.PolicyTag}
-            attempt: {request.Attempt}
-            status: completed
-            mode: sandbox
-            exit_code: {result.ExitCode}
-            duration_ms: {result.Duration.TotalMilliseconds:F0}
-            artifact_count: {result.Artifacts.Count}
-            timestamp: {DateTimeOffset.UtcNow:o}{skillContext}
-            logs: |
-            {IndentLogs(result.Logs)}
-            """;
+                var manifest = _skillRepository.FindById(skillRef.SkillManifestId);
+                if (manifest is null)
+                {
+                    return SkillResolution.Fail(
+                        $"Agent profile '{profile.AgentId}' references missing skill manifest '{skillRef.SkillManifestId}' for action '{skillRef.SkillId}'.");
+                }
+
+                availableSkills[manifest.SkillId] = new ResolvedSkill(manifest, "agent-profile", Selected: false, Invoked: false);
+            }
+        }
+
+        var explicitSelections = new List<ResolvedSkill>();
+        foreach (var contractSkill in runtimeContract?.Skills ?? [])
+        {
+            var manifest = _skillRepository.FindByReference(contractSkill.SkillId)
+                ?? (string.IsNullOrWhiteSpace(contractSkill.Name) ? null : _skillRepository.FindByReference(contractSkill.Name));
+
+            if (manifest is null)
+            {
+                return SkillResolution.Fail(
+                    $"Runtime contract references unknown skill '{contractSkill.SkillId}'. Check the skill id/name or publish the skill before running.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(contractSkill.Version) &&
+                !string.Equals(contractSkill.Version, manifest.Version, StringComparison.OrdinalIgnoreCase))
+            {
+                return SkillResolution.Fail(
+                    $"Runtime contract requested skill '{contractSkill.SkillId}' version '{contractSkill.Version}', but loaded version is '{manifest.Version ?? "unspecified"}'.");
+            }
+
+            var resolved = new ResolvedSkill(manifest, "runtime-contract", Selected: contractSkill.Required, Invoked: false);
+            availableSkills[manifest.SkillId] = resolved;
+            explicitSelections.Add(resolved);
+        }
+
+        ResolvedSkill? primarySkill = null;
+        if (explicitSelections.Count > 0)
+        {
+            primarySkill = explicitSelections.FirstOrDefault(static skill => skill.Selected) ?? explicitSelections[0];
+        }
+        else if (matchedSkillRef?.SkillManifestId is not null)
+        {
+            var manifest = _skillRepository.FindById(matchedSkillRef.SkillManifestId);
+            if (manifest is null)
+            {
+                return SkillResolution.Fail(
+                    $"Agent profile action '{matchedSkillRef.SkillId}' references unknown skill manifest '{matchedSkillRef.SkillManifestId}'.");
+            }
+
+            primarySkill = new ResolvedSkill(manifest, "agent-profile", Selected: true, Invoked: true);
+            availableSkills[manifest.SkillId] = primarySkill;
+        }
+
+        if (primarySkill is not null)
+        {
+            availableSkills[primarySkill.Manifest.SkillId] = primarySkill with { Selected = true, Invoked = true };
+        }
+
+        var auditSkills = availableSkills.Values
+            .OrderBy(static skill => skill.Manifest.SkillId, StringComparer.OrdinalIgnoreCase)
+            .Select(static skill => new AgentSkillUsageRecord
+            {
+                SkillId = skill.Manifest.SkillId,
+                Name = skill.Manifest.Name,
+                Description = skill.Manifest.Description,
+                Version = skill.Manifest.Version,
+                Fingerprint = skill.Manifest.Fingerprint,
+                InvocationRules = skill.Manifest.InvocationRules,
+                RequiredFiles = skill.Manifest.RequiredFiles,
+                OptionalTools = skill.Manifest.OptionalTools,
+                Source = skill.Source,
+                Available = true,
+                Invoked = skill.Invoked,
+                Selected = skill.Selected
+            })
+            .ToArray();
+
+        return SkillResolution.Success(primarySkill?.Manifest, auditSkills);
     }
 
-    private static string IndentLogs(string logs)
+    private static AgentPromptSnapshot CreateEmptyPromptSnapshot() =>
+        new(
+            FinalPrompt: string.Empty,
+            RenderedAt: DateTimeOffset.UtcNow.ToString("o"),
+            Sections: [],
+            Variables: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            SourceFiles: []);
+
+    private sealed record ResolvedSkill(
+        SkillManifest Manifest,
+        string Source,
+        bool Selected,
+        bool Invoked);
+
+    private sealed record SkillResolution(
+        bool Succeeded,
+        SkillManifest? PrimarySkill,
+        IReadOnlyList<AgentSkillUsageRecord> AuditSkills,
+        string? FailureReason)
     {
-        if (string.IsNullOrWhiteSpace(logs)) return "  (no output)";
-        return string.Join('\n', logs
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => $"  {l}"));
+        public static SkillResolution Success(SkillManifest? primarySkill, IReadOnlyList<AgentSkillUsageRecord> auditSkills) =>
+            new(true, primarySkill, auditSkills, null);
+
+        public static SkillResolution Fail(string failureReason) =>
+            new(false, null, [], failureReason);
+    }
+
+    private static ToolGatewayRequest CreateToolRequest(
+        string ToolName,
+        string Action,
+        string runId,
+        string stepId,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        AgentPermissionContract permissions,
+        IReadOnlyDictionary<string, string> input) =>
+        new(
+            ToolName,
+            Action,
+            runId,
+            stepId,
+            metadata.Agent,
+            metadata.Environment,
+            metadata.PurposeType,
+            metadata.PolicyTag,
+            metadata.RequiresEvidence,
+            attempt,
+            permissions.Level,
+            permissions.AllowedTools,
+            permissions.DeniedTools,
+            input);
+
+    private static IReadOnlyList<AgentArtifactRecord> MapArtifacts(IReadOnlyDictionary<string, string>? artifacts)
+    {
+        if (artifacts is null || artifacts.Count == 0)
+        {
+            return [];
+        }
+
+        return artifacts.Keys
+            .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+            .Select(static name => new AgentArtifactRecord
+            {
+                Name = name
+            })
+            .ToArray();
     }
 }

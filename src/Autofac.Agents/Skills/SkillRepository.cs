@@ -21,5 +21,8 @@ public sealed class SkillRepository : ISkillRepository
     public SkillManifest? FindByName(string name) =>
         _byName.TryGetValue(name, out var m) ? m : null;
 
+    public SkillManifest? FindByReference(string skillIdOrName) =>
+        FindById(skillIdOrName) ?? FindByName(skillIdOrName);
+
     public IReadOnlyList<SkillManifest> All() => _all;
 }
