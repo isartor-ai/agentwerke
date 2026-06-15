@@ -190,6 +190,17 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             return await RunViaToolGatewayAsync(toolRequest, node, metadata, attempt, runtimeSnapshot, cancellationToken);
         }
 
+        var subAgentOutcome = await TryRunSubAgentAsync(
+            node,
+            metadata,
+            attempt,
+            runtimeSnapshot,
+            cancellationToken);
+        if (subAgentOutcome is not null)
+        {
+            return await FinalizeOutcomeAsync(node, metadata, attempt, subAgentOutcome, cancellationToken);
+        }
+
         if (metadata.Action.StartsWith("mcp.", StringComparison.OrdinalIgnoreCase))
         {
             return await FinalizeOutcomeAsync(
@@ -270,6 +281,168 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 }
             }),
             cancellationToken);
+    }
+
+    private Task<AgentTaskOutcome?> TryRunSubAgentAsync(
+        BpmnNodeDefinition node,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        CancellationToken cancellationToken)
+    {
+        var subAgents = metadata.RuntimeContract?.SubAgents;
+        var contractMetadata = metadata.RuntimeContract?.Metadata;
+        if (subAgents is null ||
+            !subAgents.Enabled ||
+            contractMetadata is null ||
+            !contractMetadata.TryGetValue("sub_agent.agent", out var childAgent) ||
+            string.IsNullOrWhiteSpace(childAgent))
+        {
+            return Task.FromResult<AgentTaskOutcome?>(null);
+        }
+
+        var childAction = contractMetadata.TryGetValue("sub_agent.action", out var configuredAction) && !string.IsNullOrWhiteSpace(configuredAction)
+            ? configuredAction
+            : metadata.Action;
+        var currentDepth = ParseInt(contractMetadata, "sub_agent.current_depth", defaultValue: 0);
+        var childDepth = currentDepth + 1;
+        var childRunId = $"{runtimeSnapshot.RunId}:{runtimeSnapshot.StepId}:child-{runtimeSnapshot.SubAgentRuns.Count + 1}";
+        var childPermissionLevel = ResolveChildPermissionLevel(metadata, subAgents, contractMetadata);
+        var correlationId = $"{runtimeSnapshot.RunId}/{runtimeSnapshot.StepId}/{childRunId}";
+        var startedAt = DateTimeOffset.UtcNow.ToString("o");
+
+        if (subAgents.AllowedAgents.Count > 0 &&
+            !subAgents.AllowedAgents.Contains(childAgent, StringComparer.OrdinalIgnoreCase))
+        {
+            return Task.FromResult<AgentTaskOutcome?>(CreateSubAgentOutcome(
+                metadata,
+                runtimeSnapshot,
+                CreateBlockedChildRun(
+                    childRunId,
+                    runtimeSnapshot,
+                    childAgent,
+                    childAction,
+                    childDepth,
+                    childPermissionLevel,
+                    subAgents.FailureBehavior,
+                    correlationId,
+                    startedAt,
+                    $"Sub-agent '{childAgent}' is not allowed by the runtime contract."),
+                cancellationToken: cancellationToken));
+        }
+
+        if (childDepth > Math.Max(1, subAgents.MaxDepth))
+        {
+            return Task.FromResult<AgentTaskOutcome?>(CreateSubAgentOutcome(
+                metadata,
+                runtimeSnapshot,
+                CreateBlockedChildRun(
+                    childRunId,
+                    runtimeSnapshot,
+                    childAgent,
+                    childAction,
+                    childDepth,
+                    childPermissionLevel,
+                    subAgents.FailureBehavior,
+                    correlationId,
+                    startedAt,
+                    $"Sub-agent depth {childDepth} exceeds the configured max depth of {subAgents.MaxDepth}."),
+                cancellationToken: cancellationToken));
+        }
+
+        var childPolicyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
+            AgentName: childAgent,
+            Action: childAction,
+            Environment: contractMetadata.TryGetValue("sub_agent.environment", out var childEnvironment) ? childEnvironment : metadata.Environment,
+            PurposeType: contractMetadata.TryGetValue("sub_agent.purpose_type", out var childPurpose) && !string.IsNullOrWhiteSpace(childPurpose) ? childPurpose : metadata.PurposeType,
+            PolicyTag: contractMetadata.TryGetValue("sub_agent.policy_tag", out var childPolicyTag) && !string.IsNullOrWhiteSpace(childPolicyTag) ? childPolicyTag : metadata.PolicyTag,
+            RequiresEvidence: metadata.RequiresEvidence,
+            Attempt: attempt));
+
+        if (!string.Equals(childPolicyDecision.Kind, "allow", StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult<AgentTaskOutcome?>(CreateSubAgentOutcome(
+                metadata,
+                runtimeSnapshot,
+                CreateBlockedChildRun(
+                    childRunId,
+                    runtimeSnapshot,
+                    childAgent,
+                    childAction,
+                    childDepth,
+                    childPermissionLevel,
+                    subAgents.FailureBehavior,
+                    correlationId,
+                    startedAt,
+                    childPolicyDecision.Rationale),
+                childPolicyDecision,
+                cancellationToken));
+        }
+
+        var childProfile = AgentRegistry.Find(childAgent);
+        var childSkillRef = ResolveSkillRef(childProfile, childAction);
+        var childManifest = ResolveChildSkillManifest(childProfile, childSkillRef);
+        var childRequest = new AgentExecutionRequest(
+            childRunId,
+            runtimeSnapshot.StepId,
+            node.Id,
+            node.Name ?? node.Id,
+            childAgent,
+            childAction,
+            contractMetadata.TryGetValue("sub_agent.environment", out var configuredEnvironment) ? configuredEnvironment : metadata.Environment,
+            contractMetadata.TryGetValue("sub_agent.purpose_type", out var configuredPurpose) && !string.IsNullOrWhiteSpace(configuredPurpose) ? configuredPurpose : metadata.PurposeType,
+            contractMetadata.TryGetValue("sub_agent.policy_tag", out var configuredPolicyTag) && !string.IsNullOrWhiteSpace(configuredPolicyTag) ? configuredPolicyTag : metadata.PolicyTag,
+            metadata.RequiresEvidence,
+            attempt);
+
+        var shouldFail = contractMetadata.TryGetValue("sub_agent.simulate_failure", out var simulateFailure) &&
+            bool.TryParse(simulateFailure, out var parsed) &&
+            parsed;
+
+        var childOutput = shouldFail
+            ? null
+            : BuildSimulatedOutput(childRequest, childProfile, childSkillRef, childManifest);
+        var childFailureReason = shouldFail
+            ? (contractMetadata.TryGetValue("sub_agent.failure_reason", out var configuredFailureReason) && !string.IsNullOrWhiteSpace(configuredFailureReason)
+                ? configuredFailureReason
+                : $"Sub-agent '{childAgent}' reported a failure.")
+            : null;
+        var childArtifacts = shouldFail
+            ? []
+            : new[] { $"subagents/{childRunId}/response.txt" };
+        var childStatus = shouldFail ? "failed" : "completed";
+        var completedAt = DateTimeOffset.UtcNow.ToString("o");
+
+        var childRun = new AgentSubAgentExecutionRecord
+        {
+            RunId = childRunId,
+            ParentRunId = runtimeSnapshot.RunId,
+            ParentStepId = runtimeSnapshot.StepId,
+            AgentName = childAgent,
+            Action = childAction,
+            Status = childStatus,
+            Depth = childDepth,
+            PermissionLevel = childPermissionLevel,
+            FailureBehavior = subAgents.FailureBehavior,
+            CorrelationId = correlationId,
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+            OutputSummary = childOutput,
+            FailureReason = childFailureReason,
+            ArtifactNames = childArtifacts,
+            EventMessages =
+            [
+                $"spawned:{childAgent}:{childAction}",
+                $"{childStatus}:{completedAt}"
+            ]
+        };
+
+        return Task.FromResult<AgentTaskOutcome?>(CreateSubAgentOutcome(
+            metadata,
+            runtimeSnapshot,
+            childRun,
+            childPolicyDecision,
+            cancellationToken));
     }
 
     private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(
@@ -865,6 +1038,142 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Sections: [],
             Variables: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             SourceFiles: []);
+
+    private AgentTaskOutcome CreateSubAgentOutcome(
+        AutofacTaskMetadata metadata,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        AgentSubAgentExecutionRecord childRun,
+        Domain.Persistence.PolicyDecision? childPolicyDecision = null,
+        CancellationToken cancellationToken = default)
+    {
+        var updatedSnapshot = runtimeSnapshot with
+        {
+            SubAgentRuns = runtimeSnapshot.SubAgentRuns.Concat([childRun]).ToArray(),
+            Artifacts = runtimeSnapshot.Artifacts.Concat(MapSubAgentArtifacts(childRun.ArtifactNames)).ToArray(),
+            PermissionDecision = new AgentPermissionDecisionRecord
+            {
+                Allowed = string.Equals(childRun.Status, "completed", StringComparison.OrdinalIgnoreCase) ||
+                          ShouldContinueOnSubAgentFailure(childRun.FailureBehavior),
+                Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                Rationale = childRun.FailureReason ?? childRun.OutputSummary ?? $"Sub-agent '{childRun.AgentName}' {childRun.Status}."
+            }
+        };
+
+        if (string.Equals(childRun.Status, "completed", StringComparison.OrdinalIgnoreCase) ||
+            ShouldContinueOnSubAgentFailure(childRun.FailureBehavior))
+        {
+            return new AgentTaskOutcome(
+                Succeeded: true,
+                Output: childRun.OutputSummary ?? childRun.FailureReason ?? $"Sub-agent '{childRun.AgentName}' completed.",
+                FailureReason: null,
+                Artifacts: MapSubAgentArtifactPayloads(childRun),
+                PolicyDecision: childPolicyDecision,
+                RuntimeSnapshot: updatedSnapshot);
+        }
+
+        return new AgentTaskOutcome(
+            Succeeded: false,
+            Output: null,
+            FailureReason: childRun.FailureReason ?? $"Sub-agent '{childRun.AgentName}' failed.",
+            Artifacts: MapSubAgentArtifactPayloads(childRun),
+            PolicyDecision: childPolicyDecision,
+            RuntimeSnapshot: updatedSnapshot);
+    }
+
+    private static AgentSubAgentExecutionRecord CreateBlockedChildRun(
+        string childRunId,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        string childAgent,
+        string childAction,
+        int childDepth,
+        string childPermissionLevel,
+        string failureBehavior,
+        string correlationId,
+        string startedAt,
+        string failureReason) =>
+        new()
+        {
+            RunId = childRunId,
+            ParentRunId = runtimeSnapshot.RunId,
+            ParentStepId = runtimeSnapshot.StepId,
+            AgentName = childAgent,
+            Action = childAction,
+            Status = "failed",
+            Depth = childDepth,
+            PermissionLevel = childPermissionLevel,
+            FailureBehavior = failureBehavior,
+            CorrelationId = correlationId,
+            StartedAt = startedAt,
+            CompletedAt = DateTimeOffset.UtcNow.ToString("o"),
+            FailureReason = failureReason,
+            EventMessages =
+            [
+                $"spawned:{childAgent}:{childAction}",
+                $"failed:{failureReason}"
+            ]
+        };
+
+    private static string ResolveChildPermissionLevel(
+        AutofacTaskMetadata metadata,
+        AgentSubAgentContract subAgents,
+        IReadOnlyDictionary<string, string> contractMetadata)
+    {
+        if (subAgents.InheritPermissions)
+        {
+            return metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly;
+        }
+
+        return contractMetadata.TryGetValue("sub_agent.permission_level", out var explicitLevel) && !string.IsNullOrWhiteSpace(explicitLevel)
+            ? explicitLevel
+            : AgentPermissionLevels.ReadOnly;
+    }
+
+    private SkillManifest? ResolveChildSkillManifest(AgentProfile? profile, AgentSkillRef? childSkillRef)
+    {
+        if (childSkillRef?.SkillManifestId is null)
+        {
+            return null;
+        }
+
+        return _skillRepository.FindById(childSkillRef.SkillManifestId);
+    }
+
+    private static int ParseInt(IReadOnlyDictionary<string, string> metadata, string key, int defaultValue)
+    {
+        return metadata.TryGetValue(key, out var configuredValue) &&
+               int.TryParse(configuredValue, out var parsedValue)
+            ? parsedValue
+            : defaultValue;
+    }
+
+    private static bool ShouldContinueOnSubAgentFailure(string failureBehavior) =>
+        string.Equals(failureBehavior, AgentSubAgentFailureBehaviors.Continue, StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyDictionary<string, string>? MapSubAgentArtifactPayloads(AgentSubAgentExecutionRecord childRun)
+    {
+        if (childRun.ArtifactNames.Count == 0)
+        {
+            return null;
+        }
+
+        return childRun.ArtifactNames.ToDictionary(
+            static name => name,
+            _ => childRun.OutputSummary ?? string.Empty,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<AgentArtifactRecord> MapSubAgentArtifacts(IReadOnlyList<string> artifactNames)
+    {
+        if (artifactNames.Count == 0)
+        {
+            return [];
+        }
+
+        return artifactNames.Select(static name => new AgentArtifactRecord
+        {
+            Name = name
+        }).ToArray();
+    }
 
     private sealed record HookEvaluationResult(
         string Decision,

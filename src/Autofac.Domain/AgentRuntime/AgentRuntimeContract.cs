@@ -114,6 +114,19 @@ public sealed record AgentSubAgentContract
     public int MaxDepth { get; init; } = 1;
 
     public IReadOnlyList<string> AllowedAgents { get; init; } = [];
+
+    public int TimeoutSeconds { get; init; } = 60;
+
+    public bool InheritPermissions { get; init; } = true;
+
+    public string FailureBehavior { get; init; } = AgentSubAgentFailureBehaviors.FailParent;
+}
+
+public static class AgentSubAgentFailureBehaviors
+{
+    public const string FailParent = "fail-parent";
+    public const string ReturnFailure = "return-failure";
+    public const string Continue = "continue";
 }
 
 public sealed record AgentPermissionContract

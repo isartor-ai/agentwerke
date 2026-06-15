@@ -14,7 +14,8 @@ public sealed record RunStep(
     PromptSnapshot? PromptSnapshot,
     IReadOnlyList<SkillAuditRecord> Skills,
     IReadOnlyList<ToolInvocationRecord> ToolInvocations,
-    IReadOnlyList<HookExecutionRecord> HookExecutions);
+    IReadOnlyList<HookExecutionRecord> HookExecutions,
+    IReadOnlyList<SubAgentRunRecord> SubAgentRuns);
 
 public sealed record SkillAuditRecord(
     string SkillId,
@@ -51,3 +52,21 @@ public sealed record HookExecutionRecord(
     string? OutputSummary,
     string? ErrorMessage,
     int? DurationMs);
+
+public sealed record SubAgentRunRecord(
+    string RunId,
+    string ParentRunId,
+    string ParentStepId,
+    string AgentName,
+    string Action,
+    string Status,
+    int Depth,
+    string PermissionLevel,
+    string FailureBehavior,
+    string CorrelationId,
+    string StartedAt,
+    string? CompletedAt,
+    string? OutputSummary,
+    string? FailureReason,
+    IReadOnlyList<string> ArtifactNames,
+    IReadOnlyList<string> EventMessages);

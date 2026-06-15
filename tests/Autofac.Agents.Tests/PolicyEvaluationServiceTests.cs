@@ -812,6 +812,197 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Contains("unsupported type", hook.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task AgentOrchestrator_WhenSubAgentCompletes_TracksChildRunAndArtifacts()
+    {
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor());
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Delegate",
+                "Delegate",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "delegate",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite
+                        },
+                        SubAgents = new Domain.AgentRuntime.AgentSubAgentContract
+                        {
+                            Enabled = true,
+                            AllowedAgents = ["review-agent"]
+                        },
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["sub_agent.agent"] = "review-agent",
+                            ["sub_agent.action"] = "review"
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        var child = Assert.Single(outcome.RuntimeSnapshot!.SubAgentRuns);
+        Assert.Equal("review-agent", child.AgentName);
+        Assert.Equal("completed", child.Status);
+        Assert.Equal(Domain.AgentRuntime.AgentPermissionLevels.ReadWrite, child.PermissionLevel);
+        Assert.Contains(outcome.RuntimeSnapshot!.Artifacts, static artifact => artifact.Name == "subagents/run-123:step-456:child-1/response.txt");
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenSubAgentDepthExceedsLimit_FailsParent()
+    {
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor());
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Delegate",
+                "Delegate",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "delegate",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        SubAgents = new Domain.AgentRuntime.AgentSubAgentContract
+                        {
+                            Enabled = true,
+                            MaxDepth = 1,
+                            AllowedAgents = ["review-agent"]
+                        },
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["sub_agent.agent"] = "review-agent",
+                            ["sub_agent.action"] = "review",
+                            ["sub_agent.current_depth"] = "1"
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("max depth", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+        var child = Assert.Single(outcome.RuntimeSnapshot!.SubAgentRuns);
+        Assert.Equal("failed", child.Status);
+        Assert.Equal(2, child.Depth);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenSubAgentIsNotAllowed_FailsBeforeSpawn()
+    {
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor());
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Delegate",
+                "Delegate",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "delegate",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        SubAgents = new Domain.AgentRuntime.AgentSubAgentContract
+                        {
+                            Enabled = true,
+                            AllowedAgents = ["review-agent"]
+                        },
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["sub_agent.agent"] = "deploy-agent",
+                            ["sub_agent.action"] = "deploy"
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("not allowed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenSubAgentFailsAndFailureBehaviorIsContinue_ParentStillSucceeds()
+    {
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor());
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Delegate",
+                "Delegate",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "delegate",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        SubAgents = new Domain.AgentRuntime.AgentSubAgentContract
+                        {
+                            Enabled = true,
+                            AllowedAgents = ["review-agent"],
+                            FailureBehavior = Domain.AgentRuntime.AgentSubAgentFailureBehaviors.Continue
+                        },
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["sub_agent.agent"] = "review-agent",
+                            ["sub_agent.action"] = "review",
+                            ["sub_agent.simulate_failure"] = "true",
+                            ["sub_agent.failure_reason"] = "Child failed but parent may continue."
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        var child = Assert.Single(outcome.RuntimeSnapshot!.SubAgentRuns);
+        Assert.Equal("failed", child.Status);
+        Assert.Equal(Domain.AgentRuntime.AgentSubAgentFailureBehaviors.Continue, child.FailureBehavior);
+    }
+
     private static AgentOrchestrator CreateOrchestrator(
         IReadOnlyList<SkillManifest> manifests,
         string policyKind,

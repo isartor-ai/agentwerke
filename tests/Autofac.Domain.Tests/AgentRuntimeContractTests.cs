@@ -64,6 +64,20 @@ public sealed class AgentRuntimeContractTests
     }
 
     [Fact]
+    public void AgentSubAgentContract_DefaultsToInheritedPermissionsAndFailParent()
+    {
+        var subAgents = new AgentSubAgentContract
+        {
+            Enabled = true
+        };
+
+        Assert.True(subAgents.InheritPermissions);
+        Assert.Equal(60, subAgents.TimeoutSeconds);
+        Assert.Equal(AgentSubAgentFailureBehaviors.FailParent, subAgents.FailureBehavior);
+        Assert.Equal(1, subAgents.MaxDepth);
+    }
+
+    [Fact]
     public void AgentRuntimeSnapshot_CapturesRunStepAndRuntimeCapabilities()
     {
         var snapshot = new AgentRuntimeSnapshot
