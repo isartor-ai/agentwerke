@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Manual test workflow: Production Deployment Approval
+  =====================================================
+  Scenario: A deployment pipeline that requires two automated checks
+  (environment pre-flight + SAST scan) followed by a human approval
+  gate before the actual deployment executes.
+
+  Flow:
+    Start
+      → Pre-flight Check    (serviceTask, agent=infra-agent,       risk=medium)
+      → SAST Security Scan  (serviceTask, agent=security-analyst,  risk=high)
+      → Approve Deployment  (userTask,                             risk=high)
+      → Execute Deployment  (serviceTask, agent=deploy-agent,      risk=high)
+    End
+
+  Import via API:
+    POST http://localhost:8081/api/workflows/import
+    Body: { "fileName": "manual-test-deploy-approval.bpmn", "bpmnXml": "<contents>" }
+-->
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:autofac="https://autofac.ai/bpmn"
+    id="manual-test-deploy-approval-defs"
+    targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
+
+  <bpmn:process id="manual-test-deploy-approval"
+                name="Production Deployment Approval"
+                isExecutable="true">
+
+    <!-- 1. Start -->
+    <bpmn:startEvent id="Start" name="Deployment Triggered"/>
+
+    <!-- 2. Pre-flight: check target environment is healthy and ready -->
+    <bpmn:serviceTask id="PreflightCheck" name="Pre-flight Environment Check">
+      <bpmn:extensionElements>
+        <autofac:agentTask
+          agent="infra-agent"
+          action="check-environment"
+          environment="production"
+          purposeType="environment-readiness"
+          policyTag="infra-check"
+          requiresEvidence=""/>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <!-- 3. SAST scan: runs static analysis before any deployment proceeds -->
+    <bpmn:serviceTask id="SastScan" name="SAST Security Scan">
+      <bpmn:extensionElements>
+        <autofac:agentTask
+          agent="security-analyst"
+          action="run-sast"
+          environment="ci"
+          purposeType="security-scan"
+          policyTag="prod-credential"
+          requiresEvidence="ci_passed"/>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <!-- 4. Human approval gate — high-risk production change -->
+    <bpmn:userTask id="ApproveDeployment" name="Approve Production Deployment">
+      <bpmn:extensionElements>
+        <autofac:approvalTask
+          purposeType="human-approval"
+          policyTag="critical-prod-deploy"/>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+
+    <!-- 5. Execute: runs only after approval -->
+    <bpmn:serviceTask id="ExecuteDeployment" name="Execute Deployment">
+      <bpmn:extensionElements>
+        <autofac:agentTask
+          agent="deploy-agent"
+          action="deploy"
+          environment="production"
+          purposeType="deployment"
+          policyTag="prod-deploy"
+          requiresEvidence=""/>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <!-- 6. End -->
+    <bpmn:endEvent id="End" name="Deployment Complete"/>
+
+  </bpmn:process>
+</bpmn:definitions>

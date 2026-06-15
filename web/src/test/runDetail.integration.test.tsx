@@ -30,7 +30,6 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Summary' })).toBeInTheDocument();
-    expect(screen.getByText('BPMN Graph')).toBeInTheDocument();
     expect(screen.getByText('Runtime Events')).toBeInTheDocument();
     expect(screen.getByText('Retry scheduled after transient failure.')).toBeInTheDocument();
     expect(screen.getByText('Timeout boundary triggered on security scan.')).toBeInTheDocument();

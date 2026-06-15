@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import type { MockInstance } from 'vitest';
 import { apiClient } from '../api/client';
 import { WorkflowDesigner } from '../views/WorkflowDesigner';
 import { workflowsFixture } from './fixtures';
@@ -17,8 +16,8 @@ vi.mock('../api/client', () => ({
 }));
 
 describe('WorkflowDesigner integration', () => {
-  let createObjectUrlSpy: MockInstance<[obj: Blob | MediaSource], string>;
-  let revokeObjectUrlSpy: MockInstance<[url: string], void>;
+  let createObjectUrlSpy: { mockRestore: () => void };
+  let revokeObjectUrlSpy: { mockRestore: () => void };
   let hadCreateObjectUrl = false;
   let hadRevokeObjectUrl = false;
 

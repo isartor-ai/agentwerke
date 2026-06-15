@@ -20,6 +20,8 @@ public sealed class WorkflowRunStep
 
     public string? Output { get; set; }
 
+    public string? Error { get; set; }
+
     public PolicyDecision? PolicyDecision { get; set; }
 
     public AgentRuntimeSnapshot? RuntimeSnapshot { get; set; }

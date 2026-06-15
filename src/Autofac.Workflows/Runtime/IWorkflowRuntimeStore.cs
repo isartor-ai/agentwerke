@@ -39,6 +39,7 @@ public interface IWorkflowRuntimeStore
         string stepId,
         string status,
         string? output,
+        string? error,
         string? completedAt,
         PolicyDecision? policyDecision,
         AgentRuntimeSnapshot? runtimeSnapshot,

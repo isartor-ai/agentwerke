@@ -35,7 +35,11 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Owner).HasMaxLength(128);
             entity.Property(e => e.ValidationState).HasMaxLength(64);
-            entity.Property(e => e.Tags).HasColumnType("jsonb");
+            entity.Property(e => e.Tags)
+                .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                .HasColumnType("jsonb");
             entity.Property(e => e.BpmnXml).IsRequired();
         });
 
@@ -50,7 +54,11 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.RiskLevel).HasMaxLength(64);
             entity.Property(e => e.CurrentStep).HasMaxLength(256);
             entity.Property(e => e.RequestedBy).HasMaxLength(128);
-            entity.Property(e => e.Tags).HasColumnType("jsonb");
+            entity.Property(e => e.Tags)
+                .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                .HasColumnType("jsonb");
             entity.Property(e => e.CorrelationId).HasMaxLength(128);
             entity.HasMany(e => e.Steps).WithOne().HasForeignKey("RunId");
             entity.HasMany(e => e.Events).WithOne().HasForeignKey("RunId");
@@ -64,6 +72,7 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Type).HasMaxLength(128).IsRequired();
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.AgentName).HasMaxLength(128);
+            entity.Property(e => e.Error).HasColumnType("text");
             entity.Property(e => e.RuntimeSnapshot)
                 .HasConversion(
                     snapshot => SerializeRuntimeSnapshot(snapshot),
@@ -76,8 +85,16 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                 pd.Property(p => p.PolicyName).HasMaxLength(256);
                 pd.Property(p => p.Rationale).HasMaxLength(1024);
                 pd.Property(p => p.RiskLevel).HasMaxLength(64);
-                pd.Property(p => p.RiskFactors).HasColumnType("jsonb");
-                pd.Property(p => p.Constraints).HasColumnType("jsonb");
+                pd.Property(p => p.RiskFactors)
+                    .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                    .HasColumnType("jsonb");
+                pd.Property(p => p.Constraints)
+                    .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                    .HasColumnType("jsonb");
             });
         });
 
@@ -100,8 +117,16 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.AgentName).HasMaxLength(128);
             entity.Property(e => e.PolicyRationale).HasMaxLength(2048);
             entity.Property(e => e.RiskLevel).HasMaxLength(64);
-            entity.Property(e => e.RiskFactors).HasColumnType("jsonb");
-            entity.Property(e => e.AffectedSystems).HasColumnType("jsonb");
+            entity.Property(e => e.RiskFactors)
+                .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                .HasColumnType("jsonb");
+            entity.Property(e => e.AffectedSystems)
+                .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                .HasColumnType("jsonb");
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Priority).HasMaxLength(64);
             entity.Property(e => e.DecisionComment).HasMaxLength(2048);
@@ -122,6 +147,12 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Outcome).HasMaxLength(64).IsRequired();
         });
     }
+
+    private static string SerializeStringList(List<string> list) =>
+        JsonSerializer.Serialize(list, JsonOptions);
+
+    private static List<string> DeserializeStringList(string json) =>
+        JsonSerializer.Deserialize<List<string>>(json, JsonOptions) ?? [];
 
     private static string? SerializeRuntimeSnapshot(AgentRuntimeSnapshot? snapshot) =>
         snapshot is null ? null : JsonSerializer.Serialize(snapshot, JsonOptions);

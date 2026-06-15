@@ -21,7 +21,10 @@ public sealed record AgentTaskOutcome(
     IReadOnlyDictionary<string, string>? Artifacts = null,
     IReadOnlyList<ExternalActionRecord>? ExternalActions = null,
     PolicyDecision? PolicyDecision = null,
-    AgentRuntimeSnapshot? RuntimeSnapshot = null);
+    AgentRuntimeSnapshot? RuntimeSnapshot = null,
+    string? RoutingDirective = null,
+    IReadOnlyDictionary<string, string>? ContextUpdates = null,
+    IReadOnlyList<string>? FilesTouched = null);
 
 public sealed record ExternalActionRecord(
     string Provider,

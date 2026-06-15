@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { AgentDetailPanel } from '../components/AgentDetailPanel';
+import { BpmnRunGraph } from '../components/BpmnRunGraph';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -8,7 +10,6 @@ import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
-import { BpmnRunGraph } from '../components/BpmnRunGraph';
 import type { WorkflowRun } from '../types';
 
 const tabs = ['Summary', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
@@ -30,10 +31,23 @@ export function RunDetail() {
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
+  // panelStepId drives AgentDetailPanel; set by graph clicks and auto-track
+  const [panelStepId, setPanelStepId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const navigate = useNavigate();
+
+  // Tracks first load so polling doesn't flash the full-page loading state
+  const isFirstLoad = useRef(true);
+  // Timestamp of last explicit user graph-click; auto-track defers for 30 s after a manual pick
+  const lastManualSelectAt = useRef<number>(0);
+  // Tracks the last seen currentStep name so we detect changes between polls
+  const prevCurrentStep = useRef<string | null | undefined>(undefined);
+
+  const MANUAL_OVERRIDE_MS = 30_000;
+  const TERMINAL = ['completed', 'failed', 'cancelled'] as const;
+  const isTerminal = run ? (TERMINAL as readonly string[]).includes(run.status) : false;
 
   const loadRun = useCallback(async () => {
     if (!runId) {
@@ -42,7 +56,8 @@ export function RunDetail() {
       return;
     }
 
-    setLoading(true);
+    const firstLoad = isFirstLoad.current;
+    if (firstLoad) setLoading(true);
     setError(null);
     try {
       const data = await apiClient.getRun(runId);
@@ -50,12 +65,18 @@ export function RunDetail() {
         setError(`Run ${runId} was not found.`);
         return;
       }
+      if (firstLoad) {
+        isFirstLoad.current = false;
+        // Default timeline expansion to the last persisted step
+        setExpandedStepId(data.steps?.[data.steps.length - 1]?.id ?? null);
+        // Seed so the first poll doesn't look like a currentStep change
+        prevCurrentStep.current = data.currentStep;
+      }
       setRun(data);
-      setExpandedStepId(data.steps?.[data.steps.length - 1]?.id ?? null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unknown error');
     } finally {
-      setLoading(false);
+      if (firstLoad) setLoading(false);
     }
   }, [runId]);
 
@@ -63,13 +84,31 @@ export function RunDetail() {
     loadRun();
   }, [loadRun]);
 
+  // Polling: 10 s interval while the run is in-flight; stops at terminal states
   useEffect(() => {
-    if (!run || run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') {
-      return;
-    }
+    if (!run || isTerminal) return;
     const timer = setInterval(loadRun, 10_000);
     return () => clearInterval(timer);
-  }, [loadRun, run?.status]);
+  }, [loadRun, run, isTerminal]);
+
+  // Auto-track: when currentStep changes between polls, open the detail panel
+  // unless the user manually picked a node within the last 30 s
+  useEffect(() => {
+    if (!run || isFirstLoad.current) return;
+    const newStep = run.currentStep;
+    if (newStep === prevCurrentStep.current) return;
+    prevCurrentStep.current = newStep;
+    if (!newStep) return;
+
+    const manualAge = Date.now() - lastManualSelectAt.current;
+    if (manualAge > MANUAL_OVERRIDE_MS) {
+      const stepId = run.steps?.find((s) => s.name === newStep)?.id ?? null;
+      if (stepId) {
+        setPanelStepId(stepId);
+        setExpandedStepId(stepId);
+      }
+    }
+  }, [run]);
 
   const selectedStep = useMemo(() => {
     if (!run || !expandedStepId || !run.steps) {
@@ -77,6 +116,11 @@ export function RunDetail() {
     }
     return run.steps.find((step) => step.id === expandedStepId) ?? null;
   }, [expandedStepId, run]);
+
+  const panelStep = useMemo(() => {
+    if (!run || !panelStepId || !run.steps) return null;
+    return run.steps.find((step) => step.id === panelStepId) ?? null;
+  }, [panelStepId, run]);
 
   const policySteps = useMemo(
     () => (run?.steps ?? []).filter((step) => Boolean(step.policyDecision)),
@@ -86,6 +130,7 @@ export function RunDetail() {
   const runApprovals = useMemo(() => run?.approvals ?? [], [run]);
 
   const renderTabContent = () => {
+    if (!run) return null;
     switch (activeTab) {
       case 'Summary':
         return (
@@ -248,9 +293,16 @@ export function RunDetail() {
         title={`Run ${run.id}`}
         description={`${run.workflowName} · ${run.workflowVersion}`}
         actions={
-          <Link to="/runs" className="btn btn-secondary">
-            Back to runs
-          </Link>
+          <>
+            {isTerminal && (
+              <button type="button" className="btn btn-secondary" onClick={() => void loadRun()}>
+                Refresh
+              </button>
+            )}
+            <Link to="/runs" className="btn btn-secondary">
+              Back to runs
+            </Link>
+          </>
         }
       />
 
@@ -263,7 +315,25 @@ export function RunDetail() {
 
       <section className="run-detail-grid">
         <div className="run-detail-left">
-          <BpmnRunGraph steps={run.steps ?? []} />
+          <BpmnRunGraph
+            steps={run.steps ?? []}
+            currentStep={run.currentStep}
+            runStatus={run.status}
+            selectedStepId={panelStepId}
+            onSelectStep={(id) => {
+              const next = panelStepId === id ? null : id;
+              setPanelStepId(next);
+              if (next) {
+                setExpandedStepId(next);
+                lastManualSelectAt.current = Date.now();
+              }
+            }}
+          />
+          <AgentDetailPanel
+            step={panelStep}
+            events={run.events ?? []}
+            onClose={() => setPanelStepId(null)}
+          />
           <StepTimeline
             steps={run.steps ?? []}
             expandedStepId={expandedStepId}
