@@ -69,6 +69,17 @@ public sealed record AgentMcpServerContract
 
     public string Transport { get; init; } = "stdio";
 
+    public string? Command { get; init; }
+
+    public IReadOnlyList<string> Arguments { get; init; } = [];
+
+    public string? Url { get; init; }
+
+    public IReadOnlyDictionary<string, string> Headers { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public int StartupTimeoutSeconds { get; init; } = 15;
+
     public bool Enabled { get; init; } = true;
 }
 
