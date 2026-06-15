@@ -85,6 +85,8 @@ public sealed record AgentMcpServerContract
 
 public sealed record AgentHookContract
 {
+    public required string Name { get; init; }
+
     public required string Event { get; init; }
 
     public required string Type { get; init; }
@@ -92,6 +94,17 @@ public sealed record AgentHookContract
     public bool Blocking { get; init; }
 
     public int TimeoutSeconds { get; init; } = 30;
+
+    public string FailureMode { get; init; } = AgentHookFailureModes.FailClosed;
+
+    public IReadOnlyDictionary<string, string> Settings { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+}
+
+public static class AgentHookFailureModes
+{
+    public const string FailOpen = "fail-open";
+    public const string FailClosed = "fail-closed";
 }
 
 public sealed record AgentSubAgentContract
