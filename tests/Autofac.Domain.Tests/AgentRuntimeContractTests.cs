@@ -20,6 +20,29 @@ public sealed class AgentRuntimeContractTests
     }
 
     [Fact]
+    public void AgentMcpServerContract_CapturesTransportConfiguration()
+    {
+        var server = new AgentMcpServerContract
+        {
+            Name = "weather",
+            Transport = "http",
+            Url = "https://mcp.example.test",
+            Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Authorization"] = "Bearer token"
+            },
+            StartupTimeoutSeconds = 30
+        };
+
+        Assert.Equal("weather", server.Name);
+        Assert.Equal("http", server.Transport);
+        Assert.Equal("https://mcp.example.test", server.Url);
+        Assert.Equal("Bearer token", server.Headers["authorization"]);
+        Assert.Equal(30, server.StartupTimeoutSeconds);
+        Assert.True(server.Enabled);
+    }
+
+    [Fact]
     public void AgentRuntimeSnapshot_CapturesRunStepAndRuntimeCapabilities()
     {
         var snapshot = new AgentRuntimeSnapshot

@@ -1,11 +1,13 @@
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
+using Autofac.Agents.Mcp;
 using Autofac.AgentSecOps;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Autofac.Workflows.Bpmn;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace Autofac.Agents.Tests;
 
@@ -60,6 +62,12 @@ public sealed class PolicyEvaluationServiceTests
             skills,
             assembler,
             policyService,
+            new StubMcpToolSessionFactory(),
+            new ToolRegistry([
+                new GitHubCreateBranchTool(gitHub),
+                new GitHubCreatePullRequestTool(gitHub),
+                new SandboxExecutionTool(sandbox)
+            ]),
             CreateToolGateway(gitHub, sandbox, policyService),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
@@ -105,6 +113,12 @@ public sealed class PolicyEvaluationServiceTests
             skills,
             assembler,
             policyService,
+            new StubMcpToolSessionFactory(),
+            new ToolRegistry([
+                new GitHubCreateBranchTool(gitHub),
+                new GitHubCreatePullRequestTool(gitHub),
+                new SandboxExecutionTool(sandbox)
+            ]),
             CreateToolGateway(gitHub, sandbox, policyService),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
@@ -384,19 +398,186 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal(2, outcome.ExternalActions!.Count);
     }
 
+    [Fact]
+    public async Task AgentOrchestrator_WhenMcpToolExecutes_RoutesThroughGatewayAndPersistsInvocation()
+    {
+        var mcpSessionFactory = new StubMcpToolSessionFactory(
+            session: new StubMcpToolSession([
+                new StubMcpAgentTool("mcp.weather.lookup", requiredInputs: ["location"])
+            ]));
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor(),
+            sandboxEnabled: false,
+            mcpSessionFactory: mcpSessionFactory);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WeatherLookup",
+                "Weather Lookup",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "mcp.weather.lookup",
+                    Environment: "staging",
+                    PurposeType: "investigation",
+                    PolicyTag: "read-only",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadOnly,
+                            AllowedTools = ["mcp.weather.lookup"]
+                        },
+                        McpServers =
+                        [
+                            new Domain.AgentRuntime.AgentMcpServerContract
+                            {
+                                Name = "weather"
+                            }
+                        ],
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["tool.input.location"] = "Berlin"
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, mcpSessionFactory.CreateCalls);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
+        Assert.Equal("mcp.weather.lookup", invocation.ToolName);
+        Assert.Equal(Domain.AgentRuntime.AgentToolCategories.Mcp, invocation.Category);
+        Assert.Equal("completed", invocation.Status);
+        Assert.Contains("Berlin", invocation.InputSummary);
+        Assert.Equal("weather:Berlin", outcome.Output);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenMcpToolIsDenied_BlocksExecutionBeforeToolRuns()
+    {
+        var tool = new StubMcpAgentTool("mcp.weather.lookup");
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor(),
+            sandboxEnabled: false,
+            mcpSessionFactory: new StubMcpToolSessionFactory(new StubMcpToolSession([tool])));
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WeatherLookup",
+                "Weather Lookup",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "mcp.weather.lookup",
+                    Environment: "staging",
+                    PurposeType: "investigation",
+                    PolicyTag: "read-only",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadOnly,
+                            DeniedTools = ["mcp.weather.lookup"]
+                        },
+                        McpServers =
+                        [
+                            new Domain.AgentRuntime.AgentMcpServerContract
+                            {
+                                Name = "weather"
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, tool.ExecuteCalls);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        Assert.Equal("blocked", Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations).Status);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenMcpStartupFails_ReturnsClearFailureReason()
+    {
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor(),
+            sandboxEnabled: false,
+            mcpSessionFactory: new StubMcpToolSessionFactory(
+                failureReason: "MCP startup failed: connection refused"));
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WeatherLookup",
+                "Weather Lookup",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "mcp.weather.lookup",
+                    Environment: "staging",
+                    PurposeType: "investigation",
+                    PolicyTag: "read-only",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        McpServers =
+                        [
+                            new Domain.AgentRuntime.AgentMcpServerContract
+                            {
+                                Name = "weather"
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("MCP startup failed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        Assert.False(outcome.RuntimeSnapshot!.PermissionDecision?.Allowed);
+    }
+
     private static AgentOrchestrator CreateOrchestrator(
         IReadOnlyList<SkillManifest> manifests,
         string policyKind,
         RecordingGitHubConnector gitHub,
         StubSandboxExecutor sandbox,
-        bool sandboxEnabled = false)
+        bool sandboxEnabled = false,
+        IMcpToolSessionFactory? mcpSessionFactory = null)
     {
         var policyService = new StubPolicyEvaluationService(policyKind);
+        var registry = new ToolRegistry(
+        [
+            new GitHubCreateBranchTool(gitHub),
+            new GitHubCreatePullRequestTool(gitHub),
+            new SandboxExecutionTool(sandbox)
+        ]);
+
         return new AgentOrchestrator(
             new SkillRepository(manifests),
             new AgentPromptAssembler(),
             policyService,
-            CreateToolGateway(gitHub, sandbox, policyService),
+            mcpSessionFactory ?? new StubMcpToolSessionFactory(),
+            registry,
+            new ToolGateway(registry, policyService),
             Options.Create(new SandboxOptions
             {
                 Enabled = sandboxEnabled
@@ -540,6 +721,91 @@ public sealed class PolicyEvaluationServiceTests
                 FailureReason: null,
                 Duration: TimeSpan.FromSeconds(1),
                 Artifacts: new Dictionary<string, string>()));
+        }
+    }
+
+    private sealed class StubMcpToolSessionFactory : IMcpToolSessionFactory
+    {
+        private readonly IMcpToolSession? _session;
+        private readonly string? _failureReason;
+
+        public StubMcpToolSessionFactory(IMcpToolSession? session = null, string? failureReason = null)
+        {
+            _session = session;
+            _failureReason = failureReason;
+        }
+
+        public int CreateCalls { get; private set; }
+
+        public Task<McpToolSessionResult> CreateAsync(
+            IReadOnlyList<Domain.AgentRuntime.AgentMcpServerContract> servers,
+            CancellationToken cancellationToken)
+        {
+            CreateCalls++;
+
+            if (_failureReason is not null)
+            {
+                return Task.FromResult(new McpToolSessionResult(false, null, _failureReason));
+            }
+
+            return Task.FromResult(new McpToolSessionResult(true, _session ?? new StubMcpToolSession([]), null));
+        }
+    }
+
+    private sealed class StubMcpToolSession : IMcpToolSession
+    {
+        public StubMcpToolSession(IReadOnlyList<IAgentTool> tools)
+        {
+            Tools = tools;
+        }
+
+        public IReadOnlyList<IAgentTool> Tools { get; }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class StubMcpAgentTool : IAgentTool
+    {
+        private readonly string[] _requiredInputs;
+
+        public StubMcpAgentTool(string name, IReadOnlyList<string>? requiredInputs = null)
+        {
+            Name = name;
+            _requiredInputs = requiredInputs?.ToArray() ?? [];
+        }
+
+        public int ExecuteCalls { get; private set; }
+
+        public string Name { get; }
+
+        public string Category => Domain.AgentRuntime.AgentToolCategories.Mcp;
+
+        public void Validate(IReadOnlyDictionary<string, string> input)
+        {
+            foreach (var requiredInput in _requiredInputs)
+            {
+                if (!input.ContainsKey(requiredInput))
+                {
+                    throw new InvalidOperationException($"Missing '{requiredInput}'.");
+                }
+            }
+        }
+
+        public Task<AgentToolExecutionResult> ExecuteAsync(
+            AgentToolExecutionContext context,
+            IReadOnlyDictionary<string, string> input,
+            CancellationToken cancellationToken)
+        {
+            ExecuteCalls++;
+            var location = input.TryGetValue("location", out var value) ? value : "unknown";
+            return Task.FromResult(new AgentToolExecutionResult(
+                true,
+                $"weather:{location}",
+                null,
+                new Dictionary<string, string>
+                {
+                    ["mcp-result.json"] = JsonSerializer.Serialize(input)
+                }));
         }
     }
 }
