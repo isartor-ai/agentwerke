@@ -66,8 +66,9 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         IPolicyEvaluationService policyEvaluationService,
         IAuditRepository auditRepository,
         IWorkflowMetrics metrics,
-        ICorrelationContext correlationContext)
-        : base(policyEvaluationService, auditRepository, metrics, correlationContext)
+        ICorrelationContext correlationContext,
+        IWorkflowTracer tracer)
+        : base(policyEvaluationService, auditRepository, metrics, correlationContext, tracer)
     {
         _httpClient = httpClient;
         _options = options.Value.GitHub;

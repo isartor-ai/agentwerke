@@ -1,3 +1,4 @@
+using Autofac.Application.Observability;
 using Autofac.Application.Workflows;
 using Autofac.Domain.Persistence;
 using Microsoft.Extensions.Logging;
@@ -11,6 +12,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
     private readonly IWorkflowRunRepository _runRepository;
     private readonly IApprovalRepository _approvalRepository;
     private readonly IRunOutbox _outbox;
+    private readonly IWorkflowTracer _tracer;
     private readonly ILogger<WorkflowRunExecutor> _logger;
 
     public WorkflowRunExecutor(
@@ -19,6 +21,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         IWorkflowRunRepository runRepository,
         IApprovalRepository approvalRepository,
         IRunOutbox outbox,
+        IWorkflowTracer tracer,
         ILogger<WorkflowRunExecutor> logger)
     {
         _runner = runner;
@@ -26,6 +29,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         _runRepository = runRepository;
         _approvalRepository = approvalRepository;
         _outbox = outbox;
+        _tracer = tracer;
         _logger = logger;
     }
 
@@ -41,12 +45,33 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
 
         var bpmnXml = await GetBpmnXmlAsync(run.WorkflowId, ct);
 
+        using var span = _tracer.StartSpan("workflow.run.start");
+        span.SetTag("autofac.run_id", runId);
+        span.SetTag("autofac.workflow_id", run.WorkflowId);
+        if (correlationId is not null) span.SetTag("autofac.correlation_id", correlationId);
+
+        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["RunId"] = runId,
+            ["WorkflowId"] = run.WorkflowId,
+            ["Operation"] = "start"
+        });
+
         _logger.LogInformation("Executing start for run {RunId} workflow {WorkflowId}", runId, run.WorkflowId);
 
-        var result = await _runner.StartAsync(
-            run.WorkflowId, bpmnXml, run.RequestedBy, ct, correlationId, existingRunId: runId);
+        try
+        {
+            var result = await _runner.StartAsync(
+                run.WorkflowId, bpmnXml, run.RequestedBy, ct, correlationId, existingRunId: runId);
 
-        await HandleResultAsync(runId, result, ct);
+            span.SetTag("autofac.result_status", result.Status);
+            await HandleResultAsync(runId, result, ct);
+        }
+        catch (Exception ex)
+        {
+            span.SetError(ex);
+            throw;
+        }
     }
 
     public async Task ExecuteResumeAsync(string runId, string? approvedBy, CancellationToken ct)
@@ -56,11 +81,30 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
 
         var bpmnXml = await GetBpmnXmlAsync(run.WorkflowId, ct);
 
+        using var span = _tracer.StartSpan("workflow.run.resume");
+        span.SetTag("autofac.run_id", runId);
+        span.SetTag("autofac.workflow_id", run.WorkflowId);
+
+        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["RunId"] = runId,
+            ["WorkflowId"] = run.WorkflowId,
+            ["Operation"] = "resume"
+        });
+
         _logger.LogInformation("Executing resume for run {RunId}", runId);
 
-        var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, ct);
-
-        await HandleResultAsync(runId, result, ct);
+        try
+        {
+            var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, ct);
+            span.SetTag("autofac.result_status", result.Status);
+            await HandleResultAsync(runId, result, ct);
+        }
+        catch (Exception ex)
+        {
+            span.SetError(ex);
+            throw;
+        }
     }
 
     public async Task ExecuteRecoverAsync(string runId, CancellationToken ct)
@@ -70,11 +114,30 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
 
         var bpmnXml = await GetBpmnXmlAsync(run.WorkflowId, ct);
 
+        using var span = _tracer.StartSpan("workflow.run.recover");
+        span.SetTag("autofac.run_id", runId);
+        span.SetTag("autofac.workflow_id", run.WorkflowId);
+
+        using var logScope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["RunId"] = runId,
+            ["WorkflowId"] = run.WorkflowId,
+            ["Operation"] = "recover"
+        });
+
         _logger.LogInformation("Executing recovery for run {RunId}", runId);
 
-        var result = await _runner.RecoverAsync(runId, bpmnXml, ct);
-
-        await HandleResultAsync(runId, result, ct);
+        try
+        {
+            var result = await _runner.RecoverAsync(runId, bpmnXml, ct);
+            span.SetTag("autofac.result_status", result.Status);
+            await HandleResultAsync(runId, result, ct);
+        }
+        catch (Exception ex)
+        {
+            span.SetError(ex);
+            throw;
+        }
     }
 
     private async Task HandleResultAsync(string runId, WorkflowRunnerResult result, CancellationToken ct)

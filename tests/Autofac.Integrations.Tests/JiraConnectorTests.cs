@@ -33,7 +33,8 @@ public sealed class JiraConnectorTests
             new AllowAllPolicyEvaluationService(),
             new NoOpAuditRepository(),
             new NoOpWorkflowMetrics(),
-            new StubCorrelationContext());
+            new StubCorrelationContext(),
+            new NoOpWorkflowTracer());
 
         var result = await connector.UpdateIssueStatusAsync(
             new UpdateJiraIssueStatusCommand("PROJ-123", "31", "Started by Autofac"),

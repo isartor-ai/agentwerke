@@ -61,3 +61,16 @@ internal sealed class StubCorrelationContext : ICorrelationContext
 {
     public string CorrelationId => "corr-test";
 }
+
+internal sealed class NoOpWorkflowTracer : IWorkflowTracer
+{
+    public ISpan StartSpan(string name) => NoOpSpan.Instance;
+
+    private sealed class NoOpSpan : ISpan
+    {
+        public static readonly NoOpSpan Instance = new();
+        public void SetTag(string key, string value) { }
+        public void SetError(Exception ex) { }
+        public void Dispose() { }
+    }
+}

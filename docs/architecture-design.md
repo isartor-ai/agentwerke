@@ -698,10 +698,10 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 | `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Rich, but execution is simulated |
 | `Autofac.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
 | `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; placeholder workload |
-| `Autofac.Integrations` | GitHub connector, webhook ingestion + signature validation + tag-based trigger routing | GitHub only |
+| `Autofac.Integrations` | `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF comments), Slack, Teams connectors; `IConnectorRegistry`; per-connector policy gate, audit, metrics, and OTel spans | Solid (Phase E) |
 | `Autofac.Infrastructure` | EF Core + PostgreSQL (Npgsql), repositories, runtime store, 8 migrations | Solid |
-| `Autofac.Storage` | Artifact storage abstraction + local filesystem implementation | Solid (local only) |
-| `Autofac.Observability` | Prometheus metrics, JSON console logs, correlation middleware | Metrics + logs only |
+| `Autofac.Storage` | Artifact storage abstraction; local filesystem + S3 (`AWSSDK.S3`) drivers | Phase E: S3 added |
+| `Autofac.Observability` | Prometheus metrics, JSON console logs, correlation middleware, OTel tracing (`WithTracing` + OTLP exporter), `IWorkflowTracer`/`ISpan` abstraction, Jaeger via docker-compose | Metrics + tracing (Phase F) |
 | `Autofac.Api` | ASP.NET Core controllers, contract mapping, OpenAPI | Solid; unauthenticated |
 
 Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites.
@@ -715,8 +715,9 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 - **GitHub delivery**: real branch creation, marker-file commit, and pull-request creation via `GitHubConnector`.
 - **Approvals + audit**: approval requests created at user-task gates, decided through `ApprovalsController`, with run resume on approval and `AuditRecord` written for governance.
 - **Inbound triggers**: GitHub/Jira webhook ingestion with HMAC signature validation and tag-based workflow routing (`TagBasedTriggerRouter`).
-- **Observability**: workflow/step/approval/webhook metrics exported on `/metrics` (Prometheus), structured JSON logs, and correlation-ID propagation.
-- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web.
+- **Observability**: workflow/step/approval/webhook metrics on `/metrics` (Prometheus), structured JSON logs with scoped `RunId`/`WorkflowId`/`Operation`, correlation-ID propagation, and **distributed tracing** via OTel `WithTracing` + OTLP to Jaeger (`Autofac.Workflows` `ActivitySource`; spans on engine start/resume/recover and every connector call).
+- **Connectors**: `IConnector`/`ConnectorBase` policy-gated abstraction; GitHub, Jira (Atlassian Document Format), Slack, Teams connectors; data-driven `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML-backed) and `InMemoryPolicyRuleStore` (tests); S3 artifact driver.
+- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web + Jaeger; **Helm chart** (`deploy/helm/autofac`) deploys api (HPA 2→8), worker (HPA 2→6), web, Postgres StatefulSet, RBAC for sandbox namespace; Grafana dashboard at `deploy/grafana/dashboards/workflow-overview.json`; Prometheus alert rules at `deploy/prometheus/alerts.yml`.
 
 ### 21.3 Honest Limitations
 
@@ -727,10 +728,10 @@ These are the load-bearing gaps between the running system and the target archit
 3. ~~**No asynchronous backbone.**~~ **Resolved (Phase C).** `WorkflowRunOrchestrationService.StartRunAsync` now creates a `pending` run and enqueues an outbox entry; the API returns 202 immediately. `RunDispatchWorker` (BackgroundService) polls the `run_outbox` table every 2 s, executes via `WorkflowRunExecutor`, and handles crash recovery on startup.
 4. **Authentication/RBAC is stubbed.** `AuthController` returns `501 Not Implemented`; there is no SSO, no token validation, and no role enforcement on controllers.
 5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
-6. **One outbound connector.** Only GitHub exists; Jira, Slack, Teams, email, CI/CD, and cloud-action connectors from Sections 6.7/10 are absent.
-7. **No distributed tracing.** OpenTelemetry is wired for **metrics only** — no `WithTracing`/OTLP exporter, so cross-service trace correlation (Section 12) is unmet.
-8. **No Kubernetes footprint.** Only `docker-compose`; no Helm charts or K8s manifests despite the K8s-first deployment view (Section 13).
-9. **Policy is code, not data.** `PolicyEvaluationService` hardcodes MVP rules (secret-access deny, prod-deploy/merge escalate). No policy store, versioning, or admin authoring.
+6. ~~**One outbound connector.**~~ **Resolved (Phase E).** `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF), Slack, Teams connectors registered via `IConnectorRegistry`; email/CI-CD remain future work.
+7. ~~**No distributed tracing.**~~ **Resolved (Phase F).** `WithTracing` + OTLP exporter wired; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application`; engine and connectors emit spans to Jaeger.
+8. ~~**No Kubernetes footprint.**~~ **Resolved (Phase F).** Helm chart at `deploy/helm/autofac` covers api, worker, web, Postgres StatefulSet, RBAC, HPA; Grafana dashboard and Prometheus alert rules included.
+9. ~~**Policy is code, not data.**~~ **Resolved (Phase E).** `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML file) and `InMemoryPolicyRuleStore`; admin authoring surface (policy-rule file) outside of code.
 10. **No plugin runtime.** The Plugin Runtime container (Section 6.8) and secret manager (Section 9) are not implemented; credentials come from configuration/env only.
 
 ## 22. Gap Analysis
@@ -747,13 +748,13 @@ These are the load-bearing gaps between the running system and the target archit
 | Async coordination / outbox | Postgres outbox + BackgroundService worker | — | **Resolved (Phase C)**: 202-async API; crash recovery; timer scheduling |
 | AuthN / RBAC / SSO | Stubbed (501) | **Critical** | Endpoints unauthenticated |
 | Secret management | Config/env only | High | No vault/secret provider |
-| Connectors | GitHub only | Medium | Jira/Slack/Teams/email/CI-CD missing |
+| Connectors | GitHub, Jira (ADF), Slack, Teams; `IConnector`/`ConnectorBase`; data-driven policy store | — | **Resolved (Phase E)**; email/CI-CD remain future work |
 | Observability — metrics | Implemented (Prometheus) | — | Good coverage |
-| Observability — tracing | Missing | Medium | Metrics-only OTel |
+| Observability — tracing | OTel `WithTracing` + OTLP → Jaeger; engine + connector spans | — | **Resolved (Phase F)** |
 | Persistence | EF Core + Postgres | — | 8 migrations, solid |
-| Artifact storage | Local filesystem | Medium | No S3/blob driver |
+| Artifact storage | Local filesystem + S3 driver (`AWSSDK.S3`) | — | **Resolved (Phase E)** |
 | Plugin runtime | Missing | Low (MVP) | Deferred per Section 17 |
-| Deployment | docker-compose | Medium | No K8s/Helm |
+| Deployment | docker-compose + Helm chart (api/worker/web/postgres/RBAC/HPA); Grafana + Prometheus alerts | — | **Resolved (Phase F)** |
 | Timers / true parallelism | Real timer scheduling (Phase C); sequential branches (Phase D standalone) | Low | Parallel concurrency available via Phase C `Task.WhenAll` |
 
 **Critical path:** the two `Critical` items (real LLM execution and authentication) gate any production or pilot use. The `High` items (engine durability/async backbone, sandbox workload, secrets) gate trustworthy multi-step autonomous runs.
@@ -805,21 +806,22 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 *Exit criterion met:* a single, documented engine strategy with matching code; docs and runtime no longer contradict each other.
 
-### Phase E — Connector and policy breadth (Medium)
+### Phase E — Connector and policy breadth (Medium) ✓ **Complete**
 
-1. Generalize the connector contract (one interface, policy-evaluable, secret-aware, emits audit/metrics) and add Jira (intake/trigger) and Slack/Teams (notifications) next.
-2. Move policy from code to data: a versioned policy store + evaluation over rules, with an admin authoring surface. Keep `PolicyEvaluationService` as the evaluator.
-3. Add a blob/S3 artifact driver behind `IArtifactStorage`.
+1. ~~Generalize the connector contract~~ — `IConnector`/`ConnectorBase` abstraction with policy gate, audit, and metrics in `ConnectorBase.ExecuteAsync`. `IConnectorRegistry` for DI-based connector lookup.
+2. ~~Add Jira and Slack/Teams connectors~~ — `JiraConnector` (Jira REST API v3, ADF comment format), `SlackConnector` (Incoming Webhooks), `TeamsConnector` (Adaptive Cards).
+3. ~~Move policy from code to data~~ — `IPolicyRuleStore` + `FilePolicyRuleStore` (YAML) + `InMemoryPolicyRuleStore` (tests); `PolicyEvaluationService` unchanged as the evaluator.
+4. ~~Add a blob/S3 artifact driver~~ — `S3ArtifactStorage` behind `IArtifactStorage`; selected via `Storage:Provider = "s3"` config.
 
-*Exit:* new connectors and policies are added as configuration/data, not core-code changes.
+*Exit criterion met:* new connectors and policies are configuration/data, not core-code changes. PR: https://github.com/isartor-ai/autofac/pull/40
 
-### Phase F — Production observability and deployment (Medium)
+### Phase F — Production observability and deployment (Medium) ✓ **Complete**
 
-1. Add OpenTelemetry tracing (`WithTracing` + OTLP) and propagate the existing correlation ID into spans; instrument engine, orchestrator, tool gateway, and connectors.
-2. Author Helm charts / K8s manifests for api, web, worker, Postgres, and (if chosen) Zeebe; add the execution namespace for ephemeral sandbox pods.
-3. Add SLO dashboards and alerting on the metrics already emitted (run failure rate, approval wait time, step latency).
+1. ~~Add OTel tracing~~ — `WithTracing` + OTLP exporter in `Autofac.Observability`; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application` keeps core libraries OTel-free; `WorkflowRunExecutor` and `ConnectorBase` emit spans with `RunId`, `WorkflowId`, `connector.id`, `connector.operation`, and error recording; Jaeger added to `docker/docker-compose.yml`.
+2. ~~Author Helm charts~~ — `deploy/helm/autofac/`: api (HPA 2→8), worker (HPA 2→6; `ServiceAccount` with `Role`/`RoleBinding` for sandbox namespace), web, Postgres `StatefulSet` (20 Gi PVC), namespace + RBAC, optional ingress.
+3. ~~SLO dashboards and alerting~~ — `deploy/grafana/dashboards/workflow-overview.json` (run success/failure rate, approval wait p50/p95, step/connector latency p50/p95, tool-call latency by category); `deploy/prometheus/alerts.yml` (high failure rate, approval SLA breach, worker backlog, connector error rate).
 
-*Exit:* a request can be traced end-to-end and the platform deploys to Kubernetes.
+*Exit criterion met:* a request can be traced end-to-end via Jaeger and the platform deploys to Kubernetes via Helm.
 
 ### Sequencing summary
 

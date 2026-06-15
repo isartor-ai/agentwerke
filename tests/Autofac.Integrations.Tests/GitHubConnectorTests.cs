@@ -176,7 +176,8 @@ public sealed class GitHubConnectorTests
             new AllowAllPolicyEvaluationService(),
             new NoOpAuditRepository(),
             new NoOpWorkflowMetrics(),
-            new StubCorrelationContext());
+            new StubCorrelationContext(),
+            new NoOpWorkflowTracer());
     }
 
     private static HttpResponseMessage Json(HttpStatusCode statusCode, string json)

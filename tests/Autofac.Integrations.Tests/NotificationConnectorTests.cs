@@ -29,7 +29,8 @@ public sealed class NotificationConnectorTests
             new AllowAllPolicyEvaluationService(),
             new NoOpAuditRepository(),
             new NoOpWorkflowMetrics(),
-            new StubCorrelationContext());
+            new StubCorrelationContext(),
+            new NoOpWorkflowTracer());
 
         var result = await connector.SendNotificationAsync(new SendNotificationCommand("Run finished", "All green."));
 
@@ -60,7 +61,8 @@ public sealed class NotificationConnectorTests
             new AllowAllPolicyEvaluationService(),
             new NoOpAuditRepository(),
             new NoOpWorkflowMetrics(),
-            new StubCorrelationContext());
+            new StubCorrelationContext(),
+            new NoOpWorkflowTracer());
 
         var result = await connector.SendNotificationAsync(new SendNotificationCommand("Approval needed", "Please review."));
 
