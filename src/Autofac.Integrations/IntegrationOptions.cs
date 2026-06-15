@@ -6,10 +6,20 @@ public sealed class IntegrationOptions
 
     public JiraOptions Jira { get; set; } = new();
     public GitHubOptions GitHub { get; set; } = new();
+    public SlackOptions Slack { get; set; } = new();
+    public TeamsOptions Teams { get; set; } = new();
 }
 
 public sealed class JiraOptions
 {
+    public bool Enabled { get; set; }
+
+    public string ApiBaseUrl { get; set; } = "https://your-domain.atlassian.net/";
+
+    public string Username { get; set; } = string.Empty;
+
+    public string ApiToken { get; set; } = string.Empty;
+
     /// <summary>
     /// Shared secret used to validate the X-Hub-Signature header.
     /// Leave empty to skip signature validation (development only).
@@ -25,6 +35,8 @@ public sealed class JiraOptions
 
 public sealed class GitHubOptions
 {
+    public bool Enabled { get; set; }
+
     /// <summary>
     /// Base URL for the GitHub REST API.
     /// </summary>
@@ -71,4 +83,18 @@ public sealed class GitHubOptions
     /// Defaults to "opened".
     /// </summary>
     public List<string> TriggerActions { get; set; } = ["opened"];
+}
+
+public sealed class SlackOptions
+{
+    public bool Enabled { get; set; }
+
+    public string WebhookUrl { get; set; } = string.Empty;
+}
+
+public sealed class TeamsOptions
+{
+    public bool Enabled { get; set; }
+
+    public string WebhookUrl { get; set; } = string.Empty;
 }

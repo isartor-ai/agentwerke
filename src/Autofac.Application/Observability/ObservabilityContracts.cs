@@ -39,4 +39,5 @@ public interface IWorkflowMetrics
     void ApprovalCreated(string riskLevel);
     void ApprovalDecided(string decision, string riskLevel);
     void WebhookReceived(string source, bool triggered);
+    void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded);
 }

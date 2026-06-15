@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
+    <ProjectReference Include="..\Autofac.AgentSecOps\Autofac.AgentSecOps.csproj" />
     <ProjectReference Include="..\Autofac.Domain\Autofac.Domain.csproj" />
     <ProjectReference Include="..\Autofac.Workflows\Autofac.Workflows.csproj" />
   </ItemGroup>
@@ -19,7 +20,9 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
 </Project>

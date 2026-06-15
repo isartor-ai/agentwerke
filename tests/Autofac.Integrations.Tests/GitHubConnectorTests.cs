@@ -162,6 +162,7 @@ public sealed class GitHubConnectorTests
             {
                 GitHub = new GitHubOptions
                 {
+                    Enabled = true,
                     ApiBaseUrl = "https://api.github.test/",
                     RepositoryOwner = "octo",
                     RepositoryName = "autofac",
@@ -170,7 +171,12 @@ public sealed class GitHubConnectorTests
                     BranchPrefix = "autofac/run-",
                     CreateDraftPullRequests = true
                 }
-            }));
+            }),
+            new StubSecretStore(),
+            new AllowAllPolicyEvaluationService(),
+            new NoOpAuditRepository(),
+            new NoOpWorkflowMetrics(),
+            new StubCorrelationContext());
     }
 
     private static HttpResponseMessage Json(HttpStatusCode statusCode, string json)
