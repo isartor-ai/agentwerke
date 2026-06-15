@@ -1,4 +1,5 @@
 using Autofac.AgentSecOps;
+using Autofac.Agents.Mcp;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
@@ -20,6 +21,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly ISkillRepository _skillRepository;
     private readonly IAgentPromptAssembler _promptAssembler;
     private readonly IPolicyEvaluationService _policyEvaluationService;
+    private readonly IMcpToolSessionFactory _mcpToolSessionFactory;
+    private readonly IToolRegistry _toolRegistry;
     private readonly IToolGateway _toolGateway;
     private readonly string _gitHubBranchPrefix;
     private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
@@ -28,6 +31,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         ISkillRepository skillRepository,
         IAgentPromptAssembler promptAssembler,
         IPolicyEvaluationService policyEvaluationService,
+        IMcpToolSessionFactory mcpToolSessionFactory,
+        IToolRegistry toolRegistry,
         IToolGateway toolGateway,
         IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
@@ -35,6 +40,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _skillRepository = skillRepository;
         _promptAssembler = promptAssembler;
         _policyEvaluationService = policyEvaluationService;
+        _mcpToolSessionFactory = mcpToolSessionFactory;
+        _toolRegistry = toolRegistry;
         _toolGateway = toolGateway;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
@@ -119,14 +126,41 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             return new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
-            FailureReason: promptAssembly.FailureReason,
-            RuntimeSnapshot: runtimeSnapshot);
+                FailureReason: promptAssembly.FailureReason,
+                RuntimeSnapshot: runtimeSnapshot);
+        }
+
+        await using var mcpSession = await PrepareMcpToolsAsync(metadata, cancellationToken);
+        if (mcpSession.Result is not null && !mcpSession.Result.Succeeded)
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: mcpSession.Result.FailureReason,
+                RuntimeSnapshot: runtimeSnapshot with
+                {
+                    PermissionDecision = new AgentPermissionDecisionRecord
+                    {
+                        Allowed = false,
+                        Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                        Rationale = mcpSession.Result.FailureReason
+                    }
+                });
         }
 
         var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt);
         if (toolRequest is not null)
         {
             return await RunViaToolGatewayAsync(toolRequest, metadata, runtimeSnapshot, cancellationToken);
+        }
+
+        if (metadata.Action.StartsWith("mcp.", StringComparison.OrdinalIgnoreCase))
+        {
+            return new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: $"MCP tool '{metadata.Action}' is not registered. Check the enabled MCP servers and discovery settings.",
+                RuntimeSnapshot: runtimeSnapshot);
         }
 
         var policyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
@@ -264,6 +298,20 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 });
         }
 
+        if (_toolRegistry.Find(metadata.Action) is { Category: var category } &&
+            string.Equals(category, AgentToolCategories.Mcp, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateToolRequest(
+                ToolName: metadata.Action,
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                ExtractToolInput(metadata.RuntimeContract));
+        }
+
         if (_sandboxOptions.Enabled)
         {
             return CreateToolRequest(
@@ -286,6 +334,25 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         }
 
         return null;
+    }
+
+    private async Task<McpPreparationResult> PrepareMcpToolsAsync(
+        AutofacTaskMetadata metadata,
+        CancellationToken cancellationToken)
+    {
+        var servers = metadata.RuntimeContract?.McpServers ?? [];
+        if (servers.Count == 0)
+        {
+            return new McpPreparationResult(null, null);
+        }
+
+        var result = await _mcpToolSessionFactory.CreateAsync(servers, cancellationToken);
+        if (result.Succeeded && result.Session is not null)
+        {
+            _toolRegistry.RegisterRange(result.Session.Tools);
+        }
+
+        return new McpPreparationResult(result, result.Session);
     }
 
     private static AgentRuntimeSnapshot BuildRuntimeSnapshot(
@@ -556,6 +623,23 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             permissions.DeniedTools,
             input);
 
+    private static IReadOnlyDictionary<string, string> ExtractToolInput(AgentRuntimeContract? runtimeContract)
+    {
+        const string Prefix = "tool.input.";
+
+        if (runtimeContract?.Metadata is not { Count: > 0 } metadata)
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return metadata
+            .Where(static pair => pair.Key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(
+                static pair => pair.Key[Prefix.Length..],
+                static pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
     private static IReadOnlyList<AgentArtifactRecord> MapArtifacts(IReadOnlyDictionary<string, string>? artifacts)
     {
         if (artifacts is null || artifacts.Count == 0)
@@ -570,5 +654,18 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Name = name
             })
             .ToArray();
+    }
+
+    private sealed record McpPreparationResult(
+        McpToolSessionResult? Result,
+        IMcpToolSession? Session) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            if (Session is not null)
+            {
+                await Session.DisposeAsync();
+            }
+        }
     }
 }
