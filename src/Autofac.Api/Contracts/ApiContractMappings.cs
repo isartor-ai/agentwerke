@@ -4,6 +4,7 @@ using Autofac.Application.Workflows;
 using Autofac.Api.Contracts.Approvals;
 using Autofac.Api.Contracts.Runs;
 using Autofac.Api.Contracts.Workflows;
+using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 using Autofac.Storage.Artifacts;
 using RunPolicyDecision = Autofac.Api.Contracts.Runs.PolicyDecision;
@@ -170,8 +171,9 @@ internal static class ApiContractMappings
             step.CompletedAt,
             step.AgentName,
             step.Output,
-            Error: null,
-            PolicyDecision: step.PolicyDecision is null ? null : ToPolicyDecision(step.PolicyDecision));
+            step.Error,
+            PolicyDecision: step.PolicyDecision is null ? null : ToPolicyDecision(step.PolicyDecision),
+            RuntimeSnapshot: step.RuntimeSnapshot is null ? null : ToRunStepRuntimeSnapshot(step.RuntimeSnapshot));
     }
 
     public static string NormalizeRunStatus(string status)
@@ -211,5 +213,38 @@ internal static class ApiContractMappings
             artifact.Name,
             artifact.SizeBytes,
             artifact.LastModifiedAt);
+    }
+
+    private static RunStepRuntimeSnapshot ToRunStepRuntimeSnapshot(AgentRuntimeSnapshot snapshot)
+    {
+        var contract = snapshot.Contract;
+        return new RunStepRuntimeSnapshot(
+            AgentName: snapshot.AgentName,
+            Action: snapshot.Action,
+            PromptInline: contract.Prompt?.Inline,
+            Skills: snapshot.Skills
+                .Select(static s => new RunStepSkillUsage(s.SkillId, s.Name, s.Selected, s.Fingerprint))
+                .ToArray(),
+            Tools: contract.Tools
+                .Select(static t => new RunStepToolInfo(t.Name, t.Category))
+                .ToArray(),
+            McpServers: contract.McpServers
+                .Select(static m => m.Name)
+                .ToArray(),
+            Hooks: snapshot.HookExecutions
+                .Select(static h => new RunStepHookExecution(h.Event, h.Type, h.Decision, h.DurationMs))
+                .ToArray(),
+            PermissionLevel: contract.Permissions.Level,
+            AllowedTools: contract.Permissions.AllowedTools.ToArray(),
+            DeniedTools: contract.Permissions.DeniedTools.ToArray(),
+            SubAgentsEnabled: contract.SubAgents?.Enabled ?? false,
+            PermissionDecision: snapshot.PermissionDecision is null ? null
+                : new RunStepPermissionDecision(
+                    snapshot.PermissionDecision.Level,
+                    snapshot.PermissionDecision.Allowed,
+                    snapshot.PermissionDecision.Rationale),
+            StepArtifacts: snapshot.Artifacts
+                .Select(static a => new RunStepArtifactRef(a.Name, a.Uri, a.ContentType))
+                .ToArray());
     }
 }

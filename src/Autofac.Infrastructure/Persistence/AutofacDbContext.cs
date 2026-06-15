@@ -72,6 +72,7 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Type).HasMaxLength(128).IsRequired();
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.AgentName).HasMaxLength(128);
+            entity.Property(e => e.Error).HasColumnType("text");
             entity.Property(e => e.RuntimeSnapshot)
                 .HasConversion(
                     snapshot => SerializeRuntimeSnapshot(snapshot),

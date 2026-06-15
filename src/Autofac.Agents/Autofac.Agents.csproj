@@ -6,6 +6,7 @@
     <ProjectReference Include="..\Autofac.Domain\Autofac.Domain.csproj" />
     <ProjectReference Include="..\Autofac.Integrations\Autofac.Integrations.csproj" />
     <ProjectReference Include="..\Autofac.Sandboxes\Autofac.Sandboxes.csproj" />
+    <ProjectReference Include="..\Autofac.Storage\Autofac.Storage.csproj" />
     <ProjectReference Include="..\Autofac.Workflows\Autofac.Workflows.csproj" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />

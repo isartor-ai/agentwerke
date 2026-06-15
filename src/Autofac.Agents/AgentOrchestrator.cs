@@ -1,7 +1,10 @@
+using System.Text;
 using Autofac.AgentSecOps;
 using Autofac.Agents.Skills;
+using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
+using Autofac.Storage.Artifacts;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
@@ -12,21 +15,27 @@ namespace Autofac.Agents;
 /// Bridges BPMN service-task execution to the agent layer.
 /// When <see cref="SandboxOptions.Enabled"/> is true, dispatches to
 /// <see cref="ISandboxExecutor"/> for Docker-isolated execution.
+/// Outputs larger than <see cref="OutputOffloadThresholdBytes"/> are written to artifact
+/// storage and replaced with a reference marker so the DB row stays small.
 /// </summary>
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
+    private const int OutputOffloadThresholdBytes = 8192;
+
     private readonly ISkillRepository _skillRepository;
     private readonly IPolicyEvaluationService _policyEvaluationService;
     private readonly IGitHubConnector _gitHubConnector;
     private readonly string _gitHubBranchPrefix;
     private readonly ISandboxExecutor _sandbox;
     private readonly SandboxOptions _sandboxOptions;
+    private readonly IArtifactStorage _artifactStorage;
 
     public AgentOrchestrator(
         ISkillRepository skillRepository,
         IPolicyEvaluationService policyEvaluationService,
         IGitHubConnector gitHubConnector,
         ISandboxExecutor sandbox,
+        IArtifactStorage artifactStorage,
         IOptions<SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
@@ -34,6 +43,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _policyEvaluationService = policyEvaluationService;
         _gitHubConnector = gitHubConnector;
         _sandbox = sandbox;
+        _artifactStorage = artifactStorage;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
             ? "autofac/run-"
@@ -85,17 +95,18 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Succeeded: false,
                 Output: null,
                 FailureReason: policyDecision.Rationale,
-                PolicyDecision: policyDecision);
+                PolicyDecision: policyDecision,
+                RuntimeSnapshot: BuildRuntimeSnapshot(runId, stepId, node.Id, metadata, profile, matchedSkillRef, skillManifest, policyDecision, allowed: false));
         }
 
         if (IsGitHubAction(metadata.Action))
         {
-            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, policyDecision, cancellationToken);
+            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, profile, matchedSkillRef, skillManifest, policyDecision, cancellationToken);
         }
 
         if (_sandboxOptions.Enabled)
         {
-            return await RunInSandboxAsync(runId, stepId, metadata, attempt, skillManifest, policyDecision, cancellationToken);
+            return await RunInSandboxAsync(runId, stepId, metadata, attempt, profile, matchedSkillRef, skillManifest, policyDecision, cancellationToken);
         }
 
         var request = new AgentExecutionRequest(
@@ -111,13 +122,17 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             RequiresEvidence: metadata.RequiresEvidence,
             Attempt: attempt);
 
-        var output = BuildSimulatedOutput(request, profile, matchedSkillRef, skillManifest);
+        var simulatedOutput = BuildSimulatedOutput(request, profile, matchedSkillRef, skillManifest);
+        var snapshot = BuildRuntimeSnapshot(runId, stepId, node.Id, metadata, profile, matchedSkillRef, skillManifest, policyDecision, allowed: true);
 
-        return new AgentTaskOutcome(
+        var outcome = new AgentTaskOutcome(
             Succeeded: true,
-            Output: output,
+            Output: simulatedOutput,
             FailureReason: null,
-            PolicyDecision: policyDecision);
+            PolicyDecision: policyDecision,
+            RuntimeSnapshot: snapshot);
+
+        return await MaybeOffloadOutputAsync(runId, stepId, outcome, cancellationToken);
     }
 
     private async Task<AgentTaskOutcome> RunGitHubActionAsync(
@@ -126,10 +141,14 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
         int attempt,
+        AgentProfile? profile,
+        AgentSkillRef? matchedSkillRef,
+        SkillManifest? skillManifest,
         Domain.Persistence.PolicyDecision policyDecision,
         CancellationToken cancellationToken)
     {
         var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
+        var snapshot = BuildRuntimeSnapshot(runId, stepId, node.Id, metadata, profile, matchedSkillRef, skillManifest, policyDecision, allowed: true);
 
         try
         {
@@ -139,7 +158,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     new CreateGitHubBranchCommand(branchName, BaseBranch: null),
                     cancellationToken);
 
-                return new AgentTaskOutcome(
+                var branchOutcome = new AgentTaskOutcome(
                     Succeeded: true,
                     Output: $"""
                         provider: github
@@ -153,6 +172,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         """,
                     FailureReason: null,
                     PolicyDecision: policyDecision,
+                    RuntimeSnapshot: snapshot,
                     ExternalActions:
                     [
                         new ExternalActionRecord(
@@ -163,6 +183,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                             ResourceUrl: branch.BranchUrl,
                             Summary: $"GitHub branch {branch.BranchName}")
                     ]);
+                return await MaybeOffloadOutputAsync(runId, stepId, branchOutcome, cancellationToken);
             }
 
             var ensuredBranch = await _gitHubConnector.CreateBranchAsync(
@@ -185,7 +206,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     CommitMessage: $"Autofac evidence for run {runId}, step {stepId}"),
                 cancellationToken);
 
-            return new AgentTaskOutcome(
+            var prOutcome = new AgentTaskOutcome(
                 Succeeded: true,
                 Output: $"""
                     provider: github
@@ -200,6 +221,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     """,
                 FailureReason: null,
                 PolicyDecision: policyDecision,
+                RuntimeSnapshot: snapshot,
                 ExternalActions:
                 [
                     new ExternalActionRecord(
@@ -217,6 +239,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         ResourceUrl: pullRequest.PullRequestUrl,
                         Summary: $"GitHub pull request #{pullRequest.Number}")
                 ]);
+            return await MaybeOffloadOutputAsync(runId, stepId, prOutcome, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -225,6 +248,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Output: null,
                 FailureReason: ex.Message,
                 PolicyDecision: policyDecision,
+                RuntimeSnapshot: snapshot,
                 ExternalActions:
                 [
                     new ExternalActionRecord(
@@ -243,6 +267,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string stepId,
         AutofacTaskMetadata metadata,
         int attempt,
+        AgentProfile? profile,
+        AgentSkillRef? matchedSkillRef,
         SkillManifest? skillManifest,
         Domain.Persistence.PolicyDecision policyDecision,
         CancellationToken cancellationToken)
@@ -258,6 +284,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Attempt: attempt);
 
         var result = await _sandbox.ExecuteAsync(sandboxRequest, cancellationToken);
+        var snapshot = BuildRuntimeSnapshot(runId, stepId, "n/a", metadata, profile, matchedSkillRef, skillManifest, policyDecision, allowed: true,
+            artifactNames: result.Artifacts.Keys);
 
         if (!result.Succeeded)
         {
@@ -266,17 +294,124 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Output: result.Logs,
                 FailureReason: result.FailureReason,
                 Artifacts: result.Artifacts,
-                PolicyDecision: policyDecision);
+                PolicyDecision: policyDecision,
+                RuntimeSnapshot: snapshot);
         }
 
         var output = BuildSandboxOutput(sandboxRequest, result, skillManifest);
 
-        return new AgentTaskOutcome(
+        var sandboxOutcome = new AgentTaskOutcome(
             Succeeded: true,
             Output: output,
             FailureReason: null,
             Artifacts: result.Artifacts,
-            PolicyDecision: policyDecision);
+            PolicyDecision: policyDecision,
+            RuntimeSnapshot: snapshot);
+
+        return await MaybeOffloadOutputAsync(runId, stepId, sandboxOutcome, cancellationToken);
+    }
+
+    private async Task<AgentTaskOutcome> MaybeOffloadOutputAsync(
+        string runId,
+        string stepId,
+        AgentTaskOutcome outcome,
+        CancellationToken cancellationToken)
+    {
+        if (outcome.Output is not { Length: > OutputOffloadThresholdBytes })
+        {
+            return outcome;
+        }
+
+        var artifactName = $"step_{stepId}_output.txt";
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(outcome.Output));
+        await _artifactStorage.SaveAsync(runId, artifactName, ms, cancellationToken);
+
+        var mergedArtifacts = (outcome.Artifacts ?? new Dictionary<string, string>())
+            .Concat([new KeyValuePair<string, string>(artifactName, artifactName)])
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        return outcome with
+        {
+            Output = $"[artifact:{artifactName}]",
+            Artifacts = mergedArtifacts
+        };
+    }
+
+    private static AgentRuntimeSnapshot BuildRuntimeSnapshot(
+        string runId,
+        string stepId,
+        string nodeId,
+        AutofacTaskMetadata metadata,
+        AgentProfile? profile,
+        AgentSkillRef? matchedSkillRef,
+        SkillManifest? skillManifest,
+        Domain.Persistence.PolicyDecision policyDecision,
+        bool allowed,
+        IEnumerable<string>? artifactNames = null)
+    {
+        var contractSkills = profile?.Skills
+            .Select(static s => new AgentSkillContract { SkillId = s.SkillId, Name = s.Name })
+            .ToArray() ?? [];
+
+        var contractTools = IsGitHubAction(metadata.Action)
+            ? [new AgentToolContract { Name = metadata.Action, Category = AgentToolCategories.Integration }]
+            : Array.Empty<AgentToolContract>();
+
+        var skillUsage = matchedSkillRef is not null
+            ?
+            [
+                new AgentSkillUsageRecord
+                {
+                    SkillId = matchedSkillRef.SkillId,
+                    Name = matchedSkillRef.Name,
+                    Selected = true,
+                    Fingerprint = skillManifest?.Fingerprint
+                }
+            ]
+            : Array.Empty<AgentSkillUsageRecord>();
+
+        var toolInvocations = contractTools
+            .Select(static t => new AgentToolInvocationRecord
+            {
+                ToolName = t.Name,
+                Category = t.Category,
+                Status = "completed"
+            })
+            .ToArray();
+
+        var artifacts = artifactNames?
+            .Select(static name => new AgentArtifactRecord { Name = name })
+            .ToArray() ?? [];
+
+        return new AgentRuntimeSnapshot
+        {
+            RunId = runId,
+            StepId = stepId,
+            NodeId = nodeId,
+            AgentName = metadata.Agent,
+            Action = metadata.Action,
+            Contract = new AgentRuntimeContract
+            {
+                Prompt = new AgentPromptContract { Inline = metadata.Action },
+                Skills = contractSkills,
+                Tools = contractTools,
+                Permissions = new AgentPermissionContract
+                {
+                    Level = allowed ? AgentPermissionLevels.ReadWrite : AgentPermissionLevels.ReadOnly
+                },
+                Outputs = AgentOutputContract.Default
+            },
+            Skills = skillUsage,
+            ToolInvocations = toolInvocations,
+            HookExecutions = [],
+            Artifacts = artifacts,
+            PermissionDecision = new AgentPermissionDecisionRecord
+            {
+                Level = allowed ? AgentPermissionLevels.ReadWrite : AgentPermissionLevels.ReadOnly,
+                Allowed = allowed,
+                Rationale = policyDecision.Rationale
+            }
+        };
     }
 
     private static AgentSkillRef? ResolveSkillRef(AgentProfile? profile, string action)

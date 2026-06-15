@@ -148,6 +148,140 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
               </section>
             )}
 
+            {/* ── Prompt ── */}
+            {step.runtimeSnapshot?.promptInline && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Prompt</h3>
+                <pre className="adp-pre">{step.runtimeSnapshot.promptInline}</pre>
+              </section>
+            )}
+
+            {/* ── Skills ── */}
+            {(step.runtimeSnapshot?.skills?.length ?? 0) > 0 && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Skills</h3>
+                <ul className="adp-list" role="list">
+                  {step.runtimeSnapshot!.skills.map((s) => (
+                    <li key={s.skillId} className="adp-list-item">
+                      <span className={`chip chip-static${s.selected ? ' chip-active' : ''}`}>
+                        {s.selected ? '✓ ' : ''}{s.name ?? s.skillId}
+                      </span>
+                      {s.fingerprint && (
+                        <span className="cell-meta adp-mono">{s.fingerprint.slice(0, 12)}…</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* ── Tools ── */}
+            {(step.runtimeSnapshot?.tools?.length ?? 0) > 0 && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Tools</h3>
+                <ul className="adp-list" role="list">
+                  {step.runtimeSnapshot!.tools.map((t) => (
+                    <li key={t.name} className="adp-list-item">
+                      <span className="chip chip-static">{t.name}</span>
+                      <span className="cell-meta">{t.category}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* ── MCP Servers ── */}
+            {(step.runtimeSnapshot?.mcpServers?.length ?? 0) > 0 && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">MCP Servers</h3>
+                <div className="tag-row">
+                  {step.runtimeSnapshot!.mcpServers.map((m) => (
+                    <span key={m} className="chip chip-static">{m}</span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ── Hooks ── */}
+            {(step.runtimeSnapshot?.hooks?.length ?? 0) > 0 && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Hooks</h3>
+                <ul className="adp-list" role="list">
+                  {step.runtimeSnapshot!.hooks.map((h, i) => (
+                    <li key={i} className="adp-list-item">
+                      <span className="chip chip-static">{h.event}</span>
+                      <span className="cell-meta">{h.type} · {h.decision}</span>
+                      {h.durationMs !== undefined && (
+                        <span className="cell-meta">{h.durationMs} ms</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* ── Permissions ── */}
+            {step.runtimeSnapshot && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Permissions</h3>
+                <dl className="definition-list">
+                  <div>
+                    <dt>Level</dt>
+                    <dd><span className="chip chip-static">{step.runtimeSnapshot.permissionLevel}</span></dd>
+                  </div>
+                  {step.runtimeSnapshot.permissionDecision && (
+                    <>
+                      <div>
+                        <dt>Decision</dt>
+                        <dd>{step.runtimeSnapshot.permissionDecision.allowed ? 'Allowed' : 'Denied'}</dd>
+                      </div>
+                      {step.runtimeSnapshot.permissionDecision.rationale && (
+                        <div>
+                          <dt>Rationale</dt>
+                          <dd>{step.runtimeSnapshot.permissionDecision.rationale}</dd>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </dl>
+                {step.runtimeSnapshot.allowedTools.length > 0 && (
+                  <div className="tag-row adp-constraints">
+                    {step.runtimeSnapshot.allowedTools.map((t) => (
+                      <span key={t} className="chip chip-static">{t}</span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── Sub-agents ── */}
+            {step.runtimeSnapshot?.subAgentsEnabled && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Sub-agents</h3>
+                <p className="cell-meta">Sub-agent delegation enabled for this step.</p>
+              </section>
+            )}
+
+            {/* ── Step artifacts ── */}
+            {(step.runtimeSnapshot?.stepArtifacts?.length ?? 0) > 0 && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Artifacts</h3>
+                <ul className="adp-list" role="list">
+                  {step.runtimeSnapshot!.stepArtifacts.map((a) => (
+                    <li key={a.name} className="adp-list-item">
+                      <span className="chip chip-static">{a.name}</span>
+                      {a.contentType && <span className="cell-meta">{a.contentType}</span>}
+                      {a.uri && (
+                        <a className="btn btn-secondary adp-artifact-link" href={a.uri}>
+                          Download
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {/* ── Step events (conditional) ── */}
             {stepEvents.length > 0 && (
               <section className="adp-section">

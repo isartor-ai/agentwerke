@@ -206,6 +206,59 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal(AgentPermissionLevels.ReadWrite, serviceStep.RuntimeSnapshot.Contract.Permissions.Level);
     }
 
+    [Fact]
+    public async Task StartAsync_WhenServiceTaskFails_SetsStepErrorNotOutput()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new AlwaysFailingServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "FailFlow",
+            ProcessName: "Fail Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("FailTask", "Fail Task", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        Assert.Equal("failed", state.Status);
+        var persistedRun = await store.GetRunAsync(state.RunId, CancellationToken.None);
+        var failedStep = Assert.Single(persistedRun!.Steps);
+        Assert.Equal("failed", failedStep.Status);
+        Assert.Null(failedStep.Output);
+        Assert.NotNull(failedStep.Error);
+        Assert.Contains("always fails", failedStep.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenServiceTaskSucceeds_SetsStepOutputNotError()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "SucceedFlow",
+            ProcessName: "Succeed Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("Task", "Task", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        Assert.Equal("completed", state.Status);
+        var persistedRun = await store.GetRunAsync(state.RunId, CancellationToken.None);
+        var step = Assert.Single(persistedRun!.Steps);
+        Assert.Equal("completed", step.Status);
+        Assert.NotNull(step.Output);
+        Assert.Null(step.Error);
+    }
+
     private static BpmnWorkflowDefinition CreateReferenceDefinition()
     {
         return new BpmnWorkflowDefinition(
@@ -332,7 +385,7 @@ public sealed class WorkflowInstanceEngineTests
         }
 
         public Task UpdateStepStatusAsync(
-            string stepId, string status, string? output, string? completedAt,
+            string stepId, string status, string? output, string? error, string? completedAt,
             PolicyDecision? policyDecision,
             AgentRuntimeSnapshot? runtimeSnapshot,
             CancellationToken cancellationToken)
@@ -347,6 +400,7 @@ public sealed class WorkflowInstanceEngineTests
                 {
                     step.Status = status;
                     step.Output = output;
+                    step.Error = error;
                     step.CompletedAt = completedAt;
                     step.PolicyDecision = policyDecision;
                     step.RuntimeSnapshot = runtimeSnapshot;
@@ -354,6 +408,19 @@ public sealed class WorkflowInstanceEngineTests
             }
 
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class AlwaysFailingServiceTaskExecutor : IServiceTaskExecutor
+    {
+        public Task<AgentTaskOutcome> ExecuteAsync(
+            string runId, string stepId, BpmnNodeDefinition node,
+            int attempt, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: "This executor always fails."));
         }
     }
 

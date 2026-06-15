@@ -10,4 +10,5 @@ public sealed record RunStep(
     string? AgentName,
     string? Output,
     string? Error,
-    PolicyDecision? PolicyDecision);
+    PolicyDecision? PolicyDecision,
+    RunStepRuntimeSnapshot? RuntimeSnapshot = null);
