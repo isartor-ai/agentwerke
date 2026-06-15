@@ -86,6 +86,50 @@ public sealed class WorkflowInstanceEngineTests
     }
 
     [Fact]
+    public async Task StartAsync_WhenTimerCatchEventIsReached_ReturnsWaitingTimerWithDueAt()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "TimerFlow",
+            ProcessName: "Timer Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("Wait", "Wait", "intermediateCatchEvent", null, TimerDuration: "PT5S"),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        var before = DateTimeOffset.UtcNow;
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        Assert.Equal("waiting_timer", state.Status);
+        Assert.Equal("Wait", state.WaitingOnNodeId);
+        Assert.Equal("End", state.NextNodeId);
+        Assert.NotNull(state.TimerDueAt);
+        Assert.True(state.TimerDueAt >= before.AddSeconds(4));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenExistingRunIdIsProvided_ReusesPreCreatedRun()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var definition = CreateReferenceDefinition();
+        var preCreatedRun = await store.CreateRunAsync("wf-existing", "system", CancellationToken.None);
+
+        var state = await engine.StartAsync(
+            new WorkflowEngineStartRequest("wf-existing", definition, "system", ExistingRunId: preCreatedRun.Id),
+            CancellationToken.None);
+
+        Assert.Equal(preCreatedRun.Id, state.RunId);
+        var persistedRun = await store.GetRunAsync(preCreatedRun.Id, CancellationToken.None);
+        Assert.NotNull(persistedRun);
+        Assert.Equal(preCreatedRun.Id, persistedRun!.Id);
+    }
+
+    [Fact]
     public async Task StartAsync_WhenServiceTaskHasRetries_CompletesAfterRetrySequence()
     {
         var store = new InMemoryWorkflowRuntimeStore();

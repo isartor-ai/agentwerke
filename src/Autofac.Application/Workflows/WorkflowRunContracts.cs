@@ -1,4 +1,5 @@
 using Autofac.Domain.Persistence;
+using System.Text.Json;
 
 namespace Autofac.Application.Workflows;
 
@@ -71,7 +72,8 @@ public interface IWorkflowRunner
         string bpmnXml,
         string? initiator,
         CancellationToken cancellationToken,
-        string? correlationId = null);
+        string? correlationId = null,
+        string? existingRunId = null);
 
     Task<WorkflowRunnerResult> ResumeAsync(
         string runId,
@@ -88,16 +90,58 @@ public interface IWorkflowRunner
 public sealed record WorkflowRunnerResult(
     string RunId,
     string Status,
-    WaitingApprovalInfo? WaitingApproval);
+    WaitingApprovalInfo? WaitingApproval,
+    DateTimeOffset? TimerDueAt = null);
 
 public interface IWorkflowRunRepository
 {
     Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken);
+    Task<WorkflowRun> CreatePendingRunAsync(string runId, string workflowId, string workflowName, string workflowVersion, string? initiator, List<string> tags, string? correlationId, CancellationToken cancellationToken);
     Task UpdateRunStatusAsync(string runId, string status, CancellationToken cancellationToken);
     Task UpdateCurrentStepAsync(string runId, string? currentStep, CancellationToken cancellationToken);
     Task IncrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
     Task DecrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
     Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken);
+}
+
+public interface IRunOutbox
+{
+    Task EnqueueAsync(string operation, string runId, string? payload = null, DateTimeOffset? visibleAfter = null, CancellationToken ct = default);
+    Task<OutboxEntry?> TryClaimNextAsync(string workerId, CancellationToken ct = default);
+    Task MarkCompletedAsync(string entryId, CancellationToken ct = default);
+    Task MarkFailedAsync(string entryId, string error, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> ListStuckRunIdsAsync(CancellationToken ct = default);
+}
+
+public interface IWorkflowRunExecutor
+{
+    Task ExecuteStartAsync(string runId, string workflowId, string? initiator, string? correlationId, CancellationToken ct);
+    Task ExecuteResumeAsync(string runId, string? approvedBy, CancellationToken ct);
+    Task ExecuteRecoverAsync(string runId, CancellationToken ct);
+}
+
+public static class OutboxOperations
+{
+    public const string Start = "start";
+    public const string Resume = "resume";
+    public const string Recover = "recover";
+    public const string Timer = "timer";
+}
+
+public sealed record OutboxStartPayload(string WorkflowId, string? Initiator, string? CorrelationId)
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    public string Serialize() => JsonSerializer.Serialize(this, Options);
+    public static OutboxStartPayload? Deserialize(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<OutboxStartPayload>(json, Options);
+}
+
+public sealed record OutboxResumePayload(string? ApprovedBy)
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    public string Serialize() => JsonSerializer.Serialize(this, Options);
+    public static OutboxResumePayload? Deserialize(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<OutboxResumePayload>(json, Options);
 }
 
 public interface IApprovalRepository

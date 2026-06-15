@@ -22,11 +22,12 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         string bpmnXml,
         string? initiator,
         CancellationToken cancellationToken,
-        string? correlationId = null)
+        string? correlationId = null,
+        string? existingRunId = null)
     {
         var definition = ParseOrThrow(bpmnXml);
         var state = await _engine.StartAsync(
-            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator, correlationId),
+            new WorkflowEngineStartRequest(workflowDefinitionId, definition, initiator, correlationId, existingRunId),
             cancellationToken);
         return ToResult(state, definition);
     }
@@ -99,7 +100,7 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
                 AffectedSystems: affectedSystems);
         }
 
-        return new WorkflowRunnerResult(state.RunId, state.Status, waitingApproval);
+        return new WorkflowRunnerResult(state.RunId, state.Status, waitingApproval, state.TimerDueAt);
     }
 
     private static string? FindPrecedingAgentName(BpmnWorkflowDefinition definition, int userTaskIndex)

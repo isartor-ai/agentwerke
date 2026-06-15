@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Autofac.Workflows.Runtime;
@@ -9,6 +10,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 {
     private const string RunningStatus = "running";
     private const string WaitingUserStatus = "waiting_user";
+    private const string WaitingTimerStatus = "waiting_timer";
     private const string CompletedStatus = "completed";
     private const string FailedStatus = "failed";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -16,15 +18,18 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
     private readonly IWorkflowRuntimeStore _store;
     private readonly IServiceTaskExecutor _serviceTaskExecutor;
     private readonly ILogger<WorkflowInstanceEngine> _logger;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     public WorkflowInstanceEngine(
         IWorkflowRuntimeStore store,
         IServiceTaskExecutor serviceTaskExecutor,
-        ILogger<WorkflowInstanceEngine> logger)
+        ILogger<WorkflowInstanceEngine> logger,
+        IServiceScopeFactory? serviceScopeFactory = null)
     {
         _store = store;
         _serviceTaskExecutor = serviceTaskExecutor;
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     public string EngineId => "in-process";
@@ -68,18 +73,33 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var workflowDefinitionId = request.WorkflowDefinitionId;
         var definition = request.Definition;
+        var initiator = request.Initiator;
+        var correlationId = request.CorrelationId;
         ValidateDefinition(definition);
 
-        var run = await _store.CreateRunAsync(
-            request.WorkflowDefinitionId, request.Initiator, cancellationToken, request.CorrelationId);
+        WorkflowRun run;
+        if (request.ExistingRunId is not null)
+        {
+            run = await _store.GetRunAsync(request.ExistingRunId, cancellationToken)
+                ?? throw new InvalidOperationException($"Pre-created run '{request.ExistingRunId}' was not found.");
+        }
+        else
+        {
+            run = await _store.CreateRunAsync(
+                workflowDefinitionId,
+                initiator,
+                cancellationToken,
+                correlationId);
+        }
 
         _logger.LogInformation(
-            "Workflow run started. RunId={RunId} WorkflowId={WorkflowId} Initiator={Initiator}",
-            run.Id, request.WorkflowDefinitionId, request.Initiator);
+            "Workflow run started. RunId={RunId} WorkflowId={WorkflowId} Initiator={Initiator} CorrelationId={CorrelationId}",
+            run.Id, workflowDefinitionId, initiator, correlationId);
 
         await _store.AppendEventAsync(run.Id, "run_started",
-            Serialize(new { runId = run.Id, workflowDefinitionId = request.WorkflowDefinitionId, initiator = request.Initiator, correlationId = request.CorrelationId }),
+            Serialize(new { runId = run.Id, workflowDefinitionId, initiator, correlationId }),
             cancellationToken);
 
         return await AdvanceAsync(run.Id, definition, startNodeId: null, cancellationToken);
@@ -139,6 +159,15 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 RunId: request.RunId, Status: WaitingUserStatus,
                 NextNodeId: checkpoint.NextNodeId, WaitingOnNodeId: checkpoint.WaitingOnNodeId,
                 CompletedAt: null);
+        }
+
+        if (string.Equals(checkpoint.Status, WaitingTimerStatus, StringComparison.Ordinal))
+        {
+            await _store.AppendEventAsync(
+                request.RunId,
+                "timer_fired",
+                Serialize(new { runId = request.RunId, nodeId = checkpoint.WaitingOnNodeId, firedAt = DateTime.UtcNow.ToString("o") }),
+                cancellationToken);
         }
 
         return await AdvanceAsync(request.RunId, request.Definition, checkpoint.NextNodeId, cancellationToken);
@@ -228,15 +257,30 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                             Serialize(new { runId, gatewayId = node.Id, branchNodeIds }),
                             cancellationToken);
 
-                        foreach (var branchId in branchNodeIds)
+                        ServiceExecutionResult[] branchResults;
+
+                        if (_serviceScopeFactory is not null)
                         {
-                            var branchResult = await ExecuteBranchAsync(runId, definition, graph, branchId, joinNodeId, cancellationToken);
-                            if (branchResult == ServiceExecutionResult.Failed)
+                            branchResults = await Task.WhenAll(
+                                branchNodeIds.Select(branchId =>
+                                    ExecuteBranchInScopeAsync(runId, definition, graph, branchId, joinNodeId, cancellationToken)));
+                        }
+                        else
+                        {
+                            var results = new List<ServiceExecutionResult>(branchNodeIds.Count);
+                            foreach (var branchId in branchNodeIds)
                             {
-                                await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
-                                await SaveCheckpointAsync(runId, FailedStatus, null, null, null, cancellationToken);
-                                return new WorkflowExecutionState(runId, FailedStatus, null, null, null);
+                                results.Add(await ExecuteBranchAsync(runId, definition, graph, branchId, joinNodeId, cancellationToken));
                             }
+
+                            branchResults = results.ToArray();
+                        }
+
+                        if (branchResults.Any(static result => result == ServiceExecutionResult.Failed))
+                        {
+                            await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
+                            await SaveCheckpointAsync(runId, FailedStatus, null, null, null, cancellationToken);
+                            return new WorkflowExecutionState(runId, FailedStatus, null, null, null);
                         }
 
                         var afterJoin = graph.GetSingleSuccessor(joinNodeId);
@@ -256,13 +300,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     break;
 
                 case "intermediateCatchEvent":
-                    // Timer fires immediately in in-process mode (Phase C adds real scheduling)
-                    await _store.AppendEventAsync(runId, "timer_fired",
-                        Serialize(new { runId, nodeId = node.Id, firedAt = DateTime.UtcNow.ToString("o") }),
+                    return await ScheduleTimerAndPauseAsync(
+                        runId,
+                        node,
+                        graph.GetSingleSuccessor(node.Id),
                         cancellationToken);
-                    await CompleteNodeAsync(runId, node, cancellationToken);
-                    currentNodeId = graph.GetSingleSuccessor(node.Id);
-                    break;
 
                 case "boundaryEvent":
                     // Handled inline by service task execution; if reached directly, just pass through
@@ -310,6 +352,10 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 if (result == ServiceExecutionResult.Failed)
                     return ServiceExecutionResult.Failed;
             }
+            else if (branchNode.ElementName == "intermediateCatchEvent")
+            {
+                await ExecuteParallelTimerAsync(runId, branchNode, cancellationToken);
+            }
             else
             {
                 await _store.AppendEventAsync(runId, "node_completed",
@@ -322,13 +368,70 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         return ServiceExecutionResult.Completed;
     }
 
+    private async Task<ServiceExecutionResult> ExecuteBranchInScopeAsync(
+        string runId,
+        BpmnWorkflowDefinition definition,
+        FlowGraph graph,
+        string branchStartId,
+        string joinNodeId,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = _serviceScopeFactory!.CreateAsyncScope();
+        var scopedStore = scope.ServiceProvider.GetRequiredService<IWorkflowRuntimeStore>();
+        var scopedExecutor = scope.ServiceProvider.GetRequiredService<IServiceTaskExecutor>();
+
+        var nodeId = branchStartId;
+        while (!string.Equals(nodeId, joinNodeId, StringComparison.Ordinal))
+        {
+            if (!graph.NodeById.TryGetValue(nodeId, out var branchNode))
+                throw new InvalidOperationException($"Branch node '{nodeId}' not found.");
+
+            await scopedStore.AppendEventAsync(runId, "parallel_branch_entered",
+                Serialize(new { runId, branchNodeId = branchNode.Id, branchNodeType = branchNode.ElementName }),
+                cancellationToken);
+
+            if (branchNode.ElementName == "serviceTask")
+            {
+                var result = await ExecuteServiceTaskAsync(
+                    runId,
+                    definition,
+                    graph,
+                    branchNode,
+                    cancellationToken,
+                    scopedStore,
+                    scopedExecutor);
+
+                if (result == ServiceExecutionResult.Failed)
+                    return ServiceExecutionResult.Failed;
+            }
+            else if (branchNode.ElementName == "intermediateCatchEvent")
+            {
+                await ExecuteParallelTimerAsync(runId, branchNode, cancellationToken, scopedStore);
+            }
+            else
+            {
+                await scopedStore.AppendEventAsync(runId, "node_completed",
+                    Serialize(new { runId, nodeId = branchNode.Id, nodeType = branchNode.ElementName }),
+                    cancellationToken);
+            }
+
+            nodeId = graph.GetSingleSuccessor(branchNode.Id);
+        }
+
+        return ServiceExecutionResult.Completed;
+    }
+
     private async Task<ServiceExecutionResult> ExecuteServiceTaskAsync(
         string runId,
         BpmnWorkflowDefinition definition,
         FlowGraph graph,
         BpmnNodeDefinition node,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IWorkflowRuntimeStore? storeOverride = null,
+        IServiceTaskExecutor? executorOverride = null)
     {
+        var store = storeOverride ?? _store;
+        var executor = executorOverride ?? _serviceTaskExecutor;
         var metadata = node.Metadata;
         var maxRetries = metadata?.MaxRetries ?? 0;
         var retryBackoffSeconds = metadata?.RetryBackoffSeconds ?? 0;
@@ -345,31 +448,31 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             boundaryNode = candidate;
         }
 
-        var step = await _store.CreateStepAsync(
+        var step = await store.CreateStepAsync(
             runId, node.Id, node.Name, node.ElementName, metadata?.Agent, cancellationToken);
 
         if (simulateTimeout && boundaryNode is not null)
         {
-            await _store.AppendEventAsync(runId, "timer_scheduled",
+            await store.AppendEventAsync(runId, "timer_scheduled",
                 Serialize(new { runId, nodeId = node.Id, timeoutSeconds = timeoutSeconds ?? 0 }),
                 cancellationToken);
-            await _store.AppendEventAsync(runId, "timeout_triggered",
+            await store.AppendEventAsync(runId, "timeout_triggered",
                 Serialize(new { runId, nodeId = node.Id, boundaryNodeId = boundaryNode.Id }),
                 cancellationToken);
-            await _store.AppendEventAsync(runId, "boundary_event_triggered",
+            await store.AppendEventAsync(runId, "boundary_event_triggered",
                 Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }),
                 cancellationToken);
-            await _store.AppendEventAsync(runId, "node_completed",
+            await store.AppendEventAsync(runId, "node_completed",
                 Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, reason = "timeout_boundary" }),
                 cancellationToken);
-            await _store.UpdateStepStatusAsync(step.Id, "timed_out", null, null, DateTime.UtcNow.ToString("o"), null, null, cancellationToken);
+            await store.UpdateStepStatusAsync(step.Id, "timed_out", null, null, DateTime.UtcNow.ToString("o"), null, null, cancellationToken);
             return ServiceExecutionResult.Completed;
         }
 
         var attempt = 1;
         while (true)
         {
-            await _store.AppendEventAsync(runId, "service_task_attempted",
+            await store.AppendEventAsync(runId, "service_task_attempted",
                 Serialize(new
                 {
                     runId, nodeId = node.Id, stepId = step.Id, attempt, maxRetries,
@@ -379,11 +482,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     requiresEvidence = metadata?.RequiresEvidence
                 }), cancellationToken);
 
-            var outcome = await _serviceTaskExecutor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken);
+            var outcome = await executor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken);
 
             if (outcome.PolicyDecision is not null)
             {
-                await _store.AppendEventAsync(runId, "policy_decision_recorded",
+                await store.AppendEventAsync(runId, "policy_decision_recorded",
                     Serialize(new
                     {
                         runId, nodeId = node.Id, stepId = step.Id,
@@ -399,7 +502,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
             foreach (var action in outcome.ExternalActions ?? [])
             {
-                await _store.AppendEventAsync(runId, "external_action_recorded",
+                await store.AppendEventAsync(runId, "external_action_recorded",
                     Serialize(new
                     {
                         runId, nodeId = node.Id, stepId = step.Id,
@@ -411,13 +514,13 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
             if (!outcome.Succeeded)
             {
-                await _store.AppendEventAsync(runId, "service_task_failed",
+                await store.AppendEventAsync(runId, "service_task_failed",
                     Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempt, reason = outcome.FailureReason ?? "execution_error" }),
                     cancellationToken);
 
                 if (attempt <= maxRetries)
                 {
-                    await _store.AppendEventAsync(runId, "retry_scheduled",
+                    await store.AppendEventAsync(runId, "retry_scheduled",
                         Serialize(new { runId, nodeId = node.Id, nextAttempt = attempt + 1, retryBackoffSeconds }),
                         cancellationToken);
                     if (retryBackoffSeconds > 0)
@@ -428,32 +531,92 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
                 if (boundaryNode is not null)
                 {
-                    await _store.AppendEventAsync(runId, "boundary_event_triggered",
+                    await store.AppendEventAsync(runId, "boundary_event_triggered",
                         Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }),
                         cancellationToken);
-                    await _store.AppendEventAsync(runId, "node_completed",
+                    await store.AppendEventAsync(runId, "node_completed",
                         Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, reason = "retry_exhausted_boundary" }),
                         cancellationToken);
-                    await _store.UpdateStepStatusAsync(step.Id, FailedStatus, null, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+                    await store.UpdateStepStatusAsync(step.Id, FailedStatus, null, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
                     return ServiceExecutionResult.Completed;
                 }
 
-                await _store.AppendEventAsync(runId, "service_task_retry_exhausted",
+                await store.AppendEventAsync(runId, "service_task_retry_exhausted",
                     Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempts = attempt }),
                     cancellationToken);
-                await _store.UpdateStepStatusAsync(step.Id, FailedStatus, null, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+                await store.UpdateStepStatusAsync(step.Id, FailedStatus, null, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
                 return ServiceExecutionResult.Failed;
             }
 
-            await _store.AppendEventAsync(runId, "agent_output_recorded",
+            await store.AppendEventAsync(runId, "agent_output_recorded",
                 Serialize(new { runId, nodeId = node.Id, stepId = step.Id, agent = metadata?.Agent, outputLength = outcome.Output?.Length ?? 0 }),
                 cancellationToken);
-            await _store.AppendEventAsync(runId, "node_completed",
+            await store.AppendEventAsync(runId, "node_completed",
                 Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName }),
                 cancellationToken);
-            await _store.UpdateStepStatusAsync(step.Id, CompletedStatus, outcome.Output, null, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+            await store.UpdateStepStatusAsync(step.Id, CompletedStatus, outcome.Output, null, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
             return ServiceExecutionResult.Completed;
         }
+    }
+
+    private async Task<WorkflowExecutionState> ScheduleTimerAndPauseAsync(
+        string runId,
+        BpmnNodeDefinition node,
+        string? nextNodeId,
+        CancellationToken cancellationToken)
+    {
+        var duration = ParseDuration(node.TimerDuration);
+        var dueAt = DateTimeOffset.UtcNow.Add(duration);
+
+        await _store.AppendEventAsync(runId, "timer_scheduled",
+            Serialize(new { runId, nodeId = node.Id, dueAt = dueAt.ToString("o"), duration = node.TimerDuration ?? "PT0S" }),
+            cancellationToken);
+
+        await _store.UpdateRunStatusAsync(runId, WaitingTimerStatus, completedAt: null, cancellationToken);
+        await SaveCheckpointAsync(runId, WaitingTimerStatus, nextNodeId, node.Id, completedAt: null, cancellationToken);
+
+        return new WorkflowExecutionState(
+            RunId: runId,
+            Status: WaitingTimerStatus,
+            NextNodeId: nextNodeId,
+            WaitingOnNodeId: node.Id,
+            CompletedAt: null,
+            TimerDueAt: dueAt);
+    }
+
+    private Task ExecuteParallelTimerAsync(
+        string runId,
+        BpmnNodeDefinition node,
+        CancellationToken cancellationToken,
+        IWorkflowRuntimeStore? storeOverride = null)
+    {
+        var store = storeOverride ?? _store;
+        return ExecuteParallelTimerCoreAsync(runId, node, store, cancellationToken);
+    }
+
+    private static async Task ExecuteParallelTimerCoreAsync(
+        string runId,
+        BpmnNodeDefinition node,
+        IWorkflowRuntimeStore store,
+        CancellationToken cancellationToken)
+    {
+        var duration = ParseDuration(node.TimerDuration);
+        var dueAt = DateTimeOffset.UtcNow.Add(duration);
+
+        await store.AppendEventAsync(runId, "timer_scheduled",
+            Serialize(new { runId, nodeId = node.Id, dueAt = dueAt.ToString("o"), duration = node.TimerDuration ?? "PT0S" }),
+            cancellationToken);
+
+        if (duration > TimeSpan.Zero)
+            await Task.Delay(duration, cancellationToken);
+
+        await store.AppendEventAsync(runId, "timer_fired",
+            Serialize(new { runId, nodeId = node.Id, firedAt = DateTime.UtcNow.ToString("o") }),
+            cancellationToken);
+
+        await store.AppendEventAsync(runId, "node_completed",
+            Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName }),
+            cancellationToken);
     }
 
     // ── Checkpoint helpers ────────────────────────────────────────────────────
@@ -511,6 +674,21 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
         if (definition.Nodes.Any(static n => n.ElementName == "userTask" && n.ApprovalMetadata is null))
             throw new InvalidOperationException("User tasks must include parsed autofac:approvalTask metadata.");
+    }
+
+    private static TimeSpan ParseDuration(string? isoDuration)
+    {
+        if (string.IsNullOrWhiteSpace(isoDuration))
+            return TimeSpan.Zero;
+
+        try
+        {
+            return System.Xml.XmlConvert.ToTimeSpan(isoDuration);
+        }
+        catch
+        {
+            return TimeSpan.Zero;
+        }
     }
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);

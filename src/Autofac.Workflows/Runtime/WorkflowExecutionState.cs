@@ -5,4 +5,5 @@ public sealed record WorkflowExecutionState(
     string Status,
     string? NextNodeId,
     string? WaitingOnNodeId,
-    string? CompletedAt);
+    string? CompletedAt,
+    DateTimeOffset? TimerDueAt = null);
