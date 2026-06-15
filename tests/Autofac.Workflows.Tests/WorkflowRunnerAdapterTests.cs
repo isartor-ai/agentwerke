@@ -50,7 +50,7 @@ public sealed class WorkflowRunnerAdapterTests
         public Task<WorkflowExecutionState> StartAsync(WorkflowEngineStartRequest request, CancellationToken cancellationToken)
         {
             StartRequest = request;
-            return Task.FromResult(new WorkflowExecutionState("run-123", "completed", request.Definition.Nodes.Count, null, DateTime.UtcNow.ToString("o")));
+            return Task.FromResult(new WorkflowExecutionState("run-123", "completed", null, null, DateTime.UtcNow.ToString("o")));
         }
 
         public Task<WorkflowExecutionState> ResumeAsync(WorkflowEngineResumeRequest request, CancellationToken cancellationToken)

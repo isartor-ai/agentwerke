@@ -22,7 +22,7 @@ public sealed class WorkflowInstanceEngineTests
 
         Assert.Equal("waiting_user", state.Status);
         Assert.Equal("HumanApproval", state.WaitingOnNodeId);
-        Assert.Equal(3, state.NextNodeIndex);
+        Assert.Equal("Finalize", state.NextNodeId);
 
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
         Assert.Contains(events, static e => e.Type == "checkpoint_saved" && e.Message.Contains("\"status\":\"running\"", StringComparison.Ordinal));
@@ -82,7 +82,7 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal(started.RunId, recovered.RunId);
         Assert.Equal("waiting_user", recovered.Status);
         Assert.Equal("HumanApproval", recovered.WaitingOnNodeId);
-        Assert.Equal(3, recovered.NextNodeIndex);
+        Assert.Equal("Finalize", recovered.NextNodeId);
     }
 
     [Fact]

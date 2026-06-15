@@ -1,5 +1,4 @@
 using Autofac.Workflows.Bpmn;
-using Autofac.Workflows.Camunda;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,7 +10,6 @@ public static class DependencyInjection
     {
         services.AddScoped<IBpmnWorkflowValidator, BpmnWorkflowValidator>();
         services.AddScoped<IWorkflowEngineAdapter, WorkflowInstanceEngine>();
-        services.AddSingleton<ICamunda8SpikeAnalyzer, Camunda8SpikeAnalyzer>();
         return services;
     }
 }
