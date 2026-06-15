@@ -1,9 +1,12 @@
+using Autofac.Api.Auth;
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Approvals;
 using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace Autofac.Api.Controllers;
 
@@ -47,6 +50,7 @@ public sealed class ApprovalsController : ControllerBase
         return Ok(ApiContractMappings.ToApprovalSummary(approval));
     }
 
+    [Authorize(Policy = AutofacPolicies.Approver)]
     [HttpPost("{approvalId}/decision")]
     public async Task<IActionResult> Decide(string approvalId, [FromBody] ApprovalDecisionRequest request)
     {
@@ -67,13 +71,17 @@ public sealed class ApprovalsController : ControllerBase
                 return NotFound();
             }
 
+            var decidedBy = User.FindFirstValue(ClaimTypes.Name)
+                ?? User.FindFirstValue("sub")
+                ?? "api-user";
+
             await _orchestrationService.ResumeRunAsync(
                 new ResumeRunCommand(
                     RunId: approval.RunId,
                     ApprovalId: approvalId,
                     Decision: request.Decision,
                     Comment: request.Comment,
-                    DecidedBy: "api-user"),
+                    DecidedBy: decidedBy),
                 HttpContext.RequestAborted);
 
             var updated = await _dbContext.ApprovalRequests

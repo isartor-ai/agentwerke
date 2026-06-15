@@ -1,5 +1,6 @@
 using Autofac.Agents;
 using Autofac.AgentSecOps;
+using Autofac.Api.Auth;
 using Autofac.Infrastructure;
 using Autofac.Integrations;
 using Autofac.Observability;
@@ -11,8 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddAutofacLogging();
 
 builder.Services.AddControllers();
-builder.Services.AddAuthentication();
-builder.Services.AddAuthorization();
+builder.Services.AddAutofacAuth(builder.Configuration);
 builder.Services.AddOpenApi("v1");
 builder.Services.AddAutofacObservability();
 builder.Services.AddAutofacInfrastructure(builder.Configuration);

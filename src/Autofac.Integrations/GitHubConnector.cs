@@ -1,3 +1,4 @@
+using Autofac.Application.Secrets;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -54,11 +55,13 @@ public sealed class GitHubConnector : IGitHubConnector
 
     private readonly HttpClient _httpClient;
     private readonly GitHubOptions _options;
+    private readonly ISecretStore _secretStore;
 
-    public GitHubConnector(HttpClient httpClient, IOptions<IntegrationOptions> options)
+    public GitHubConnector(HttpClient httpClient, IOptions<IntegrationOptions> options, ISecretStore secretStore)
     {
         _httpClient = httpClient;
         _options = options.Value.GitHub;
+        _secretStore = secretStore;
 
         if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
         {
@@ -87,7 +90,7 @@ public sealed class GitHubConnector : IGitHubConnector
             sha = baseRef.Sha
         });
 
-        using var request = CreateRequest(HttpMethod.Post, "git/refs", payload);
+        using var request = await CreateRequestAsync(HttpMethod.Post, "git/refs", payload, cancellationToken);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
@@ -143,7 +146,7 @@ public sealed class GitHubConnector : IGitHubConnector
             draft = _options.CreateDraftPullRequests
         });
 
-        using var request = CreateRequest(HttpMethod.Post, "pulls", payload);
+        using var request = await CreateRequestAsync(HttpMethod.Post, "pulls", payload, cancellationToken);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
@@ -173,7 +176,7 @@ public sealed class GitHubConnector : IGitHubConnector
             branch = command.HeadBranch
         });
 
-        using var request = CreateRequest(HttpMethod.Put, $"contents/{markerPath}", payload);
+        using var request = await CreateRequestAsync(HttpMethod.Put, $"contents/{markerPath}", payload, cancellationToken);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
@@ -189,7 +192,7 @@ public sealed class GitHubConnector : IGitHubConnector
         CancellationToken cancellationToken)
     {
         var query = $"pulls?state=open&head={Uri.EscapeDataString($"{_options.RepositoryOwner}:{headBranch}")}&base={Uri.EscapeDataString(baseBranch)}";
-        using var request = CreateRequest(HttpMethod.Get, query);
+        using var request = await CreateRequestAsync(HttpMethod.Get, query, cancellationToken: cancellationToken);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
@@ -199,7 +202,7 @@ public sealed class GitHubConnector : IGitHubConnector
 
     private async Task<GitReferenceResponse> GetBranchReferenceAsync(string branchName, CancellationToken cancellationToken)
     {
-        using var request = CreateRequest(HttpMethod.Get, $"git/ref/heads/{Uri.EscapeDataString(branchName)}");
+        using var request = await CreateRequestAsync(HttpMethod.Get, $"git/ref/heads/{Uri.EscapeDataString(branchName)}", cancellationToken: cancellationToken);
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
@@ -207,13 +210,16 @@ public sealed class GitHubConnector : IGitHubConnector
             ?? throw new InvalidOperationException($"GitHub did not return a reference for branch '{branchName}'.");
     }
 
-    private HttpRequestMessage CreateRequest(HttpMethod method, string relativePath, string? json = null)
+    private async Task<HttpRequestMessage> CreateRequestAsync(HttpMethod method, string relativePath, string? json = null, CancellationToken cancellationToken = default)
     {
+        var pat = await _secretStore.GetSecretAsync("Integrations:GitHub:PersonalAccessToken", cancellationToken)
+                  ?? _options.PersonalAccessToken;
+
         var request = new HttpRequestMessage(
             method,
             $"repos/{_options.RepositoryOwner}/{_options.RepositoryName}/{relativePath}");
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.PersonalAccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pat);
 
         if (json is not null)
         {
@@ -232,11 +238,10 @@ public sealed class GitHubConnector : IGitHubConnector
     private void EnsureConfigured()
     {
         if (string.IsNullOrWhiteSpace(_options.RepositoryOwner) ||
-            string.IsNullOrWhiteSpace(_options.RepositoryName) ||
-            string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
+            string.IsNullOrWhiteSpace(_options.RepositoryName))
         {
             throw new InvalidOperationException(
-                "GitHub outbound integration is not configured. Set Integrations:GitHub:RepositoryOwner, RepositoryName, and PersonalAccessToken.");
+                "GitHub outbound integration is not configured. Set Integrations:GitHub:RepositoryOwner and RepositoryName.");
         }
     }
 
