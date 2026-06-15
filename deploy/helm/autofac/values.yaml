@@ -1,0 +1,111 @@
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# --- API ---
+api:
+  image:
+    repository: autofac/api
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: false
+    className: nginx
+    host: autofac.example.com
+    tlsSecretName: autofac-tls
+  env:
+    ASPNETCORE_ENVIRONMENT: Production
+    Tracing__ServiceName: autofac-api
+    # Set Tracing__OtlpEndpoint to your OTLP collector, e.g. http://jaeger-collector:4317
+    Tracing__OtlpEndpoint: ""
+
+# --- Worker (RunDispatchWorker) ---
+worker:
+  image:
+    repository: autofac/api     # same image, different entrypoint via env
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  env:
+    ASPNETCORE_ENVIRONMENT: Production
+    Tracing__ServiceName: autofac-worker
+    Tracing__OtlpEndpoint: ""
+
+# --- Web (SPA) ---
+web:
+  image:
+    repository: autofac/web
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  apiBaseUrl: "https://autofac.example.com/api"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  service:
+    type: ClusterIP
+    port: 80
+
+# --- Postgres ---
+postgres:
+  enabled: true           # set false to use an external DB
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  storage:
+    size: 20Gi
+    storageClass: ""
+  credentials:
+    existingSecret: ""    # name of K8s Secret with POSTGRES_PASSWORD key
+    database: autofac
+    username: postgres
+
+# --- Shared secrets reference ---
+# Create a K8s Secret named `autofac-secrets` with keys:
+#   POSTGRES_PASSWORD, ANTHROPIC_API_KEY, JWT_SECRET
+secretName: autofac-secrets
+
+# --- Sandbox execution namespace ---
+sandbox:
+  namespace: autofac-sandboxes
+  createNamespace: true

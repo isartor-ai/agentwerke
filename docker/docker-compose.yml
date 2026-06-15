@@ -1,5 +1,19 @@
 services:
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -47,6 +61,8 @@ services:
       Agents__Skills__SkillsDirectory: /app/skills
       Sandboxes__Docker__Enabled: "false"
       Sandboxes__Docker__DockerEndpoint: "unix:///var/run/docker.sock"
+      Tracing__OtlpEndpoint: "http://jaeger:4317"
+      Tracing__ServiceName: "autofac-api"
     volumes:
       - api_storage:/app/storage
       - ../.github/skills:/app/skills:ro
@@ -57,6 +73,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_healthy
 
   web:
     build:

@@ -1,19 +1,24 @@
 using Autofac.Application.Observability;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Autofac.Observability;
 
 public static class DependencyInjection
 {
-    /// <summary>
-    /// Registers observability infrastructure: correlation context, metrics, and
-    /// OpenTelemetry/Prometheus instrumentation. Call before <c>app.Build()</c>.
-    /// </summary>
-    public static IServiceCollection AddAutofacObservability(this IServiceCollection services)
+    public static IServiceCollection AddAutofacObservability(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
+        var tracingOptions = configuration
+            .GetSection(TracingOptions.SectionName)
+            .Get<TracingOptions>() ?? new TracingOptions();
+
         // Correlation context — scoped so one instance lives per HTTP request.
         services.AddScoped<CorrelationContext>();
         services.AddScoped<ICorrelationContext>(sp => sp.GetRequiredService<CorrelationContext>());
@@ -24,20 +29,49 @@ public static class DependencyInjection
         services.AddSingleton<WorkflowMetrics>();
         services.AddSingleton<IWorkflowMetrics>(sp => sp.GetRequiredService<WorkflowMetrics>());
 
+        // Tracer — singleton ActivitySource wrapper.
+        services.AddSingleton<IWorkflowTracer, WorkflowTracer>();
+
+        var resourceBuilder = ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: tracingOptions.ServiceName,
+                serviceVersion: tracingOptions.ServiceVersion);
+
         services.AddOpenTelemetry()
             .WithMetrics(metrics => metrics
+                .SetResourceBuilder(resourceBuilder)
                 .AddMeter(WorkflowMetrics.MeterName)
                 .AddAspNetCoreInstrumentation()
                 .AddRuntimeInstrumentation()
-                .AddPrometheusExporter());
+                .AddPrometheusExporter())
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .SetResourceBuilder(resourceBuilder)
+                    .AddSource(WorkflowActivitySource.SourceName)
+                    .AddAspNetCoreInstrumentation(options =>
+                    {
+                        options.RecordException = true;
+                        options.EnrichWithHttpRequest = (activity, request) =>
+                        {
+                            if (request.Headers.TryGetValue(CorrelationMiddleware.HeaderName, out var corrId))
+                            {
+                                activity.SetTag("autofac.correlation_id", corrId.ToString());
+                            }
+                        };
+                    })
+                    .AddHttpClientInstrumentation();
+
+                if (!string.IsNullOrWhiteSpace(tracingOptions.OtlpEndpoint))
+                {
+                    tracing.AddOtlpExporter(otlp =>
+                        otlp.Endpoint = new Uri(tracingOptions.OtlpEndpoint));
+                }
+            });
 
         return services;
     }
 
-    /// <summary>
-    /// Wires JSON console logging and the correlation middleware into the pipeline.
-    /// Call after <c>app.Build()</c> and before route mapping.
-    /// </summary>
     public static IApplicationBuilder UseAutofacObservability(this IApplicationBuilder app)
     {
         app.UseMiddleware<CorrelationMiddleware>();

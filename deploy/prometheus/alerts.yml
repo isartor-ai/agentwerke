@@ -1,0 +1,110 @@
+groups:
+  - name: autofac.workflow
+    rules:
+      - alert: HighRunFailureRate
+        expr: |
+          (
+            rate(autofac_workflow_runs_total{status="failed"}[10m])
+            /
+            rate(autofac_workflow_runs_total[10m])
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Workflow run failure rate above 10%"
+          description: >
+            {{ $value | humanizePercentage }} of workflow runs are failing over the last 10 minutes.
+            Check worker logs and connector health.
+
+      - alert: CriticalRunFailureRate
+        expr: |
+          (
+            rate(autofac_workflow_runs_total{status="failed"}[10m])
+            /
+            rate(autofac_workflow_runs_total[10m])
+          ) > 0.25
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Workflow run failure rate above 25%"
+          description: >
+            {{ $value | humanizePercentage }} of workflow runs are failing over the last 10 minutes.
+            Immediate investigation required.
+
+  - name: autofac.approval
+    rules:
+      - alert: ApprovalSLABreach
+        expr: |
+          histogram_quantile(0.95, rate(autofac_approval_wait_seconds_bucket[30m])) > 86400
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Approval p95 wait time exceeds 24 hours"
+          description: >
+            The 95th-percentile approval wait time is {{ $value | humanizeDuration }}.
+            Reviewers may be blocked. Check pending approval queue.
+
+      - alert: ApprovalQueueStuck
+        expr: |
+          autofac_workflow_runs_pending_approval > 20
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "More than 20 runs waiting for approval for 15 minutes"
+          description: >
+            {{ $value }} runs are pending approval. Reviewer capacity may be saturated.
+
+  - name: autofac.worker
+    rules:
+      - alert: WorkerBacklogGrowing
+        expr: |
+          deriv(autofac_workflow_runs_active[10m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Worker backlog is growing"
+          description: >
+            Active run count is increasing at {{ $value | humanize }} per second over the last 10 minutes.
+            Consider scaling up workers.
+
+      - alert: WorkerDown
+        expr: |
+          absent(autofac_workflow_runs_active) == 1
+        for: 3m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "No worker metrics received"
+          description: >
+            The autofac_workflow_runs_active metric has not been received for 3 minutes.
+            The worker may be down.
+
+  - name: autofac.connector
+    rules:
+      - alert: ConnectorHighErrorRate
+        expr: |
+          (
+            rate(autofac_connector_invocations_total{status="failed"}[5m])
+            /
+            rate(autofac_connector_invocations_total[5m])
+          ) > 0.20
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Connector {{ $labels.connector_id }} error rate above 20%"
+          description: >
+            {{ $value | humanizePercentage }} of invocations to connector {{ $labels.connector_id }}
+            are failing. Check connector configuration and upstream service health.

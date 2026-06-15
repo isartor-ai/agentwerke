@@ -10,17 +10,20 @@ public abstract class ConnectorBase : IConnector
     private readonly IAuditRepository _auditRepository;
     private readonly IWorkflowMetrics _metrics;
     private readonly ICorrelationContext _correlationContext;
+    private readonly IWorkflowTracer _tracer;
 
     protected ConnectorBase(
         IPolicyEvaluationService policyEvaluationService,
         IAuditRepository auditRepository,
         IWorkflowMetrics metrics,
-        ICorrelationContext correlationContext)
+        ICorrelationContext correlationContext,
+        IWorkflowTracer tracer)
     {
         _policyEvaluationService = policyEvaluationService;
         _auditRepository = auditRepository;
         _metrics = metrics;
         _correlationContext = correlationContext;
+        _tracer = tracer;
     }
 
     public abstract string ConnectorId { get; }
@@ -36,6 +39,11 @@ public abstract class ConnectorBase : IConnector
         CancellationToken cancellationToken = default)
     {
         var started = Stopwatch.StartNew();
+        using var span = _tracer.StartSpan($"connector.{ConnectorId}.{request.Operation}");
+        span.SetTag("connector.id", ConnectorId);
+        span.SetTag("connector.operation", request.Operation);
+        span.SetTag("autofac.run_id", request.RunId);
+        span.SetTag("autofac.correlation_id", _correlationContext.CorrelationId);
 
         if (!Enabled)
         {
@@ -58,6 +66,9 @@ public abstract class ConnectorBase : IConnector
             RequiresEvidence: request.RequiresEvidence,
             Attempt: 1));
 
+        span.SetTag("policy.decision", decision.Kind);
+        span.SetTag("policy.id", decision.PolicyId);
+
         if (!string.Equals(decision.Kind, "allow", StringComparison.Ordinal))
         {
             var blocked = new ConnectorExecutionResult(
@@ -75,11 +86,13 @@ public abstract class ConnectorBase : IConnector
         {
             var result = await ExecuteAllowedAsync(request, cancellationToken);
             var completed = result with { PolicyDecision = decision };
+            span.SetTag("connector.status", completed.Status);
             await RecordAsync(request, completed, started.Elapsed.TotalMilliseconds, cancellationToken);
             return completed;
         }
         catch (Exception ex)
         {
+            span.SetError(ex);
             var failed = new ConnectorExecutionResult(
                 Succeeded: false,
                 Status: "failed",
