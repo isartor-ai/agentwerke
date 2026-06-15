@@ -197,7 +197,16 @@ internal static class ApiContractMappings
                 tool.OutputSummary,
                 tool.ErrorMessage,
                 tool.ArtifactNames.ToArray(),
-                tool.DurationMs)).ToArray() ?? []);
+                tool.DurationMs)).ToArray() ?? [],
+            HookExecutions: step.RuntimeSnapshot?.HookExecutions.Select(static hook => new HookExecutionRecord(
+                hook.HookName,
+                hook.Event,
+                hook.Type,
+                hook.Decision,
+                hook.Blocking,
+                hook.OutputSummary,
+                hook.ErrorMessage,
+                hook.DurationMs)).ToArray() ?? []);
     }
 
     public static string NormalizeRunStatus(string status)

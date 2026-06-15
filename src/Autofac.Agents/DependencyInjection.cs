@@ -1,3 +1,4 @@
+using Autofac.Agents.Hooks;
 using Autofac.Agents.Mcp;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
@@ -32,6 +33,9 @@ public static class DependencyInjection
         services.AddScoped<IAgentTool, GitHubCreateBranchTool>();
         services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();
         services.AddScoped<IAgentTool, SandboxExecutionTool>();
+        services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();
+        services.AddScoped<IAgentHookHandler, TemplateHookHandler>();
+        services.AddScoped<IAgentHookGateway, HookGateway>();
         services.AddScoped<IMcpClientFactory, McpClientFactory>();
         services.AddScoped<IMcpToolSessionFactory, McpToolSessionFactory>();
         services.AddScoped<IToolRegistry, ToolRegistry>();

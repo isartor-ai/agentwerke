@@ -1,3 +1,4 @@
+using Autofac.Agents.Hooks;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
@@ -62,6 +63,7 @@ public sealed class PolicyEvaluationServiceTests
             skills,
             assembler,
             policyService,
+            CreateHookGateway(),
             new StubMcpToolSessionFactory(),
             new ToolRegistry([
                 new GitHubCreateBranchTool(gitHub),
@@ -113,6 +115,7 @@ public sealed class PolicyEvaluationServiceTests
             skills,
             assembler,
             policyService,
+            CreateHookGateway(),
             new StubMcpToolSessionFactory(),
             new ToolRegistry([
                 new GitHubCreateBranchTool(gitHub),
@@ -555,6 +558,260 @@ public sealed class PolicyEvaluationServiceTests
         Assert.False(outcome.RuntimeSnapshot!.PermissionDecision?.Allowed);
     }
 
+    [Fact]
+    public async Task AgentOrchestrator_WhenBeforeAgentRunHookBlocks_FailsBeforeExecution()
+    {
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            sandbox,
+            sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite
+                        },
+                        Hooks =
+                        [
+                            new Domain.AgentRuntime.AgentHookContract
+                            {
+                                Name = "policy-guard",
+                                Event = AgentHookEvents.BeforeAgentRun,
+                                Type = "internal-policy",
+                                Blocking = true,
+                                Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["decision"] = AgentHookDecisions.Block,
+                                    ["reason"] = "Blocked before execution."
+                                }
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal("Blocked before execution.", outcome.FailureReason);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        var hook = Assert.Single(outcome.RuntimeSnapshot!.HookExecutions);
+        Assert.Equal("policy-guard", hook.HookName);
+        Assert.Equal(AgentHookDecisions.Block, hook.Decision);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenBeforeToolCallHookBlocks_PreventsToolSideEffects()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            gitHub,
+            new StubSandboxExecutor());
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "OpenPr",
+                "Open Pull Request",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: "github.create_pull_request",
+                    Environment: null,
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite,
+                            AllowedTools = ["github.create_pull_request"]
+                        },
+                        Hooks =
+                        [
+                            new Domain.AgentRuntime.AgentHookContract
+                            {
+                                Name = "tool-guard",
+                                Event = AgentHookEvents.BeforeToolCall,
+                                Type = "template",
+                                Blocking = true,
+                                Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["decision"] = AgentHookDecisions.Block,
+                                    ["reason"] = "Blocked {{tool_name}}."
+                                }
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, gitHub.CreateBranchCalls);
+        Assert.Equal(0, gitHub.CreatePullRequestCalls);
+        Assert.Equal("Blocked github.create_pull_request.", outcome.FailureReason);
+        Assert.Single(outcome.RuntimeSnapshot!.HookExecutions);
+        Assert.Contains(outcome.RuntimeSnapshot!.HookExecutions, static hook => hook.Event == AgentHookEvents.BeforeToolCall);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenAfterToolCallAndArtifactHooksRun_PersistsTheirDecisions()
+    {
+        var mcpSessionFactory = new StubMcpToolSessionFactory(
+            session: new StubMcpToolSession([
+                new StubMcpAgentTool("mcp.weather.lookup", requiredInputs: ["location"])
+            ]));
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            new StubSandboxExecutor(),
+            sandboxEnabled: false,
+            mcpSessionFactory: mcpSessionFactory);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WeatherLookup",
+                "Weather Lookup",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "ops-agent",
+                    Action: "mcp.weather.lookup",
+                    Environment: "staging",
+                    PurposeType: "investigation",
+                    PolicyTag: "read-only",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadOnly,
+                            AllowedTools = ["mcp.weather.lookup"]
+                        },
+                        McpServers =
+                        [
+                            new Domain.AgentRuntime.AgentMcpServerContract
+                            {
+                                Name = "weather"
+                            }
+                        ],
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["tool.input.location"] = "Berlin"
+                        },
+                        Hooks =
+                        [
+                            new Domain.AgentRuntime.AgentHookContract
+                            {
+                                Name = "after-tool",
+                                Event = AgentHookEvents.AfterToolCall,
+                                Type = "template",
+                                Blocking = false,
+                                FailureMode = Domain.AgentRuntime.AgentHookFailureModes.FailOpen,
+                                Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["decision"] = AgentHookDecisions.Proceed,
+                                    ["output"] = "tool={{tool_name}}"
+                                }
+                            },
+                            new Domain.AgentRuntime.AgentHookContract
+                            {
+                                Name = "artifact-audit",
+                                Event = AgentHookEvents.OnArtifactCreated,
+                                Type = "template",
+                                Blocking = false,
+                                Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                {
+                                    ["decision"] = AgentHookDecisions.Proceed,
+                                    ["output"] = "artifacts={{artifact_names}}"
+                                }
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, mcpSessionFactory.CreateCalls);
+        Assert.Contains(outcome.RuntimeSnapshot!.HookExecutions, static hook => hook.HookName == "after-tool" && hook.OutputSummary == "tool=mcp.weather.lookup");
+        Assert.Contains(outcome.RuntimeSnapshot!.HookExecutions, static hook => hook.HookName == "artifact-audit" && hook.OutputSummary == "artifacts=mcp-result.json");
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenHookTypeIsUnsupportedButFailOpen_ContinuesAndRecordsFailure()
+    {
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            new RecordingGitHubConnector(),
+            sandbox,
+            sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite
+                        },
+                        Hooks =
+                        [
+                            new Domain.AgentRuntime.AgentHookContract
+                            {
+                                Name = "future-hook",
+                                Event = AgentHookEvents.BeforeAgentRun,
+                                Type = "http",
+                                Blocking = false,
+                                FailureMode = Domain.AgentRuntime.AgentHookFailureModes.FailOpen
+                            }
+                        ]
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, sandbox.ExecuteCalls);
+        var hook = Assert.Single(outcome.RuntimeSnapshot!.HookExecutions);
+        Assert.Equal(AgentHookDecisions.FailOpen, hook.Decision);
+        Assert.Contains("unsupported type", hook.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static AgentOrchestrator CreateOrchestrator(
         IReadOnlyList<SkillManifest> manifests,
         string policyKind,
@@ -575,6 +832,7 @@ public sealed class PolicyEvaluationServiceTests
             new SkillRepository(manifests),
             new AgentPromptAssembler(),
             policyService,
+            CreateHookGateway(),
             mcpSessionFactory ?? new StubMcpToolSessionFactory(),
             registry,
             new ToolGateway(registry, policyService),
@@ -590,6 +848,13 @@ public sealed class PolicyEvaluationServiceTests
                 }
             }));
     }
+
+    private static IAgentHookGateway CreateHookGateway() =>
+        new HookGateway(
+        [
+            new InternalPolicyHookHandler(),
+            new TemplateHookHandler()
+        ]);
 
     private static IToolGateway CreateToolGateway(
         RecordingGitHubConnector gitHub,
