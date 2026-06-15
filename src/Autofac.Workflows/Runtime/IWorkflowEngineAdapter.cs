@@ -23,7 +23,8 @@ public sealed record WorkflowEngineStartRequest(
     string WorkflowDefinitionId,
     BpmnWorkflowDefinition Definition,
     string? Initiator,
-    string? CorrelationId = null);
+    string? CorrelationId = null,
+    string? ExistingRunId = null);
 
 public sealed record WorkflowEngineResumeRequest(
     string RunId,

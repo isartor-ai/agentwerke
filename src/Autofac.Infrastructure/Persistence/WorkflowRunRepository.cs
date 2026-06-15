@@ -22,6 +22,33 @@ public sealed class WorkflowRunRepository : IWorkflowRunRepository
             .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
     }
 
+    public async Task<WorkflowRun> CreatePendingRunAsync(
+        string runId,
+        string workflowId,
+        string workflowName,
+        string workflowVersion,
+        string? initiator,
+        List<string> tags,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        var run = new WorkflowRun
+        {
+            Id = runId,
+            WorkflowId = workflowId,
+            WorkflowName = workflowName,
+            WorkflowVersion = workflowVersion,
+            Status = "pending",
+            RequestedBy = initiator ?? string.Empty,
+            StartedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Tags = tags,
+            CorrelationId = correlationId,
+        };
+        _dbContext.WorkflowRuns.Add(run);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return run;
+    }
+
     public async Task UpdateRunStatusAsync(string runId, string status, CancellationToken cancellationToken)
     {
         var run = await _dbContext.WorkflowRuns.FirstOrDefaultAsync(r => r.Id == runId, cancellationToken)
