@@ -1,3 +1,4 @@
+using System.Text;
 using Autofac.AgentSecOps;
 using Autofac.Agents.Mcp;
 using Autofac.Agents.Prompts;
@@ -5,6 +6,7 @@ using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
+using Autofac.Storage.Artifacts;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
@@ -15,9 +17,13 @@ namespace Autofac.Agents;
 /// Bridges BPMN service-task execution to the agent layer.
 /// When <see cref="SandboxOptions.Enabled"/> is true, dispatches to
 /// <see cref="ISandboxExecutor"/> for Docker-isolated execution.
+/// Outputs larger than <see cref="OutputOffloadThresholdBytes"/> are written to artifact
+/// storage and replaced with a reference marker so the DB row stays small.
 /// </summary>
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
+    private const int OutputOffloadThresholdBytes = 8192;
+
     private readonly ISkillRepository _skillRepository;
     private readonly IAgentPromptAssembler _promptAssembler;
     private readonly IPolicyEvaluationService _policyEvaluationService;
@@ -26,6 +32,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly IToolGateway _toolGateway;
     private readonly string _gitHubBranchPrefix;
     private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
+    private readonly IArtifactStorage _artifactStorage;
 
     public AgentOrchestrator(
         ISkillRepository skillRepository,
@@ -34,6 +41,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         IMcpToolSessionFactory mcpToolSessionFactory,
         IToolRegistry toolRegistry,
         IToolGateway toolGateway,
+        IArtifactStorage artifactStorage,
         IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
@@ -43,6 +51,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _mcpToolSessionFactory = mcpToolSessionFactory;
         _toolRegistry = toolRegistry;
         _toolGateway = toolGateway;
+        _artifactStorage = artifactStorage;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
             ? "autofac/run-"
@@ -203,11 +212,11 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             RequiresEvidence: metadata.RequiresEvidence,
             Attempt: attempt);
 
-        var output = BuildSimulatedOutput(request, profile, matchedSkillRef, skillManifest);
+        var simulatedOutput = BuildSimulatedOutput(request, profile, matchedSkillRef, skillManifest);
 
-        return new AgentTaskOutcome(
+        var outcome = new AgentTaskOutcome(
             Succeeded: true,
-            Output: output,
+            Output: simulatedOutput,
             FailureReason: null,
             PolicyDecision: policyDecision,
             RuntimeSnapshot: runtimeSnapshot with
@@ -219,6 +228,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     Rationale = policyDecision.Rationale
                 }
             });
+
+        return await MaybeOffloadOutputAsync(runId, stepId, outcome, cancellationToken);
     }
 
     private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(
@@ -381,6 +392,32 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
                 Rationale = $"Prompt rendered for attempt {attempt}."
             }
+        };
+    }
+
+    private async Task<AgentTaskOutcome> MaybeOffloadOutputAsync(
+        string runId,
+        string stepId,
+        AgentTaskOutcome outcome,
+        CancellationToken cancellationToken)
+    {
+        if (outcome.Output is not { Length: > OutputOffloadThresholdBytes })
+        {
+            return outcome;
+        }
+
+        var artifactName = $"step_{stepId}_output.txt";
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(outcome.Output));
+        await _artifactStorage.SaveAsync(runId, artifactName, ms, cancellationToken);
+
+        var mergedArtifacts = (outcome.Artifacts ?? new Dictionary<string, string>())
+            .Concat([new KeyValuePair<string, string>(artifactName, artifactName)])
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        return outcome with
+        {
+            Output = $"[artifact:{artifactName}]",
+            Artifacts = mergedArtifacts
         };
     }
 

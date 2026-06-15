@@ -520,7 +520,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             await _store.AppendEventAsync(runId, "node_completed",
                 Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex, reason = "timeout_boundary" }), cancellationToken);
 
-            await _store.UpdateStepStatusAsync(step.Id, "timed_out", output: null, DateTime.UtcNow.ToString("o"), policyDecision: null, runtimeSnapshot: null, cancellationToken);
+            await _store.UpdateStepStatusAsync(step.Id, "timed_out", output: null, error: null, DateTime.UtcNow.ToString("o"), policyDecision: null, runtimeSnapshot: null, cancellationToken);
             return ServiceExecutionResult.Completed;
         }
 
@@ -606,13 +606,13 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         Serialize(new { runId, boundaryNodeId = boundaryNode.Id, sourceNodeId = node.Id }), cancellationToken);
                     await _store.AppendEventAsync(runId, "node_completed",
                         Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex, reason = "retry_exhausted_boundary" }), cancellationToken);
-                    await _store.UpdateStepStatusAsync(step.Id, FailedStatus, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+                    await _store.UpdateStepStatusAsync(step.Id, FailedStatus, output: null, error: outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
                     return ServiceExecutionResult.Completed;
                 }
 
                 await _store.AppendEventAsync(runId, "service_task_retry_exhausted",
                     Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempts = attempt }), cancellationToken);
-                await _store.UpdateStepStatusAsync(step.Id, FailedStatus, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+                await _store.UpdateStepStatusAsync(step.Id, FailedStatus, output: null, error: outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
                 return ServiceExecutionResult.Failed;
             }
 
@@ -621,7 +621,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 cancellationToken);
             await _store.AppendEventAsync(runId, "node_completed",
                 Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, nodeIndex }), cancellationToken);
-            await _store.UpdateStepStatusAsync(step.Id, CompletedStatus, outcome.Output, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+            await _store.UpdateStepStatusAsync(step.Id, CompletedStatus, output: outcome.Output, error: null, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
             return ServiceExecutionResult.Completed;
         }
     }

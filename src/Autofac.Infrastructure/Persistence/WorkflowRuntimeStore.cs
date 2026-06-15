@@ -121,6 +121,7 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         string stepId,
         string status,
         string? output,
+        string? error,
         string? completedAt,
         PolicyDecision? policyDecision,
         AgentRuntimeSnapshot? runtimeSnapshot,
@@ -129,6 +130,7 @@ public sealed class WorkflowRuntimeStore : IWorkflowRuntimeStore
         var step = await _dbContext.WorkflowRunSteps.FirstAsync(s => s.Id == stepId, cancellationToken);
         step.Status = status;
         step.Output = output;
+        step.Error = error;
         step.CompletedAt = completedAt;
         step.PolicyDecision = policyDecision;
         step.RuntimeSnapshot = runtimeSnapshot;

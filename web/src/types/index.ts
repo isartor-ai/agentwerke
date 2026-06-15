@@ -43,6 +43,78 @@ export interface Workflow {
   bpmnXml?: string;
 }
 
+export interface RunStepSkillUsage {
+  skillId: string;
+  name?: string;
+  selected: boolean;
+  fingerprint?: string;
+  invoked?: boolean;
+  source?: string;
+}
+
+export interface RunStepToolInfo {
+  name: string;
+  category: string;
+}
+
+export interface RunStepToolInvocation {
+  toolName: string;
+  category: string;
+  status: string;
+  policyDecisionId?: string;
+  policyDecisionKind?: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  errorMessage?: string;
+  artifactNames: string[];
+  durationMs?: number;
+}
+
+export interface RunStepPromptSnapshot {
+  finalPrompt: string;
+  renderedAt: string;
+  sections: { name: string; content: string; source: string }[];
+  variables: Record<string, string>;
+  sourceFiles: string[];
+}
+
+export interface RunStepHookExecution {
+  event: string;
+  type: string;
+  decision: string;
+  durationMs?: number;
+}
+
+export interface RunStepPermissionDecision {
+  level: string;
+  allowed: boolean;
+  rationale?: string;
+}
+
+export interface RunStepArtifactRef {
+  name: string;
+  uri?: string;
+  contentType?: string;
+}
+
+export interface RunStepRuntimeSnapshot {
+  agentName?: string;
+  action?: string;
+  promptInline?: string;
+  prompt?: RunStepPromptSnapshot;
+  skills: RunStepSkillUsage[];
+  tools: RunStepToolInfo[];
+  toolInvocations: RunStepToolInvocation[];
+  mcpServers: string[];
+  hooks: RunStepHookExecution[];
+  permissionLevel: string;
+  allowedTools: string[];
+  deniedTools: string[];
+  subAgentsEnabled: boolean;
+  permissionDecision?: RunStepPermissionDecision;
+  stepArtifacts: RunStepArtifactRef[];
+}
+
 export interface RunStep {
   id: string;
   name: string;
@@ -55,6 +127,7 @@ export interface RunStep {
   output?: string;
   error?: string;
   policyDecision?: PolicyDecision;
+  runtimeSnapshot?: RunStepRuntimeSnapshot;
 }
 
 export interface RunEvent {
