@@ -1,0 +1,223 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Autofac.AgentSecOps;
+using Autofac.Domain.AgentRuntime;
+
+namespace Autofac.Agents.Tools;
+
+public interface IToolGateway
+{
+    Task<ToolGatewayResult> ExecuteAsync(ToolGatewayRequest request, CancellationToken cancellationToken);
+}
+
+public sealed class ToolGateway : IToolGateway
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly IToolRegistry _toolRegistry;
+    private readonly IPolicyEvaluationService _policyEvaluationService;
+
+    public ToolGateway(
+        IToolRegistry toolRegistry,
+        IPolicyEvaluationService policyEvaluationService)
+    {
+        _toolRegistry = toolRegistry;
+        _policyEvaluationService = policyEvaluationService;
+    }
+
+    public async Task<ToolGatewayResult> ExecuteAsync(ToolGatewayRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var tool = _toolRegistry.Find(request.ToolName);
+        if (tool is null)
+        {
+            return Failure(
+                request,
+                Category: AgentToolCategories.Read,
+                FailureReason: $"Tool '{request.ToolName}' is not registered.",
+                Status: "missing");
+        }
+
+        if (IsDenied(request, tool, out var permissionFailure))
+        {
+            return Failure(request, tool.Category, permissionFailure, "blocked");
+        }
+
+        try
+        {
+            tool.Validate(request.Input);
+        }
+        catch (Exception ex)
+        {
+            return Failure(request, tool.Category, ex.Message, "invalid_input");
+        }
+
+        var policyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
+            AgentName: request.AgentName,
+            Action: request.Action,
+            Environment: request.Environment,
+            PurposeType: request.PurposeType,
+            PolicyTag: request.PolicyTag,
+            RequiresEvidence: request.RequiresEvidence,
+            Attempt: request.Attempt));
+
+        if (!string.Equals(policyDecision.Kind, "allow", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ToolGatewayResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: policyDecision.Rationale,
+                PolicyDecision: policyDecision,
+                Invocation: CreateInvocation(
+                    request,
+                    tool.Category,
+                    Status: "blocked",
+                    policyDecision.PolicyId,
+                    policyDecision.Kind,
+                    InputSummary: Serialize(request.Input),
+                    OutputSummary: null,
+                    ErrorMessage: policyDecision.Rationale,
+                    DurationMs: 0,
+                    ArtifactNames: []));
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var result = await tool.ExecuteAsync(
+                new AgentToolExecutionContext(
+                    request.RunId,
+                    request.StepId,
+                    request.AgentName,
+                    request.Action,
+                    request.Environment,
+                    request.PurposeType,
+                    request.PolicyTag,
+                    request.Attempt),
+                request.Input,
+                cancellationToken);
+
+            stopwatch.Stop();
+            var artifactNames = (result.Artifacts?.Keys ?? []).OrderBy(static name => name, StringComparer.OrdinalIgnoreCase).ToArray();
+            return new ToolGatewayResult(
+                Succeeded: result.Succeeded,
+                Output: result.Output,
+                FailureReason: result.FailureReason,
+                PolicyDecision: policyDecision,
+                Invocation: CreateInvocation(
+                    request,
+                    tool.Category,
+                    Status: result.Succeeded ? "completed" : "failed",
+                    policyDecision.PolicyId,
+                    policyDecision.Kind,
+                    InputSummary: Serialize(request.Input),
+                    OutputSummary: result.Output,
+                    ErrorMessage: result.FailureReason,
+                    DurationMs: (int)stopwatch.ElapsedMilliseconds,
+                    ArtifactNames: artifactNames),
+                Artifacts: result.Artifacts,
+                ExternalActions: result.ExternalActions);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            return new ToolGatewayResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: ex.Message,
+                PolicyDecision: policyDecision,
+                Invocation: CreateInvocation(
+                    request,
+                    tool.Category,
+                    Status: "failed",
+                    policyDecision.PolicyId,
+                    policyDecision.Kind,
+                    InputSummary: Serialize(request.Input),
+                    OutputSummary: null,
+                    ErrorMessage: ex.Message,
+                    DurationMs: (int)stopwatch.ElapsedMilliseconds,
+                    ArtifactNames: []));
+        }
+    }
+
+    private static bool IsDenied(ToolGatewayRequest request, IAgentTool tool, out string failureReason)
+    {
+        if (request.DeniedTools.Contains(request.ToolName, StringComparer.OrdinalIgnoreCase))
+        {
+            failureReason = $"Tool '{request.ToolName}' is denied by the runtime contract.";
+            return true;
+        }
+
+        if (request.AllowedTools.Count > 0 &&
+            !request.AllowedTools.Contains(request.ToolName, StringComparer.OrdinalIgnoreCase))
+        {
+            failureReason = $"Tool '{request.ToolName}' is not included in the runtime contract allowlist.";
+            return true;
+        }
+
+        if (string.Equals(tool.Category, AgentToolCategories.Shell, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(request.PermissionLevel, AgentPermissionLevels.ReadOnly, StringComparison.OrdinalIgnoreCase))
+        {
+            failureReason = $"Tool '{request.ToolName}' requires elevated permissions beyond '{request.PermissionLevel}'.";
+            return true;
+        }
+
+        failureReason = string.Empty;
+        return false;
+    }
+
+    private static ToolGatewayResult Failure(
+        ToolGatewayRequest request,
+        string Category,
+        string FailureReason,
+        string Status)
+    {
+        return new ToolGatewayResult(
+            Succeeded: false,
+            Output: null,
+            FailureReason: FailureReason,
+            PolicyDecision: null,
+            Invocation: CreateInvocation(
+                request,
+                Category,
+                Status,
+                PolicyDecisionId: null,
+                PolicyDecisionKind: null,
+                InputSummary: Serialize(request.Input),
+                OutputSummary: null,
+                ErrorMessage: FailureReason,
+                DurationMs: 0,
+                ArtifactNames: []));
+    }
+
+    private static AgentToolInvocationRecord CreateInvocation(
+        ToolGatewayRequest request,
+        string Category,
+        string Status,
+        string? PolicyDecisionId,
+        string? PolicyDecisionKind,
+        string InputSummary,
+        string? OutputSummary,
+        string? ErrorMessage,
+        int DurationMs,
+        IReadOnlyList<string> ArtifactNames)
+    {
+        return new AgentToolInvocationRecord
+        {
+            ToolName = request.ToolName,
+            Category = Category,
+            Status = Status,
+            PolicyDecisionId = PolicyDecisionId,
+            PolicyDecisionKind = PolicyDecisionKind,
+            InputSummary = InputSummary,
+            OutputSummary = OutputSummary,
+            ErrorMessage = ErrorMessage,
+            DurationMs = DurationMs,
+            ArtifactNames = ArtifactNames
+        };
+    }
+
+    private static string Serialize(IReadOnlyDictionary<string, string> input) =>
+        JsonSerializer.Serialize(input, SerializerOptions);
+}

@@ -76,6 +76,16 @@ public sealed record AgentToolInvocationRecord
 
     public string? PolicyDecisionId { get; init; }
 
+    public string? PolicyDecisionKind { get; init; }
+
+    public string? InputSummary { get; init; }
+
+    public string? OutputSummary { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public IReadOnlyList<string> ArtifactNames { get; init; } = [];
+
     public int? DurationMs { get; init; }
 }
 

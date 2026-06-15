@@ -65,6 +65,21 @@ public sealed class ApiContractMappingsTests
                                 Selected = true,
                                 Invoked = true
                             }
+                        ],
+                        ToolInvocations =
+                        [
+                            new AgentToolInvocationRecord
+                            {
+                                ToolName = "github.create_pull_request",
+                                Category = AgentToolCategories.Integration,
+                                Status = "completed",
+                                PolicyDecisionId = "test-policy",
+                                PolicyDecisionKind = "allow",
+                                InputSummary = "{\"head_branch\":\"autofac/run-1\"}",
+                                OutputSummary = "created pull request",
+                                ArtifactNames = [".autofac/runs/run-1/step-1.md"],
+                                DurationMs = 125
+                            }
                         ]
                     }
                 }
@@ -82,5 +97,9 @@ public sealed class ApiContractMappingsTests
         Assert.Equal("shipping-and-launch", skill.SkillId);
         Assert.True(skill.Invoked);
         Assert.Equal("runtime-contract", skill.Source);
+        var tool = Assert.Single(step.ToolInvocations);
+        Assert.Equal("github.create_pull_request", tool.ToolName);
+        Assert.Equal("allow", tool.PolicyDecisionKind);
+        Assert.Single(tool.ArtifactNames);
     }
 }

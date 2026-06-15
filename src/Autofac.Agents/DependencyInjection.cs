@@ -1,5 +1,6 @@
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
+using Autofac.Agents.Tools;
 using Autofac.Sandboxes;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Configuration;
@@ -27,6 +28,11 @@ public static class DependencyInjection
 
         services.AddSingleton<ISkillRepository>(repository);
         services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
+        services.AddScoped<IAgentTool, GitHubCreateBranchTool>();
+        services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();
+        services.AddScoped<IAgentTool, SandboxExecutionTool>();
+        services.AddScoped<IToolRegistry, ToolRegistry>();
+        services.AddScoped<IToolGateway, ToolGateway>();
         services.AddAutofacSandboxes(configuration);
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();
 

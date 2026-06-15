@@ -1,5 +1,6 @@
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
+using Autofac.Agents.Tools;
 using Autofac.AgentSecOps;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
@@ -59,8 +60,7 @@ public sealed class PolicyEvaluationServiceTests
             skills,
             assembler,
             policyService,
-            gitHub,
-            sandbox,
+            CreateToolGateway(gitHub, sandbox, policyService),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -105,8 +105,7 @@ public sealed class PolicyEvaluationServiceTests
             skills,
             assembler,
             policyService,
-            gitHub,
-            sandbox,
+            CreateToolGateway(gitHub, sandbox, policyService),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -147,7 +146,9 @@ public sealed class PolicyEvaluationServiceTests
     [Fact]
     public async Task AgentOrchestrator_WhenRuntimeContractSelectsSkill_TracksAvailableAndInvokedSkills()
     {
-        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow");
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
 
         var outcome = await orchestrator.ExecuteAsync(
             "run-123",
@@ -165,6 +166,10 @@ public sealed class PolicyEvaluationServiceTests
                     RequiresEvidence: [],
                     RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
                     {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite
+                        },
                         Skills =
                         [
                             new Domain.AgentRuntime.AgentSkillContract
@@ -183,12 +188,15 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal("security-and-hardening", Assert.Single(snapshot.Skills, static s => s.Invoked).SkillId);
         Assert.Contains(snapshot.Skills, static s => s.SkillId == "shipping-and-launch" && s.Available && !s.Invoked);
         Assert.Contains(snapshot.Skills, static s => s.SkillId == "security-and-hardening" && s.Selected && s.Invoked && s.Source == "runtime-contract");
+        Assert.Single(snapshot.ToolInvocations);
+        Assert.Equal("sandbox.execute", snapshot.ToolInvocations[0].ToolName);
+        Assert.Equal("allow", snapshot.ToolInvocations[0].PolicyDecisionKind);
     }
 
     [Fact]
     public async Task AgentOrchestrator_WhenRuntimeContractReferencesUnknownSkill_FailsEarly()
     {
-        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow");
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", new RecordingGitHubConnector(), new StubSandboxExecutor());
 
         var outcome = await orchestrator.ExecuteAsync(
             "run-123",
@@ -224,7 +232,7 @@ public sealed class PolicyEvaluationServiceTests
     [Fact]
     public async Task AgentOrchestrator_WhenRuntimeContractRequestsMismatchedSkillVersion_FailsEarly()
     {
-        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow");
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", new RecordingGitHubConnector(), new StubSandboxExecutor());
 
         var outcome = await orchestrator.ExecuteAsync(
             "run-123",
@@ -258,15 +266,141 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Contains("loaded version", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static AgentOrchestrator CreateOrchestrator(IReadOnlyList<SkillManifest> manifests, string policyKind)
+    [Fact]
+    public async Task AgentOrchestrator_WhenToolIsDeniedByPermissions_BlocksExecutionBeforeConnectorCall()
     {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "OpenPr",
+                "Open Pull Request",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: "github.create_pull_request",
+                    Environment: null,
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite,
+                            DeniedTools = ["github.create_pull_request"]
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, gitHub.CreatePullRequestCalls);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        Assert.Equal("blocked", Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations).Status);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenSandboxRunsUnderReadOnlyPermissions_BlocksShellTool()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = Domain.AgentRuntime.AgentPermissionContract.ReadOnly
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
+        Assert.Equal("sandbox.execute", invocation.ToolName);
+        Assert.Equal("blocked", invocation.Status);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenGitHubToolExecutes_RecordsInvocationAndExternalActions()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "OpenPr",
+                "Open Pull Request",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: "github.create_pull_request",
+                    Environment: null,
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite,
+                            AllowedTools = ["github.create_pull_request"]
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, gitHub.CreateBranchCalls);
+        Assert.Equal(1, gitHub.CreatePullRequestCalls);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
+        Assert.Equal("github.create_pull_request", invocation.ToolName);
+        Assert.Equal("completed", invocation.Status);
+        Assert.Equal("allow", invocation.PolicyDecisionKind);
+        Assert.NotNull(outcome.ExternalActions);
+        Assert.Equal(2, outcome.ExternalActions!.Count);
+    }
+
+    private static AgentOrchestrator CreateOrchestrator(
+        IReadOnlyList<SkillManifest> manifests,
+        string policyKind,
+        RecordingGitHubConnector gitHub,
+        StubSandboxExecutor sandbox,
+        bool sandboxEnabled = false)
+    {
+        var policyService = new StubPolicyEvaluationService(policyKind);
         return new AgentOrchestrator(
             new SkillRepository(manifests),
             new AgentPromptAssembler(),
-            new StubPolicyEvaluationService(policyKind),
-            new RecordingGitHubConnector(),
-            new StubSandboxExecutor(),
-            Options.Create(new SandboxOptions()),
+            policyService,
+            CreateToolGateway(gitHub, sandbox, policyService),
+            Options.Create(new SandboxOptions
+            {
+                Enabled = sandboxEnabled
+            }),
             Options.Create(new IntegrationOptions
             {
                 GitHub = new GitHubOptions
@@ -274,6 +408,21 @@ public sealed class PolicyEvaluationServiceTests
                     BranchPrefix = "autofac/run-"
                 }
             }));
+    }
+
+    private static IToolGateway CreateToolGateway(
+        RecordingGitHubConnector gitHub,
+        StubSandboxExecutor sandbox,
+        IPolicyEvaluationService policyService)
+    {
+        var registry = new ToolRegistry(
+        [
+            new GitHubCreateBranchTool(gitHub),
+            new GitHubCreatePullRequestTool(gitHub),
+            new SandboxExecutionTool(sandbox)
+        ]);
+
+        return new ToolGateway(registry, policyService);
     }
 
     private static SkillManifest[] CreateKnownSkills() =>
@@ -379,8 +528,11 @@ public sealed class PolicyEvaluationServiceTests
 
     private sealed class StubSandboxExecutor : ISandboxExecutor
     {
+        public int ExecuteCalls { get; private set; }
+
         public Task<SandboxExecutionResult> ExecuteAsync(SandboxExecutionRequest request, CancellationToken cancellationToken)
         {
+            ExecuteCalls++;
             return Task.FromResult(new SandboxExecutionResult(
                 Succeeded: true,
                 ExitCode: 0,

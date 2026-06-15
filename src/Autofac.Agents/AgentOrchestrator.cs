@@ -1,9 +1,9 @@
 using Autofac.AgentSecOps;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
+using Autofac.Agents.Tools;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
-using Autofac.Sandboxes;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
@@ -20,25 +20,22 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly ISkillRepository _skillRepository;
     private readonly IAgentPromptAssembler _promptAssembler;
     private readonly IPolicyEvaluationService _policyEvaluationService;
-    private readonly IGitHubConnector _gitHubConnector;
+    private readonly IToolGateway _toolGateway;
     private readonly string _gitHubBranchPrefix;
-    private readonly ISandboxExecutor _sandbox;
-    private readonly SandboxOptions _sandboxOptions;
+    private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
 
     public AgentOrchestrator(
         ISkillRepository skillRepository,
         IAgentPromptAssembler promptAssembler,
         IPolicyEvaluationService policyEvaluationService,
-        IGitHubConnector gitHubConnector,
-        ISandboxExecutor sandbox,
-        IOptions<SandboxOptions> sandboxOptions,
+        IToolGateway toolGateway,
+        IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
         _skillRepository = skillRepository;
         _promptAssembler = promptAssembler;
         _policyEvaluationService = policyEvaluationService;
-        _gitHubConnector = gitHubConnector;
-        _sandbox = sandbox;
+        _toolGateway = toolGateway;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
             ? "autofac/run-"
@@ -122,8 +119,14 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             return new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
-                FailureReason: promptAssembly.FailureReason,
-                RuntimeSnapshot: runtimeSnapshot);
+            FailureReason: promptAssembly.FailureReason,
+            RuntimeSnapshot: runtimeSnapshot);
+        }
+
+        var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt);
+        if (toolRequest is not null)
+        {
+            return await RunViaToolGatewayAsync(toolRequest, metadata, runtimeSnapshot, cancellationToken);
         }
 
         var policyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
@@ -151,16 +154,6 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         Rationale = policyDecision.Rationale
                     }
                 });
-        }
-
-        if (IsGitHubAction(metadata.Action))
-        {
-            return await RunGitHubActionAsync(runId, stepId, node, metadata, attempt, policyDecision, runtimeSnapshot, cancellationToken);
-        }
-
-        if (_sandboxOptions.Enabled)
-        {
-            return await RunInSandboxAsync(runId, stepId, metadata, attempt, skillManifest, policyDecision, runtimeSnapshot, cancellationToken);
         }
 
         var request = new AgentExecutionRequest(
@@ -194,194 +187,105 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             });
     }
 
-    private async Task<AgentTaskOutcome> RunGitHubActionAsync(
+    private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(
+        ToolGatewayRequest request,
+        AutofacTaskMetadata metadata,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        CancellationToken cancellationToken)
+    {
+        var result = await _toolGateway.ExecuteAsync(request, cancellationToken);
+        var updatedSnapshot = runtimeSnapshot with
+        {
+            ToolInvocations = runtimeSnapshot.ToolInvocations.Concat([result.Invocation]).ToArray(),
+            Artifacts = runtimeSnapshot.Artifacts.Concat(MapArtifacts(result.Artifacts)).ToArray(),
+            PermissionDecision = new AgentPermissionDecisionRecord
+            {
+                Allowed = result.Succeeded,
+                Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+                Rationale = result.FailureReason ?? result.PolicyDecision?.Rationale ?? $"Tool '{request.ToolName}' completed."
+            }
+        };
+
+        return new AgentTaskOutcome(
+            Succeeded: result.Succeeded,
+            Output: result.Output,
+            FailureReason: result.FailureReason,
+            Artifacts: result.Artifacts,
+            ExternalActions: result.ExternalActions,
+            PolicyDecision: result.PolicyDecision,
+            RuntimeSnapshot: updatedSnapshot);
+    }
+
+    private ToolGatewayRequest? BuildToolGatewayRequest(
         string runId,
         string stepId,
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
-        int attempt,
-        Domain.Persistence.PolicyDecision policyDecision,
-        AgentRuntimeSnapshot runtimeSnapshot,
-        CancellationToken cancellationToken)
+        int attempt)
     {
-        var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
-
-        try
+        var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
+        if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
-            {
-                var branch = await _gitHubConnector.CreateBranchAsync(
-                    new CreateGitHubBranchCommand(branchName, BaseBranch: null),
-                    cancellationToken);
-
-                return new AgentTaskOutcome(
-                    Succeeded: true,
-                    Output: $"""
-                        provider: github
-                        action: create_branch
-                        status: completed
-                        branch: {branch.BranchName}
-                        base: {branch.BaseBranch}
-                        url: {branch.BranchUrl}
-                        sha: {branch.CommitSha}
-                        existing: {branch.AlreadyExisted}
-                        """,
-                    FailureReason: null,
-                    PolicyDecision: policyDecision,
-                    RuntimeSnapshot: runtimeSnapshot with
-                    {
-                        PermissionDecision = new AgentPermissionDecisionRecord
-                        {
-                            Allowed = true,
-                            Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
-                            Rationale = policyDecision.Rationale
-                        }
-                    },
-                    ExternalActions:
-                    [
-                        new ExternalActionRecord(
-                            Provider: "github",
-                            Action: "create_branch",
-                            Status: branch.AlreadyExisted ? "already_exists" : "completed",
-                            ResourceId: branch.BranchName,
-                            ResourceUrl: branch.BranchUrl,
-                            Summary: $"GitHub branch {branch.BranchName}")
-                    ]);
-            }
-
-            var ensuredBranch = await _gitHubConnector.CreateBranchAsync(
-                new CreateGitHubBranchCommand(branchName, BaseBranch: null),
-                cancellationToken);
-
-            var title = node.Name is { Length: > 0 }
-                ? $"Autofac: {node.Name}"
-                : $"Autofac run {runId}";
-            var body = BuildPullRequestBody(runId, stepId, metadata, attempt);
-            var pullRequest = await _gitHubConnector.CreatePullRequestAsync(
-                new CreateGitHubPullRequestCommand(
-                    RunId: runId,
-                    StepId: stepId,
-                    Attempt: attempt,
-                    HeadBranch: branchName,
-                    BaseBranch: null,
-                    Title: title,
-                    Body: body,
-                    CommitMessage: $"Autofac evidence for run {runId}, step {stepId}"),
-                cancellationToken);
-
-            return new AgentTaskOutcome(
-                Succeeded: true,
-                Output: $"""
-                    provider: github
-                    action: create_pull_request
-                    status: completed
-                    branch: {ensuredBranch.BranchName}
-                    branch_existing: {ensuredBranch.AlreadyExisted}
-                    pull_request: #{pullRequest.Number}
-                    url: {pullRequest.PullRequestUrl}
-                    marker: {pullRequest.MarkerPath}
-                    existing: {pullRequest.AlreadyExisted}
-                    """,
-                FailureReason: null,
-                PolicyDecision: policyDecision,
-                RuntimeSnapshot: runtimeSnapshot with
+            var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
+            return CreateToolRequest(
+                ToolName: metadata.Action,
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    PermissionDecision = new AgentPermissionDecisionRecord
-                    {
-                        Allowed = true,
-                        Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
-                        Rationale = policyDecision.Rationale
-                    }
-                },
-                ExternalActions:
-                [
-                    new ExternalActionRecord(
-                        Provider: "github",
-                        Action: "create_branch",
-                        Status: ensuredBranch.AlreadyExisted ? "already_exists" : "completed",
-                        ResourceId: ensuredBranch.BranchName,
-                        ResourceUrl: ensuredBranch.BranchUrl,
-                        Summary: $"GitHub branch {ensuredBranch.BranchName}"),
-                    new ExternalActionRecord(
-                        Provider: "github",
-                        Action: "create_pull_request",
-                        Status: pullRequest.AlreadyExisted ? "already_exists" : "completed",
-                        ResourceId: pullRequest.Number.ToString(),
-                        ResourceUrl: pullRequest.PullRequestUrl,
-                        Summary: $"GitHub pull request #{pullRequest.Number}")
-                ]);
+                    ["branch_name"] = branchName
+                });
         }
-        catch (Exception ex)
+
+        if (IsGitHubPullRequestAction(metadata.Action))
         {
-            return new AgentTaskOutcome(
-                Succeeded: false,
-                Output: null,
-                FailureReason: ex.Message,
-                PolicyDecision: policyDecision,
-                RuntimeSnapshot: runtimeSnapshot,
-                ExternalActions:
-                [
-                    new ExternalActionRecord(
-                        Provider: "github",
-                        Action: metadata.Action,
-                        Status: "failed",
-                        ResourceId: branchName,
-                        ResourceUrl: null,
-                        Summary: ex.Message)
-                ]);
-        }
-    }
-
-    private async Task<AgentTaskOutcome> RunInSandboxAsync(
-        string runId,
-        string stepId,
-        AutofacTaskMetadata metadata,
-        int attempt,
-        SkillManifest? skillManifest,
-        Domain.Persistence.PolicyDecision policyDecision,
-        AgentRuntimeSnapshot runtimeSnapshot,
-        CancellationToken cancellationToken)
-    {
-        var sandboxRequest = new SandboxExecutionRequest(
-            RunId: runId,
-            StepId: stepId,
-            AgentName: metadata.Agent,
-            Action: metadata.Action,
-            Environment: metadata.Environment,
-            PurposeType: metadata.PurposeType,
-            PolicyTag: metadata.PolicyTag,
-            Attempt: attempt);
-
-        var result = await _sandbox.ExecuteAsync(sandboxRequest, cancellationToken);
-
-        if (!result.Succeeded)
-        {
-            return new AgentTaskOutcome(
-                Succeeded: false,
-                Output: result.Logs,
-                FailureReason: result.FailureReason,
-                Artifacts: result.Artifacts,
-                PolicyDecision: policyDecision,
-                RuntimeSnapshot: runtimeSnapshot);
-        }
-
-        var output = BuildSandboxOutput(sandboxRequest, result, skillManifest);
-
-        return new AgentTaskOutcome(
-            Succeeded: true,
-            Output: output,
-            FailureReason: null,
-            Artifacts: result.Artifacts,
-            PolicyDecision: policyDecision,
-            RuntimeSnapshot: runtimeSnapshot with
-            {
-                PermissionDecision = new AgentPermissionDecisionRecord
+            var branchName = BuildBranchName(runId, _gitHubBranchPrefix);
+            return CreateToolRequest(
+                ToolName: "github.create_pull_request",
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    Allowed = true,
-                    Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
-                    Rationale = policyDecision.Rationale
-                }
-            });
+                    ["run_id"] = runId,
+                    ["step_id"] = stepId,
+                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["head_branch"] = branchName,
+                    ["title"] = node.Name is { Length: > 0 } ? $"Autofac: {node.Name}" : $"Autofac run {runId}",
+                    ["body"] = BuildPullRequestBody(runId, stepId, metadata, attempt),
+                    ["commit_message"] = $"Autofac evidence for run {runId}, step {stepId}"
+                });
+        }
+
+        if (_sandboxOptions.Enabled)
+        {
+            return CreateToolRequest(
+                ToolName: "sandbox.execute",
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["agent_name"] = metadata.Agent,
+                    ["action"] = metadata.Action,
+                    ["environment"] = metadata.Environment ?? string.Empty,
+                    ["purpose_type"] = metadata.PurposeType,
+                    ["policy_tag"] = metadata.PolicyTag,
+                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                });
+        }
+
+        return null;
     }
 
     private static AgentRuntimeSnapshot BuildRuntimeSnapshot(
@@ -422,10 +326,13 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             ?? profile.Skills.FirstOrDefault();
     }
 
-    private static bool IsGitHubAction(string action) =>
-        string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+    private static bool IsGitHubPullRequestAction(string action) =>
         string.Equals(action, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.create_pr", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsGitHubAction(string action) =>
+        string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+        IsGitHubPullRequestAction(action);
 
     private static string BuildBranchName(string runId, string branchPrefix)
     {
@@ -499,48 +406,6 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             mode: simulated
             timestamp: {DateTimeOffset.UtcNow:o}{contextSection}
             """;
-    }
-
-    private static string BuildSandboxOutput(
-        SandboxExecutionRequest request,
-        SandboxExecutionResult result,
-        SkillManifest? manifest)
-    {
-        var skillContext = manifest is not null
-            ? $"""
-
-              skill_context:
-                id: {manifest.SkillId}
-                name: {manifest.Name}
-                version: {manifest.Version ?? "unspecified"}
-                fingerprint: {manifest.Fingerprint}
-              """
-            : string.Empty;
-
-        return $"""
-            agent: {request.AgentName}
-            action: {request.Action}
-            environment: {request.Environment ?? "unspecified"}
-            purpose: {request.PurposeType}
-            policy: {request.PolicyTag}
-            attempt: {request.Attempt}
-            status: completed
-            mode: sandbox
-            exit_code: {result.ExitCode}
-            duration_ms: {result.Duration.TotalMilliseconds:F0}
-            artifact_count: {result.Artifacts.Count}
-            timestamp: {DateTimeOffset.UtcNow:o}{skillContext}
-            logs: |
-            {IndentLogs(result.Logs)}
-            """;
-    }
-
-    private static string IndentLogs(string logs)
-    {
-        if (string.IsNullOrWhiteSpace(logs)) return "  (no output)";
-        return string.Join('\n', logs
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => $"  {l}"));
     }
 
     private SkillResolution ResolveSkills(
@@ -664,5 +529,46 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
         public static SkillResolution Fail(string failureReason) =>
             new(false, null, [], failureReason);
+    }
+
+    private static ToolGatewayRequest CreateToolRequest(
+        string ToolName,
+        string Action,
+        string runId,
+        string stepId,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        AgentPermissionContract permissions,
+        IReadOnlyDictionary<string, string> input) =>
+        new(
+            ToolName,
+            Action,
+            runId,
+            stepId,
+            metadata.Agent,
+            metadata.Environment,
+            metadata.PurposeType,
+            metadata.PolicyTag,
+            metadata.RequiresEvidence,
+            attempt,
+            permissions.Level,
+            permissions.AllowedTools,
+            permissions.DeniedTools,
+            input);
+
+    private static IReadOnlyList<AgentArtifactRecord> MapArtifacts(IReadOnlyDictionary<string, string>? artifacts)
+    {
+        if (artifacts is null || artifacts.Count == 0)
+        {
+            return [];
+        }
+
+        return artifacts.Keys
+            .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+            .Select(static name => new AgentArtifactRecord
+            {
+                Name = name
+            })
+            .ToArray();
     }
 }
