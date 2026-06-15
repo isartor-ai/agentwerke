@@ -1,6 +1,8 @@
 using Autofac.Application.Observability;
+using Autofac.Application.Secrets;
 using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
+using Autofac.Infrastructure.Secrets;
 using Autofac.Infrastructure.Workflows;
 using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRunner, WorkflowRunnerAdapter>();
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
+        services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
 
         return services;
     }

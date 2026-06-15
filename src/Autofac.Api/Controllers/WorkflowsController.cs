@@ -1,6 +1,8 @@
+using Autofac.Api.Auth;
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Workflows;
 using Autofac.Application.Workflows;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Autofac.Api.Controllers;
@@ -36,6 +38,7 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(ApiContractMappings.ToWorkflowDetail(workflow));
     }
 
+    [Authorize(Policy = AutofacPolicies.Admin)]
     [HttpPost("import")]
     public async Task<IActionResult> Import([FromBody] ImportWorkflowRequest request)
     {
@@ -67,6 +70,7 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(new PolicySimulationResponse(tasks));
     }
 
+    [Authorize(Policy = AutofacPolicies.Admin)]
     [HttpPost("{workflowId}/publish")]
     public async Task<IActionResult> Publish(string workflowId, [FromBody] PublishWorkflowRequest request)
     {

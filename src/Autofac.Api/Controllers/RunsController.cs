@@ -1,8 +1,10 @@
+using Autofac.Api.Auth;
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Runs;
 using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
 using Autofac.Storage.Artifacts;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -62,6 +64,7 @@ public sealed class RunsController : ControllerBase
         return Ok(ApiContractMappings.ToRunDetail(run, approvals, artifacts));
     }
 
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost]
     public async Task<IActionResult> Start([FromBody] StartRunRequest request)
     {
@@ -86,6 +89,7 @@ public sealed class RunsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("{runId}/recover")]
     public async Task<IActionResult> Recover(string runId)
     {
@@ -104,6 +108,7 @@ public sealed class RunsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("{runId}/artifacts/{artifactName}")]
     [RequestSizeLimit(50_000_000)]
     public async Task<IActionResult> UploadArtifact(
