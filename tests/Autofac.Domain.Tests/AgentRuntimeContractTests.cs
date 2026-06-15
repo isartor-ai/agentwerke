@@ -44,6 +44,27 @@ public sealed class AgentRuntimeContractTests
     }
 
     [Fact]
+    public void AgentHookContract_CapturesFailureModeAndSettings()
+    {
+        var hook = new AgentHookContract
+        {
+            Name = "policy-guard",
+            Event = "before_agent_run",
+            Type = "internal-policy",
+            Blocking = true,
+            FailureMode = AgentHookFailureModes.FailOpen,
+            Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["decision"] = "block"
+            }
+        };
+
+        Assert.Equal("policy-guard", hook.Name);
+        Assert.Equal(AgentHookFailureModes.FailOpen, hook.FailureMode);
+        Assert.Equal("block", hook.Settings["decision"]);
+    }
+
+    [Fact]
     public void AgentRuntimeSnapshot_CapturesRunStepAndRuntimeCapabilities()
     {
         var snapshot = new AgentRuntimeSnapshot

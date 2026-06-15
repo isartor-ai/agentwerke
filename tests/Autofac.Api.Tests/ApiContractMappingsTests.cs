@@ -80,6 +80,19 @@ public sealed class ApiContractMappingsTests
                                 ArtifactNames = [".autofac/runs/run-1/step-1.md"],
                                 DurationMs = 125
                             }
+                        ],
+                        HookExecutions =
+                        [
+                            new AgentHookExecutionRecord
+                            {
+                                HookName = "policy-guard",
+                                Event = "before_agent_run",
+                                Type = "internal-policy",
+                                Decision = "proceed",
+                                Blocking = true,
+                                OutputSummary = "validated",
+                                DurationMs = 5
+                            }
                         ]
                     }
                 }
@@ -103,5 +116,8 @@ public sealed class ApiContractMappingsTests
         Assert.Equal("github.create_pull_request", tool.ToolName);
         Assert.Equal("allow", tool.PolicyDecisionKind);
         Assert.Single(tool.ArtifactNames);
+        var hook = Assert.Single(step.HookExecutions);
+        Assert.Equal("policy-guard", hook.HookName);
+        Assert.True(hook.Blocking);
     }
 }

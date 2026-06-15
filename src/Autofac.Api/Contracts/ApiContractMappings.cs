@@ -173,7 +173,40 @@ internal static class ApiContractMappings
             step.Output,
             step.Error,
             PolicyDecision: step.PolicyDecision is null ? null : ToPolicyDecision(step.PolicyDecision),
-            RuntimeSnapshot: step.RuntimeSnapshot is null ? null : ToRunStepRuntimeSnapshot(step.RuntimeSnapshot));
+            PromptSnapshot: step.RuntimeSnapshot?.Prompt is null ? null : ToPromptSnapshot(step.RuntimeSnapshot.Prompt),
+            Skills: step.RuntimeSnapshot?.Skills.Select(static skill => new SkillAuditRecord(
+                skill.SkillId,
+                skill.Name,
+                skill.Description,
+                skill.Version,
+                skill.Fingerprint,
+                skill.InvocationRules.ToArray(),
+                skill.RequiredFiles.ToArray(),
+                skill.OptionalTools.ToArray(),
+                skill.Source,
+                skill.Available,
+                skill.Selected,
+                skill.Invoked)).ToArray() ?? [],
+            ToolInvocations: step.RuntimeSnapshot?.ToolInvocations.Select(static tool => new ToolInvocationRecord(
+                tool.ToolName,
+                tool.Category,
+                tool.Status,
+                tool.PolicyDecisionId,
+                tool.PolicyDecisionKind,
+                tool.InputSummary,
+                tool.OutputSummary,
+                tool.ErrorMessage,
+                tool.ArtifactNames.ToArray(),
+                tool.DurationMs)).ToArray() ?? [],
+            HookExecutions: step.RuntimeSnapshot?.HookExecutions.Select(static hook => new HookExecutionRecord(
+                hook.HookName,
+                hook.Event,
+                hook.Type,
+                hook.Decision,
+                hook.Blocking,
+                hook.OutputSummary,
+                hook.ErrorMessage,
+                hook.DurationMs)).ToArray() ?? []);
     }
 
     public static string NormalizeRunStatus(string status)

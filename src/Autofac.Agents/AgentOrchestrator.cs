@@ -1,5 +1,6 @@
 using System.Text;
 using Autofac.AgentSecOps;
+using Autofac.Agents.Hooks;
 using Autofac.Agents.Mcp;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
@@ -27,6 +28,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly ISkillRepository _skillRepository;
     private readonly IAgentPromptAssembler _promptAssembler;
     private readonly IPolicyEvaluationService _policyEvaluationService;
+    private readonly IAgentHookGateway _hookGateway;
     private readonly IMcpToolSessionFactory _mcpToolSessionFactory;
     private readonly IToolRegistry _toolRegistry;
     private readonly IToolGateway _toolGateway;
@@ -38,6 +40,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         ISkillRepository skillRepository,
         IAgentPromptAssembler promptAssembler,
         IPolicyEvaluationService policyEvaluationService,
+        IAgentHookGateway hookGateway,
         IMcpToolSessionFactory mcpToolSessionFactory,
         IToolRegistry toolRegistry,
         IToolGateway toolGateway,
@@ -48,6 +51,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _skillRepository = skillRepository;
         _promptAssembler = promptAssembler;
         _policyEvaluationService = policyEvaluationService;
+        _hookGateway = hookGateway;
         _mcpToolSessionFactory = mcpToolSessionFactory;
         _toolRegistry = toolRegistry;
         _toolGateway = toolGateway;
@@ -88,7 +92,11 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         var skillResolution = ResolveSkills(profile, matchedSkillRef, metadata.RuntimeContract);
         if (!skillResolution.Succeeded)
         {
-            return new AgentTaskOutcome(
+            return await FinalizeOutcomeAsync(
+                node,
+                metadata,
+                attempt,
+                new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
                 FailureReason: skillResolution.FailureReason,
@@ -100,7 +108,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     attempt,
                     null,
                     skillResolution.AuditSkills,
-                    CreateEmptyPromptSnapshot()));
+                    CreateEmptyPromptSnapshot())),
+                cancellationToken);
         }
 
         var skillManifest = skillResolution.PrimarySkill;
@@ -132,17 +141,43 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
         if (!promptAssembly.Succeeded)
         {
-            return new AgentTaskOutcome(
+            return await FinalizeOutcomeAsync(
+                node,
+                metadata,
+                attempt,
+                new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
                 FailureReason: promptAssembly.FailureReason,
-                RuntimeSnapshot: runtimeSnapshot);
+                RuntimeSnapshot: runtimeSnapshot),
+                cancellationToken);
+        }
+
+        var beforeRunHooks = await ExecuteHooksAsync(
+            AgentHookEvents.BeforeAgentRun,
+            node,
+            metadata,
+            attempt,
+            runtimeSnapshot,
+            Output: null,
+            FailureReason: null,
+            Artifacts: null,
+            ToolName: null,
+            cancellationToken);
+        runtimeSnapshot = beforeRunHooks.RuntimeSnapshot;
+        if (TryCreateOutcomeFromHookDecision(beforeRunHooks, metadata, runtimeSnapshot, out var hookOutcome))
+        {
+            return await FinalizeOutcomeAsync(node, metadata, attempt, hookOutcome, cancellationToken);
         }
 
         await using var mcpSession = await PrepareMcpToolsAsync(metadata, cancellationToken);
         if (mcpSession.Result is not null && !mcpSession.Result.Succeeded)
         {
-            return new AgentTaskOutcome(
+            return await FinalizeOutcomeAsync(
+                node,
+                metadata,
+                attempt,
+                new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
                 FailureReason: mcpSession.Result.FailureReason,
@@ -154,22 +189,28 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
                         Rationale = mcpSession.Result.FailureReason
                     }
-                });
+                }),
+                cancellationToken);
         }
 
         var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt);
         if (toolRequest is not null)
         {
-            return await RunViaToolGatewayAsync(toolRequest, metadata, runtimeSnapshot, cancellationToken);
+            return await RunViaToolGatewayAsync(toolRequest, node, metadata, attempt, runtimeSnapshot, cancellationToken);
         }
 
         if (metadata.Action.StartsWith("mcp.", StringComparison.OrdinalIgnoreCase))
         {
-            return new AgentTaskOutcome(
+            return await FinalizeOutcomeAsync(
+                node,
+                metadata,
+                attempt,
+                new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
                 FailureReason: $"MCP tool '{metadata.Action}' is not registered. Check the enabled MCP servers and discovery settings.",
-                RuntimeSnapshot: runtimeSnapshot);
+                RuntimeSnapshot: runtimeSnapshot),
+                cancellationToken);
         }
 
         var policyDecision = _policyEvaluationService.Evaluate(new PolicyEvaluationRequest(
@@ -183,7 +224,11 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
         if (!string.Equals(policyDecision.Kind, "allow", StringComparison.OrdinalIgnoreCase))
         {
-            return new AgentTaskOutcome(
+            return await FinalizeOutcomeAsync(
+                node,
+                metadata,
+                attempt,
+                new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
                 FailureReason: policyDecision.Rationale,
@@ -196,7 +241,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
                         Rationale = policyDecision.Rationale
                     }
-                });
+                }),
+                cancellationToken);
         }
 
         var request = new AgentExecutionRequest(
@@ -214,7 +260,11 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
         var simulatedOutput = BuildSimulatedOutput(request, profile, matchedSkillRef, skillManifest);
 
-        var outcome = new AgentTaskOutcome(
+        return await FinalizeOutcomeAsync(
+            node,
+            metadata,
+            attempt,
+            new AgentTaskOutcome(
             Succeeded: true,
             Output: simulatedOutput,
             FailureReason: null,
@@ -227,17 +277,35 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
                     Rationale = policyDecision.Rationale
                 }
-            });
-
-        return await MaybeOffloadOutputAsync(runId, stepId, outcome, cancellationToken);
+            }),
+            cancellationToken);
     }
 
     private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(
         ToolGatewayRequest request,
+        BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
+        int attempt,
         AgentRuntimeSnapshot runtimeSnapshot,
         CancellationToken cancellationToken)
     {
+        var beforeToolHooks = await ExecuteHooksAsync(
+            AgentHookEvents.BeforeToolCall,
+            node,
+            metadata,
+            attempt,
+            runtimeSnapshot,
+            Output: null,
+            FailureReason: null,
+            Artifacts: null,
+            ToolName: request.ToolName,
+            cancellationToken);
+        runtimeSnapshot = beforeToolHooks.RuntimeSnapshot;
+        if (TryCreateOutcomeFromHookDecision(beforeToolHooks, metadata, runtimeSnapshot, out var beforeToolOutcome))
+        {
+            return await FinalizeOutcomeAsync(node, metadata, attempt, beforeToolOutcome, cancellationToken);
+        }
+
         var result = await _toolGateway.ExecuteAsync(request, cancellationToken);
         var updatedSnapshot = runtimeSnapshot with
         {
@@ -250,8 +318,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Rationale = result.FailureReason ?? result.PolicyDecision?.Rationale ?? $"Tool '{request.ToolName}' completed."
             }
         };
-
-        return new AgentTaskOutcome(
+        var toolOutcome = new AgentTaskOutcome(
             Succeeded: result.Succeeded,
             Output: result.Output,
             FailureReason: result.FailureReason,
@@ -259,6 +326,33 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             ExternalActions: result.ExternalActions,
             PolicyDecision: result.PolicyDecision,
             RuntimeSnapshot: updatedSnapshot);
+
+        var afterToolHooks = await ExecuteHooksAsync(
+            AgentHookEvents.AfterToolCall,
+            node,
+            metadata,
+            attempt,
+            updatedSnapshot,
+            result.Output,
+            result.FailureReason,
+            result.Artifacts,
+            request.ToolName,
+            cancellationToken);
+        updatedSnapshot = afterToolHooks.RuntimeSnapshot;
+        toolOutcome = toolOutcome with { RuntimeSnapshot = updatedSnapshot };
+
+        if (TryCreateOutcomeFromHookDecision(afterToolHooks, metadata, updatedSnapshot, out var afterToolOutcome))
+        {
+            toolOutcome = afterToolOutcome with
+            {
+                Artifacts = toolOutcome.Artifacts,
+                ExternalActions = toolOutcome.ExternalActions,
+                PolicyDecision = toolOutcome.PolicyDecision,
+                RuntimeSnapshot = updatedSnapshot
+            };
+        }
+
+        return await FinalizeOutcomeAsync(node, metadata, attempt, toolOutcome, cancellationToken);
     }
 
     private ToolGatewayRequest? BuildToolGatewayRequest(
@@ -512,6 +606,197 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             """;
     }
 
+    private async Task<HookEvaluationResult> ExecuteHooksAsync(
+        string eventName,
+        BpmnNodeDefinition node,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        string? Output,
+        string? FailureReason,
+        IReadOnlyDictionary<string, string>? Artifacts,
+        string? ToolName,
+        CancellationToken cancellationToken)
+    {
+        var hooks = metadata.RuntimeContract?.Hooks ?? [];
+        if (hooks.Count == 0)
+        {
+            return new HookEvaluationResult(AgentHookDecisions.Proceed, null, null, runtimeSnapshot);
+        }
+
+        var context = BuildHookContext(
+            runtimeSnapshot.RunId,
+            runtimeSnapshot.StepId,
+            node,
+            metadata,
+            attempt,
+            Output,
+            FailureReason,
+            Artifacts,
+            ToolName);
+        var result = await _hookGateway.ExecuteAsync(eventName, hooks, context, cancellationToken);
+        var updatedSnapshot = runtimeSnapshot with
+        {
+            HookExecutions = runtimeSnapshot.HookExecutions.Concat(result.Records).ToArray()
+        };
+
+        return new HookEvaluationResult(result.Decision, result.OutputSummary, result.FailureReason, updatedSnapshot);
+    }
+
+    private async Task<AgentTaskOutcome> FinalizeOutcomeAsync(
+        BpmnNodeDefinition node,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        AgentTaskOutcome outcome,
+        CancellationToken cancellationToken)
+    {
+        if (outcome.RuntimeSnapshot is null)
+        {
+            return outcome;
+        }
+
+        var runtimeSnapshot = outcome.RuntimeSnapshot;
+        if (outcome.Artifacts is { Count: > 0 })
+        {
+            var artifactHooks = await ExecuteHooksAsync(
+                AgentHookEvents.OnArtifactCreated,
+                node,
+                metadata,
+                attempt,
+                runtimeSnapshot,
+                outcome.Output,
+                outcome.FailureReason,
+                outcome.Artifacts,
+                ToolName: null,
+                cancellationToken);
+            runtimeSnapshot = artifactHooks.RuntimeSnapshot;
+            outcome = outcome with { RuntimeSnapshot = runtimeSnapshot };
+
+            if (TryCreateOutcomeFromHookDecision(artifactHooks, metadata, runtimeSnapshot, out var artifactOutcome))
+            {
+                outcome = MergeOutcome(outcome, artifactOutcome, runtimeSnapshot);
+            }
+        }
+
+        var finalEvent = outcome.Succeeded
+            ? AgentHookEvents.AfterAgentRun
+            : AgentHookEvents.OnFailure;
+
+        var finalHooks = await ExecuteHooksAsync(
+            finalEvent,
+            node,
+            metadata,
+            attempt,
+            runtimeSnapshot,
+            outcome.Output,
+            outcome.FailureReason,
+            outcome.Artifacts,
+            ToolName: null,
+            cancellationToken);
+        runtimeSnapshot = finalHooks.RuntimeSnapshot;
+        outcome = outcome with { RuntimeSnapshot = runtimeSnapshot };
+
+        if (TryCreateOutcomeFromHookDecision(finalHooks, metadata, runtimeSnapshot, out var finalOutcome))
+        {
+            outcome = MergeOutcome(outcome, finalOutcome, runtimeSnapshot);
+        }
+
+        return outcome;
+    }
+
+    private static AgentTaskOutcome MergeOutcome(
+        AgentTaskOutcome original,
+        AgentTaskOutcome updated,
+        AgentRuntimeSnapshot runtimeSnapshot) =>
+        updated with
+        {
+            Artifacts = updated.Artifacts ?? original.Artifacts,
+            ExternalActions = updated.ExternalActions ?? original.ExternalActions,
+            PolicyDecision = updated.PolicyDecision ?? original.PolicyDecision,
+            RuntimeSnapshot = runtimeSnapshot
+        };
+
+    private static bool TryCreateOutcomeFromHookDecision(
+        HookEvaluationResult result,
+        AutofacTaskMetadata metadata,
+        AgentRuntimeSnapshot runtimeSnapshot,
+        out AgentTaskOutcome outcome)
+    {
+        var rationale = result.FailureReason ?? result.OutputSummary ?? "Hook changed the agent lifecycle outcome.";
+        var permissionDecision = new AgentPermissionDecisionRecord
+        {
+            Allowed = !string.Equals(result.Decision, AgentHookDecisions.Block, StringComparison.OrdinalIgnoreCase),
+            Level = metadata.RuntimeContract?.Permissions.Level ?? AgentPermissionLevels.ReadOnly,
+            Rationale = rationale
+        };
+        var snapshot = runtimeSnapshot with { PermissionDecision = permissionDecision };
+
+        switch (result.Decision)
+        {
+            case AgentHookDecisions.Block:
+                outcome = new AgentTaskOutcome(
+                    Succeeded: false,
+                    Output: null,
+                    FailureReason: rationale,
+                    RuntimeSnapshot: snapshot);
+                return true;
+            case AgentHookDecisions.Skip:
+            case AgentHookDecisions.Override:
+                outcome = new AgentTaskOutcome(
+                    Succeeded: true,
+                    Output: result.OutputSummary ?? rationale,
+                    FailureReason: null,
+                    RuntimeSnapshot: snapshot);
+                return true;
+            default:
+                outcome = default!;
+                return false;
+        }
+    }
+
+    private static AgentHookContext BuildHookContext(
+        string runId,
+        string stepId,
+        BpmnNodeDefinition node,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        string? output,
+        string? failureReason,
+        IReadOnlyDictionary<string, string>? artifacts,
+        string? toolName)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["run_id"] = runId,
+            ["step_id"] = stepId,
+            ["node_id"] = node.Id,
+            ["node_name"] = node.Name ?? string.Empty,
+            ["agent"] = metadata.Agent,
+            ["action"] = metadata.Action,
+            ["environment"] = metadata.Environment ?? string.Empty,
+            ["purpose_type"] = metadata.PurposeType,
+            ["policy_tag"] = metadata.PolicyTag,
+            ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["output"] = output ?? string.Empty,
+            ["failure_reason"] = failureReason ?? string.Empty,
+            ["tool_name"] = toolName ?? string.Empty,
+            ["artifact_names"] = artifacts is null ? string.Empty : string.Join(",", artifacts.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase))
+        };
+
+        return new AgentHookContext(
+            runId,
+            stepId,
+            node.Id,
+            node.Name ?? string.Empty,
+            metadata.Agent,
+            metadata.Action,
+            metadata.Environment,
+            metadata.PurposeType,
+            metadata.PolicyTag,
+            attempt,
+            values);
+    }
+
     private SkillResolution ResolveSkills(
         AgentProfile? profile,
         AgentSkillRef? matchedSkillRef,
@@ -615,6 +900,12 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Sections: [],
             Variables: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             SourceFiles: []);
+
+    private sealed record HookEvaluationResult(
+        string Decision,
+        string? OutputSummary,
+        string? FailureReason,
+        AgentRuntimeSnapshot RuntimeSnapshot);
 
     private sealed record ResolvedSkill(
         SkillManifest Manifest,

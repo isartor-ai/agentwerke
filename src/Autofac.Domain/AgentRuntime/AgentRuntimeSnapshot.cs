@@ -91,11 +91,19 @@ public sealed record AgentToolInvocationRecord
 
 public sealed record AgentHookExecutionRecord
 {
+    public required string HookName { get; init; }
+
     public required string Event { get; init; }
 
     public required string Type { get; init; }
 
     public string Decision { get; init; } = "proceed";
+
+    public bool Blocking { get; init; }
+
+    public string? OutputSummary { get; init; }
+
+    public string? ErrorMessage { get; init; }
 
     public int? DurationMs { get; init; }
 }
