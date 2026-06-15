@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
     <ProjectReference Include="..\Autofac.AgentSecOps\Autofac.AgentSecOps.csproj" />
     <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
     <ProjectReference Include="..\Autofac.Domain\Autofac.Domain.csproj" />

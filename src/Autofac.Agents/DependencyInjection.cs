@@ -1,5 +1,6 @@
 using Autofac.Agents.Hooks;
 using Autofac.Agents.Mcp;
+using Autofac.Agents.Models;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
@@ -41,6 +42,20 @@ public static class DependencyInjection
         services.AddScoped<IToolRegistry, ToolRegistry>();
         services.AddScoped<IToolGateway, ToolGateway>();
         services.AddAutofacSandboxes(configuration);
+
+        // Language model client — Anthropic if API key is present, null client otherwise
+        services.Configure<LanguageModelOptions>(configuration.GetSection(LanguageModelOptions.Section));
+        var apiKey = configuration[$"{LanguageModelOptions.Section}:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            services.AddScoped<ILanguageModelClient, AnthropicLanguageModelClient>();
+        }
+        else
+        {
+            services.AddScoped<ILanguageModelClient, NullLanguageModelClient>();
+        }
+        services.AddScoped<IAgentModelRunner, AgentModelRunner>();
+
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();
 
         return services;

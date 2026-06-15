@@ -226,6 +226,16 @@ internal static class ApiContractMappings
             approval.DecisionComment);
     }
 
+    private static PromptSnapshot ToPromptSnapshot(AgentPromptSnapshot prompt)
+    {
+        return new PromptSnapshot(
+            prompt.FinalPrompt,
+            prompt.RenderedAt,
+            prompt.Sections.Select(static s => new PromptSection(s.Name, s.Content, s.Source)).ToArray(),
+            prompt.Variables,
+            prompt.SourceFiles.ToArray());
+    }
+
     private static RunPolicyDecision ToPolicyDecision(DomainPolicyDecision decision)
     {
         return new RunPolicyDecision(

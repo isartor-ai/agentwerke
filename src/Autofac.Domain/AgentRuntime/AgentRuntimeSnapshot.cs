@@ -25,6 +25,8 @@ public sealed record AgentRuntimeSnapshot
     public IReadOnlyList<AgentArtifactRecord> Artifacts { get; init; } = [];
 
     public AgentPermissionDecisionRecord? PermissionDecision { get; init; }
+
+    public AgentModelTokenUsage? TokenUsage { get; init; }
 }
 
 public sealed record AgentPromptSnapshot(
@@ -125,3 +127,5 @@ public sealed record AgentPermissionDecisionRecord
 
     public string? Rationale { get; init; }
 }
+
+public sealed record AgentModelTokenUsage(int InputTokens, int OutputTokens, string? ModelId);

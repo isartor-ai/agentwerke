@@ -132,7 +132,7 @@ public sealed class AgentRuntimeContractTests
             },
             Skills = [new AgentSkillUsageRecord { SkillId = "tdd", Name = "TDD", Selected = true, Fingerprint = "abc123" }],
             ToolInvocations = [new AgentToolInvocationRecord { ToolName = "bash", Category = AgentToolCategories.Shell, Status = "completed", DurationMs = 1200 }],
-            HookExecutions = [new AgentHookExecutionRecord { Event = "PreToolUse", Type = "command", Decision = "proceed", DurationMs = 5 }],
+            HookExecutions = [new AgentHookExecutionRecord { HookName = "policy-guard", Event = "PreToolUse", Type = "command", Decision = "proceed", DurationMs = 5 }],
             Artifacts = [new AgentArtifactRecord { Name = "coverage.html", Uri = "/artifacts/coverage.html", ContentType = "text/html" }],
             PermissionDecision = new AgentPermissionDecisionRecord
             {

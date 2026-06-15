@@ -5,7 +5,7 @@ using Autofac.Workflows.Runtime;
 
 namespace Autofac.Agents.Tools;
 
-public sealed class GitHubCreateBranchTool : IAgentTool
+public sealed class GitHubCreateBranchTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IGitHubConnector _connector;
 
@@ -17,6 +17,12 @@ public sealed class GitHubCreateBranchTool : IAgentTool
     public string Name => "github.create_branch";
 
     public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("branch_name", "string", "The name of the branch to create.", Required: true),
+        new("base_branch", "string", "The base branch to create from. Defaults to the repository default branch.", Required: false)
+    ];
 
     public void Validate(IReadOnlyDictionary<string, string> input)
     {
@@ -71,7 +77,7 @@ public sealed class GitHubCreateBranchTool : IAgentTool
         input.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 }
 
-public sealed class GitHubCreatePullRequestTool : IAgentTool
+public sealed class GitHubCreatePullRequestTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IGitHubConnector _connector;
 
@@ -83,6 +89,17 @@ public sealed class GitHubCreatePullRequestTool : IAgentTool
     public string Name => "github.create_pull_request";
 
     public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("head_branch", "string", "The source branch to merge from.", Required: true),
+        new("title", "string", "The pull request title.", Required: true),
+        new("body", "string", "The pull request description body.", Required: true),
+        new("commit_message", "string", "Commit message for evidence commits.", Required: true),
+        new("run_id", "string", "The workflow run ID (injected automatically).", Required: false),
+        new("step_id", "string", "The workflow step ID (injected automatically).", Required: false),
+        new("attempt", "string", "The execution attempt number (injected automatically).", Required: false)
+    ];
 
     public void Validate(IReadOnlyDictionary<string, string> input)
     {
