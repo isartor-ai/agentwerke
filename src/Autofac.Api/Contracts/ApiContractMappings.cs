@@ -221,7 +221,7 @@ internal static class ApiContractMappings
         return new RunStepRuntimeSnapshot(
             AgentName: snapshot.AgentName,
             Action: snapshot.Action,
-            PromptInline: contract.Prompt?.Inline,
+            PromptInline: snapshot.Prompt?.FinalPrompt ?? contract.Prompt?.Inline,
             Skills: snapshot.Skills
                 .Select(static s => new RunStepSkillUsage(s.SkillId, s.Name, s.Selected, s.Fingerprint))
                 .ToArray(),

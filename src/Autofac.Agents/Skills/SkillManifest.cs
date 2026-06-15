@@ -11,6 +11,14 @@ public sealed record SkillManifest(
     string Name,
     /// <summary>Short description from frontmatter 'description:' field.</summary>
     string Description,
+    /// <summary>Optional semantic version declared in frontmatter.</summary>
+    string? Version,
+    /// <summary>Rules that describe when the skill should be invoked.</summary>
+    IReadOnlyList<string> InvocationRules,
+    /// <summary>Relative file paths the skill expects to have available.</summary>
+    IReadOnlyList<string> RequiredFiles,
+    /// <summary>Optional tools the skill can make use of.</summary>
+    IReadOnlyList<string> OptionalTools,
     /// <summary>Full Markdown body (without frontmatter delimiters).</summary>
     string Content,
     /// <summary>SHA-256 hex digest of the raw file bytes — used for audit/traceability.</summary>

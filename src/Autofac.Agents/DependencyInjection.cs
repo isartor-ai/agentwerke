@@ -1,4 +1,7 @@
+using Autofac.Agents.Mcp;
+using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
+using Autofac.Agents.Tools;
 using Autofac.Sandboxes;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +28,14 @@ public static class DependencyInjection
         var repository = new SkillRepository(manifests);
 
         services.AddSingleton<ISkillRepository>(repository);
+        services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
+        services.AddScoped<IAgentTool, GitHubCreateBranchTool>();
+        services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();
+        services.AddScoped<IAgentTool, SandboxExecutionTool>();
+        services.AddScoped<IMcpClientFactory, McpClientFactory>();
+        services.AddScoped<IMcpToolSessionFactory, McpToolSessionFactory>();
+        services.AddScoped<IToolRegistry, ToolRegistry>();
+        services.AddScoped<IToolGateway, ToolGateway>();
         services.AddAutofacSandboxes(configuration);
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();
 
