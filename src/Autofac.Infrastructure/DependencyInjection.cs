@@ -2,6 +2,7 @@ using Autofac.Application.Observability;
 using Autofac.Application.Secrets;
 using Autofac.Application.Workflows;
 using Autofac.Infrastructure.Persistence;
+using Autofac.Infrastructure.Workers;
 using Autofac.Infrastructure.Secrets;
 using Autofac.Infrastructure.Workflows;
 using Autofac.Workflows.Runtime;
@@ -42,6 +43,10 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
+
+        services.AddScoped<IRunOutbox, OutboxRepository>();
+        services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();
+        services.AddHostedService<RunDispatchWorker>();
 
         return services;
     }

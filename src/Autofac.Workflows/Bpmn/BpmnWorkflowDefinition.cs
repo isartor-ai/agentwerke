@@ -12,7 +12,8 @@ public sealed record BpmnNodeDefinition(
     string? Name,
     string ElementName,
     AutofacTaskMetadata? Metadata,
-    AutofacApprovalMetadata? ApprovalMetadata = null);
+    AutofacApprovalMetadata? ApprovalMetadata = null,
+    string? TimerDuration = null);
 
 public sealed record AutofacTaskMetadata(
     string Agent,

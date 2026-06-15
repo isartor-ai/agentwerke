@@ -1,40 +1,39 @@
 using Autofac.Application.Observability;
 using Autofac.Domain.Persistence;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 
 namespace Autofac.Application.Workflows;
 
 public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationService
 {
-    private const string ActiveStatus = "active";
+    private const string PendingStatus = "pending";
     private const string PendingApprovalStatus = "pending";
     private const string CancelledStatus = "cancelled";
 
     private readonly IWorkflowDefinitionRepository _definitionRepository;
-    private readonly IWorkflowRunner _runner;
     private readonly IWorkflowRunRepository _runRepository;
     private readonly IApprovalRepository _approvalRepository;
     private readonly IAuditRepository _auditRepository;
+    private readonly IRunOutbox _outbox;
     private readonly ICorrelationContext _correlationContext;
     private readonly IWorkflowMetrics _metrics;
     private readonly ILogger<WorkflowRunOrchestrationService> _logger;
 
     public WorkflowRunOrchestrationService(
         IWorkflowDefinitionRepository definitionRepository,
-        IWorkflowRunner runner,
         IWorkflowRunRepository runRepository,
         IApprovalRepository approvalRepository,
         IAuditRepository auditRepository,
+        IRunOutbox outbox,
         ICorrelationContext correlationContext,
         IWorkflowMetrics metrics,
         ILogger<WorkflowRunOrchestrationService> logger)
     {
         _definitionRepository = definitionRepository;
-        _runner = runner;
         _runRepository = runRepository;
         _approvalRepository = approvalRepository;
         _auditRepository = auditRepository;
+        _outbox = outbox;
         _correlationContext = correlationContext;
         _metrics = metrics;
         _logger = logger;
@@ -51,73 +50,58 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         var workflow = await _definitionRepository.GetAsync(command.WorkflowId, cancellationToken)
             ?? throw new WorkflowNotFoundException(command.WorkflowId);
 
-        if (!string.Equals(workflow.Status, ActiveStatus, StringComparison.Ordinal))
+        if (!string.Equals(workflow.Status, "active", StringComparison.Ordinal))
         {
             throw new WorkflowNotPublishedException(command.WorkflowId, workflow.Status);
         }
 
-        _logger.LogInformation(
-            "Starting workflow run. WorkflowId={WorkflowId} Initiator={Initiator} CorrelationId={CorrelationId}",
-            command.WorkflowId, command.Initiator, correlationId);
+        var runId = $"run_{Guid.NewGuid():N}";
 
-        _metrics.RunStarted(command.WorkflowId, workflow.Name);
-        var sw = Stopwatch.StartNew();
-
-        var result = await _runner.StartAsync(
-            command.WorkflowId,
-            workflow.BpmnXml,
+        await _runRepository.CreatePendingRunAsync(
+            runId,
+            workflow.Id,
+            workflow.Name,
+            workflow.Version,
             command.Initiator,
-            cancellationToken,
-            correlationId);
+            workflow.Tags,
+            correlationId,
+            cancellationToken);
 
         if (command.Trigger is not null)
         {
-            var t = command.Trigger;
-            var msg = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                source = t.Source,
-                eventType = t.EventType,
-                externalId = t.ExternalId,
-                externalUrl = t.ExternalUrl,
-                title = t.Title
-            });
-            await _runRepository.AppendEventAsync(result.RunId, "trigger_fired", msg, cancellationToken);
+            await _runRepository.AppendEventAsync(runId, "trigger_fired",
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    source = command.Trigger.Source,
+                    eventType = command.Trigger.EventType,
+                    externalId = command.Trigger.ExternalId,
+                    externalUrl = command.Trigger.ExternalUrl,
+                    title = command.Trigger.Title
+                }), cancellationToken);
         }
 
-        sw.Stop();
-        _metrics.RunCompleted(command.WorkflowId, workflow.Name, sw.Elapsed.TotalMilliseconds);
+        var payload = new OutboxStartPayload(workflow.Id, command.Initiator, correlationId).Serialize();
+        await _outbox.EnqueueAsync(OutboxOperations.Start, runId, payload, ct: cancellationToken);
 
-        if (result.WaitingApproval is not null)
-        {
-            await _runRepository.UpdateCurrentStepAsync(result.RunId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
-            await _runRepository.IncrementPendingApprovalsAsync(result.RunId, cancellationToken);
-            await CreateApprovalRequestAsync(
-                result.RunId,
-                workflow.Name,
-                command.Initiator ?? "unknown",
-                result.WaitingApproval,
-                correlationId,
-                cancellationToken);
-            _metrics.ApprovalCreated(result.WaitingApproval.RiskLevel);
-        }
+        _logger.LogInformation(
+            "Workflow run enqueued. RunId={RunId} WorkflowId={WorkflowId} Initiator={Initiator} CorrelationId={CorrelationId}",
+            runId, command.WorkflowId, command.Initiator, correlationId);
+
+        _metrics.RunStarted(command.WorkflowId, workflow.Name);
 
         await WriteAuditAsync(
-            runId: result.RunId,
+            runId: runId,
             correlationId: correlationId,
             actorType: "system",
             actor: command.Initiator ?? "unknown",
             action: "workflow.start",
             resourceType: "workflow",
             resourceId: command.WorkflowId,
-            outcome: "success",
+            outcome: "enqueued",
             details: null,
             cancellationToken);
 
-        return new StartRunResult(
-            result.RunId,
-            command.WorkflowId,
-            result.Status,
-            result.WaitingApproval);
+        return new StartRunResult(runId, command.WorkflowId, PendingStatus, WaitingApproval: null);
     }
 
     public async Task<ResumeRunResult> ResumeRunAsync(
@@ -138,9 +122,6 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
 
         var run = await _runRepository.GetRunAsync(command.RunId, cancellationToken)
             ?? throw new WorkflowRunNotFoundException(command.RunId);
-
-        var workflow = await _definitionRepository.GetAsync(run.WorkflowId, cancellationToken)
-            ?? throw new WorkflowNotFoundException(run.WorkflowId);
 
         var resolvedStatus = command.Decision switch
         {
@@ -184,30 +165,10 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             return new ResumeRunResult(command.RunId, CancelledStatus, WaitingApproval: null);
         }
 
-        var result = await _runner.ResumeAsync(
-            command.RunId,
-            workflow.BpmnXml,
-            decidedBy,
-            cancellationToken);
+        var payload = new OutboxResumePayload(decidedBy).Serialize();
+        await _outbox.EnqueueAsync(OutboxOperations.Resume, command.RunId, payload, ct: cancellationToken);
 
-        if (result.WaitingApproval is not null)
-        {
-            await _runRepository.UpdateCurrentStepAsync(result.RunId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
-            await _runRepository.IncrementPendingApprovalsAsync(result.RunId, cancellationToken);
-            await CreateApprovalRequestAsync(
-                result.RunId,
-                workflow.Name,
-                run.RequestedBy,
-                result.WaitingApproval,
-                correlationId,
-                cancellationToken);
-        }
-        else
-        {
-            await _runRepository.UpdateCurrentStepAsync(result.RunId, null, cancellationToken);
-        }
-
-        return new ResumeRunResult(result.RunId, result.Status, result.WaitingApproval);
+        return new ResumeRunResult(command.RunId, PendingStatus, WaitingApproval: null);
     }
 
     public async Task<RecoverRunResult> RecoverRunAsync(
@@ -219,65 +180,11 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         var run = await _runRepository.GetRunAsync(runId, cancellationToken)
             ?? throw new WorkflowRunNotFoundException(runId);
 
-        var workflow = await _definitionRepository.GetAsync(run.WorkflowId, cancellationToken)
-            ?? throw new WorkflowNotFoundException(run.WorkflowId);
+        await _outbox.EnqueueAsync(OutboxOperations.Recover, runId, ct: cancellationToken);
 
-        _logger.LogInformation(
-            "Recovering workflow run. RunId={RunId} WorkflowId={WorkflowId}",
-            runId, run.WorkflowId);
+        _logger.LogInformation("Workflow run recovery enqueued. RunId={RunId}", runId);
 
-        var result = await _runner.RecoverAsync(runId, workflow.BpmnXml, cancellationToken);
-
-        if (result.WaitingApproval is not null)
-        {
-            var existingApproval = await _approvalRepository.GetPendingApprovalForRunAsync(runId, cancellationToken);
-            if (existingApproval is null)
-            {
-                await _runRepository.UpdateCurrentStepAsync(runId, result.WaitingApproval.NodeName ?? result.WaitingApproval.NodeId, cancellationToken);
-                await _runRepository.IncrementPendingApprovalsAsync(runId, cancellationToken);
-                await CreateApprovalRequestAsync(
-                    runId,
-                    workflow.Name,
-                    run.RequestedBy,
-                    result.WaitingApproval,
-                    run.CorrelationId,
-                    cancellationToken);
-            }
-        }
-
-        return new RecoverRunResult(result.RunId, result.Status);
-    }
-
-    private async Task CreateApprovalRequestAsync(
-        string runId,
-        string workflowName,
-        string requester,
-        WaitingApprovalInfo waiting,
-        string? correlationId,
-        CancellationToken cancellationToken)
-    {
-        var slaDeadline = DateTimeOffset.UtcNow.AddHours(24).ToString("o");
-        var approval = new ApprovalRequest
-        {
-            Id = $"apr_{Guid.NewGuid():N}",
-            RunId = runId,
-            WorkflowName = workflowName,
-            ActionRequested = waiting.NodeName ?? waiting.PurposeType,
-            Requester = requester,
-            AgentName = waiting.AgentName ?? string.Empty,
-            PolicyRationale = waiting.PolicyTag,
-            RiskScore = waiting.RiskScore,
-            RiskLevel = waiting.RiskLevel,
-            RiskFactors = waiting.RiskFactors?.ToList() ?? [],
-            AffectedSystems = waiting.AffectedSystems?.ToList() ?? [],
-            SlaDeadline = slaDeadline,
-            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
-            Status = PendingApprovalStatus,
-            Priority = DeriveApprovalPriority(waiting.RiskLevel),
-        };
-
-        await _approvalRepository.AddApprovalAsync(approval, cancellationToken);
-        await _approvalRepository.SaveChangesAsync(cancellationToken);
+        return new RecoverRunResult(runId, run.Status);
     }
 
     private async Task WriteAuditAsync(
@@ -310,11 +217,4 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         await _auditRepository.AddAsync(record, cancellationToken);
         await _auditRepository.SaveChangesAsync(cancellationToken);
     }
-
-    private static string DeriveApprovalPriority(string riskLevel) => riskLevel switch
-    {
-        "critical" or "high" => "urgent",
-        "medium" => "normal",
-        _ => "low"
-    };
 }

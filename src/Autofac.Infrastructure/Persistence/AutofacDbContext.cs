@@ -21,6 +21,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
+    public DbSet<OutboxEntry> OutboxEntries => Set<OutboxEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("autofac");
@@ -131,6 +133,19 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Priority).HasMaxLength(64);
             entity.Property(e => e.DecisionComment).HasMaxLength(2048);
             entity.Property(e => e.DecidedBy).HasMaxLength(128);
+        });
+
+        modelBuilder.Entity<OutboxEntry>(entity =>
+        {
+            entity.ToTable("run_outbox");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Operation).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.Payload).HasColumnType("text");
+            entity.Property(e => e.LockedBy).HasMaxLength(128);
+            entity.Property(e => e.Error).HasColumnType("text");
+            entity.HasIndex(e => new { e.LockedBy, e.CompletedAt, e.VisibleAfter })
+                .HasDatabaseName("ix_run_outbox_claim");
         });
 
         modelBuilder.Entity<AuditRecord>(entity =>

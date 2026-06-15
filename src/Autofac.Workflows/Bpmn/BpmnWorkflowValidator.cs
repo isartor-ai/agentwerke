@@ -119,6 +119,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
 
             AutofacTaskMetadata? metadata = null;
             AutofacApprovalMetadata? approvalMetadata = null;
+            string? timerDuration = null;
 
             if ((localName is "serviceTask" or "scriptTask" or "userTask") &&
                 string.IsNullOrWhiteSpace(element.Attribute("name")?.Value))
@@ -138,7 +139,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                     approvalMetadata = ValidateApprovalMetadata(element, autofacNamespace, errors, warnings);
                     break;
                 case "intermediateCatchEvent":
-                    ValidateTimerEvent(element, errors);
+                    timerDuration = ParseTimerDuration(element, errors);
                     break;
                 case "boundaryEvent":
                     ValidateBoundaryEvent(element, errors);
@@ -150,7 +151,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 Name: element.Attribute("name")?.Value,
                 ElementName: localName,
                 Metadata: metadata,
-                ApprovalMetadata: approvalMetadata));
+                ApprovalMetadata: approvalMetadata,
+                TimerDuration: timerDuration));
         }
 
         var definition = new BpmnWorkflowDefinition(
@@ -339,14 +341,18 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         }
     }
 
-    private static void ValidateTimerEvent(XElement element, ICollection<BpmnValidationError> errors)
+    private static string? ParseTimerDuration(XElement element, ICollection<BpmnValidationError> errors)
     {
-        var hasTimerDefinition = element.Elements().Any(static child => child.Name.LocalName == "timerEventDefinition");
-        if (!hasTimerDefinition)
+        var timerDef = element.Elements().FirstOrDefault(static c => c.Name.LocalName == "timerEventDefinition");
+        if (timerDef is null)
         {
             errors.Add(CreateError(element,
                 "Intermediate catch event must define bpmn:timerEventDefinition for timer handling."));
+            return null;
         }
+
+        var timeDuration = timerDef.Elements().FirstOrDefault(static c => c.Name.LocalName == "timeDuration");
+        return timeDuration?.Value?.Trim();
     }
 
     private static void ValidateBoundaryEvent(XElement element, ICollection<BpmnValidationError> errors)
