@@ -58,6 +58,12 @@ Expected result:
 Check:
 
 - API liveness endpoint returns healthy.
+- API Camunda runtime endpoint reports configuration and reachability:
+
+```bash
+curl -sf http://localhost:8081/api/health/camunda | jq .
+```
+
 - Camunda topology endpoint responds:
 
 ```bash
@@ -72,6 +78,7 @@ curl -sf http://localhost:9600/ready
 
 Expected result:
 
+- Autofac reports `enabled: true`, `configured: true`, and `reachable: true` when the local Camunda profile is up.
 - Camunda Zeebe reports a healthy single-node topology.
 - Zeebe readiness responds successfully.
 - The stack is ready for later adapter/worker tickets.
