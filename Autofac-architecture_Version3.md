@@ -1208,7 +1208,7 @@ Important principle:
 | Web UI | React + TypeScript |
 | Workflow Format | BPMN 2.0 XML |
 | BPMN Editor | BPMN.js |
-| Workflow Runtime | Custom C# BPMN subset runtime |
+| Workflow Runtime | Camunda 8 in production via Autofac adapter; in-process C# runtime for tests/simulation only |
 | Realtime Updates | SignalR + SSE |
 | Sandbox Runtime | Docker Engine |
 | Docker Client | Docker.DotNet |
@@ -1301,15 +1301,15 @@ volumes:
 - Basic workflow instance model
 - Basic run event stream
 
-## Phase 2: BPMN Runtime
+## Phase 2: Camunda 8 Runtime Integration
 
-- Start/end events
-- Service tasks
-- User tasks
-- Exclusive gateways
-- Parallel gateways
-- Timer events
-- Durable workflow state
+- Camunda 8 local/runtime profile
+- Camunda-compatible BPMN projection
+- Workflow publish deployment to Camunda
+- Process instance start from Autofac APIs
+- Agent service-task job workers
+- User-task approval bridge
+- Durable workflow state through Camunda
 
 ## Phase 3: Docker Sandbox Execution
 

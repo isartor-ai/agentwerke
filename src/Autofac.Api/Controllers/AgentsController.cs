@@ -7,54 +7,53 @@ namespace Autofac.Api.Controllers;
 [Route("api/agents")]
 public sealed class AgentsController : ControllerBase
 {
+    private readonly IAgentRegistry _agentRegistry;
+
+    public AgentsController(IAgentRegistry agentRegistry)
+    {
+        _agentRegistry = agentRegistry;
+    }
+
     [HttpGet]
     public IActionResult List()
     {
-        var profiles = AgentRegistry.All().Select(p => new
-        {
-            agentId = p.AgentId,
-            name = p.Name,
-            description = p.Description,
-            category = p.Category,
-            skills = p.Skills.Select(s => new
-            {
-                skillId = s.SkillId,
-                name = s.Name,
-                description = s.Description,
-                supportedActions = s.SupportedActions,
-                skillManifestId = s.SkillManifestId
-            }),
-            supportedEnvironments = p.SupportedEnvironments,
-            supportedPolicyTags = p.SupportedPolicyTags
-        });
-
+        var profiles = _agentRegistry.All().Select(Project);
         return Ok(profiles);
     }
 
     [HttpGet("{agentId}")]
     public IActionResult Get(string agentId)
     {
-        var profile = AgentRegistry.Find(agentId);
+        var profile = _agentRegistry.Find(agentId);
         if (profile is null)
         {
             return NotFound(new { message = $"Agent '{agentId}' not found." });
         }
 
-        return Ok(new
-        {
-            agentId = profile.AgentId,
-            name = profile.Name,
-            description = profile.Description,
-            category = profile.Category,
-            skills = profile.Skills.Select(s => new
-            {
-                skillId = s.SkillId,
-                name = s.Name,
-                description = s.Description,
-                supportedActions = s.SupportedActions
-            }),
-            supportedEnvironments = profile.SupportedEnvironments,
-            supportedPolicyTags = profile.SupportedPolicyTags
-        });
+        return Ok(Project(profile));
     }
+
+    private static object Project(AgentProfile p) => new
+    {
+        agentId = p.AgentId,
+        name = p.Name,
+        description = p.Description,
+        category = p.Category,
+        runner = p.Runner,
+        model = p.Model,
+        dockerImage = p.DockerImage,
+        tools = p.Tools,
+        supportedActions = p.SupportedActions,
+        skills = p.Skills.Select(s => new
+        {
+            skillId = s.SkillId,
+            name = s.Name,
+            description = s.Description,
+            supportedActions = s.SupportedActions,
+            skillManifestId = s.SkillManifestId
+        }),
+        supportedEnvironments = p.SupportedEnvironments,
+        supportedPolicyTags = p.SupportedPolicyTags,
+        source = p.Source
+    };
 }

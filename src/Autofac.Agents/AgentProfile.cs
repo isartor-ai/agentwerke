@@ -9,6 +9,41 @@ public sealed class AgentProfile
     public IReadOnlyList<AgentSkillRef> Skills { get; init; } = [];
     public IReadOnlyList<string> SupportedEnvironments { get; init; } = [];
     public IReadOnlyList<string> SupportedPolicyTags { get; init; } = [];
+
+    // ── File-registry fields (AGENT.md). Built-in profiles leave these at defaults. ──
+
+    /// <summary>Execution engine: "agent-model" (in-process) or "claude-code" (sandbox).</summary>
+    public string Runner { get; init; } = "agent-model";
+
+    /// <summary>Optional model id override.</summary>
+    public string? Model { get; init; }
+
+    /// <summary>Sandbox base image (used by the claude-code runner).</summary>
+    public string? DockerImage { get; init; }
+
+    /// <summary>Sandbox network policy: "none" (default) or "bridge".</summary>
+    public string Network { get; init; } = "none";
+
+    /// <summary>Tool allow-list (gateway tools and/or sandbox --allowedTools).</summary>
+    public IReadOnlyList<string> Tools { get; init; } = [];
+
+    /// <summary>Tool deny-list.</summary>
+    public IReadOnlyList<string> DeniedTools { get; init; } = [];
+
+    /// <summary>Secret names resolved at launch (never inlined).</summary>
+    public IReadOnlyList<string> Secrets { get; init; } = [];
+
+    /// <summary>Actions this agent answers to (for action→agent resolution).</summary>
+    public IReadOnlyList<string> SupportedActions { get; init; } = [];
+
+    /// <summary>System prompt / standing instructions (the AGENT.md body).</summary>
+    public string? SystemPrompt { get; init; }
+
+    /// <summary>SHA-256 of the source AGENT.md, for audit. Null for built-ins.</summary>
+    public string? Fingerprint { get; init; }
+
+    /// <summary>Origin of the profile: "builtin" or "file".</summary>
+    public string Source { get; init; } = "builtin";
 }
 
 /// <summary>

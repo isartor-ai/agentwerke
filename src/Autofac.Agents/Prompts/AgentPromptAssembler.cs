@@ -36,6 +36,14 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
                 Source: "generated:agent_profile"));
         }
 
+        if (!string.IsNullOrWhiteSpace(request.SystemPrompt))
+        {
+            sections.Add(new AgentPromptSectionSnapshot(
+                Name: "agent_system_prompt",
+                Content: Render(request.SystemPrompt!, variables, missingVariables),
+                Source: "agent:system_prompt"));
+        }
+
         if (!string.IsNullOrWhiteSpace(prompt?.File))
         {
             var promptFile = ResolvePromptFile(prompt.File!);

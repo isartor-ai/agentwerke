@@ -47,6 +47,12 @@ See `CONTRIBUTING.md` for contribution standards.
 ## Persistence
 - Phase-1 schema documentation: `docs/persistence-schema.md`
 
+## Architecture Decisions
+- Production BPMN runtime decision: `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`
+- Camunda 8 implementation plan: `docs/camunda8-sdlc-factory-implementation-plan.md`
+- UI cleanup/refactor plan: `docs/ui-cleanup-refactor-plan.md`
+- Camunda-backed manual test scenario: `docs/manual-test-camunda8-sdlc-factory.md`
+
 ## Local Artifact Storage
 - Config section: `Storage:RootPath`
 - Defaults:

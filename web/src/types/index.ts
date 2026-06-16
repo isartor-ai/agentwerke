@@ -214,6 +214,21 @@ export interface ApprovalRequest {
   decidedAt?: string;
 }
 
+export interface AgentSummary {
+  agentId: string;
+  name: string;
+  description: string;
+  category: string;
+  runner: string;
+  model?: string;
+  dockerImage?: string;
+  tools: string[];
+  supportedActions: string[];
+  supportedEnvironments: string[];
+  supportedPolicyTags: string[];
+  source: string;
+}
+
 export interface AuthUser {
   id: string;
   name: string;

@@ -48,8 +48,8 @@ At MVP completion, a user should be able to:
 - React workflow designer
 - BPMN import, validation, metadata editing, publish
 - C# API for workflows, runs, approvals
-- Camunda 8-aligned workflow engine adapter boundary
-- Local Autofac runtime for MVP execution
+- Camunda 8-backed workflow execution through the workflow engine adapter boundary
+- In-process runtime retained only for tests, simulation, or temporary compatibility
 - Manual trigger plus Jira webhook trigger
 - GitHub integration for PR creation
 - Approval workflow and resume handling
@@ -456,46 +456,46 @@ Objective: make Autofac usable as an operations product, not just an API demo.
 - approvals and failures are easy to inspect
 - workflow execution telemetry is visible in app and logs
 
-## Phase 8: Camunda 8 Adapter Path
+## Phase 8: Camunda 8 Production Runtime
 
-Objective: align the runtime with the architecture decision without derailing MVP delivery.
+Objective: make Camunda 8 the production BPMN runtime rather than growing the local runtime.
 
 ### Recommended Approach
 
-Do not start by replacing the current runtime immediately.
-First finish the vertical slice using the current local runtime abstraction, but shape it so a Camunda adapter can replace the execution core.
+Use Camunda 8 from the beginning of the next execution phase. The in-process runtime should not receive new production features. It may remain available for tests, local simulation, or temporary compatibility while the Camunda adapter reaches parity.
 
 ### Steps
 
-1. Introduce `IWorkflowEngineAdapter` in `Autofac.Workflows`.
-2. Move current runtime implementation behind that interface.
-3. Keep BPMN parsing and Autofac task mapping owned by Autofac.
-4. Build a spike for Camunda 8 self-managed integration.
-5. Prove mapping for:
-   - service task
-   - user task
-   - timer trigger
-   - webhook or message start event
+1. Add a Camunda 8 local runtime profile.
+2. Add Camunda configuration and REST client infrastructure.
+3. Project Autofac task metadata to Camunda-compatible BPMN.
+4. Deploy workflows to Camunda during publish.
+5. Start Camunda process instances from Autofac run APIs.
+6. Execute `autofac.agent` service tasks with Autofac job workers.
+7. Bridge Camunda user tasks to Autofac approval requests.
+8. Surface retries, incidents, evidence, and artifacts in Autofac run views.
 
 ### Exit Criteria
 
-- current runtime is behind an adapter boundary
-- Camunda spike is validated
-- no major rewrite is needed to switch execution backends later
+- Camunda 8 is the default production workflow runtime
+- agent service tasks execute through Autofac workers
+- Camunda user tasks create and resolve Autofac approvals
+- operators can inspect Camunda-backed run state, evidence, failures, and approvals in Autofac
 
 ## 9. Recommended Delivery Order
 
 This is the exact order I would implement:
 
 1. Stabilize contracts and persistence
-2. Make workflow authoring real
-3. Make run and approval flow real
-4. Add agent orchestrator
-5. Add sandbox execution
-6. Add Jira trigger and GitHub PR connector
-7. Add policy and audit hardening
-8. Finish monitoring UX
-9. Add Camunda adapter seam and spike
+2. Add Camunda runtime foundation
+3. Make workflow authoring publish to Camunda
+4. Make Camunda-backed run and approval flow real
+5. Add agent job workers and orchestration
+6. Add evidence, artifacts, retry, and incident visibility
+7. Add sandbox execution
+8. Add Jira trigger and GitHub PR connector
+9. Add policy and audit hardening
+10. Finish monitoring UX
 
 ## 10. Suggested MVP Milestones
 

@@ -1,10 +1,10 @@
 # Camunda 8 Spike
 
-This spike captures the minimum mapping Autofac needs to keep the current MVP runtime swappable while aligning to the long-term Camunda 8 direction.
+This spike captures the minimum mapping Autofac needs for Camunda 8. It has been superseded as a strategy document by `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`: Camunda 8 is now the intended production BPMN runtime, not only a long-term replacement path.
 
 ## Goal
 
-Prove that Autofac's current MVP execution slice can be represented behind a Camunda 8-oriented adapter boundary without rewriting application orchestration logic.
+Prove that Autofac's MVP execution slice can run through a Camunda 8-oriented adapter boundary without leaking engine details into application orchestration or UI semantics.
 
 ## Mapped MVP Slice
 
@@ -20,7 +20,7 @@ Prove that Autofac's current MVP execution slice can be represented behind a Cam
 ## Notes
 
 - Autofac should keep BPMN parsing, task metadata extraction, policy, and approval semantics in Autofac-owned code.
-- Camunda should own execution scheduling, waiting states, and job/user-task orchestration once the runtime backend is swapped.
+- Camunda should own execution scheduling, waiting states, and job/user-task orchestration for the production runtime.
 - Service-task execution should be projected onto Camunda job types so the Agent Orchestrator can act as the controlled worker layer.
 - Webhook starts are best treated as inbound connector configuration rather than hand-built HTTP endpoints inside the engine adapter.
 

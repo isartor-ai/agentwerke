@@ -1,0 +1,29 @@
+# Bridge Camunda user tasks to Autofac approvals
+
+## Summary
+Create Autofac approval requests when Camunda reaches user tasks and complete Camunda user tasks when users decide.
+
+## Why
+Human approval is central to the dark software factory model. Camunda should own the waiting state, and Autofac should own the approval UX and audit record.
+
+## Scope
+- Detect or query active Camunda user tasks for Autofac process instances.
+- Create pending `ApprovalRequest` records in Autofac.
+- Complete the Camunda user task on approve.
+- Apply rejection behavior and record rationale.
+
+## Acceptance Criteria
+- User task creates a pending approval visible in the Approvals dashboard.
+- Approving completes the Camunda user task and advances the workflow.
+- Rejecting follows documented behavior and records who/why.
+- Audit trail includes run id, task id, decision, approver, and comment.
+
+## Verification
+- Integration test reaches user task, approves it, and process continues.
+- Manual test confirms approval UI can drive Camunda continuation.
+
+## Suggested Files
+- `src/Autofac.Application/Workflows`
+- `src/Autofac.Infrastructure/Persistence`
+- `src/Autofac.Api/Controllers/ApprovalsController.cs`
+- `tests/Autofac.Application.Tests`

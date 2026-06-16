@@ -2,10 +2,15 @@
 # Autofac — Manual test stack
 #
 # Brings up: Postgres, API, Web UI, and WireMock (GitHub stub).
+# Optional `camunda` profile adds a local Camunda 8 Zeebe runtime for
+# development and evaluation. The Camunda Docker Compose path is intended for
+# local development, not production.
+#
 # No real credentials needed. Agent tasks use simulated output.
 #
 # Start:
 #   docker compose -f docker/docker-compose.manual.yml up --build
+#   docker compose -f docker/docker-compose.manual.yml --profile camunda up --build
 #
 # Stop and remove volumes:
 #   docker compose -f docker/docker-compose.manual.yml down -v
@@ -14,6 +19,8 @@
 #   http://localhost:3002   Web UI
 #   http://localhost:8081   API  (e.g. http://localhost:8081/api/health/live)
 #   http://localhost:9090   WireMock admin (optional inspection)
+#   http://localhost:8088   Camunda Zeebe REST topology endpoint (`/v2/topology`) when `--profile camunda` is enabled
+#   http://localhost:9600   Camunda Zeebe readiness endpoint (`/ready`) when `--profile camunda` is enabled
 #
 # Auth:
 #   The API is configured with a dev-only JWT secret. The web UI is built with
@@ -22,6 +29,30 @@
 ###############################################################################
 
 services:
+
+  # Optional Camunda 8 self-managed orchestration runtime for local development.
+  # This keeps the manual stack compatible with the future Camunda-backed engine
+  # work without changing the default no-Camunda workflow.
+  zeebe:
+    profiles: [camunda]
+    image: camunda/zeebe:8.6.6
+    environment:
+      # Disable the default Elasticsearch exporter for the lightweight local profile.
+      - >-
+        SPRING_APPLICATION_JSON={"zeebe":{"broker":{"exporters":{}}}}
+    ports:
+      - "26500:26500"
+      - "8088:8080"
+      - "9600:9600"
+    healthcheck:
+      # The broker monitoring API listens on port 9600 once the node is ready.
+      # The image does not ship curl/wget reliably, so we probe the listening
+      # socket directly instead of calling /ready from inside the container.
+      test: ["CMD-SHELL", "grep -q ':2580 ' /proc/net/tcp6 || grep -q ':2580 ' /proc/net/tcp"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
 
   postgres:
     image: postgres:16-alpine
@@ -118,8 +149,10 @@ services:
   # Seeds demo data (workflow, completed run, awaiting-approval run) after migrations.
   seed:
     image: postgres:16-alpine
+    # --set ON_ERROR_STOP=1 so a bad SQL statement fails loudly instead of silently
     command: >
-      psql "host=postgres port=5432 dbname=autofac_manual user=postgres password=postgres"
+      psql --set ON_ERROR_STOP=1
+      "host=postgres port=5432 dbname=autofac_manual user=postgres password=postgres"
       -f /seed/seed-manual.sql
     volumes:
       - ./seed-manual.sql:/seed/seed-manual.sql:ro
@@ -136,7 +169,8 @@ services:
         VITE_API_BASE_URL: ""
         # Pre-signed HS256 JWT (role=admin, exp=2030-01-01, signed with Jwt__SecretKey above).
         # Allows the SPA to call protected endpoints without a login flow.
-        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiYWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.W1s08RqaNsfu_MX00ccH4Q6IKMEd5LDsBtBapvTzpB0"
+        # role=Admin (PascalCase) to match AutofacRoles.Admin / RequireRole policy checks
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
     restart: unless-stopped
     ports:
       - "3002:80"

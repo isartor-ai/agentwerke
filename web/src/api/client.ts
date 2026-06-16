@@ -1,4 +1,5 @@
 import type {
+  AgentSummary,
   ApprovalRequest,
   WorkflowPublishResult,
   WorkflowValidationResult,
@@ -64,6 +65,10 @@ export const apiClient = {
 
   async getWorkflows(): Promise<Workflow[]> {
     return requestJson<Workflow[]>('/api/workflows', undefined, WORKFLOW_API_BASE_URL);
+  },
+
+  async getAgents(): Promise<AgentSummary[]> {
+    return requestJson<AgentSummary[]>('/api/agents', undefined, WORKFLOW_API_BASE_URL);
   },
 
   async getWorkflow(id: string): Promise<Workflow | undefined> {

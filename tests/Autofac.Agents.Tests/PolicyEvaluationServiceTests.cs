@@ -76,6 +76,7 @@ public sealed class PolicyEvaluationServiceTests
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
+            new FileAgentRegistry([]),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -131,6 +132,7 @@ public sealed class PolicyEvaluationServiceTests
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
+            new FileAgentRegistry([]),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -847,6 +849,7 @@ public sealed class PolicyEvaluationServiceTests
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
+            new FileAgentRegistry([]),
             Options.Create(new SandboxOptions
             {
                 Enabled = sandboxEnabled

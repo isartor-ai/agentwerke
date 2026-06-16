@@ -29,6 +29,18 @@ public static class DependencyInjection
         var manifests = MarkdownSkillLoader.LoadFromDirectory(skillsDir);
         var repository = new SkillRepository(manifests);
 
+        var agentOptions = new AgentOptions();
+        configuration.GetSection(AgentOptions.Section).Bind(agentOptions);
+
+        var agentsDir = string.IsNullOrWhiteSpace(agentOptions.AgentsDirectory)
+            ? agentOptions.AgentsDirectory
+            : Path.IsPathRooted(agentOptions.AgentsDirectory)
+                ? agentOptions.AgentsDirectory
+                : Path.GetFullPath(agentOptions.AgentsDirectory);
+
+        var fileAgents = MarkdownAgentLoader.LoadFromDirectory(agentsDir);
+        services.AddSingleton<IAgentRegistry>(new FileAgentRegistry(fileAgents));
+
         services.AddSingleton<ISkillRepository>(repository);
         services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
         services.AddScoped<IAgentTool, GitHubCreateBranchTool>();

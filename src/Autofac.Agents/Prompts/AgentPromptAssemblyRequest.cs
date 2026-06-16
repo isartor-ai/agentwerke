@@ -24,4 +24,9 @@ public sealed record AgentPromptAssemblyRequest(
     /// names like "input.body" / "output.&lt;nodeId&gt;". Exposed both as template
     /// variables and as a rendered "run_context" prompt section.
     /// </summary>
-    IReadOnlyDictionary<string, string>? RunContext = null);
+    IReadOnlyDictionary<string, string>? RunContext = null,
+    /// <summary>
+    /// The agent's system prompt / standing instructions (the AGENT.md body).
+    /// Rendered with the same variables as the task prompt.
+    /// </summary>
+    string? SystemPrompt = null);

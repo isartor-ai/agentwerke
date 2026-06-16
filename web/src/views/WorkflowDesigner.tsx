@@ -8,6 +8,7 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { Toolbar } from '../components/Toolbar';
 import { createEmptyDiagram } from '../bpmn/constants';
+import { setAgentCatalog } from '../bpmn/agentCatalog';
 import type { Workflow, WorkflowRun, WorkflowValidationResult } from '../types';
 
 interface DiffLine {
@@ -31,7 +32,7 @@ const BPMN_TEMPLATE_LIBRARY: BpmnTemplate[] = [
     description: 'Build, verify, human approval, and deploy to production.',
     preview: ['Start', 'Build', 'Approval', 'Deploy', 'End'],
     xml: `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:autofac="https://autofac.dev/bpmn/extensions/v1" id="Defs_Deploy" targetNamespace="https://autofac.dev/bpmn/extensions/v1">
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:autofac="https://autofac.ai/bpmn" id="Defs_Deploy" targetNamespace="https://autofac.ai/bpmn">
   <bpmn:process id="ProductionDeploy" name="Production Deploy" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Start">
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
@@ -86,7 +87,7 @@ const BPMN_TEMPLATE_LIBRARY: BpmnTemplate[] = [
     description: 'Run tests, then require human approval before merge.',
     preview: ['Start', 'Test', 'Approval', 'Merge', 'End'],
     xml: `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:autofac="https://autofac.dev/bpmn/extensions/v1" id="Defs_CI" targetNamespace="https://autofac.dev/bpmn/extensions/v1">
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:autofac="https://autofac.ai/bpmn" id="Defs_CI" targetNamespace="https://autofac.ai/bpmn">
   <bpmn:process id="CiApproval" name="CI Approval" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Start"><bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>
     <bpmn:serviceTask id="TestTask" name="Run Tests">
@@ -243,6 +244,12 @@ export function WorkflowDesigner() {
 
   useEffect(() => {
     void loadWorkflows();
+    // Populate the agent catalog so the properties-panel drop-down can render
+    // registered agents synchronously. Best-effort: ignore failures.
+    void apiClient
+      .getAgents()
+      .then(setAgentCatalog)
+      .catch(() => {});
   }, []);
 
   // Poll runs when Monitor tab is active

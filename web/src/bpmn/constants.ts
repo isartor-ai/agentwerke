@@ -2,13 +2,13 @@
  * Shared constants for the Autofac BPMN editor.
  *
  * The namespace URI and prefix MUST match what the backend
- * `BpmnWorkflowValidator` expects (`https://autofac.dev/bpmn/extensions/v1`,
+ * `BpmnWorkflowValidator` expects (`https://autofac.ai/bpmn`,
  * prefix `autofac`) so extension metadata authored in the designer round-trips
  * cleanly into the executable workflow definition.
  */
 
 export const AUTOFAC_NS_PREFIX = 'autofac';
-export const AUTOFAC_NS_URI = 'https://autofac.dev/bpmn/extensions/v1';
+export const AUTOFAC_NS_URI = 'https://autofac.ai/bpmn';
 
 /** Moddle type names (note: serialized lower-camel via the descriptor's tagAlias). */
 export const AGENT_TASK_TYPE = 'autofac:AgentTask';

@@ -36,6 +36,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly IToolGateway _toolGateway;
     private readonly IAgentModelRunner _modelRunner;
     private readonly IRunContextRepository _runContextRepository;
+    private readonly IAgentRegistry _agentRegistry;
     private readonly string _gitHubBranchPrefix;
     private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
     private readonly IArtifactStorage _artifactStorage;
@@ -51,6 +52,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         IAgentModelRunner modelRunner,
         IArtifactStorage artifactStorage,
         IRunContextRepository runContextRepository,
+        IAgentRegistry agentRegistry,
         IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
@@ -64,6 +66,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _modelRunner = modelRunner;
         _artifactStorage = artifactStorage;
         _runContextRepository = runContextRepository;
+        _agentRegistry = agentRegistry;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
             ? "autofac/run-"
@@ -95,7 +98,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 FailureReason: $"Simulated failure on attempt {attempt} (failUntilAttempt={metadata.FailUntilAttempt})");
         }
 
-        var profile = AgentRegistry.Find(metadata.Agent);
+        var profile = _agentRegistry.Find(metadata.Agent);
         var matchedSkillRef = ResolveSkillRef(profile, metadata.Action);
         var skillResolution = ResolveSkills(profile, matchedSkillRef, metadata.RuntimeContract);
         if (!skillResolution.Succeeded)
@@ -139,7 +142,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             RequiresEvidence: metadata.RequiresEvidence,
             Prompt: metadata.RuntimeContract?.Prompt,
             Skill: skillManifest,
-            RunContext: runContext));
+            RunContext: runContext,
+            SystemPrompt: profile?.SystemPrompt));
         var runtimeSnapshot = BuildRuntimeSnapshot(
             runId,
             stepId,
