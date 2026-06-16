@@ -19,37 +19,68 @@ INSERT INTO autofac.workflows (
     'valid',
     '["demo"]',
     '<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                  xmlns:autofac="https://autofac.ai/bpmn"
-                  id="e2e-simple-defs"
-                  targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:autofac="https://autofac.dev/bpmn/extensions/v1"
+    id="e2e-simple-defs"
+    targetNamespace="https://autofac.dev/bpmn/extensions/v1">
   <bpmn:process id="e2e-simple" name="E2E Simple Workflow" isExecutable="true">
-    <bpmn:startEvent id="Start" name="Start"/>
+    <bpmn:startEvent id="Start" name="Start">
+      <bpmn:outgoing>Flow1</bpmn:outgoing>
+    </bpmn:startEvent>
     <bpmn:serviceTask id="RunAnalysis" name="Run Analysis">
       <bpmn:extensionElements>
-        <autofac:agentTask
-          agent="security-analyst"
-          action="run-analysis"
-          environment="ci"
-          purposeType="security-scan"
-          policyTag="standard"
-          requiresEvidence=""/>
+        <autofac:agentTask agent="security-analyst" action="run-analysis" environment="ci" purposeType="security-scan" policyTag="standard" requiresEvidence="" />
       </bpmn:extensionElements>
+      <bpmn:incoming>Flow1</bpmn:incoming>
+      <bpmn:outgoing>Flow2</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:userTask id="ApproveDeployment" name="Approve Deployment">
       <bpmn:extensionElements>
-        <autofac:approvalTask
-          purposeType="human-approval"
-          policyTag="standard-deploy"/>
+        <autofac:approvalTask purposeType="human-approval" policyTag="standard-deploy" />
       </bpmn:extensionElements>
+      <bpmn:incoming>Flow2</bpmn:incoming>
+      <bpmn:outgoing>Flow3</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:endEvent id="End" name="End"/>
-    <bpmn:sequenceFlow id="Flow1" sourceRef="Start"           targetRef="RunAnalysis"/>
-    <bpmn:sequenceFlow id="Flow2" sourceRef="RunAnalysis"     targetRef="ApproveDeployment"/>
-    <bpmn:sequenceFlow id="Flow3" sourceRef="ApproveDeployment" targetRef="End"/>
+    <bpmn:endEvent id="End" name="End">
+      <bpmn:incoming>Flow3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow1" sourceRef="Start" targetRef="RunAnalysis" />
+    <bpmn:sequenceFlow id="Flow2" sourceRef="RunAnalysis" targetRef="ApproveDeployment" />
+    <bpmn:sequenceFlow id="Flow3" sourceRef="ApproveDeployment" targetRef="End" />
   </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="e2e-simple">
+      <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
+        <dc:Bounds x="152" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="155" y="185" width="30" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="RunAnalysis_di" bpmnElement="RunAnalysis">
+        <dc:Bounds x="240" y="120" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ApproveDeployment_di" bpmnElement="ApproveDeployment">
+        <dc:Bounds x="400" y="120" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_di" bpmnElement="End">
+        <dc:Bounds x="562" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="569" y="185" width="22" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow1_di" bpmnElement="Flow1">
+        <di:waypoint x="188" y="160" /><di:waypoint x="240" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow2_di" bpmnElement="Flow2">
+        <di:waypoint x="340" y="160" /><di:waypoint x="400" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow3_di" bpmnElement="Flow3">
+        <di:waypoint x="500" y="160" /><di:waypoint x="562" y="160" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>'
-) ON CONFLICT ("Id") DO NOTHING;
+) ON CONFLICT ("Id") DO UPDATE SET "BpmnXml" = EXCLUDED."BpmnXml";
 
 -- ── Completed run ──────────────────────────────────────────────────────────
 
