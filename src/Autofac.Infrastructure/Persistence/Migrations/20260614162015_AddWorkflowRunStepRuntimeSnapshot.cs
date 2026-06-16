@@ -10,12 +10,10 @@ namespace Autofac.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "RuntimeSnapshot",
-                schema: "autofac",
-                table: "workflow_run_steps",
-                type: "jsonb",
-                nullable: true);
+            // Use IF NOT EXISTS because a later migration (20260615063250) adds the same
+            // column; either one may have already run on an existing database.
+            migrationBuilder.Sql(
+                @"ALTER TABLE autofac.workflow_run_steps ADD COLUMN IF NOT EXISTS ""RuntimeSnapshot"" jsonb;");
         }
 
         /// <inheritdoc />
