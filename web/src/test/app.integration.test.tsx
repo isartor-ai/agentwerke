@@ -3,6 +3,9 @@ import { apiClient } from '../api/client';
 import App from '../App';
 import { approvalsFixture, runsFixture, workflowsFixture } from './fixtures';
 
+// Use the lightweight modeler stub (bpmn-js cannot render in jsdom).
+vi.mock('../components/BpmnModeler');
+
 vi.mock('../api/client', () => ({
   apiClient: {
     getRuns: vi.fn(),

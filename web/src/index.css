@@ -611,15 +611,16 @@ th {
   margin-bottom: 0.75rem;
 }
 
-.designer-grid,
-.run-detail-grid {
+.designer-grid {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 0.9fr;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 0.75rem;
 }
 
 .run-detail-grid {
+  display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
 }
 
 .designer-list-panel,
@@ -1767,4 +1768,68 @@ textarea {
   .top-bar input {
     width: 100%;
   }
+}
+
+/* ── BPMN modeler (bpmn-js) ──────────────────────────────────────────────── */
+.bpmn-modeler {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 520px;
+  height: 60vh;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.bpmn-modeler-canvas {
+  position: relative;
+  min-width: 0;
+  /* BPMN diagrams read best on a light surface inside the dark shell. */
+  background: #fbfbfb;
+}
+
+.bpmn-modeler-panel {
+  border-left: 1px solid var(--color-border);
+  background: #ffffff;
+  overflow-y: auto;
+  color: #1a1a1a;
+}
+
+/* Autofac extension accents on the canvas. */
+.autofac-agent-task .djs-visual > :nth-child(1) {
+  stroke: #00b3bb !important;
+  stroke-width: 2px !important;
+}
+
+.autofac-approval-task .djs-visual > :nth-child(1) {
+  stroke: #c08a00 !important;
+  stroke-width: 2px !important;
+}
+
+/* Backend validation error highlight + overlay badge. */
+.autofac-validation-error .djs-visual > :nth-child(1) {
+  stroke: #e5484d !important;
+  stroke-width: 2px !important;
+}
+
+.autofac-validation-overlay {
+  max-width: 220px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #fff;
+  background: #e5484d;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+}
+
+/* Palette accents for the Autofac entries. */
+.autofac-palette-agent::before {
+  color: #00b3bb;
+}
+
+.autofac-palette-approval::before {
+  color: #c08a00;
 }

@@ -24,9 +24,11 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
     return () => document.removeEventListener('keydown', onKey);
   }, [step, onClose]);
 
-  // Move focus into panel when it opens so keyboard users can navigate
+  // Move focus into panel when it opens so keyboard users can navigate.
+  // Intentionally keyed on step identity only (focus on open / step change).
   useEffect(() => {
     if (step) panelRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step?.id]);
 
   const stepEvents = step
