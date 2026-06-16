@@ -207,6 +207,20 @@ Responsibilities:
 - Track agent run state and outcomes
 - Publish agent events to observability and audit streams
 
+**Run context (inter-task data flow, Phase A).** Each run owns a key/value
+context bag (`workflow_run_context`). It is seeded at run start with the
+triggering issue (`input.title`, `input.body`, `input.external_url`, …) and
+appended after every completed service task with that task's primary output
+(`output.<nodeId>`). During prompt assembly the orchestrator loads the bag and
+exposes it both as template variables (e.g. `{{input.body}}`,
+`{{output.WriteRequirements}}`) and as a rendered `run_context` prompt section,
+so a later agent (architect, analyst, …) can build on earlier agents' output.
+See issue isartor-ai/autofac-private#89.
+
+SDLC agent profiles registered in `AgentRegistry`: `business-analyst`,
+`solution-architect`, `technical-analyst`, `implementation-engineer`,
+`senior-code-reviewer` (plus the existing deploy/security/infra/test/github agents).
+
 ### 6.5 Sandbox Execution Manager
 
 Responsibilities:

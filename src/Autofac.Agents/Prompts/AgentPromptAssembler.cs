@@ -61,6 +61,14 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
                 Source: "generated:task_prompt"));
         }
 
+        if (request.RunContext is { Count: > 0 })
+        {
+            sections.Add(new AgentPromptSectionSnapshot(
+                Name: "run_context",
+                Content: BuildRunContextSection(request.RunContext),
+                Source: "generated:run_context"));
+        }
+
         if (request.Skill is not null)
         {
             var invocationRules = request.Skill.InvocationRules.Count == 0
@@ -164,6 +172,17 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
             ["requires_evidence_csv"] = string.Join(", ", request.RequiresEvidence)
         };
 
+        // Run context (triggering issue + prior step outputs) is available to templates
+        // as e.g. {{input.body}} or {{output.SomeNode}}. Added before explicit prompt
+        // variables so an authored prompt can still override a context value.
+        if (request.RunContext is not null)
+        {
+            foreach (var pair in request.RunContext)
+            {
+                variables[pair.Key] = pair.Value;
+            }
+        }
+
         if (prompt?.Variables is not null)
         {
             foreach (var pair in prompt.Variables)
@@ -173,6 +192,22 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
         }
 
         return variables;
+    }
+
+    private static string BuildRunContextSection(IReadOnlyDictionary<string, string> runContext)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Data carried into this task from the trigger and prior steps:");
+
+        foreach (var pair in runContext.OrderBy(static p => p.Key, StringComparer.Ordinal))
+        {
+            builder.AppendLine();
+            builder.AppendLine($"### {pair.Key}");
+            builder.Append(pair.Value.Trim());
+            builder.AppendLine();
+        }
+
+        return builder.ToString().TrimEnd();
     }
 
     private static string Render(

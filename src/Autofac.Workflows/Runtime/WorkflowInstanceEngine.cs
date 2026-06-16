@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Autofac.Application.Workflows;
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,17 +18,20 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
     private readonly IWorkflowRuntimeStore _store;
     private readonly IServiceTaskExecutor _serviceTaskExecutor;
+    private readonly IRunContextRepository _runContext;
     private readonly ILogger<WorkflowInstanceEngine> _logger;
     private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     public WorkflowInstanceEngine(
         IWorkflowRuntimeStore store,
         IServiceTaskExecutor serviceTaskExecutor,
+        IRunContextRepository runContext,
         ILogger<WorkflowInstanceEngine> logger,
         IServiceScopeFactory? serviceScopeFactory = null)
     {
         _store = store;
         _serviceTaskExecutor = serviceTaskExecutor;
+        _runContext = runContext;
         _logger = logger;
         _serviceScopeFactory = serviceScopeFactory;
     }
@@ -379,6 +383,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         await using var scope = _serviceScopeFactory!.CreateAsyncScope();
         var scopedStore = scope.ServiceProvider.GetRequiredService<IWorkflowRuntimeStore>();
         var scopedExecutor = scope.ServiceProvider.GetRequiredService<IServiceTaskExecutor>();
+        var scopedRunContext = scope.ServiceProvider.GetRequiredService<IRunContextRepository>();
 
         var nodeId = branchStartId;
         while (!string.Equals(nodeId, joinNodeId, StringComparison.Ordinal))
@@ -399,7 +404,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     branchNode,
                     cancellationToken,
                     scopedStore,
-                    scopedExecutor);
+                    scopedExecutor,
+                    scopedRunContext);
 
                 if (result == ServiceExecutionResult.Failed)
                     return ServiceExecutionResult.Failed;
@@ -428,10 +434,12 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         BpmnNodeDefinition node,
         CancellationToken cancellationToken,
         IWorkflowRuntimeStore? storeOverride = null,
-        IServiceTaskExecutor? executorOverride = null)
+        IServiceTaskExecutor? executorOverride = null,
+        IRunContextRepository? runContextOverride = null)
     {
         var store = storeOverride ?? _store;
         var executor = executorOverride ?? _serviceTaskExecutor;
+        var runContext = runContextOverride ?? _runContext;
         var metadata = node.Metadata;
         var maxRetries = metadata?.MaxRetries ?? 0;
         var retryBackoffSeconds = metadata?.RetryBackoffSeconds ?? 0;
@@ -555,6 +563,13 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName }),
                 cancellationToken);
             await store.UpdateStepStatusAsync(step.Id, CompletedStatus, outcome.Output, null, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+
+            // Persist the step's primary output to run context so later tasks can read it.
+            if (!string.IsNullOrEmpty(outcome.Output))
+            {
+                await runContext.SetAsync(runId, $"output.{node.Id}", outcome.Output, RunContextKinds.Output, cancellationToken);
+            }
+
             return ServiceExecutionResult.Completed;
         }
     }

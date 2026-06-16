@@ -12,7 +12,7 @@ public sealed class WorkflowExternalActionTests
     public async Task StartAsync_WhenServiceTaskReturnsExternalActions_RecordsConnectorEvents()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new ExternalActionServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new ExternalActionServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var state = await engine.StartAsync(
             Guid.NewGuid().ToString(),

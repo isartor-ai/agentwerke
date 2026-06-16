@@ -18,4 +18,10 @@ public sealed record AgentPromptAssemblyRequest(
     int Attempt,
     IReadOnlyList<string> RequiresEvidence,
     AgentPromptContract? Prompt = null,
-    SkillManifest? Skill = null);
+    SkillManifest? Skill = null,
+    /// <summary>
+    /// Run-scoped context (triggering issue, prior step outputs) keyed by stable
+    /// names like "input.body" / "output.&lt;nodeId&gt;". Exposed both as template
+    /// variables and as a rendered "run_context" prompt section.
+    /// </summary>
+    IReadOnlyDictionary<string, string>? RunContext = null);

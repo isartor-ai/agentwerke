@@ -12,7 +12,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_ForReferenceWorkflow_ProgressesDeterministicallyToUserTaskCheckpoint()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var state = await engine.StartAsync(
             workflowDefinitionId: Guid.NewGuid().ToString(),
@@ -48,7 +48,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         var store = new InMemoryWorkflowRuntimeStore();
         var definition = CreateReferenceDefinition();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var started = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
         var resumed = await engine.ResumeAsync(started.RunId, definition, "reviewer", CancellationToken.None);
@@ -73,10 +73,10 @@ public sealed class WorkflowInstanceEngineTests
         var store = new InMemoryWorkflowRuntimeStore();
         var definition = CreateReferenceDefinition();
 
-        var engine1 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine1 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
         var started = await engine1.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
 
-        var engine2 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine2 = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
         var recovered = await engine2.RecoverAsync(started.RunId, definition, CancellationToken.None);
 
         Assert.Equal(started.RunId, recovered.RunId);
@@ -89,7 +89,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenTimerCatchEventIsReached_ReturnsWaitingTimerWithDueAt()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "TimerFlow",
@@ -115,7 +115,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenExistingRunIdIsProvided_ReusesPreCreatedRun()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
         var definition = CreateReferenceDefinition();
         var preCreatedRun = await store.CreateRunAsync("wf-existing", "system", CancellationToken.None);
 
@@ -133,7 +133,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskHasRetries_CompletesAfterRetrySequence()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "RetryFlow",
@@ -168,7 +168,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskTimeoutTriggersBoundary_ContinuesToCompletion()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "TimeoutFlow",
@@ -199,7 +199,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenParallelGatewayExists_ExecutesParallelSectionAndJoins()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "ParallelFlow",
@@ -228,7 +228,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskReturnsRuntimeSnapshot_PersistsSnapshotOnStep()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new RuntimeSnapshotServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new RuntimeSnapshotServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "RuntimeSnapshotFlow",
@@ -254,7 +254,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskFails_SetsStepErrorNotOutput()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new AlwaysFailingServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new AlwaysFailingServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "FailFlow",
@@ -281,7 +281,7 @@ public sealed class WorkflowInstanceEngineTests
     public async Task StartAsync_WhenServiceTaskSucceeds_SetsStepOutputNotError()
     {
         var store = new InMemoryWorkflowRuntimeStore();
-        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: "SucceedFlow",

@@ -12,6 +12,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
 
     private readonly IWorkflowDefinitionRepository _definitionRepository;
     private readonly IWorkflowRunRepository _runRepository;
+    private readonly IRunContextRepository _runContextRepository;
     private readonly IApprovalRepository _approvalRepository;
     private readonly IAuditRepository _auditRepository;
     private readonly IRunOutbox _outbox;
@@ -22,6 +23,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     public WorkflowRunOrchestrationService(
         IWorkflowDefinitionRepository definitionRepository,
         IWorkflowRunRepository runRepository,
+        IRunContextRepository runContextRepository,
         IApprovalRepository approvalRepository,
         IAuditRepository auditRepository,
         IRunOutbox outbox,
@@ -31,6 +33,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     {
         _definitionRepository = definitionRepository;
         _runRepository = runRepository;
+        _runContextRepository = runContextRepository;
         _approvalRepository = approvalRepository;
         _auditRepository = auditRepository;
         _outbox = outbox;
@@ -78,6 +81,10 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
                     externalUrl = command.Trigger.ExternalUrl,
                     title = command.Trigger.Title
                 }), cancellationToken);
+
+            // Seed run context so the first agent (e.g. the BA) can read the
+            // triggering issue's title/body. Later steps add "output.*" entries.
+            await SeedTriggerContextAsync(runId, command.Trigger, cancellationToken);
         }
 
         var payload = new OutboxStartPayload(workflow.Id, command.Initiator, correlationId).Serialize();
@@ -185,6 +192,24 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         _logger.LogInformation("Workflow run recovery enqueued. RunId={RunId}", runId);
 
         return new RecoverRunResult(runId, run.Status);
+    }
+
+    private async Task SeedTriggerContextAsync(
+        string runId,
+        TriggerMetadata trigger,
+        CancellationToken cancellationToken)
+    {
+        const string kind = RunContextKinds.Input;
+        await _runContextRepository.SetAsync(runId, "input.source", trigger.Source, kind, cancellationToken);
+        await _runContextRepository.SetAsync(runId, "input.event_type", trigger.EventType, kind, cancellationToken);
+        await _runContextRepository.SetAsync(runId, "input.external_id", trigger.ExternalId, kind, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(trigger.ExternalUrl))
+            await _runContextRepository.SetAsync(runId, "input.external_url", trigger.ExternalUrl, kind, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(trigger.Title))
+            await _runContextRepository.SetAsync(runId, "input.title", trigger.Title, kind, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(trigger.Body))
+            await _runContextRepository.SetAsync(runId, "input.body", trigger.Body, kind, cancellationToken);
     }
 
     private async Task WriteAuditAsync(

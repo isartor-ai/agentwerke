@@ -67,6 +67,22 @@ The model stores timestamps as ISO-8601 strings in text columns and uses `jsonb`
 - `Message` (varchar(2048), required)
 - `CreatedAt` (text, required)
 
+### workflow_run_context
+
+Run-scoped key/value bag used to flow data between tasks (Phase A). Seeded with
+the triggering issue (`input.*`) at run start, and appended with each completed
+service task's primary output (`output.<nodeId>`). Exposed to agent prompt
+assembly as template variables and a rendered `run_context` section.
+
+- `Id` (text, PK)
+- `RunId` (varchar(128), required)
+- `Key` (varchar(256), required) — e.g. `input.body`, `output.WriteRequirements`
+- `Value` (text, required)
+- `Kind` (varchar(64), required) — `input` or `output`
+- `CreatedAt` (text, required)
+- `UpdatedAt` (text, required)
+- Unique index `ix_workflow_run_context_run_key` on (`RunId`, `Key`) — writes upsert by key.
+
 ### approval_requests
 
 - `Id` (text, PK)
@@ -92,6 +108,7 @@ The model stores timestamps as ISO-8601 strings in text columns and uses `jsonb`
 
 - `PolicyDecision` is an owned type on `workflow_run_steps`, so it does not have its own table.
 - `approval_requests` is intentionally modeled as a standalone table without a foreign key back to `workflow_runs` in the current EF model.
+- `workflow_run_context` is likewise standalone (no FK), keyed by `RunId`; entries are upserted by (`RunId`, `Key`).
 - To add a migration:
   - `dotnet ef migrations add <Name> --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`
 - To list migrations:

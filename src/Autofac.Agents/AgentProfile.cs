@@ -106,6 +106,86 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["github"],
             SupportedPolicyTags = ["repo-change", "pull-request", "branch-create"]
+        },
+
+        // ── SDLC agents (autonomous software-delivery workflow) ──────────────────
+        // Skill manifests are intentionally left unbound (SkillManifestId omitted) so
+        // these profiles run in stacks without a populated skills directory. Binding
+        // real manifests is a later step. See issue isartor-ai/autofac-private#89.
+        ["business-analyst"] = new AgentProfile
+        {
+            AgentId = "business-analyst",
+            Name = "Business Analyst",
+            Description = "Turns an idea or GitHub issue into a clear requirements specification (Markdown).",
+            Category = "analysis",
+            Skills =
+            [
+                new AgentSkillRef("requirement-design", "Requirement Design",
+                    "Elicit and structure requirements from an idea or issue into a spec",
+                    ["requirement-design", "design-requirements"])
+            ],
+            SupportedEnvironments = ["all"],
+            SupportedPolicyTags = ["requirement-design", "doc-generation"]
+        },
+        ["solution-architect"] = new AgentProfile
+        {
+            AgentId = "solution-architect",
+            Name = "Solution Architect",
+            Description = "Evaluates requirements and produces a technical design specification (Markdown).",
+            Category = "architecture",
+            Skills =
+            [
+                new AgentSkillRef("architecture-design", "Architecture Design",
+                    "Produce a technical design / architecture specification from requirements",
+                    ["architecture-design", "design-architecture"])
+            ],
+            SupportedEnvironments = ["all"],
+            SupportedPolicyTags = ["architecture-design", "doc-generation"]
+        },
+        ["technical-analyst"] = new AgentProfile
+        {
+            AgentId = "technical-analyst",
+            Name = "Technical Analyst",
+            Description = "Produces a TDD-driven implementation plan from requirements and architecture.",
+            Category = "planning",
+            Skills =
+            [
+                new AgentSkillRef("implementation-plan", "Implementation Plan",
+                    "Break work into a TDD-driven implementation plan with acceptance criteria",
+                    ["technical-analysis", "implementation-plan"])
+            ],
+            SupportedEnvironments = ["all"],
+            SupportedPolicyTags = ["implementation-plan", "doc-generation"]
+        },
+        ["implementation-engineer"] = new AgentProfile
+        {
+            AgentId = "implementation-engineer",
+            Name = "Implementation Engineer",
+            Description = "Implements tasks from the plan in a sandbox and opens a pull request for review.",
+            Category = "engineering",
+            Skills =
+            [
+                new AgentSkillRef("implement", "Implement",
+                    "Implement plan tasks with tests and open a pull request",
+                    ["implement", "github.create_pull_request", "github.create_pr"])
+            ],
+            SupportedEnvironments = ["sandbox", "ci", "github"],
+            SupportedPolicyTags = ["implementation", "pull-request", "repo-change"]
+        },
+        ["senior-code-reviewer"] = new AgentProfile
+        {
+            AgentId = "senior-code-reviewer",
+            Name = "Senior Code Reviewer",
+            Description = "Reviews a pull request, leaves feedback, and proposes changes.",
+            Category = "quality",
+            Skills =
+            [
+                new AgentSkillRef("code-review", "Code Review",
+                    "Review a pull request for correctness and quality, and propose changes",
+                    ["review-code", "code-review"])
+            ],
+            SupportedEnvironments = ["sandbox", "github"],
+            SupportedPolicyTags = ["code-review", "quality-check"]
         }
     };
 

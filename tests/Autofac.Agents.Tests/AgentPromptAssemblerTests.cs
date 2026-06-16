@@ -126,6 +126,69 @@ public sealed class AgentPromptAssemblerTests
     }
 
     [Fact]
+    public void Assemble_WithRunContext_RendersSectionAndExposesVariables()
+    {
+        var assembler = new AgentPromptAssembler();
+
+        var result = assembler.Assemble(new AgentPromptAssemblyRequest(
+            RunId: "run-1",
+            StepId: "step-1",
+            NodeId: "DesignArchitecture",
+            NodeName: "Design Architecture",
+            AgentName: "solution-architect",
+            AgentDescription: "Produces a technical design.",
+            AgentCategory: "architecture",
+            Action: "architecture-design",
+            Environment: null,
+            PurposeType: "architecture-design",
+            PolicyTag: "doc-generation",
+            Attempt: 1,
+            RequiresEvidence: [],
+            Prompt: new AgentPromptContract
+            {
+                Inline = "Design from requirements: {{output.WriteRequirements}}"
+            },
+            RunContext: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["input.title"] = "Add dark mode",
+                ["input.body"] = "Users want a dark theme toggle.",
+                ["output.WriteRequirements"] = "REQ-1: provide a theme toggle."
+            }));
+
+        Assert.True(result.Succeeded);
+        // Context entries are usable as template variables.
+        Assert.Contains("Design from requirements: REQ-1: provide a theme toggle.", result.PromptSnapshot.FinalPrompt);
+        // And surfaced as a dedicated run_context section.
+        Assert.Contains(result.PromptSnapshot.Sections, static s => s.Name == "run_context");
+        Assert.Contains("### input.title", result.PromptSnapshot.FinalPrompt);
+        Assert.Contains("Users want a dark theme toggle.", result.PromptSnapshot.FinalPrompt);
+    }
+
+    [Fact]
+    public void Assemble_WithoutRunContext_OmitsSection()
+    {
+        var assembler = new AgentPromptAssembler();
+
+        var result = assembler.Assemble(new AgentPromptAssemblyRequest(
+            RunId: "run-1",
+            StepId: "step-1",
+            NodeId: "Node",
+            NodeName: "Node",
+            AgentName: "test-agent",
+            AgentDescription: "Runs tests.",
+            AgentCategory: "quality",
+            Action: "run-tests",
+            Environment: "dev",
+            PurposeType: "verification",
+            PolicyTag: "test-gate",
+            Attempt: 1,
+            RequiresEvidence: []));
+
+        Assert.True(result.Succeeded);
+        Assert.DoesNotContain(result.PromptSnapshot.Sections, static s => s.Name == "run_context");
+    }
+
+    [Fact]
     public void Assemble_WithSameInput_IsDeterministic()
     {
         var assembler = new AgentPromptAssembler();

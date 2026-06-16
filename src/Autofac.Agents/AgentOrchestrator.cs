@@ -6,6 +6,7 @@ using Autofac.Agents.Models;
 using Autofac.Agents.Prompts;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
+using Autofac.Application.Workflows;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
 using Autofac.Storage.Artifacts;
@@ -34,6 +35,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly IToolRegistry _toolRegistry;
     private readonly IToolGateway _toolGateway;
     private readonly IAgentModelRunner _modelRunner;
+    private readonly IRunContextRepository _runContextRepository;
     private readonly string _gitHubBranchPrefix;
     private readonly Autofac.Sandboxes.SandboxOptions _sandboxOptions;
     private readonly IArtifactStorage _artifactStorage;
@@ -48,6 +50,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         IToolGateway toolGateway,
         IAgentModelRunner modelRunner,
         IArtifactStorage artifactStorage,
+        IRunContextRepository runContextRepository,
         IOptions<Autofac.Sandboxes.SandboxOptions> sandboxOptions,
         IOptions<IntegrationOptions> integrationOptions)
     {
@@ -60,6 +63,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _toolGateway = toolGateway;
         _modelRunner = modelRunner;
         _artifactStorage = artifactStorage;
+        _runContextRepository = runContextRepository;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
             ? "autofac/run-"
@@ -116,6 +120,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 cancellationToken);
         }
 
+        var runContext = await LoadRunContextAsync(runId, cancellationToken);
+
         var skillManifest = skillResolution.PrimarySkill;
         var promptAssembly = _promptAssembler.Assemble(new AgentPromptAssemblyRequest(
             RunId: runId,
@@ -132,7 +138,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Attempt: attempt,
             RequiresEvidence: metadata.RequiresEvidence,
             Prompt: metadata.RuntimeContract?.Prompt,
-            Skill: skillManifest));
+            Skill: skillManifest,
+            RunContext: runContext));
         var runtimeSnapshot = BuildRuntimeSnapshot(
             runId,
             stepId,
@@ -292,6 +299,25 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             stepId,
             await FinalizeOutcomeAsync(node, metadata, attempt, outcome, cancellationToken),
             cancellationToken);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> LoadRunContextAsync(
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        var entries = await _runContextRepository.GetAllAsync(runId, cancellationToken);
+        if (entries.Count == 0)
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            result[entry.Key] = entry.Value;
+        }
+
+        return result;
     }
 
     private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(

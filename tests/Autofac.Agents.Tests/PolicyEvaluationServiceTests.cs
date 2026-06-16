@@ -75,6 +75,7 @@ public sealed class PolicyEvaluationServiceTests
             CreateToolGateway(gitHub, sandbox, policyService),
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
+            new InMemoryRunContextRepository(),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -129,6 +130,7 @@ public sealed class PolicyEvaluationServiceTests
             CreateToolGateway(gitHub, sandbox, policyService),
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
+            new InMemoryRunContextRepository(),
             Options.Create(new SandboxOptions()),
             Options.Create(new IntegrationOptions
             {
@@ -844,6 +846,7 @@ public sealed class PolicyEvaluationServiceTests
             new ToolGateway(registry, policyService),
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
+            new InMemoryRunContextRepository(),
             Options.Create(new SandboxOptions
             {
                 Enabled = sandboxEnabled

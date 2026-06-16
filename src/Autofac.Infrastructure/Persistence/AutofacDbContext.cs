@@ -23,6 +23,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<OutboxEntry> OutboxEntries => Set<OutboxEntry>();
 
+    public DbSet<RunContextEntry> RunContextEntries => Set<RunContextEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("autofac");
@@ -146,6 +148,19 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Error).HasColumnType("text");
             entity.HasIndex(e => new { e.LockedBy, e.CompletedAt, e.VisibleAfter })
                 .HasDatabaseName("ix_run_outbox_claim");
+        });
+
+        modelBuilder.Entity<RunContextEntry>(entity =>
+        {
+            entity.ToTable("workflow_run_context");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.Key).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Value).HasColumnType("text");
+            entity.Property(e => e.Kind).HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => new { e.RunId, e.Key })
+                .IsUnique()
+                .HasDatabaseName("ix_workflow_run_context_run_key");
         });
 
         modelBuilder.Entity<AuditRecord>(entity =>
