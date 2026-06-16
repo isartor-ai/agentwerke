@@ -18,55 +18,41 @@ public interface IPolicyEvaluationService
 
 public sealed class PolicyEvaluationService : IPolicyEvaluationService
 {
-    private const string PolicyId = "mvp-sensitive-tool-actions";
-    private const string PolicyName = "MVP Sensitive Tool Actions";
+    private readonly IPolicyRuleStore _ruleStore;
+
+    public PolicyEvaluationService()
+        : this(new InMemoryPolicyRuleStore())
+    {
+    }
+
+    public PolicyEvaluationService(IPolicyRuleStore ruleStore)
+    {
+        _ruleStore = ruleStore;
+    }
 
     public PolicyDecision Evaluate(PolicyEvaluationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-
         var action = request.Action.ToLowerInvariant();
-        var environment = request.Environment?.ToLowerInvariant() ?? string.Empty;
-        var policyTag = request.PolicyTag.ToLowerInvariant();
-        var purposeType = request.PurposeType.ToLowerInvariant();
 
-        if (TouchesSecretMaterial(action, policyTag, purposeType))
+        var matchingRule = _ruleStore
+            .GetSnapshot()
+            .Rules
+            .Where(rule => rule.Enabled)
+            .OrderBy(rule => rule.Priority)
+            .FirstOrDefault(rule => MatchesRule(rule, request));
+
+        if (matchingRule is not null)
         {
             return CreateDecision(
-                kind: "reject",
-                rationale: "Secret and credential access actions are blocked in the MVP policy layer.",
-                riskScore: 95,
-                riskLevel: "critical",
-                riskFactors:
-                [
-                    "Secret or credential scope requested",
-                    $"Policy tag: {request.PolicyTag}"
-                ],
-                constraints:
-                [
-                    "Use a dedicated secret-management workflow with human approval.",
-                    "Do not expose secret material through agent output or artifacts."
-                ]);
-        }
-
-        if (RequiresHumanApproval(action, environment, policyTag))
-        {
-            return CreateDecision(
-                kind: "escalate",
-                rationale: "This action targets a sensitive delivery path and must be approved before execution.",
-                riskScore: 78,
-                riskLevel: "high",
-                riskFactors:
-                [
-                    $"Action: {request.Action}",
-                    string.IsNullOrWhiteSpace(request.Environment) ? "Environment unspecified" : $"Environment: {request.Environment}",
-                    $"Policy tag: {request.PolicyTag}"
-                ],
-                constraints:
-                [
-                    "Require human approval before execution.",
-                    "Capture rollout and rollback evidence in the run record."
-                ]);
+                matchingRule.DecisionKind,
+                matchingRule.Id,
+                matchingRule.Name,
+                matchingRule.Rationale,
+                matchingRule.RiskScore,
+                matchingRule.RiskLevel,
+                BuildRiskFactors(request, matchingRule),
+                matchingRule.Constraints);
         }
 
         var riskFactors = new List<string>();
@@ -82,6 +68,8 @@ public sealed class PolicyEvaluationService : IPolicyEvaluationService
 
         return CreateDecision(
             kind: "allow",
+            policyId: "default-allow",
+            policyName: "Default Allow",
             rationale: "No sensitive-action rule matched; execution may proceed under standard audit logging.",
             riskScore: action.StartsWith("github.create_", StringComparison.Ordinal) ? 28 : 18,
             riskLevel: action.StartsWith("github.create_", StringComparison.Ordinal) ? "medium" : "low",
@@ -92,45 +80,38 @@ public sealed class PolicyEvaluationService : IPolicyEvaluationService
             ]);
     }
 
-    private static bool TouchesSecretMaterial(string action, string policyTag, string purposeType)
+    private static bool MatchesRule(PolicyRule rule, PolicyEvaluationRequest request)
     {
-        var mentionsSecret = action.Contains("secret", StringComparison.Ordinal) ||
-            action.Contains("credential", StringComparison.Ordinal) ||
-            policyTag.Contains("secret", StringComparison.Ordinal) ||
-            policyTag.Contains("credential", StringComparison.Ordinal) ||
-            purposeType.Contains("secret", StringComparison.Ordinal);
-
-        var sensitiveVerb = action.Contains("access", StringComparison.Ordinal) ||
-            action.Contains("export", StringComparison.Ordinal) ||
-            action.Contains("reveal", StringComparison.Ordinal) ||
-            action.Contains("retrieve", StringComparison.Ordinal) ||
-            action.Contains("dump", StringComparison.Ordinal) ||
-            action.Contains("rotate", StringComparison.Ordinal);
-
-        return mentionsSecret && sensitiveVerb;
+        return rule.Predicates.All(predicate => MatchesPredicate(predicate, request));
     }
 
-    private static bool RequiresHumanApproval(string action, string environment, string policyTag)
+    private static bool MatchesPredicate(PolicyRulePredicate predicate, PolicyEvaluationRequest request)
     {
-        if (action.Contains("merge", StringComparison.Ordinal))
+        var values = predicate.Values
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .ToArray();
+
+        if (values.Length == 0)
         {
             return true;
         }
 
-        var productionTarget = environment.Contains("prod", StringComparison.Ordinal) ||
-            environment.Contains("production", StringComparison.Ordinal) ||
-            policyTag.Contains("prod", StringComparison.Ordinal) ||
-            policyTag.Contains("production", StringComparison.Ordinal);
+        var actual = ResolveField(predicate.Field, request);
 
-        var deploymentAction = action.Contains("deploy", StringComparison.Ordinal) ||
-            action.Contains("promote", StringComparison.Ordinal) ||
-            action.Contains("rollback", StringComparison.Ordinal);
-
-        return productionTarget && deploymentAction;
+        return predicate.Match switch
+        {
+            PolicyRuleMatches.EqualsAny => values.Any(expected => actual.Any(candidate =>
+                string.Equals(candidate, expected, StringComparison.OrdinalIgnoreCase))),
+            _ => values.Any(expected => actual.Any(candidate =>
+                candidate.Contains(expected, StringComparison.OrdinalIgnoreCase)))
+        };
     }
 
     private static PolicyDecision CreateDecision(
         string kind,
+        string policyId,
+        string policyName,
         string rationale,
         int riskScore,
         string riskLevel,
@@ -140,8 +121,8 @@ public sealed class PolicyEvaluationService : IPolicyEvaluationService
         return new PolicyDecision
         {
             Kind = kind,
-            PolicyId = PolicyId,
-            PolicyName = PolicyName,
+            PolicyId = policyId,
+            PolicyName = policyName,
             Rationale = rationale,
             RiskScore = riskScore,
             RiskLevel = riskLevel,
@@ -149,5 +130,42 @@ public sealed class PolicyEvaluationService : IPolicyEvaluationService
             DecidedAt = DateTime.UtcNow.ToString("o"),
             Constraints = constraints.ToList()
         };
+    }
+
+    private static List<string> ResolveField(string field, PolicyEvaluationRequest request)
+    {
+        return field switch
+        {
+            PolicyRuleFields.Action => [request.Action],
+            PolicyRuleFields.Environment => [request.Environment ?? string.Empty],
+            PolicyRuleFields.PolicyTag => [request.PolicyTag],
+            PolicyRuleFields.PurposeType => [request.PurposeType],
+            PolicyRuleFields.AgentName => [request.AgentName],
+            PolicyRuleFields.RequiresEvidence => [.. request.RequiresEvidence],
+            PolicyRuleFields.Scope => [request.Environment ?? string.Empty, request.PolicyTag],
+            _ => [request.Action, request.Environment ?? string.Empty, request.PolicyTag, request.PurposeType, request.AgentName, .. request.RequiresEvidence]
+        };
+    }
+
+    private static IReadOnlyList<string> BuildRiskFactors(PolicyEvaluationRequest request, PolicyRule rule)
+    {
+        if (rule.RiskFactors.Count > 0)
+        {
+            var factors = new List<string>(rule.RiskFactors);
+
+            if (!string.IsNullOrWhiteSpace(request.PolicyTag))
+            {
+                factors.Add($"Policy tag: {request.PolicyTag}");
+            }
+
+            return factors;
+        }
+
+        return
+        [
+            $"Action: {request.Action}",
+            string.IsNullOrWhiteSpace(request.Environment) ? "Environment unspecified" : $"Environment: {request.Environment}",
+            $"Policy tag: {request.PolicyTag}"
+        ];
     }
 }

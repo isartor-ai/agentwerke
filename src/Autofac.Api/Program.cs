@@ -14,7 +14,7 @@ builder.Logging.AddAutofacLogging();
 builder.Services.AddControllers();
 builder.Services.AddAutofacAuth(builder.Configuration);
 builder.Services.AddOpenApi("v1");
-builder.Services.AddAutofacObservability();
+builder.Services.AddAutofacObservability(builder.Configuration);
 builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
 builder.Services.AddAutofacWorkflows();

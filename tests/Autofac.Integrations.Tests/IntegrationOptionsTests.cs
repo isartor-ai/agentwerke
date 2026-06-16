@@ -9,6 +9,8 @@ public sealed class IntegrationOptionsTests
     {
         var opts = new JiraOptions();
 
+        Assert.False(opts.Enabled);
+        Assert.Equal("https://your-domain.atlassian.net/", opts.ApiBaseUrl);
         Assert.Contains("jira:issue_created", opts.TriggerEvents);
         Assert.Equal(string.Empty, opts.WebhookSecret);
     }
@@ -18,6 +20,7 @@ public sealed class IntegrationOptionsTests
     {
         var opts = new GitHubOptions();
 
+        Assert.False(opts.Enabled);
         Assert.Contains("opened", opts.TriggerActions);
         Assert.Equal("https://api.github.com/", opts.ApiBaseUrl);
         Assert.Equal("main", opts.DefaultBaseBranch);
@@ -30,5 +33,14 @@ public sealed class IntegrationOptionsTests
     public void IntegrationOptions_Section_IsCorrect()
     {
         Assert.Equal("Integrations", IntegrationOptions.Section);
+    }
+
+    [Fact]
+    public void SlackAndTeams_DefaultToDisabled()
+    {
+        var opts = new IntegrationOptions();
+
+        Assert.False(opts.Slack.Enabled);
+        Assert.False(opts.Teams.Enabled);
     }
 }

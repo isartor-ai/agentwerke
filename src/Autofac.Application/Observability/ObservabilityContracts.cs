@@ -39,4 +39,23 @@ public interface IWorkflowMetrics
     void ApprovalCreated(string riskLevel);
     void ApprovalDecided(string decision, string riskLevel);
     void WebhookReceived(string source, bool triggered);
+    void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded);
+}
+
+/// <summary>
+/// Thin tracer abstraction over <c>System.Diagnostics.ActivitySource</c>.
+/// Lets engine/connector code create spans without taking a direct OTel package reference.
+/// </summary>
+public interface IWorkflowTracer
+{
+    ISpan StartSpan(string name);
+}
+
+/// <summary>
+/// Represents a single trace span. Dispose to end it.
+/// </summary>
+public interface ISpan : IDisposable
+{
+    void SetTag(string key, string value);
+    void SetError(Exception ex);
 }

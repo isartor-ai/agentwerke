@@ -41,6 +41,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autofac.E2ETests", "tests\A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autofac.Api.Tests", "tests\Autofac.Api.Tests\Autofac.Api.Tests.csproj", "{B8DBC94E-96F7-436B-B4C6-308F19E28965}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autofac.Integrations.Tests", "tests\Autofac.Integrations.Tests\Autofac.Integrations.Tests.csproj", "{A1C2D3E4-5F6A-7B8C-9D0E-1F2A3B4C5D6E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Autofac.Sandboxes.Tests", "tests\Autofac.Sandboxes.Tests\Autofac.Sandboxes.Tests.csproj", "{B2C3D4E5-6F7A-8B9C-0D1E-2F3A4B5C6D7F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

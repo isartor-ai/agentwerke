@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Autofac.AgentSecOps;
+using Autofac.Application.Observability;
 using Microsoft.Extensions.Options;
 
 namespace Autofac.Integrations;
@@ -49,7 +51,7 @@ public sealed record GitHubPullRequestResult(
     string MarkerPath,
     bool AlreadyExisted);
 
-public sealed class GitHubConnector : IGitHubConnector
+public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -57,7 +59,16 @@ public sealed class GitHubConnector : IGitHubConnector
     private readonly GitHubOptions _options;
     private readonly ISecretStore _secretStore;
 
-    public GitHubConnector(HttpClient httpClient, IOptions<IntegrationOptions> options, ISecretStore secretStore)
+    public GitHubConnector(
+        HttpClient httpClient,
+        IOptions<IntegrationOptions> options,
+        ISecretStore secretStore,
+        IPolicyEvaluationService policyEvaluationService,
+        IAuditRepository auditRepository,
+        IWorkflowMetrics metrics,
+        ICorrelationContext correlationContext,
+        IWorkflowTracer tracer)
+        : base(policyEvaluationService, auditRepository, metrics, correlationContext, tracer)
     {
         _httpClient = httpClient;
         _options = options.Value.GitHub;
@@ -73,6 +84,14 @@ public sealed class GitHubConnector : IGitHubConnector
             _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         }
     }
+
+    public override string ConnectorId => "github";
+
+    public override string DisplayName => "GitHub";
+
+    public override bool Enabled => _options.Enabled;
+
+    public override IReadOnlyList<string> SupportedOperations => ["create_branch", "create_pull_request"];
 
     public async Task<GitHubBranchResult> CreateBranchAsync(
         CreateGitHubBranchCommand command,
@@ -161,6 +180,44 @@ public sealed class GitHubConnector : IGitHubConnector
             CommitSha: commitSha,
             MarkerPath: markerPath,
             AlreadyExisted: false);
+    }
+
+    protected override async Task<ConnectorExecutionResult> ExecuteAllowedAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        return request.Operation switch
+        {
+            "create_branch" => await ExecuteCreateBranchAsync(request, cancellationToken),
+            "create_pull_request" => await ExecuteCreatePullRequestAsync(request, cancellationToken),
+            _ => throw new InvalidOperationException($"Unsupported GitHub operation '{request.Operation}'.")
+        };
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteCreateBranchAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<CreateGitHubBranchCommand>(SerializerOptions)
+            ?? throw new InvalidOperationException("GitHub branch payload was empty.");
+
+        var result = await CreateBranchAsync(command, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: result.AlreadyExisted ? "already_exists" : "completed",
+            Summary: $"GitHub branch {result.BranchName} prepared.",
+            ExternalId: result.BranchName,
+            ExternalUrl: result.BranchUrl);
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteCreatePullRequestAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<CreateGitHubPullRequestCommand>(SerializerOptions)
+            ?? throw new InvalidOperationException("GitHub pull request payload was empty.");
+
+        var result = await CreatePullRequestAsync(command, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: result.AlreadyExisted ? "already_exists" : "completed",
+            Summary: $"GitHub pull request #{result.Number} prepared.",
+            ExternalId: result.Number.ToString(),
+            ExternalUrl: result.PullRequestUrl);
     }
 
     private async Task<string> CommitMarkerFileAsync(

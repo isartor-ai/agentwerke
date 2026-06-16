@@ -1,0 +1,28 @@
+{{- if .Values.api.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "autofac.fullname" . }}-api
+  labels:
+    {{- include "autofac.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: {{ .Values.api.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.api.ingress.host }}
+      secretName: {{ .Values.api.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.api.ingress.host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "autofac.fullname" . }}-api
+                port:
+                  name: http
+{{- end }}

@@ -18,6 +18,9 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
     private readonly Counter<long> _approvalsCreated;
     private readonly Counter<long> _approvalsDecided;
     private readonly Counter<long> _webhooksReceived;
+    private readonly Counter<long> _connectorsSucceeded;
+    private readonly Counter<long> _connectorsFailed;
+    private readonly Histogram<double> _connectorDurationMs;
 
     public WorkflowMetrics()
     {
@@ -36,6 +39,9 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
         _approvalsDecided = _meter.CreateCounter<long>("workflow.approvals.decided", description: "Approval decisions recorded.");
 
         _webhooksReceived = _meter.CreateCounter<long>("workflow.webhooks.received", description: "Inbound webhooks received.");
+        _connectorsSucceeded = _meter.CreateCounter<long>("workflow.connectors.succeeded", description: "Connector invocations completed successfully.");
+        _connectorsFailed = _meter.CreateCounter<long>("workflow.connectors.failed", description: "Connector invocations that failed or were blocked.");
+        _connectorDurationMs = _meter.CreateHistogram<double>("workflow.connector.duration_ms", unit: "ms", description: "Connector invocation duration.");
     }
 
     public void RunStarted(string workflowId, string workflowName)
@@ -96,6 +102,26 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
         _webhooksReceived.Add(1,
             new KeyValuePair<string, object?>("webhook.source", source),
             new KeyValuePair<string, object?>("workflow.triggered", triggered));
+    }
+
+    public void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded)
+    {
+        var tags = new[]
+        {
+            new KeyValuePair<string, object?>("connector.id", connectorId),
+            new KeyValuePair<string, object?>("connector.operation", operation)
+        };
+
+        if (succeeded)
+        {
+            _connectorsSucceeded.Add(1, tags);
+        }
+        else
+        {
+            _connectorsFailed.Add(1, tags);
+        }
+
+        _connectorDurationMs.Record(durationMs, tags);
     }
 
     public void Dispose() => _meter.Dispose();

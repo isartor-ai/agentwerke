@@ -1,7 +1,9 @@
 using Autofac.Application.Observability;
 using Autofac.Application.Secrets;
 using Autofac.Application.Workflows;
+using Autofac.AgentSecOps;
 using Autofac.Infrastructure.Persistence;
+using Autofac.Infrastructure.Policies;
 using Autofac.Infrastructure.Workers;
 using Autofac.Infrastructure.Secrets;
 using Autofac.Infrastructure.Workflows;
@@ -44,6 +46,8 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
+        services.Configure<PolicyStoreOptions>(configuration.GetSection(PolicyStoreOptions.SectionName));
+        services.AddSingleton<IPolicyRuleStore, FilePolicyRuleStore>();
 
         services.AddScoped<IRunOutbox, OutboxRepository>();
         services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();

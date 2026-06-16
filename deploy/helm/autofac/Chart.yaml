@@ -1,0 +1,12 @@
+apiVersion: v2
+name: autofac
+description: Autofac — AI-native workflow orchestration platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - workflow
+  - ai
+  - orchestration
+maintainers:
+  - name: Autofac Team
