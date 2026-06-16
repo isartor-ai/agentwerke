@@ -16,6 +16,8 @@ vi.mock('../api/client', () => ({
     uploadBpmnWorkflow: vi.fn(),
     validateBpmnWorkflow: vi.fn(),
     publishWorkflowDefinition: vi.fn(),
+    getRuns: vi.fn(),
+    startRun: vi.fn(),
   },
 }));
 
@@ -59,6 +61,8 @@ describe('WorkflowDesigner integration', () => {
       version: 'v2.3.2',
       publishedAt: '2026-06-10T16:00:00.000Z',
     });
+    vi.mocked(apiClient.getRuns).mockResolvedValue([]);
+    vi.mocked(apiClient.startRun).mockResolvedValue({ runId: 'run-new-1' });
 
     if (typeof URL.createObjectURL !== 'function') {
       Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: () => 'blob:x' });
@@ -211,6 +215,28 @@ describe('WorkflowDesigner integration', () => {
         expect.objectContaining({ workflowId: 'wf-import-1' }),
       );
       expect(screen.getByText(/Published as v2.3.2/i)).toBeInTheDocument();
+    });
+  });
+
+  it('switches to Monitor tab and shows run list for the selected workflow', async () => {
+    const { runsFixture } = await import('./fixtures');
+    vi.mocked(apiClient.getRuns).mockResolvedValue(
+      runsFixture.filter((r) => r.workflowId === 'wf-001'),
+    );
+
+    renderDesigner();
+    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
+
+    // Switch to Monitor tab
+    fireEvent.click(screen.getByRole('tab', { name: 'Monitor' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getRuns)).toHaveBeenCalled();
+    });
+
+    // run-0421 belongs to wf-001
+    await waitFor(() => {
+      expect(screen.getByText('run-0421')).toBeInTheDocument();
     });
   });
 

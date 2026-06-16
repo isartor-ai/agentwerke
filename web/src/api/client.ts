@@ -107,6 +107,20 @@ export const apiClient = {
     return requestJson<WorkflowRun>(`/api/runs/${id}`);
   },
 
+  async cancelRun(runId: string): Promise<void> {
+    await requestJson<void>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
+  async startRun(workflowId: string): Promise<{ runId: string }> {
+    return requestJson<{ runId: string }>('/api/runs', {
+      method: 'POST',
+      body: JSON.stringify({ workflowId }),
+    });
+  },
+
   async getApprovals(): Promise<ApprovalRequest[]> {
     return requestJson<ApprovalRequest[]>('/api/approvals');
   },

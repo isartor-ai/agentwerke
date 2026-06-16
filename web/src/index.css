@@ -1833,3 +1833,389 @@ textarea {
 .autofac-palette-approval::before {
   color: #c08a00;
 }
+
+/* ─── BpmnViewer (read-only NavigatedViewer) ────────────────────────────── */
+
+.bpmn-viewer {
+  width: 100%;
+  height: 420px;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  background: #1a1a1b;
+}
+
+/* Token-highlight markers applied via canvas.addMarker */
+.raf-completed .djs-visual > :nth-child(1) {
+  stroke: #22c55e !important;
+  fill: rgb(34 197 94 / 0.12) !important;
+  stroke-width: 2px !important;
+}
+
+.raf-running .djs-visual > :nth-child(1) {
+  stroke: #00dce5 !important;
+  fill: rgb(0 220 229 / 0.12) !important;
+  stroke-width: 2.5px !important;
+}
+
+.raf-awaiting .djs-visual > :nth-child(1) {
+  stroke: #f59e0b !important;
+  fill: rgb(245 158 11 / 0.12) !important;
+  stroke-width: 2.5px !important;
+}
+
+.raf-failed .djs-visual > :nth-child(1) {
+  stroke: #ef4444 !important;
+  fill: rgb(239 68 68 / 0.12) !important;
+  stroke-width: 2.5px !important;
+}
+
+.raf-cancelled .djs-visual > :nth-child(1) {
+  stroke: #849495 !important;
+  fill: rgb(132 148 149 / 0.08) !important;
+  stroke-width: 1.5px !important;
+}
+
+/* Legend swatches in RunDetail canvas panel */
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.graph-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 2px solid currentColor;
+}
+
+.graph-legend-swatch.raf-swatch-raf-completed  { color: #22c55e; }
+.graph-legend-swatch.raf-swatch-raf-running    { color: #00dce5; }
+.graph-legend-swatch.raf-swatch-raf-awaiting   { color: #f59e0b; }
+.graph-legend-swatch.raf-swatch-raf-failed     { color: #ef4444; }
+.graph-legend-swatch.raf-swatch-raf-cancelled  { color: #849495; }
+
+/* ─── RunDiffModal ───────────────────────────────────────────────────────── */
+
+.diff-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgb(0 0 0 / 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.diff-modal {
+  width: min(860px, 100%);
+  max-height: min(85vh, 760px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-drawer);
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.diff-modal-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.diff-summary {
+  margin: 0;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  color: var(--color-orange);
+  background: rgb(255 180 162 / 0.07);
+  border-bottom: 1px solid var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.diff-summary-clean {
+  color: #22c55e;
+  background: rgb(34 197 94 / 0.07);
+}
+
+.diff-modal-body {
+  overflow-y: auto;
+  flex: 1 1 0;
+  padding: 1rem 1.25rem;
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.diff-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--color-border-soft);
+  white-space: nowrap;
+}
+
+.diff-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: top;
+}
+
+.diff-table tr:last-child td {
+  border-bottom: none;
+}
+
+.diff-row-deviation td {
+  background: rgb(255 180 162 / 0.05);
+}
+
+.diff-step-name {
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+.diff-badge-unplanned {
+  background: rgb(132 148 149 / 0.2) !important;
+  color: var(--color-muted) !important;
+  margin-left: 0.5rem;
+}
+
+.diff-badge-retry {
+  background: rgb(245 158 11 / 0.18) !important;
+  color: #f59e0b !important;
+  margin-right: 0.25rem;
+}
+
+.diff-badge-timeout {
+  background: rgb(239 68 68 / 0.18) !important;
+  color: #ef4444 !important;
+  margin-right: 0.25rem;
+}
+
+.diff-error-hint {
+  font-size: 0.75rem;
+  color: var(--color-error);
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+.diff-status-completed  { background: rgb(34 197 94 / 0.15)  !important; color: #22c55e  !important; }
+.diff-status-running    { background: rgb(0 220 229 / 0.15)   !important; color: #00dce5  !important; }
+.diff-status-awaiting   { background: rgb(245 158 11 / 0.15)  !important; color: #f59e0b  !important; }
+.diff-status-failed     { background: rgb(239 68 68 / 0.15)   !important; color: #ef4444  !important; }
+.diff-status-cancelled  { background: rgb(132 148 149 / 0.15) !important; color: #849495  !important; }
+.diff-status-pending    { background: rgb(132 148 149 / 0.1)  !important; color: var(--color-muted) !important; }
+
+.diff-events-section {
+  margin-top: 1.5rem;
+}
+
+.diff-events-section h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-strong);
+  margin: 0 0 0.75rem;
+}
+
+.diff-modal-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--color-border-soft);
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* ─── WorkflowDesigner Monitor mode ─────────────────────────────────────── */
+
+.designer-mode-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border-soft);
+  padding: 0 1rem;
+  background: var(--color-surface);
+}
+
+.monitor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.monitor-header h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.monitor-empty {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.monitor-run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.monitor-run-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.25rem;
+  text-decoration: none;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface-container);
+  transition: background 0.1s;
+}
+
+.monitor-run-item:hover {
+  background: var(--color-surface-container-high);
+  color: var(--color-text-strong);
+}
+
+.monitor-run-id {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+/* ─── Inline approval decision (RunDetail Approvals tab) ─────────────────── */
+
+.approval-inline-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.approval-comment-input {
+  width: 100%;
+  min-height: 3.5rem;
+  resize: vertical;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  color: var(--color-text);
+  font-size: 0.875rem;
+}
+
+.approval-comment-input:focus {
+  outline: 2px solid var(--color-brand-ring);
+  outline-offset: 2px;
+  border-color: var(--color-brand);
+}
+
+.approval-comment-input::placeholder {
+  color: var(--color-muted);
+}
+
+.approval-decision-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.approval-decided {
+  font-style: italic;
+}
+
+.btn-approve {
+  background: rgb(34 197 94 / 0.18);
+  color: #22c55e;
+  border: 1px solid rgb(34 197 94 / 0.35);
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.btn-approve:hover:not(:disabled) {
+  background: rgb(34 197 94 / 0.3);
+}
+
+.btn-reject {
+  background: rgb(239 68 68 / 0.15);
+  color: #ef4444;
+  border: 1px solid rgb(239 68 68 / 0.35);
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.btn-reject:hover:not(:disabled) {
+  background: rgb(239 68 68 / 0.28);
+}
+
+.btn-escalate {
+  background: rgb(245 158 11 / 0.15);
+  color: #f59e0b;
+  border: 1px solid rgb(245 158 11 / 0.35);
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.btn-escalate:hover:not(:disabled) {
+  background: rgb(245 158 11 / 0.28);
+}
+
+.btn-approve:disabled,
+.btn-reject:disabled,
+.btn-escalate:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

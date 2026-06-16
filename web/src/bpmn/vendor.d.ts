@@ -5,6 +5,16 @@
  * to provide full type-safety over the imperative diagram-js API.
  */
 
+declare module 'bpmn-js/lib/NavigatedViewer' {
+  export default class NavigatedViewer {
+    constructor(options?: { container?: HTMLElement | string; [key: string]: unknown });
+    importXML(xml: string): Promise<{ warnings: unknown[] }>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    get<T = any>(name: string): T;
+    destroy(): void;
+  }
+}
+
 declare module 'bpmn-js/lib/Modeler' {
   export interface ModelerOptions {
     container?: HTMLElement | string;

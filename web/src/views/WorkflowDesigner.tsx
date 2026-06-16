@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { BpmnModeler, type BpmnModelerHandle } from '../components/BpmnModeler';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
+import { StatusBadge } from '../components/StatusBadge';
 import { Toolbar } from '../components/Toolbar';
 import { createEmptyDiagram } from '../bpmn/constants';
-import type { Workflow, WorkflowValidationResult } from '../types';
+import type { Workflow, WorkflowRun, WorkflowValidationResult } from '../types';
 
 interface DiffLine {
   lineNumber: number;
@@ -176,6 +178,7 @@ function buildBpmnDiff(previousXml: string, currentXml: string): DiffLine[] {
 }
 
 export function WorkflowDesigner() {
+  const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -186,9 +189,16 @@ export function WorkflowDesigner() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [lastPublishedXml, setLastPublishedXml] = useState('');
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [publishedWorkflowId, setPublishedWorkflowId] = useState<string | null>(null);
+  const [startingRun, setStartingRun] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workflowDetailLoading, setWorkflowDetailLoading] = useState(false);
+
+  // Design | Monitor mode toggle
+  const [designerMode, setDesignerMode] = useState<'design' | 'monitor'>('design');
+  const [monitorRuns, setMonitorRuns] = useState<WorkflowRun[]>([]);
+  const [monitorLoading, setMonitorLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelerRef = useRef<BpmnModelerHandle | null>(null);
@@ -234,6 +244,26 @@ export function WorkflowDesigner() {
   useEffect(() => {
     void loadWorkflows();
   }, []);
+
+  // Poll runs when Monitor tab is active
+  useEffect(() => {
+    if (designerMode !== 'monitor') return;
+    let cancelled = false;
+    const load = async () => {
+      setMonitorLoading(true);
+      try {
+        const all = await apiClient.getRuns();
+        if (!cancelled) {
+          setMonitorRuns(selectedId ? all.filter((r) => r.workflowId === selectedId) : all);
+        }
+      } finally {
+        if (!cancelled) setMonitorLoading(false);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 10_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [designerMode, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -439,6 +469,7 @@ export function WorkflowDesigner() {
       });
       setLastPublishedXml(xml);
       setSelectedTemplateId(null);
+      setPublishedWorkflowId(workflowId);
       setPublishMessage(
         `Published as ${publishResult.version} at ${new Date(publishResult.publishedAt).toLocaleString()}.`,
       );
@@ -447,6 +478,20 @@ export function WorkflowDesigner() {
       setPublishMessage(
         publishError instanceof Error ? publishError.message : 'Failed to publish workflow.',
       );
+    }
+  };
+
+  const onStartRun = async () => {
+    const workflowId = publishedWorkflowId ?? selectedId;
+    if (!workflowId) return;
+    setStartingRun(true);
+    try {
+      const result = await apiClient.startRun(workflowId);
+      navigate(`/runs/${result.runId}`);
+    } catch {
+      navigate('/runs');
+    } finally {
+      setStartingRun(false);
     }
   };
 
@@ -547,107 +592,191 @@ export function WorkflowDesigner() {
         </article>
 
         <article className="panel designer-canvas-panel">
-          <Toolbar>
-            <button type="button" className="btn btn-secondary" onClick={validateCurrentBpmn}>
-              Validate
+          {/* Design / Monitor mode toggle */}
+          <div className="designer-mode-tabs" role="tablist" aria-label="Designer mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={designerMode === 'design'}
+              className={`tab ${designerMode === 'design' ? 'tab-active' : ''}`}
+              onClick={() => setDesignerMode('design')}
+            >
+              Design
             </button>
-            <button type="button" className="btn btn-secondary" onClick={onPublishWorkflow}>
-              Publish
+            <button
+              type="button"
+              role="tab"
+              aria-selected={designerMode === 'monitor'}
+              className={`tab ${designerMode === 'monitor' ? 'tab-active' : ''}`}
+              onClick={() => setDesignerMode('monitor')}
+            >
+              Monitor
             </button>
-            <button type="button" className="btn btn-secondary" onClick={onExportClick}>
-              Export BPMN
-            </button>
-          </Toolbar>
+          </div>
 
-          <BpmnModeler
-            ref={modelerRef}
-            onReady={handleModelerReady}
-            onChange={(xml) => {
-              setCurrentXml(xml);
-              setPublishMessage(null);
-            }}
-            onError={(message) => setValidationError(message)}
-            validationErrors={validation?.errors ?? []}
-          />
+          {designerMode === 'design' ? (
+            <>
+              <Toolbar>
+                <button type="button" className="btn btn-secondary" onClick={validateCurrentBpmn}>
+                  Validate
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={onPublishWorkflow}>
+                  Publish
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={onExportClick}>
+                  Export BPMN
+                </button>
+              </Toolbar>
 
-          <section className="panel validation-panel" aria-label="BPMN validation results">
-            <h3>Validation Results</h3>
-            {workflowDetailLoading ? <p>Loading persisted workflow detail...</p> : null}
-            {validationLoading ? <p>Validating BPMN...</p> : null}
-            {validationError ? <p className="validation-error">{validationError}</p> : null}
+              <BpmnModeler
+                ref={modelerRef}
+                onReady={handleModelerReady}
+                onChange={(xml) => {
+                  setCurrentXml(xml);
+                  setPublishMessage(null);
+                }}
+                onError={(message) => setValidationError(message)}
+                validationErrors={validation?.errors ?? []}
+              />
 
-            {validation ? (
-              <div>
-                <p>
-                  Status: <strong>{validation.isValid ? 'Valid' : 'Invalid'}</strong>
-                </p>
-                {validation.processId ? (
-                  <p>
-                    Process: {validation.processName ?? validation.processId} ({validation.processId})
-                  </p>
-                ) : null}
-                {validation.errors.length > 0 ? (
-                  <ul className="validation-list">
-                    {validation.errors.map((item, index) => (
-                      <li key={`${item.elementId ?? item.elementName ?? 'error'}-${index}`}>
-                        <strong>{item.elementName ?? 'element'}:</strong> {item.message}
-                        {item.elementId ? ` [id: ${item.elementId}]` : ''}
-                        {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
-                        {item.linePosition ? `, col ${item.linePosition}` : ''}
+              <section className="panel validation-panel" aria-label="BPMN validation results">
+                <h3>Validation Results</h3>
+                {workflowDetailLoading ? <p>Loading persisted workflow detail...</p> : null}
+                {validationLoading ? <p>Validating BPMN...</p> : null}
+                {validationError ? <p className="validation-error">{validationError}</p> : null}
+
+                {validation ? (
+                  <div>
+                    <p>
+                      Status: <strong>{validation.isValid ? 'Valid' : 'Invalid'}</strong>
+                    </p>
+                    {validation.processId ? (
+                      <p>
+                        Process: {validation.processName ?? validation.processId} ({validation.processId})
+                      </p>
+                    ) : null}
+                    {validation.errors.length > 0 ? (
+                      <ul className="validation-list">
+                        {validation.errors.map((item, index) => (
+                          <li key={`${item.elementId ?? item.elementName ?? 'error'}-${index}`}>
+                            <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                            {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                            {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                            {item.linePosition ? `, col ${item.linePosition}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No validation errors.</p>
+                    )}
+                    {validation.warnings.length > 0 ? (
+                      <>
+                        <p>
+                          Warnings: <strong>{validation.warnings.length}</strong>
+                        </p>
+                        <ul className="validation-list">
+                          {validation.warnings.map((item, index) => (
+                            <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`}>
+                              <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                              {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                              {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                              {item.linePosition ? `, col ${item.linePosition}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p>Validate the workflow to see actionable errors on the canvas.</p>
+                )}
+              </section>
+
+              {publishMessage ? (
+                <section className="panel publish-panel" aria-label="Workflow publish status">
+                  <h3>Publish Status</h3>
+                  <p>{publishMessage}</p>
+                  {publishedWorkflowId && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={startingRun}
+                      onClick={() => void onStartRun()}
+                    >
+                      {startingRun ? 'Starting…' : 'Start Run'}
+                    </button>
+                  )}
+                </section>
+              ) : null}
+
+              {bpmnDiff.length > 0 ? (
+                <section className="panel diff-panel" aria-label="BPMN diff view">
+                  <h3>Workflow Diff</h3>
+                  <ul className="diff-list" role="list">
+                    {bpmnDiff.map((entry, index) => (
+                      <li
+                        key={`${entry.lineNumber}-${entry.kind}-${index}`}
+                        className={`diff-line diff-line-${entry.kind}`}
+                      >
+                        <span className="diff-glyph" aria-hidden="true">
+                          {entry.kind === 'added' ? '+' : entry.kind === 'removed' ? '-' : ' '}
+                        </span>
+                        <code>{entry.text || ' '}</code>
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p>No validation errors.</p>
-                )}
-                {validation.warnings.length > 0 ? (
-                  <>
-                    <p>
-                      Warnings: <strong>{validation.warnings.length}</strong>
-                    </p>
-                    <ul className="validation-list">
-                      {validation.warnings.map((item, index) => (
-                        <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`}>
-                          <strong>{item.elementName ?? 'element'}:</strong> {item.message}
-                          {item.elementId ? ` [id: ${item.elementId}]` : ''}
-                          {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
-                          {item.linePosition ? `, col ${item.linePosition}` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
+                </section>
+              ) : null}
+            </>
+          ) : (
+            /* Monitor mode — run list for the selected workflow */
+            <section className="monitor-panel" aria-label="Run monitor">
+              <div className="monitor-header">
+                <h3>
+                  {selectedWorkflow
+                    ? `Runs for ${selectedWorkflow.name}`
+                    : 'All Runs'}
+                </h3>
+                <span className="live-chip">
+                  <span aria-hidden="true" />
+                  Live · 10s
+                </span>
               </div>
-            ) : (
-              <p>Validate the workflow to see actionable errors on the canvas.</p>
-            )}
-          </section>
-
-          {publishMessage ? (
-            <section className="panel publish-panel" aria-label="Workflow publish status">
-              <h3>Publish Status</h3>
-              <p>{publishMessage}</p>
+              {monitorLoading && monitorRuns.length === 0 ? (
+                <p>Loading runs…</p>
+              ) : monitorRuns.length === 0 ? (
+                <p className="monitor-empty">
+                  No runs found for this workflow.{' '}
+                  {selectedId && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void onStartRun()}
+                    >
+                      Start Run
+                    </button>
+                  )}
+                </p>
+              ) : (
+                <ul className="monitor-run-list" role="list">
+                  {monitorRuns.map((run) => (
+                    <li key={run.id}>
+                      <Link to={`/runs/${run.id}`} className="monitor-run-item">
+                        <span className="monitor-run-id">{run.id}</span>
+                        <StatusBadge status={run.status} />
+                        <span className="cell-meta">
+                          {run.currentStep ?? 'no active step'}
+                        </span>
+                        <span className="cell-meta">
+                          {new Date(run.startedAt).toLocaleString()}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
-          ) : null}
-
-          {bpmnDiff.length > 0 ? (
-            <section className="panel diff-panel" aria-label="BPMN diff view">
-              <h3>Workflow Diff</h3>
-              <ul className="diff-list" role="list">
-                {bpmnDiff.map((entry, index) => (
-                  <li
-                    key={`${entry.lineNumber}-${entry.kind}-${index}`}
-                    className={`diff-line diff-line-${entry.kind}`}
-                  >
-                    <span className="diff-glyph" aria-hidden="true">
-                      {entry.kind === 'added' ? '+' : entry.kind === 'removed' ? '-' : ' '}
-                    </span>
-                    <code>{entry.text || ' '}</code>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          )}
         </article>
       </section>
     </section>
