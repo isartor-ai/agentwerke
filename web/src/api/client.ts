@@ -9,11 +9,19 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const WORKFLOW_API_BASE_URL = API_BASE_URL ?? '';
 
+// Injected at build time for the manual test stack (docker-compose.manual.yml).
+// In production builds this variable is unset and auth is handled externally.
+const DEV_ADMIN_TOKEN = import.meta.env.VITE_DEV_ADMIN_TOKEN as string | undefined;
+
+function authHeaders(): Record<string, string> {
+  return DEV_ADMIN_TOKEN ? { Authorization: `Bearer ${DEV_ADMIN_TOKEN}` } : {};
+}
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function requestJson<T>(path: string, init?: RequestInit, baseUrl: string = API_BASE_URL ?? ''): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers ?? {}) },
     ...init,
   });
 

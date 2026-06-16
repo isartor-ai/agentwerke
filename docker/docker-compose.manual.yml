@@ -14,6 +14,11 @@
 #   http://localhost:3002   Web UI
 #   http://localhost:8081   API  (e.g. http://localhost:8081/api/health/live)
 #   http://localhost:9090   WireMock admin (optional inspection)
+#
+# Auth:
+#   The API is configured with a dev-only JWT secret. The web UI is built with
+#   a pre-signed admin token (VITE_DEV_ADMIN_TOKEN) so all protected endpoints
+#   work without a login flow. DO NOT use these credentials in production.
 ###############################################################################
 
 services:
@@ -89,6 +94,12 @@ services:
       Integrations__GitHub__RepositoryName: "mock-repo"
       Integrations__Jira__WebhookSecret: ""
       Integrations__GitHub__WebhookSecret: ""
+      # Dev-only JWT — signs tokens accepted by the web UI's pre-baked admin token.
+      # Secret must match VITE_DEV_ADMIN_TOKEN in the web service build args.
+      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
+      Jwt__Issuer: "autofac-dev"
+      Jwt__Audience: "autofac-dev"
+      Jwt__DevTokensEnabled: "true"
     volumes:
       - api_storage:/app/storage
     depends_on:
@@ -104,12 +115,28 @@ services:
       timeout: 5s
       retries: 20
 
+  # Seeds demo data (workflow, completed run, awaiting-approval run) after migrations.
+  seed:
+    image: postgres:16-alpine
+    command: >
+      psql "host=postgres port=5432 dbname=autofac_manual user=postgres password=postgres"
+      -f /seed/seed-manual.sql
+    volumes:
+      - ./seed-manual.sql:/seed/seed-manual.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   web:
     build:
       context: ..
       dockerfile: docker/web/Dockerfile
       args:
         VITE_API_BASE_URL: ""
+        # Pre-signed HS256 JWT (role=admin, exp=2030-01-01, signed with Jwt__SecretKey above).
+        # Allows the SPA to call protected endpoints without a login flow.
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiYWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.W1s08RqaNsfu_MX00ccH4Q6IKMEd5LDsBtBapvTzpB0"
     restart: unless-stopped
     ports:
       - "3002:80"

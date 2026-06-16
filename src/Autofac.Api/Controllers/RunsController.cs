@@ -90,6 +90,32 @@ public sealed class RunsController : ControllerBase
     }
 
     [Authorize(Policy = AutofacPolicies.Operator)]
+    [HttpPost("{runId}/cancel")]
+    public async Task<IActionResult> Cancel(string runId)
+    {
+        var run = await _dbContext.WorkflowRuns
+            .FirstOrDefaultAsync(r => r.Id == runId);
+
+        if (run == null)
+        {
+            return NotFound(new { message = $"Run '{runId}' not found." });
+        }
+
+        var terminalStatuses = new[] { "completed", "failed", "cancelled" };
+        if (Array.Exists(terminalStatuses, s => string.Equals(s, run.Status, StringComparison.Ordinal)))
+        {
+            return Conflict(new { message = $"Run '{runId}' is already in a terminal state '{run.Status}' and cannot be cancelled." });
+        }
+
+        run.Status = "cancelled";
+        run.CompletedAt = DateTimeOffset.UtcNow.ToString("o");
+        run.PendingApprovals = 0;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { runId, status = "cancelled" });
+    }
+
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("{runId}/recover")]
     public async Task<IActionResult> Recover(string runId)
     {
