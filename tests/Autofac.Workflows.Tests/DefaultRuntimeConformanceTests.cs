@@ -22,7 +22,7 @@ namespace Autofac.Workflows.Tests;
 /// </summary>
 public sealed class DefaultRuntimeConformanceTests
 {
-    private static readonly string AutofacNs = "https://autofac.dev/bpmn/extensions/v1";
+    private static readonly string AutofacNs = "https://autofac.de/bpmn/extensions/v1";
     private static readonly string BpmnNs = "http://www.omg.org/spec/BPMN/20100524/MODEL";
 
     private readonly BpmnWorkflowValidator _validator = new();
@@ -39,7 +39,7 @@ public sealed class DefaultRuntimeConformanceTests
     private const string IssueToPrTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
           <bpmn:process id="IssueToPr" name="Issue to PR">
             <bpmn:startEvent id="Start" name="Issue Received" />
             <bpmn:serviceTask id="Specify" name="Specify Requirements">
@@ -103,7 +103,7 @@ public sealed class DefaultRuntimeConformanceTests
     private const string BugfixTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
           <bpmn:process id="Bugfix" name="Bugfix">
             <bpmn:startEvent id="Start" name="Bug Reported" />
             <bpmn:serviceTask id="Diagnose" name="Diagnose Root Cause">
@@ -150,7 +150,7 @@ public sealed class DefaultRuntimeConformanceTests
     private const string ParallelBuildAndTestTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
           <bpmn:process id="ParallelBuildAndTest" name="Parallel Build and Test">
             <bpmn:startEvent id="Start" name="Build Triggered" />
             <bpmn:parallelGateway id="Fork" name="Quality Gate Fork" />
@@ -212,7 +212,7 @@ public sealed class DefaultRuntimeConformanceTests
     private const string SecurityReviewTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
           <bpmn:process id="SecurityReview" name="Security Review">
             <bpmn:startEvent id="Start" name="Review Requested" />
             <bpmn:serviceTask id="Scan" name="Run Security Scan">

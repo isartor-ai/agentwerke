@@ -12,7 +12,7 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
               <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
                 <bpmn:startEvent id="Start" />
                 <bpmn:serviceTask id="DeployTask" name="Deploy">
@@ -91,7 +91,7 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
               <bpmn:process id="MetadataFlow">
                 <bpmn:serviceTask id="Task1">
                   <bpmn:extensionElements>
@@ -143,7 +143,7 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
               <bpmn:process id="WarnFlow">
                 <bpmn:serviceTask id="DeployTask">
                   <bpmn:extensionElements>

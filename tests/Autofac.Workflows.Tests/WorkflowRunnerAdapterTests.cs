@@ -16,7 +16,7 @@ public sealed class WorkflowRunnerAdapterTests
             workflowDefinitionId: "wf-123",
             bpmnXml: """
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                                  xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                                  xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
                   <bpmn:process id="Process_1" name="Adapter Flow">
                     <bpmn:startEvent id="Start" />
                     <bpmn:serviceTask id="ServiceA" name="Do Work">
