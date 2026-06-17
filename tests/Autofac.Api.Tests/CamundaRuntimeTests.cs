@@ -30,6 +30,7 @@ public sealed class CamundaRuntimeTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] = "Host=localhost;Database=autofac;Username=test;Password=test",
+                ["WorkflowRuntime:Mode"] = "Camunda",
                 ["Camunda:Enabled"] = "true",
                 ["Camunda:BaseUrl"] = "https://camunda.example.test/",
                 ["Camunda:AuthMode"] = "Basic",
@@ -216,7 +217,8 @@ public sealed class CamundaRuntimeTests
                 ClusterSize: 1,
                 PartitionsCount: 1,
                 ReplicationFactor: 1,
-                Error: null)));
+                Error: null)),
+            new WorkflowRuntimeOptions { Mode = WorkflowRuntimeMode.Camunda });
 
         var result = await controller.Camunda(CancellationToken.None);
 

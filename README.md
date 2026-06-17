@@ -28,7 +28,9 @@ Secure, BPMN-native, Docker-sandboxed autonomous software factory.
 	- `/openapi/v1.json`
 3. Baseline phase-1 endpoints:
 	- `GET /api/health/live`
-	- `GET /api/health/ready`
+	- `GET /api/health/ready` (includes the active `runtimeMode`)
+	- `GET /api/health/runtime` (active workflow runtime mode)
+	- `GET /api/health/camunda` (Camunda topology; reports inactive unless runtime mode is `Camunda`)
 	- `GET /api/auth/config`
 	- `POST /api/auth/token`
 	- `GET /api/workflows`
@@ -44,11 +46,31 @@ Secure, BPMN-native, Docker-sandboxed autonomous software factory.
 
 See `CONTRIBUTING.md` for contribution standards.
 
+## Workflow Runtime Mode
+Autofac selects its workflow execution runtime through the `WorkflowRuntime:Mode` setting:
+
+| Value | Behavior |
+| --- | --- |
+| `Autofac` (default) | Bounded, Postgres-backed Autofac runtime. No Camunda configuration is read and no Camunda client is constructed. This is the default when the setting is absent. |
+| `Camunda` | Opt-in enterprise adapter. Camunda options, client, health probe, and status are wired (see ADR-002). |
+
+```jsonc
+// appsettings.json
+"WorkflowRuntime": {
+  "Mode": "Autofac"   // or "Camunda"
+}
+```
+
+- An unsupported value (e.g. `WorkflowRuntime:Mode=Temporal`) fails fast at startup with an actionable error.
+- The active mode is logged once on startup and exposed at `GET /api/health/runtime` and on `GET /api/health/ready`.
+- Camunda settings under the `Camunda` section are only consumed when `Mode=Camunda`.
+
 ## Persistence
 - Phase-1 schema documentation: `docs/persistence-schema.md`
 
 ## Architecture Decisions
-- Production BPMN runtime decision: `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`
+- Default workflow runtime decision (current): `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`
+- Superseded Camunda-first decision: `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`
 - Camunda 8 implementation plan: `docs/camunda8-sdlc-factory-implementation-plan.md`
 - UI cleanup/refactor plan: `docs/ui-cleanup-refactor-plan.md`
 - Camunda-backed manual test scenario: `docs/manual-test-camunda8-sdlc-factory.md`

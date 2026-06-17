@@ -36,6 +36,10 @@ public static class DependencyInjection
         services.AddDbContext<AutofacDbContext>(options =>
             options.UseNpgsql(dataSource));
 
+        var runtimeOptions = WorkflowRuntimeOptions.Resolve(configuration);
+        services.AddSingleton(runtimeOptions);
+        services.AddHostedService<WorkflowRuntimeStartupLogger>();
+
         services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
         services.AddScoped<IWorkflowValidationService, WorkflowValidationService>();
         services.AddScoped<IWorkflowAuthoringService, WorkflowAuthoringService>();
@@ -47,21 +51,33 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
-        services.Configure<CamundaOptions>(o =>
-            configuration.GetSection(CamundaOptions.Section).Bind(o));
-        services.AddHttpClient<CamundaClient>((sp, client) =>
-        {
-            var options = sp.GetRequiredService<IOptions<CamundaOptions>>().Value;
-            if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri))
-            {
-                client.BaseAddress = baseUri;
-            }
 
-            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds > 0 ? options.TimeoutSeconds : 10);
-            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-        });
-        services.AddScoped<ICamundaClient>(sp => sp.GetRequiredService<CamundaClient>());
-        services.AddScoped<ICamundaRuntimeStatusService, CamundaRuntimeStatusService>();
+        // Camunda services, clients, and configuration are wired only when the runtime is
+        // explicitly opted into Camunda mode (ADR-002). The default Autofac runtime never
+        // binds Camunda configuration or constructs a Camunda client.
+        if (runtimeOptions.Mode == WorkflowRuntimeMode.Camunda)
+        {
+            services.Configure<CamundaOptions>(o =>
+                configuration.GetSection(CamundaOptions.Section).Bind(o));
+            services.AddHttpClient<CamundaClient>((sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<CamundaOptions>>().Value;
+                if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri))
+                {
+                    client.BaseAddress = baseUri;
+                }
+
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds > 0 ? options.TimeoutSeconds : 10);
+                client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+            });
+            services.AddScoped<ICamundaClient>(sp => sp.GetRequiredService<CamundaClient>());
+            services.AddScoped<ICamundaRuntimeStatusService, CamundaRuntimeStatusService>();
+        }
+        else
+        {
+            services.AddSingleton<ICamundaRuntimeStatusService, DisabledCamundaRuntimeStatusService>();
+        }
+
         services.Configure<PolicyStoreOptions>(configuration.GetSection(PolicyStoreOptions.SectionName));
         services.AddSingleton<IPolicyRuleStore, FilePolicyRuleStore>();
 
