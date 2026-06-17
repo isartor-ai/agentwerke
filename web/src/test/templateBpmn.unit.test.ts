@@ -13,7 +13,7 @@ const issueToPrTemplate: TemplateDetail = {
   requiredInputs: ['issue_url', 'repository'],
   evidenceExpectations: ['spec_document', 'code_changes'],
   bpmnXml: `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
   <bpmn:process id="IssueToPr" name="Issue to Pull Request">
     <bpmn:serviceTask id="Specify" name="Specify">
       <bpmn:extensionElements>

@@ -61,7 +61,7 @@ const issueToPrTemplate = {
   requiredInputs: ['issue_url', 'repository'],
   evidenceExpectations: ['spec_document', 'code_changes'],
   bpmnXml:
-    '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:autofac="https://autofac.dev/bpmn/extensions/v1"><bpmn:process id="IssueToPr" name="Issue to Pull Request"><bpmn:serviceTask id="Specify" name="Specify"><bpmn:extensionElements><autofac:agentTask agent="specification-agent" action="spec.generate" purposeType="specification" policyTag="sdlc-spec" /></bpmn:extensionElements></bpmn:serviceTask><bpmn:userTask id="CodeReview" name="Code Review Approval"><bpmn:extensionElements><autofac:approvalTask purposeType="code_review" policyTag="human-code-review" /></bpmn:extensionElements></bpmn:userTask></bpmn:process></bpmn:definitions>',
+    '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:autofac="https://autofac.de/bpmn/extensions/v1"><bpmn:process id="IssueToPr" name="Issue to Pull Request"><bpmn:serviceTask id="Specify" name="Specify"><bpmn:extensionElements><autofac:agentTask agent="specification-agent" action="spec.generate" purposeType="specification" policyTag="sdlc-spec" /></bpmn:extensionElements></bpmn:serviceTask><bpmn:userTask id="CodeReview" name="Code Review Approval"><bpmn:extensionElements><autofac:approvalTask purposeType="code_review" policyTag="human-code-review" /></bpmn:extensionElements></bpmn:userTask></bpmn:process></bpmn:definitions>',
 };
 
 describe('WorkflowDesigner integration', () => {
