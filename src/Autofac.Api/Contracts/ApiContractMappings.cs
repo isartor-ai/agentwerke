@@ -3,6 +3,7 @@ using System.Linq;
 using Autofac.Application.Workflows;
 using Autofac.Api.Contracts.Approvals;
 using Autofac.Api.Contracts.Runs;
+using Autofac.Api.Contracts.Templates;
 using Autofac.Api.Contracts.Workflows;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
@@ -14,6 +15,32 @@ namespace Autofac.Api.Contracts;
 
 internal static class ApiContractMappings
 {
+    public static TemplateSummary ToTemplateSummary(SdlcTemplate template) =>
+        new(
+            template.Id,
+            template.Name,
+            template.Description,
+            template.Trigger,
+            template.PolicyLevel,
+            template.Tags.ToArray(),
+            template.AgentRoles.ToArray(),
+            template.ApprovalRoles.ToArray());
+
+    public static TemplateDetail ToTemplateDetail(SdlcTemplate template) =>
+        new(
+            template.Id,
+            template.Name,
+            template.Description,
+            template.Trigger,
+            template.PolicyLevel,
+            template.Tags.ToArray(),
+            template.AgentRoles.ToArray(),
+            template.ApprovalRoles.ToArray(),
+            template.RequiredInputs.ToArray(),
+            template.EvidenceExpectations.ToArray(),
+            template.BpmnXml);
+
+
     public static WorkflowSummary ToWorkflowSummary(WorkflowDefinition workflow)
     {
         return new WorkflowSummary(
