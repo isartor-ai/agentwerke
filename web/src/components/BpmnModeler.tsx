@@ -42,6 +42,12 @@ export interface BpmnModelerProps {
   onReady?: () => void;
   /** Backend validation errors to surface as inline markers/overlays. */
   validationErrors?: BpmnValidationError[];
+  /**
+   * When true, the modeler is configured for Camunda-compatible editing:
+   * Camunda-specific moddle extensions and properties providers will be loaded
+   * when available. Defaults to false (Autofac default runtime only).
+   */
+  camundaMode?: boolean;
   className?: string;
 }
 
@@ -52,7 +58,7 @@ export interface BpmnModelerProps {
  */
 export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
   function BpmnModeler(
-    { initialXml, onChange, onError, onImportSuccess, onReady, validationErrors, className },
+    { initialXml, onChange, onError, onImportSuccess, onReady, validationErrors, camundaMode = false, className },
     ref,
   ) {
     const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -99,11 +105,19 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
       [],
     );
 
+    // Captured at mount; camundaMode is a construction-time config, not reactive.
+    const camundaModeRef = useRef(camundaMode);
+
     // Instantiate the modeler once on mount.
     useEffect(() => {
       if (!canvasRef.current || !panelRef.current) {
         return;
       }
+
+      // Camunda-specific providers (e.g. CamundaPropertiesProviderModule) would be
+      // appended here when camundaModeRef.current is true and the camunda-bpmn-js
+      // package is present. Currently a no-op; the hook is in place for the adapter.
+      void camundaModeRef.current;
 
       let disposed = false;
       const modeler = new Modeler({

@@ -10,6 +10,7 @@ vi.mock('../components/BpmnModeler');
 
 vi.mock('../api/client', () => ({
   apiClient: {
+    getRuntimeMode: vi.fn(),
     getTemplates: vi.fn(),
     getTemplate: vi.fn(),
     getAgents: vi.fn(),
@@ -69,6 +70,7 @@ describe('WorkflowDesigner integration', () => {
   let revokeObjectUrlSpy: { mockRestore: () => void };
 
   beforeEach(() => {
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
     vi.mocked(apiClient.getTemplates).mockResolvedValue(templateSummaries);
     vi.mocked(apiClient.getTemplate).mockResolvedValue(issueToPrTemplate);
     vi.mocked(apiClient.getAgents).mockResolvedValue([]);
@@ -233,7 +235,7 @@ describe('WorkflowDesigner integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Valid')).toBeInTheDocument();
-      expect(screen.getByText('Warnings:')).toBeInTheDocument();
+      expect(screen.getByText('Compatibility Warnings')).toBeInTheDocument();
       expect(screen.getByText(/human-readable 'name' attribute/i)).toBeInTheDocument();
     });
   });
@@ -309,6 +311,92 @@ describe('WorkflowDesigner integration', () => {
     // run-0421 belongs to wf-001
     await waitFor(() => {
       expect(screen.getByText('run-0421')).toBeInTheDocument();
+    });
+  });
+
+  it('shows the Autofac runtime mode badge in the advanced BPMN toolbar', async () => {
+    renderDesigner();
+
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced BPMN' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Active runtime mode')).toHaveTextContent('Autofac Runtime');
+    });
+  });
+
+  it('shows Camunda runtime mode badge when Camunda is active', async () => {
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValueOnce({ mode: 'Camunda', camundaEnabled: true });
+
+    renderDesigner();
+
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced BPMN' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Active runtime mode')).toHaveTextContent('Camunda Runtime');
+    });
+  });
+
+  it('validation panel labels errors as runtime errors and warnings as compatibility warnings', async () => {
+    vi.mocked(apiClient.validateBpmnWorkflow).mockResolvedValueOnce({
+      isValid: false,
+      processId: 'TestFlow',
+      processName: 'Test Flow',
+      errors: [
+        {
+          message: 'Service task missing agentTask metadata.',
+          elementName: 'serviceTask',
+          elementId: 'T1',
+          lineNumber: 5,
+          linePosition: 3,
+        },
+      ],
+      warnings: [
+        {
+          message: 'eventBasedGateway is not supported by the default runtime.',
+          elementName: 'eventBasedGateway',
+          elementId: 'GW1',
+          lineNumber: 10,
+          linePosition: 1,
+        },
+      ],
+    });
+
+    renderDesigner();
+
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced BPMN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Runtime errors' })).toBeInTheDocument();
+      expect(screen.getByText(/Service task missing agentTask metadata/i)).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Compatibility warnings' })).toBeInTheDocument();
+      expect(screen.getByText(/eventBasedGateway is not supported/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows Edit in BPMN editor button after template draft is created', async () => {
+    renderDesigner();
+
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Configure Issue to Pull Request/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Workflow name')).toHaveValue('Issue to Pull Request');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Edit in BPMN editor' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit in BPMN editor' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bpmn-modeler-mock')).toBeInTheDocument();
     });
   });
 

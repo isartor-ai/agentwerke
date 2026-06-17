@@ -258,6 +258,11 @@ export interface AgentSummary {
   source: string;
 }
 
+export interface RuntimeMode {
+  mode: 'Autofac' | 'Camunda';
+  camundaEnabled: boolean;
+}
+
 export interface AuthUser {
   id: string;
   name: string;

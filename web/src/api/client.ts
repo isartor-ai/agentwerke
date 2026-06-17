@@ -1,6 +1,7 @@
 import type {
   AgentSummary,
   ApprovalRequest,
+  RuntimeMode,
   TemplateDetail,
   TemplateSummary,
   WorkflowPublishResult,
@@ -51,6 +52,10 @@ function extractErrorMessage(errorText: string): string | null {
 }
 
 export const apiClient = {
+  async getRuntimeMode(): Promise<RuntimeMode> {
+    return requestJson<RuntimeMode>('/api/health/runtime');
+  },
+
   getRunArtifactDownloadUrl(runId: string, artifactName: string): string {
     return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactName)}`;
   },

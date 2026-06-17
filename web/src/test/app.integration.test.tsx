@@ -8,6 +8,7 @@ vi.mock('../components/BpmnModeler');
 
 vi.mock('../api/client', () => ({
   apiClient: {
+    getRuntimeMode: vi.fn(),
     getRuns: vi.fn(),
     getRun: vi.fn(),
     getTemplates: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('../api/client', () => ({
 
 describe('App integration', () => {
   beforeEach(() => {
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
     vi.mocked(apiClient.getRuns).mockResolvedValue(runsFixture);
     vi.mocked(apiClient.getRun).mockResolvedValue(runsFixture[0]);
     vi.mocked(apiClient.getWorkflows).mockResolvedValue(workflowsFixture);

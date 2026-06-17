@@ -11,6 +11,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { Toolbar } from '../components/Toolbar';
 import { buildConfiguredTemplateBpmn } from '../templates/templateBpmn';
 import type {
+  RuntimeMode,
   TemplateDetail,
   TemplateFactoryConfiguration,
   TemplateSummary,
@@ -139,6 +140,7 @@ export function WorkflowDesigner() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('factory');
   const [monitorRuns, setMonitorRuns] = useState<WorkflowRun[]>([]);
   const [monitorLoading, setMonitorLoading] = useState(false);
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Autofac', camundaEnabled: false });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelerRef = useRef<BpmnModelerHandle | null>(null);
@@ -201,6 +203,10 @@ export function WorkflowDesigner() {
       .getAgents()
       .then(setAgentCatalog)
       .catch(() => {});
+    void apiClient
+      .getRuntimeMode()
+      .then(setRuntimeMode)
+      .catch(() => {}); // Non-fatal: default stays Autofac.
   }, []);
 
   useEffect(() => {
@@ -579,28 +585,16 @@ export function WorkflowDesigner() {
               Process: {validation.processName ?? validation.processId} ({validation.processId})
             </p>
           ) : null}
-          {validation.errors.length > 0 ? (
-            <ul className="validation-list">
-              {validation.errors.map((item, index) => (
-                <li key={`${item.elementId ?? item.elementName ?? 'error'}-${index}`}>
-                  <strong>{item.elementName ?? 'element'}:</strong> {item.message}
-                  {item.elementId ? ` [id: ${item.elementId}]` : ''}
-                  {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
-                  {item.linePosition ? `, col ${item.linePosition}` : ''}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No validation errors.</p>
-          )}
-          {validation.warnings.length > 0 ? (
-            <>
-              <p>
-                Warnings: <strong>{validation.warnings.length}</strong>
-              </p>
+
+          <section className="validation-section" aria-label="Runtime errors">
+            <h4>Runtime Errors</h4>
+            <p className="validation-section-hint">
+              Issues that block execution on the {runtimeMode.mode} runtime. Fix these before publishing.
+            </p>
+            {validation.errors.length > 0 ? (
               <ul className="validation-list">
-                {validation.warnings.map((item, index) => (
-                  <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`}>
+                {validation.errors.map((item, index) => (
+                  <li key={`${item.elementId ?? item.elementName ?? 'error'}-${index}`} className="validation-item validation-item-error">
                     <strong>{item.elementName ?? 'element'}:</strong> {item.message}
                     {item.elementId ? ` [id: ${item.elementId}]` : ''}
                     {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
@@ -608,7 +602,30 @@ export function WorkflowDesigner() {
                   </li>
                 ))}
               </ul>
-            </>
+            ) : (
+              <p className="validation-ok">No runtime errors — this workflow is compatible with the {runtimeMode.mode} runtime.</p>
+            )}
+          </section>
+
+          {validation.warnings.length > 0 ? (
+            <section className="validation-section" aria-label="Compatibility warnings">
+              <h4>Compatibility Warnings</h4>
+              <p className="validation-section-hint">
+                {runtimeMode.camundaEnabled
+                  ? 'Elements outside the Camunda adapter\'s supported subset. Review adapter settings.'
+                  : 'Elements outside the governed default-runtime subset. These are not supported unless a compatible adapter is active.'}
+              </p>
+              <ul className="validation-list">
+                {validation.warnings.map((item, index) => (
+                  <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`} className="validation-item validation-item-warning">
+                    <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                    {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                    {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                    {item.linePosition ? `, col ${item.linePosition}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
         </div>
       ) : (
@@ -913,6 +930,15 @@ export function WorkflowDesigner() {
                               Validation: <strong>{validation.isValid ? 'Valid' : 'Invalid'}</strong>
                             </p>
                           ) : null}
+                          {selectedId ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setWorkspaceMode('advanced')}
+                            >
+                              Edit in BPMN editor
+                            </button>
+                          ) : null}
                         </section>
                       ) : null}
                     </>
@@ -939,11 +965,18 @@ export function WorkflowDesigner() {
                 <button type="button" className="btn btn-secondary" onClick={onExportClick}>
                   Export BPMN
                 </button>
+                <span
+                  className={`mini-badge ${runtimeMode.camundaEnabled ? 'neutral' : 'healthy'}`}
+                  aria-label="Active runtime mode"
+                >
+                  {runtimeMode.mode} Runtime
+                </span>
               </Toolbar>
 
               <BpmnModeler
                 ref={modelerRef}
                 initialXml={currentXml}
+                camundaMode={runtimeMode.camundaEnabled}
                 onReady={handleModelerReady}
                 onImportSuccess={() => setValidationError(null)}
                 onChange={(xml) => {
