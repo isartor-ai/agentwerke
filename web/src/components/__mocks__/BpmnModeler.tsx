@@ -9,8 +9,8 @@ import type { BpmnModelerHandle, BpmnModelerProps } from '../BpmnModeler';
  */
 export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
   function BpmnModelerMock(props, ref) {
-    const [xml, setXml] = useState('');
-    const xmlRef = useRef('');
+    const [xml, setXml] = useState(props.initialXml ?? '');
+    const xmlRef = useRef(props.initialXml ?? '');
     const onReadyRef = useRef(props.onReady);
     onReadyRef.current = props.onReady;
 
@@ -19,6 +19,7 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
       importXML: async (next: string) => {
         xmlRef.current = next;
         setXml(next);
+        props.onImportSuccess?.();
         props.onChange?.(next);
       },
     }));

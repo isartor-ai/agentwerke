@@ -36,6 +36,8 @@ export interface BpmnModelerProps {
   onChange?: (xml: string) => void;
   /** Fired when a modeling/import error occurs. */
   onError?: (message: string) => void;
+  /** Fired after BPMN XML is successfully imported into the canvas. */
+  onImportSuccess?: () => void;
   /** Fired once the modeler instance is constructed and ready for imports. */
   onReady?: () => void;
   /** Backend validation errors to surface as inline markers/overlays. */
@@ -50,7 +52,7 @@ export interface BpmnModelerProps {
  */
 export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
   function BpmnModeler(
-    { initialXml, onChange, onError, onReady, validationErrors, className },
+    { initialXml, onChange, onError, onImportSuccess, onReady, validationErrors, className },
     ref,
   ) {
     const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -62,9 +64,11 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
     // Keep the latest callbacks in refs so the modeler effect runs once.
     const onChangeRef = useRef(onChange);
     const onErrorRef = useRef(onError);
+    const onImportSuccessRef = useRef(onImportSuccess);
     const onReadyRef = useRef(onReady);
     onChangeRef.current = onChange;
     onErrorRef.current = onError;
+    onImportSuccessRef.current = onImportSuccess;
     onReadyRef.current = onReady;
 
     useImperativeHandle(
@@ -84,6 +88,7 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
           try {
             await modelerRef.current.importXML(xml);
             modelerRef.current.get('canvas').zoom('fit-viewport');
+            onImportSuccessRef.current?.();
           } catch (error) {
             onErrorRef.current?.(
               error instanceof Error ? error.message : 'Failed to render BPMN diagram.',
@@ -100,6 +105,7 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
         return;
       }
 
+      let disposed = false;
       const modeler = new Modeler({
         container: canvasRef.current,
         propertiesPanel: { parent: panelRef.current },
@@ -135,8 +141,17 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
       if (seed) {
         modeler
           .importXML(seed)
-          .then(() => modeler.get('canvas').zoom('fit-viewport'))
+          .then(() => {
+            if (disposed) {
+              return;
+            }
+            modeler.get('canvas').zoom('fit-viewport');
+            onImportSuccessRef.current?.();
+          })
           .catch((error: unknown) => {
+            if (disposed) {
+              return;
+            }
             onErrorRef.current?.(
               error instanceof Error ? error.message : 'Failed to render BPMN diagram.',
             );
@@ -146,6 +161,7 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
       onReadyRef.current?.();
 
       return () => {
+        disposed = true;
         if (debounceRef.current) {
           clearTimeout(debounceRef.current);
         }
