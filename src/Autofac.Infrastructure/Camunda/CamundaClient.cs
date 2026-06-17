@@ -105,6 +105,62 @@ public sealed class CamundaClient : ICamundaClient
         return result ?? throw new InvalidOperationException("Camunda process start response was empty.");
     }
 
+    public async Task<IReadOnlyList<CamundaActivatedJob>> ActivateJobsAsync(
+        CamundaJobActivationRequest requestModel,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(requestModel);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "v2/jobs/activation");
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Authorization = BuildAuthorizationHeader(_options.Value);
+        request.Content = JsonContent.Create(requestModel, options: SerializerOptions);
+
+        using var response = await _httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateApiExceptionAsync(response, cancellationToken);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var result = await JsonSerializer.DeserializeAsync<List<CamundaActivatedJob>>(
+            stream,
+            SerializerOptions,
+            cancellationToken);
+
+        return result ?? [];
+    }
+
+    public async Task CompleteJobAsync(
+        string jobKey,
+        CamundaJobCompletionRequest requestModel,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jobKey);
+        ArgumentNullException.ThrowIfNull(requestModel);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"v2/jobs/{Uri.EscapeDataString(jobKey)}/completion");
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Authorization = BuildAuthorizationHeader(_options.Value);
+        request.Content = JsonContent.Create(requestModel, options: SerializerOptions);
+
+        using var response = await _httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateApiExceptionAsync(response, cancellationToken);
+        }
+    }
+
     private static AuthenticationHeaderValue? BuildAuthorizationHeader(CamundaOptions options)
     {
         return options.AuthMode switch

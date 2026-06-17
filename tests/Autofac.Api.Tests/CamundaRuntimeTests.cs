@@ -212,6 +212,128 @@ public sealed class CamundaRuntimeTests
     }
 
     [Fact]
+    public async Task CamundaClient_ActivateJobsAsync_UsesJsonBodyAndActivationPath()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+            return Json(HttpStatusCode.OK, """
+                [
+                  {
+                    "jobKey": "2251799813685402",
+                    "type": "autofac.agent",
+                    "processInstanceKey": "2251799813685401",
+                    "processDefinitionId": "process-invoice",
+                    "processDefinitionVersion": 2,
+                    "processDefinitionKey": "2251799813685311",
+                    "elementId": "ImplementTask",
+                    "elementInstanceKey": "2251799813685403",
+                    "customHeaders": {
+                      "autofac.agent": "implementation-agent",
+                      "autofac.action": "code.generate",
+                      "autofac.purposeType": "implementation",
+                      "autofac.policyTag": "repo-change",
+                      "autofac.requiresEvidence": "diff,test-results"
+                    },
+                    "worker": "autofac-worker",
+                    "retries": 3,
+                    "deadline": "1737067200000",
+                    "variables": {
+                      "autofac": {
+                        "runId": "run_123"
+                      }
+                    },
+                    "tenantId": "<default>"
+                  }
+                ]
+                """);
+        });
+
+        var client = new CamundaClient(
+            new HttpClient(handler) { BaseAddress = new Uri("https://camunda.example.test/platform/") },
+            Options.Create(new CamundaOptions
+            {
+                Enabled = true,
+                BaseUrl = "https://camunda.example.test/platform/",
+                AuthMode = CamundaAuthMode.Basic,
+                Username = "demo",
+                Password = "secret"
+            }));
+
+        var jobs = await client.ActivateJobsAsync(
+            new CamundaJobActivationRequest(
+                Type: "autofac.agent",
+                Worker: "autofac-worker",
+                Timeout: 300000,
+                MaxJobsToActivate: 1,
+                FetchVariables: []),
+            CancellationToken.None);
+
+        var job = Assert.Single(jobs);
+        Assert.Equal("2251799813685402", job.JobKey);
+        Assert.Equal("ImplementTask", job.ElementId);
+        Assert.Equal("run_123", job.Variables.GetProperty("autofac").GetProperty("runId").GetString());
+
+        Assert.Single(requests);
+        Assert.Equal(HttpMethod.Post, requests[0].Method);
+        Assert.Equal("/platform/v2/jobs/activation", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("application/json", requests[0].Content?.Headers.ContentType?.MediaType);
+
+        var body = await requests[0].Content!.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal("autofac.agent", json.RootElement.GetProperty("type").GetString());
+        Assert.Equal("autofac-worker", json.RootElement.GetProperty("worker").GetString());
+        Assert.Equal(300000, json.RootElement.GetProperty("timeout").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("maxJobsToActivate").GetInt32());
+        Assert.Equal(JsonValueKind.Array, json.RootElement.GetProperty("fetchVariables").ValueKind);
+    }
+
+    [Fact]
+    public async Task CamundaClient_CompleteJobAsync_UsesJsonBodyAndCompletionPath()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var client = new CamundaClient(
+            new HttpClient(handler) { BaseAddress = new Uri("https://camunda.example.test/platform/") },
+            Options.Create(new CamundaOptions
+            {
+                Enabled = true,
+                BaseUrl = "https://camunda.example.test/platform/",
+                AuthMode = CamundaAuthMode.Basic,
+                Username = "demo",
+                Password = "secret"
+            }));
+
+        var variables = JsonSerializer.SerializeToElement(new
+        {
+            output = new
+            {
+                ImplementTask = "generated diff"
+            }
+        });
+
+        await client.CompleteJobAsync(
+            "2251799813685402",
+            new CamundaJobCompletionRequest(variables),
+            CancellationToken.None);
+
+        Assert.Single(requests);
+        Assert.Equal(HttpMethod.Post, requests[0].Method);
+        Assert.Equal("/platform/v2/jobs/2251799813685402/completion", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("application/json", requests[0].Content?.Headers.ContentType?.MediaType);
+
+        var body = await requests[0].Content!.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal("generated diff", json.RootElement.GetProperty("variables").GetProperty("output").GetProperty("ImplementTask").GetString());
+    }
+
+    [Fact]
     public async Task CamundaRuntimeStatusService_ReturnsDisabledStatusWithoutCallingCamunda()
     {
         var service = new CamundaRuntimeStatusService(
@@ -355,6 +477,21 @@ public sealed class CamundaRuntimeTests
         {
             throw new InvalidOperationException("This client should not be called.");
         }
+
+        public Task<IReadOnlyList<CamundaActivatedJob>> ActivateJobsAsync(
+            CamundaJobActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("This client should not be called.");
+        }
+
+        public Task CompleteJobAsync(
+            string jobKey,
+            CamundaJobCompletionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("This client should not be called.");
+        }
     }
 
     private sealed class StubCamundaClient : ICamundaClient
@@ -383,6 +520,21 @@ public sealed class CamundaRuntimeTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new CamundaProcessStartResponse());
+        }
+
+        public Task<IReadOnlyList<CamundaActivatedJob>> ActivateJobsAsync(
+            CamundaJobActivationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<CamundaActivatedJob>>([]);
+        }
+
+        public Task CompleteJobAsync(
+            string jobKey,
+            CamundaJobCompletionRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
         }
     }
 

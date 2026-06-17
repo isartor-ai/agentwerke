@@ -69,7 +69,10 @@ public static class DependencyInjection
 
         services.AddScoped<IRunOutbox, OutboxRepository>();
         services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();
+        services.AddScoped<ICamundaAgentJobExecutor, CamundaAgentJobExecutor>();
+        services.AddScoped<CamundaAgentJobDispatcher>();
         services.AddHostedService<RunDispatchWorker>();
+        services.AddHostedService<CamundaAgentJobWorker>();
 
         return services;
     }
