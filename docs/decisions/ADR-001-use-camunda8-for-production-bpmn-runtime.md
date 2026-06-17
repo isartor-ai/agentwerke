@@ -1,7 +1,9 @@
 # ADR-001: Use Camunda 8 as the Production BPMN Runtime
 
 ## Status
-Accepted
+Superseded by [ADR-002: Use BPMN-Centric Autofac Runtime by Default](ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
+
+This ADR is retained for historical context only. Do not use the implementation guidance below for new work unless ADR-002's re-decision triggers are met.
 
 ## Date
 2026-06-16

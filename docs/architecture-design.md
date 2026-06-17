@@ -2,7 +2,7 @@
 
 Version: Draft v0.2
 Status: Working Draft
-Last reviewed: 2026-06-15
+Last reviewed: 2026-06-17
 Related Document: `docs/functional-specification.md`
 
 > **Reader's note.** Sections 1–20 describe the **target architecture** (the north star). Sections 21–24 were added after a full source review on 2026-06-15 and describe the **as-built reality**, the **gap analysis**, the **implementation roadmap**, and **future enhancements**. Where the target and the as-built state diverge, Section 21 is authoritative for "what exists today."
@@ -188,7 +188,7 @@ Responsibilities:
 ### 6.3 Workflow Runtime Engine
 
 Responsibilities:
-- Execute BPMN workflows through Camunda 8 in production
+- Execute the Autofac-supported BPMN subset through the default Postgres-backed runtime
 - Maintain workflow state and transitions through the engine adapter
 - Process triggers and schedules
 - Create and resume workflow runs
@@ -196,7 +196,7 @@ Responsibilities:
 - Route task execution to agent or integration handlers
 - Handle retries, compensation, and rollback controls
 
-Architecture decision: Camunda 8 is the production BPMN runtime. Autofac keeps the product-level workflow adapter, SDLC metadata model, agent execution, evidence capture, policy, audit, and UI. The in-process runtime is retained only for tests, simulation, or temporary compatibility. See `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`.
+Architecture decision: Autofac is BPMN-centric, but the default runtime is the bounded Postgres-backed Autofac runtime. Camunda 8 is retained as an optional enterprise adapter, not the production default. See `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
 
 ### 6.4 Agent Orchestrator
 
@@ -550,68 +550,72 @@ flowchart TB
 - Message bus for asynchronous coordination
 - Centralized telemetry pipeline for logs, metrics, traces, and audit
 
-### 14.1 BPMN Engine Evaluation and Selection
+### 14.1 BPMN Runtime Strategy
 
 Autofac needs two distinct BPMN capabilities:
 - a React-friendly modeling experience that can be extended with Autofac custom components
-- a production-grade execution engine that can orchestrate long-running workflows, timers, approvals, and agent-driven service tasks
+- a reliable runtime that executes the governed SDLC workflow subset used by Autofac templates
 
-Because the platform backend is C# and the frontend is React, the BPMN engine should be treated as a dedicated orchestration runtime behind an adapter boundary rather than embedded directly in the application backend.
+These capabilities are deliberately separated. BPMN remains the workflow artifact, import/export format, and governance language. Runtime choice is infrastructure behind the Autofac workflow boundary.
 
 #### Candidate Comparison
 
 | Candidate | Strengths | Risks / Constraints | Fit for Autofac |
 | --- | --- | --- | --- |
-| Camunda 8 with Zeebe | Current cloud-native orchestration engine; designed for distributed, high-throughput execution; official BPMN modeling and execution docs are current; service-task and job-worker model aligns well with agent tasks; clear support for self-managed deployment | BPMN support is a defined subset and models must target Camunda 8 specifically; introduces a separate orchestration runtime rather than an embedded library | Strongest overall fit for Autofac's agent orchestration, event-driven execution, and Kubernetes-first direction |
-| Flowable OSS | Mature open source BPMN engine; supports BPMN 2.0 deployments, process instances, history, REST API, and web modeler/admin/task apps; broad BPMN and extension support | Java-first engine designed to be embedded or hosted in Java environments; less naturally aligned to a C#-centric platform boundary; cloud-native horizontal scale story is less central in its positioning than Zeebe | Good fallback and strong classical BPM/workflow option, especially if richer BPMN breadth becomes more important than distributed orchestration |
-| jBPM / Apache KIE stack | Long BPM heritage and broader business automation ecosystem | Current project positioning is under Apache KIE incubation, which adds ecosystem and long-term roadmap uncertainty for a new greenfield platform | Not recommended for Autofac at this stage |
+| Autofac bounded runtime | Native .NET/Postgres deployment; already integrated with run state, context, approvals, audit, outbox, timers, and recovery; simplest self-hosted path for German companies | Must remain explicitly scoped to Autofac-supported SDLC templates; not a general BPMN engine | Default runtime for MVP, pilots, and first self-hosted deployments |
+| Camunda 8 with Zeebe | Mature orchestration runtime; service-task/job-worker model aligns with agent tasks; strong user task, timer, retry, and incident concepts | Adds separate production runtime, licensing and operations questions, Camunda-specific BPMN projection, and installation complexity | Optional enterprise adapter when a customer requires or already operates Camunda |
+| Flowable OSS | Mature classical BPM engine; broad BPMN support; strong self-hosted story in Java environments | Java-first runtime and separate operational surface; not aligned with simple .NET/Postgres default deployment | Fallback only if richer BPMN breadth becomes a customer requirement |
+| Embedded third-party workflow engine | Could reduce custom runtime maintenance while keeping deployment simpler than a full external BPM platform | No current option clearly beats the existing Autofac runtime for .NET, Postgres, BPMN artifact continuity, and template-first strategy | Deferred evaluation |
 
 #### Evaluation Criteria
 
 Autofac's engine choice should optimize for:
 - React-compatible BPMN modeling and custom node extensibility
-- clean separation from the C# API layer
-- long-running workflow support
-- timer, message, and human-approval orchestration
+- simple self-hosted deployment with PostgreSQL
+- immediate usability for German companies with data residency requirements
+- bounded long-running workflow support for SDLC templates
+- timer and human-approval orchestration
 - service-task execution that maps cleanly to Autofac agents
-- strong observability and production operations on Kubernetes
+- run observability, auditability, and evidence capture
 - low migration risk between MVP and long-term platform evolution
 
-#### Decision (Revised — 2026-06-16)
+#### Decision (Revised - 2026-06-17)
 
-**Autofac adopts Camunda 8 as the production BPMN execution runtime.** The current in-process `WorkflowInstanceEngine` remains valuable for tests, simulation, and temporary compatibility, but it is no longer the strategic production direction.
+**Autofac remains BPMN-centric, but Camunda 8 is no longer the default production runtime.** The default runtime is the bounded Postgres-backed Autofac runtime, executing the supported BPMN subset required by curated SDLC templates. Camunda 8 is an optional enterprise adapter behind the runtime boundary.
 
 Rationale:
-- The `IWorkflowEngineAdapter` boundary is already in place and lets Autofac treat engine choice as infrastructure behind a stable product contract.
-- Camunda 8 is a better fit for long-running, durable SDLC workflows with user tasks, retries, waiting states, timers, and externally executed agent work.
-- The service-task plus job-worker model maps naturally to Autofac agent execution.
-- Autofac should spend engineering effort on SDLC semantics, agent execution, evidence, policy, integrations, and UI rather than continuing to grow a custom BPMN runtime.
-- `bpmn-js` still drives the design-side experience; BPMN XML remains the design artifact whether execution is local, test-only, or production-grade.
+- Autofac's strategic value is SDLC semantics, real agent execution, policy, evidence, approvals, integrations, audit, and operator UX.
+- Company SDLC processes are usually stable enough to start from a small catalog of governed templates rather than arbitrary BPMN.
+- The existing Postgres/outbox runtime already covers the near-term needs for durable runs, recovery, timers, approvals, and run context without adding a separate stateful engine.
+- A simple .NET/Postgres self-hosted deployment better matches first German customer adoption than a required Camunda 8 cluster.
+- The adapter boundary remains useful so Camunda can be enabled when a customer requires it.
 
 #### Engine Strategy
 
-- Camunda 8 is the target production engine behind `IWorkflowEngineAdapter`.
-- Autofac owns BPMN parsing, validation, SDLC metadata, publish/start APIs, agent orchestration, approvals UX, evidence, and audit.
-- `WorkflowInstanceEngine` remains available as a non-production implementation for tests, local simulation, and migration support.
-- The current in-process engine still executes the supported BPMN subset (`startEvent`, `serviceTask`, `userTask`, `exclusiveGateway`, `parallelGateway`, `intermediateCatchEvent`, `boundaryEvent`, `endEvent`) while the Camunda adapter is implemented.
-- The adapter seam stays mandatory so production and non-production runtimes can coexist during migration.
+- Default runtime: Autofac bounded runtime backed by PostgreSQL, outbox workers, run events, checkpoints, and run context.
+- Supported BPMN subset: `startEvent`, `serviceTask`, `userTask`, `exclusiveGateway`, `parallelGateway`, `intermediateCatchEvent`, `boundaryEvent`, `endEvent`, and sequence flows required by curated SDLC templates.
+- Unsupported BPMN constructs must fail validation for the default runtime instead of being interpreted partially.
+- Optional runtime: Camunda 8 adapter, enabled only through explicit configuration and customer need.
+- The adapter boundary stays mandatory so default and optional enterprise runtimes can coexist without changing product-level workflow APIs.
+- Runtime extension pressure should be handled through agent profiles, tools, connectors, policies, evidence handlers, and templates before expanding BPMN semantics.
 
 #### Impact on the Architecture
 
-- `Workflow Runtime Engine` = Camunda 8 in production, reached through an Autofac adapter
-- `BPMN Engine Adapter` = Autofac workflow adapter layer plus Camunda client/projection infrastructure
-- `React BPMN UI` = `bpmn-js`-based editor — unchanged; BPMN XML remains the design artifact
-- `WorkflowInstanceEngine` = compatibility and test runtime while the Camunda migration is completed
+- `Workflow Runtime Engine` = bounded Autofac runtime by default, reached through product workflow services
+- `BPMN Engine Adapter` = runtime boundary for optional engines such as Camunda 8
+- `React BPMN UI` = template-first SDLC builder plus advanced `bpmn-js` editor; BPMN XML remains the design artifact
+- `WorkflowInstanceEngine` = default runtime until a measured re-decision trigger requires a different engine
 
 ## 15. Key Architectural Decisions
 
-### Decision 1: BPMN-Centric Orchestration with Camunda 8 Runtime
+### Decision 1: BPMN-Centric Orchestration with Bounded Autofac Runtime
 
 Why:
 - aligns with business-readable workflow modeling
 - supports auditability and lifecycle visibility
 - allows custom Autofac nodes for agent and governance behavior
-- resolved with Camunda 8 as the production execution engine behind `IWorkflowEngineAdapter`; the current in-process engine remains a transitional non-production path (see §14.1)
+- keeps first deployment simple: .NET service plus PostgreSQL, with Camunda 8 available only as an optional enterprise adapter
+- constrains runtime scope to curated SDLC templates instead of arbitrary BPMN execution
 
 ### Decision 2: Separate Workflow Engine and Agent Orchestrator
 
@@ -724,7 +728,7 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 ### 21.2 What Actually Works End-to-End
 
 - **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer. The designer provides a drag-and-drop canvas with Autofac-specific palette entries ("Agent Task", "Approval Gate"), a properties panel sidebar for editing `autofac:agentTask` and `autofac:ApprovalTask` extension elements, canvas accent markers for visual identification, and overlay badges that surface backend validation errors directly on the relevant BPMN elements. Extension metadata round-trips natively through `bpmnXml` — no side-channel JSON.
-- **Workflow execution today** still runs via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`. This is an as-built transitional state, not the strategic production runtime.
+- **Workflow execution today** runs via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`. This is now the default runtime foundation for MVP and pilots, constrained to curated Autofac SDLC templates rather than arbitrary BPMN execution.
 - **Policy enforcement** at the Tool Gateway (`ToolGateway`): allow/deny lists, permission-level checks, input validation, and `PolicyEvaluationService` evaluation before every tool call — the single control point envisioned in Decision 3.
 - **Agent runtime assembly**: skill resolution from markdown manifests (`SkillRepository`/`MarkdownSkillLoader`), prompt assembly with full prompt snapshots, hook execution (`HookGateway` with `before/after_agent_run`), MCP tool sessions (`McpToolSessionFactory`), and a complete `AgentRuntimeSnapshot` persisted per step.
 - **GitHub delivery**: real branch creation, marker-file commit, and pull-request creation via `GitHubConnector`.
@@ -739,7 +743,7 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 These are the load-bearing gaps between the running system and the target architecture:
 
 1. **Agent execution is simulated.** `AgentOrchestrator.BuildSimulatedOutput` produces deterministic text; there is **no LLM/model client** anywhere in the solution. The Docker sandbox runs a fixed shell entrypoint that writes `result.json` — it does not invoke a model.
-2. **The production runtime is not yet Camunda 8 in the shipping code.** The current implementation still executes through `WorkflowInstanceEngine`. The architecture decision has been updated to make Camunda 8 the production target, and the migration is tracked by the Camunda-first issue set starting at `isartor-ai/autofac-private#90`.
+2. **Runtime strategy has been reset to Autofac-default.** The current implementation executes through `WorkflowInstanceEngine`, backed by Postgres persistence, run context, outbox dispatch, and recovery. This is now the default path for MVP and pilots, not a temporary gap. Camunda work is optional adapter groundwork only.
 3. ~~**No asynchronous backbone.**~~ **Resolved (Phase C).** `WorkflowRunOrchestrationService.StartRunAsync` now creates a `pending` run and enqueues an outbox entry; the API returns 202 immediately. `RunDispatchWorker` (BackgroundService) polls the `run_outbox` table every 2 s, executes via `WorkflowRunExecutor`, and handles crash recovery on startup.
 4. **Authentication/RBAC is stubbed.** `AuthController` returns `501 Not Implemented`; there is no SSO, no token validation, and no role enforcement on controllers.
 5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
@@ -754,7 +758,7 @@ These are the load-bearing gaps between the running system and the target archit
 | Capability (target) | As-built | Gap severity | Notes |
 | --- | --- | --- | --- |
 | BPMN modeling (bpmn-js) | Implemented (Phase 1–3 complete) | — | Drag-and-drop canvas; Autofac moddle extension; properties panel; palette; markers; validation overlays |
-| BPMN execution engine | In-process engine currently; Camunda 8 selected for production target | High | Strategic decision updated; migration to Camunda-backed execution still required |
+| BPMN execution engine | Bounded Autofac runtime backed by Postgres/outbox | Medium | Keep scope capped to SDLC templates; do not expand into arbitrary BPMN |
 | Agent task execution (LLM) | Simulated only | **Critical** | No model client; blocks the core value prop |
 | Tool Gateway + policy | Implemented | — | Strong; single control point in place |
 | Sandbox isolation | Container lifecycle real; workload placeholder | High | network=none, mem/cpu limits applied |
@@ -772,7 +776,7 @@ These are the load-bearing gaps between the running system and the target archit
 | Deployment | docker-compose + Helm chart (api/worker/web/postgres/RBAC/HPA); Grafana + Prometheus alerts | — | **Resolved (Phase F)** |
 | Timers / true parallelism | Real timer scheduling (Phase C); sequential branches (Phase D standalone) | Low | Parallel concurrency available via Phase C `Task.WhenAll` |
 
-**Critical path:** the two `Critical` items (real LLM execution and authentication) gate any production or pilot use. The `High` items (engine durability/async backbone, sandbox workload, secrets) gate trustworthy multi-step autonomous runs.
+**Critical path:** the two `Critical` items (real LLM execution and authentication) gate any production or pilot use. The runtime should be hardened only within the bounded SDLC-template scope; Camunda migration is not on the default critical path.
 
 ## 23. Implementation Roadmap
 
@@ -798,7 +802,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 *Exit:* every state-changing endpoint requires an authenticated, authorized principal; credentials are not read from plain config in production.
 
-### Phase C — Durable, asynchronous execution backbone (High)
+### Phase C — Durable, asynchronous execution backbone (High) ✓ **Default runtime foundation**
 
 1. Introduce a background worker: move `_runner.StartAsync`/`ResumeAsync` off the request thread into a hosted service that consumes a durable queue (start with an outbox table in Postgres; graduate to a message bus).
 2. Add a run supervisor that auto-invokes `RecoverAsync` for runs left `running` after a crash (there is already a recovery path — make it automatic).
@@ -807,10 +811,10 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 *Exit:* workflows survive process restarts, timers genuinely delay, and the API returns immediately while work proceeds in the background.
 
-### Phase D — Engine decision: superseded
+### Phase D — Default runtime scope and template conformance (High)
 
-1. The earlier in-process-engine decision has been superseded by the Camunda 8 production runtime decision recorded in `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`.
-2. Existing in-process engine hardening work remains useful for tests, simulation, and migration support.
+1. ADR-001 has been superseded by `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
+2. The Autofac/Postgres runtime is the default production path for MVP and pilots. Camunda 8 remains an optional adapter, not a dependency of the core plan.
 3. **Engine hardened**:
    - `BpmnSequenceFlow` added to `BpmnWorkflowDefinition`; `BpmnWorkflowValidator` now parses `<sequenceFlow>` and `<conditionExpression>` elements and validates source/target references.
    - `WorkflowInstanceEngine` refactored to graph-based traversal via `FlowGraph` (node map + outgoing-flows map). When sequence flows are absent (tests), `FlowGraph` infers linear edges from node order.
@@ -819,7 +823,10 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
    - Checkpoint stores `string? NextNodeId` (node ID, not list index); recovery resolves by node map lookup — resilient to node reordering in future BPMN revisions.
    - Compensation/rollback: documented as Phase E concern; engine emits `compensation_not_supported` when it would be needed (not yet implemented).
 
-*Exit criterion met:* a single, documented engine strategy with matching code; docs and runtime no longer contradict each other.
+4. Add a default-runtime conformance suite for every built-in SDLC template. Unsupported BPMN constructs must fail validation before publish.
+5. Add runtime-mode configuration and startup diagnostics so `Autofac` is the default mode and `Camunda` is explicit opt-in.
+
+*Exit:* all curated templates validate and run on the default runtime; Camunda-specific paths are optional and configuration-gated.
 
 ### Phase E — Connector and policy breadth (Medium) ✓ **Complete**
 
@@ -842,9 +849,10 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 ```
 A (agents real) ─┐
-B (auth/secrets)─┼─► C (async backbone) ─► D (engine decision) ─► E (breadth) ─► F (prod ops)
+B (auth/secrets)─┼─► C (async backbone) ─► D (runtime conformance) ─► E (breadth) ─► F (prod ops)
                  │
    A and B can proceed in parallel; both are prerequisites for a credible pilot.
+   Phase D now hardens the default Autofac runtime and template contract, not a Camunda migration.
 ```
 
 ## 24. Future Enhancements (Beyond the Roadmap)
