@@ -30,6 +30,7 @@ public sealed class WorkflowRunRepository : IWorkflowRunRepository
         string? initiator,
         List<string> tags,
         string? correlationId,
+        WorkflowRunCamundaLink? camunda,
         CancellationToken cancellationToken)
     {
         var run = new WorkflowRun
@@ -43,6 +44,10 @@ public sealed class WorkflowRunRepository : IWorkflowRunRepository
             StartedAt = DateTimeOffset.UtcNow.ToString("o"),
             Tags = tags,
             CorrelationId = correlationId,
+            CamundaProcessInstanceKey = camunda?.ProcessInstanceKey,
+            CamundaProcessDefinitionKey = camunda?.ProcessDefinitionKey,
+            CamundaProcessDefinitionId = camunda?.ProcessDefinitionId,
+            CamundaProcessDefinitionVersion = camunda?.ProcessDefinitionVersion,
         };
         _dbContext.WorkflowRuns.Add(run);
         await _dbContext.SaveChangesAsync(cancellationToken);

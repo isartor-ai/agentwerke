@@ -39,6 +39,10 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Owner).HasMaxLength(128);
             entity.Property(e => e.ValidationState).HasMaxLength(64);
+            entity.Property(e => e.CamundaDeploymentKey).HasMaxLength(64);
+            entity.Property(e => e.CamundaProcessDefinitionId).HasMaxLength(256);
+            entity.Property(e => e.CamundaProcessDefinitionKey).HasMaxLength(64);
+            entity.Property(e => e.CamundaDeployedAt).HasMaxLength(64);
             entity.Property(e => e.Tags)
                 .HasConversion(
                     list => SerializeStringList(list),
@@ -64,6 +68,9 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                     json => DeserializeStringList(json))
                 .HasColumnType("jsonb");
             entity.Property(e => e.CorrelationId).HasMaxLength(128);
+            entity.Property(e => e.CamundaProcessInstanceKey).HasMaxLength(64);
+            entity.Property(e => e.CamundaProcessDefinitionKey).HasMaxLength(64);
+            entity.Property(e => e.CamundaProcessDefinitionId).HasMaxLength(256);
             entity.HasMany(e => e.Steps).WithOne().HasForeignKey("RunId");
             entity.HasMany(e => e.Events).WithOne().HasForeignKey("RunId");
         });

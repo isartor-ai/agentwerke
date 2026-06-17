@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Autofac.Api.Controllers;
 using Autofac.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
@@ -149,6 +150,68 @@ public sealed class CamundaRuntimeTests
     }
 
     [Fact]
+    public async Task CamundaClient_StartProcessInstanceAsync_UsesJsonBodyAndProcessInstancesPath()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+            return Json(HttpStatusCode.OK, """
+                {
+                  "processDefinitionKey": "2251799813685311",
+                  "processDefinitionId": "process-invoice",
+                  "processDefinitionVersion": 2,
+                  "processInstanceKey": "2251799813685401",
+                  "tenantId": "<default>",
+                  "variables": {}
+                }
+                """);
+        });
+
+        var client = new CamundaClient(
+            new HttpClient(handler) { BaseAddress = new Uri("https://camunda.example.test/platform/") },
+            Options.Create(new CamundaOptions
+            {
+                Enabled = true,
+                BaseUrl = "https://camunda.example.test/platform/",
+                AuthMode = CamundaAuthMode.Basic,
+                Username = "demo",
+                Password = "secret"
+            }));
+
+        var variables = JsonSerializer.SerializeToElement(new
+        {
+            autofac = new
+            {
+                runId = "run_123"
+            },
+            input = new
+            {
+                ticketId = "INC-42"
+            }
+        });
+
+        var response = await client.StartProcessInstanceAsync(
+            new CamundaProcessStartRequest("2251799813685311", variables),
+            CancellationToken.None);
+
+        Assert.Equal("2251799813685401", response.ProcessInstanceKey);
+        Assert.Equal("process-invoice", response.ProcessDefinitionId);
+        Assert.Equal(2, response.ProcessDefinitionVersion);
+
+        Assert.Single(requests);
+        Assert.Equal(HttpMethod.Post, requests[0].Method);
+        Assert.Equal("/platform/v2/process-instances", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("application/json", requests[0].Content?.Headers.ContentType?.MediaType);
+
+        var body = await requests[0].Content!.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal("2251799813685311", json.RootElement.GetProperty("processDefinitionKey").GetString());
+        Assert.Equal("run_123", json.RootElement.GetProperty("variables").GetProperty("autofac").GetProperty("runId").GetString());
+        Assert.Equal("INC-42", json.RootElement.GetProperty("variables").GetProperty("input").GetProperty("ticketId").GetString());
+    }
+
+    [Fact]
     public async Task CamundaRuntimeStatusService_ReturnsDisabledStatusWithoutCallingCamunda()
     {
         var service = new CamundaRuntimeStatusService(
@@ -278,6 +341,20 @@ public sealed class CamundaRuntimeTests
         {
             throw new InvalidOperationException("This client should not be called.");
         }
+
+        public Task<CamundaDeploymentResponse> DeployWorkflowAsync(
+            CamundaDeploymentRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("This client should not be called.");
+        }
+
+        public Task<CamundaProcessStartResponse> StartProcessInstanceAsync(
+            CamundaProcessStartRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("This client should not be called.");
+        }
     }
 
     private sealed class StubCamundaClient : ICamundaClient
@@ -292,6 +369,20 @@ public sealed class CamundaRuntimeTests
         public Task<CamundaTopologyResponse> GetTopologyAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_response);
+        }
+
+        public Task<CamundaDeploymentResponse> DeployWorkflowAsync(
+            CamundaDeploymentRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new CamundaDeploymentResponse());
+        }
+
+        public Task<CamundaProcessStartResponse> StartProcessInstanceAsync(
+            CamundaProcessStartRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new CamundaProcessStartResponse());
         }
     }
 

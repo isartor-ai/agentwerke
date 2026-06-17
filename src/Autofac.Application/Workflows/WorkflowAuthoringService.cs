@@ -12,13 +12,16 @@ public sealed class WorkflowAuthoringService : IWorkflowAuthoringService
 
     private readonly IWorkflowDefinitionRepository _repository;
     private readonly IWorkflowValidationService _validationService;
+    private readonly IWorkflowDeploymentService _deploymentService;
 
     public WorkflowAuthoringService(
         IWorkflowDefinitionRepository repository,
-        IWorkflowValidationService validationService)
+        IWorkflowValidationService validationService,
+        IWorkflowDeploymentService deploymentService)
     {
         _repository = repository;
         _validationService = validationService;
+        _deploymentService = deploymentService;
     }
 
     public Task<IReadOnlyList<WorkflowDefinition>> ListWorkflowsAsync(CancellationToken cancellationToken = default)
@@ -66,10 +69,10 @@ public sealed class WorkflowAuthoringService : IWorkflowAuthoringService
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowId);
         ArgumentNullException.ThrowIfNull(command);
 
-        var validation = ValidateWorkflow(command.BpmnXml);
-        if (!validation.IsValid)
+        var preparation = _validationService.PrepareForPublish(command.BpmnXml);
+        if (!preparation.IsValid)
         {
-            throw new WorkflowValidationException(validation);
+            throw new WorkflowValidationException(preparation.Validation);
         }
 
         var workflow = await _repository.FindTrackedAsync(workflowId, cancellationToken);
@@ -78,17 +81,41 @@ public sealed class WorkflowAuthoringService : IWorkflowAuthoringService
             throw new WorkflowNotFoundException(workflowId);
         }
 
+        var nextVersion = WorkflowVersioning.NextPublishedVersion(workflow.Version);
+        var deployment = await _deploymentService.DeployAsync(
+            new WorkflowDeploymentRequest(
+                WorkflowId: workflow.Id,
+                Version: nextVersion,
+                ProcessDefinitionId: preparation.Validation.ProcessId ?? workflow.Id,
+                ProjectedBpmnXml: preparation.ProjectedBpmnXml!,
+                ResourceName: BuildDeploymentResourceName(preparation.Validation.ProcessId, workflow.Id)),
+            cancellationToken);
+
         var now = DateTimeOffset.UtcNow.ToString("o");
-        workflow.Name = validation.ProcessName ?? workflow.Name;
+        workflow.Name = preparation.Validation.ProcessName ?? workflow.Name;
         workflow.Description = command.Description ?? workflow.Description;
         workflow.Status = ActiveStatus;
         workflow.LastEditedAt = now;
         workflow.ValidationState = ValidState;
         workflow.BpmnXml = command.BpmnXml;
-        workflow.Version = WorkflowVersioning.NextPublishedVersion(workflow.Version);
+        workflow.Version = nextVersion;
+        workflow.CamundaDeploymentKey = deployment.DeploymentKey;
+        workflow.CamundaProcessDefinitionId = deployment.ProcessDefinitionId;
+        workflow.CamundaProcessDefinitionKey = deployment.ProcessDefinitionKey;
+        workflow.CamundaProcessDefinitionVersion = deployment.ProcessDefinitionVersion;
+        workflow.CamundaDeployedAt = deployment.DeployedAt;
 
         await _repository.SaveChangesAsync(cancellationToken);
 
-        return new WorkflowPublishResult(workflow.Id, workflow.Version, now);
+        return new WorkflowPublishResult(workflow.Id, workflow.Version, now, deployment);
+    }
+
+    private static string BuildDeploymentResourceName(string? processDefinitionId, string workflowId)
+    {
+        var baseName = string.IsNullOrWhiteSpace(processDefinitionId)
+            ? workflowId
+            : processDefinitionId.Trim();
+
+        return $"{baseName}.bpmn";
     }
 }

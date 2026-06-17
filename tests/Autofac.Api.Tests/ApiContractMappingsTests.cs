@@ -20,6 +20,10 @@ public sealed class ApiContractMappingsTests
             CurrentStep = "Deploy",
             RequestedBy = "tester",
             StartedAt = DateTimeOffset.UtcNow.ToString("o"),
+            CamundaProcessInstanceKey = "2251799813685401",
+            CamundaProcessDefinitionKey = "2251799813685311",
+            CamundaProcessDefinitionId = "process-invoice",
+            CamundaProcessDefinitionVersion = 2,
             Steps =
             [
                 new WorkflowRunStep
@@ -102,6 +106,9 @@ public sealed class ApiContractMappingsTests
         var detail = ApiContractMappings.ToRunDetail(run, Array.Empty<ApprovalRequest>(), Array.Empty<Autofac.Storage.Artifacts.ArtifactDescriptor>());
 
         var step = Assert.Single(detail.Steps);
+        Assert.NotNull(detail.Camunda);
+        Assert.Equal("2251799813685401", detail.Camunda!.ProcessInstanceKey);
+        Assert.Equal("2251799813685311", detail.Camunda.ProcessDefinitionKey);
         Assert.NotNull(step.PromptSnapshot);
         Assert.Equal("assembled prompt", step.PromptSnapshot!.FinalPrompt);
         Assert.Equal("staging", step.PromptSnapshot.Variables["environment"]);
