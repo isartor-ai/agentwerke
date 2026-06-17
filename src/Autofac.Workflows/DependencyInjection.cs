@@ -9,6 +9,7 @@ public static class DependencyInjection
     public static IServiceCollection AddAutofacWorkflows(this IServiceCollection services)
     {
         services.AddScoped<IBpmnWorkflowValidator, BpmnWorkflowValidator>();
+        services.AddScoped<ICamundaBpmnProjector, CamundaBpmnProjector>();
         services.AddScoped<IWorkflowEngineAdapter, WorkflowInstanceEngine>();
         return services;
     }

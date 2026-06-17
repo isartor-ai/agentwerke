@@ -13,4 +13,5 @@ public sealed record WorkflowDetail(
     string LastEditedAt,
     string ValidationState,
     IReadOnlyList<string> Tags,
-    string BpmnXml);
+    string BpmnXml,
+    CamundaWorkflowDeployment? Camunda);

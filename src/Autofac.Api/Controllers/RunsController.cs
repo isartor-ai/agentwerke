@@ -71,7 +71,7 @@ public sealed class RunsController : ControllerBase
         try
         {
             var result = await _orchestrationService.StartRunAsync(
-                new StartRunCommand(request.WorkflowId, Initiator: "api"),
+                new StartRunCommand(request.WorkflowId, Initiator: "api", Input: request.Input),
                 HttpContext.RequestAborted);
 
             return Accepted(new StartRunResponse(
@@ -85,7 +85,15 @@ public sealed class RunsController : ControllerBase
         }
         catch (WorkflowNotPublishedException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new StartRunErrorResponse(
+                ex.Message,
+                [ex.Message]));
+        }
+        catch (WorkflowRunStartException ex)
+        {
+            return BadRequest(new StartRunErrorResponse(
+                ex.Message,
+                ex.Errors.Select(error => error.Message).ToArray()));
         }
     }
 

@@ -1,6 +1,7 @@
 using Autofac.Application.Observability;
 using Autofac.Domain.Persistence;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Autofac.Application.Workflows;
 
@@ -18,6 +19,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     private readonly IRunOutbox _outbox;
     private readonly ICorrelationContext _correlationContext;
     private readonly IWorkflowMetrics _metrics;
+    private readonly IWorkflowProcessStartService _processStartService;
     private readonly ILogger<WorkflowRunOrchestrationService> _logger;
 
     public WorkflowRunOrchestrationService(
@@ -29,6 +31,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         IRunOutbox outbox,
         ICorrelationContext correlationContext,
         IWorkflowMetrics metrics,
+        IWorkflowProcessStartService processStartService,
         ILogger<WorkflowRunOrchestrationService> logger)
     {
         _definitionRepository = definitionRepository;
@@ -39,6 +42,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         _outbox = outbox;
         _correlationContext = correlationContext;
         _metrics = metrics;
+        _processStartService = processStartService;
         _logger = logger;
     }
 
@@ -59,6 +63,39 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         }
 
         var runId = $"run_{Guid.NewGuid():N}";
+        var camundaProcessDefinitionKey = workflow.CamundaProcessDefinitionKey;
+        var camundaProcessDefinitionId = workflow.CamundaProcessDefinitionId;
+
+        if (string.IsNullOrWhiteSpace(camundaProcessDefinitionKey) ||
+            string.IsNullOrWhiteSpace(camundaProcessDefinitionId))
+        {
+            throw new WorkflowRunStartException(
+                "Run start failed.",
+                [
+                    new WorkflowRunStartError(
+                        "workflow_not_deployed",
+                        $"Workflow '{command.WorkflowId}' has no Camunda deployment metadata. Publish it again before starting a run.")
+                ]);
+        }
+
+        if (command.Input is { ValueKind: not (JsonValueKind.Object or JsonValueKind.Null or JsonValueKind.Undefined) })
+        {
+            throw new WorkflowRunStartException(
+                "Run start failed.",
+                [
+                    new WorkflowRunStartError(
+                        "invalid_input",
+                        "Run input must be a JSON object when provided.")
+                ]);
+        }
+
+        var processStart = await _processStartService.StartAsync(
+            new WorkflowProcessStartRequest(
+                RunId: runId,
+                ProcessDefinitionKey: camundaProcessDefinitionKey,
+                ProcessDefinitionId: camundaProcessDefinitionId,
+                Variables: BuildStartVariables(runId, workflow, command, correlationId)),
+            cancellationToken);
 
         await _runRepository.CreatePendingRunAsync(
             runId,
@@ -68,6 +105,11 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             command.Initiator,
             workflow.Tags,
             correlationId,
+            new WorkflowRunCamundaLink(
+                processStart.ProcessInstanceKey,
+                processStart.ProcessDefinitionKey,
+                processStart.ProcessDefinitionId,
+                processStart.ProcessDefinitionVersion),
             cancellationToken);
 
         if (command.Trigger is not null)
@@ -87,12 +129,9 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             await SeedTriggerContextAsync(runId, command.Trigger, cancellationToken);
         }
 
-        var payload = new OutboxStartPayload(workflow.Id, command.Initiator, correlationId).Serialize();
-        await _outbox.EnqueueAsync(OutboxOperations.Start, runId, payload, ct: cancellationToken);
-
         _logger.LogInformation(
-            "Workflow run enqueued. RunId={RunId} WorkflowId={WorkflowId} Initiator={Initiator} CorrelationId={CorrelationId}",
-            runId, command.WorkflowId, command.Initiator, correlationId);
+            "Workflow run started in Camunda. RunId={RunId} WorkflowId={WorkflowId} ProcessInstanceKey={ProcessInstanceKey} Initiator={Initiator} CorrelationId={CorrelationId}",
+            runId, command.WorkflowId, processStart.ProcessInstanceKey, command.Initiator, correlationId);
 
         _metrics.RunStarted(command.WorkflowId, workflow.Name);
 
@@ -210,6 +249,30 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             await _runContextRepository.SetAsync(runId, "input.title", trigger.Title, kind, cancellationToken);
         if (!string.IsNullOrWhiteSpace(trigger.Body))
             await _runContextRepository.SetAsync(runId, "input.body", trigger.Body, kind, cancellationToken);
+    }
+
+    private static JsonElement BuildStartVariables(
+        string runId,
+        WorkflowDefinition workflow,
+        StartRunCommand command,
+        string? correlationId)
+    {
+        var input = command.Input is { ValueKind: JsonValueKind.Object } providedInput
+            ? providedInput.Clone()
+            : JsonSerializer.SerializeToElement(new Dictionary<string, object?>());
+
+        return JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+        {
+            ["autofac"] = new Dictionary<string, object?>
+            {
+                ["runId"] = runId,
+                ["workflowId"] = workflow.Id,
+                ["workflowVersion"] = workflow.Version,
+                ["initiator"] = command.Initiator,
+                ["correlationId"] = correlationId
+            },
+            ["input"] = input
+        });
     }
 
     private async Task WriteAuditAsync(

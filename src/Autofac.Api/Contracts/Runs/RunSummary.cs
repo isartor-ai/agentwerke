@@ -16,4 +16,5 @@ public sealed record RunSummary(
     int? DurationMs,
     int PendingApprovals,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<RunEvent> Events);
+    IReadOnlyList<RunEvent> Events,
+    CamundaRunLink? Camunda);

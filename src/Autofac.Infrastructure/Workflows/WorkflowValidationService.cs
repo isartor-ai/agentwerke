@@ -5,31 +5,42 @@ namespace Autofac.Infrastructure.Workflows;
 
 public sealed class WorkflowValidationService : IWorkflowValidationService
 {
-    private readonly IBpmnWorkflowValidator _validator;
+    private readonly ICamundaBpmnProjector _projector;
 
-    public WorkflowValidationService(IBpmnWorkflowValidator validator)
+    public WorkflowValidationService(ICamundaBpmnProjector projector)
     {
-        _validator = validator;
+        _projector = projector;
     }
 
     public WorkflowValidationResult Validate(string bpmnXml)
     {
-        var validation = _validator.Validate(bpmnXml);
-        return new WorkflowValidationResult(
-            validation.IsValid,
-            validation.Definition?.ProcessId,
-            validation.Definition?.ProcessName,
-            validation.Errors.Select(error => new WorkflowValidationError(
+        return MapPreparation(_projector.Project(bpmnXml)).Validation;
+    }
+
+    public WorkflowPublishPreparation PrepareForPublish(string bpmnXml)
+    {
+        return MapPreparation(_projector.Project(bpmnXml));
+    }
+
+    private static WorkflowPublishPreparation MapPreparation(CamundaBpmnProjectionResult projection)
+    {
+        var validation = new WorkflowValidationResult(
+            projection.IsValid,
+            projection.Definition?.ProcessId,
+            projection.Definition?.ProcessName,
+            projection.Errors.Select(error => new WorkflowValidationError(
                 error.Message,
                 error.ElementId,
                 error.ElementName ?? "document",
                 error.LineNumber,
                 error.LinePosition)).ToArray(),
-            validation.Warnings.Select(warning => new WorkflowValidationWarning(
+            projection.Warnings.Select(warning => new WorkflowValidationWarning(
                 warning.Message,
                 warning.ElementId,
                 warning.ElementName ?? "document",
                 warning.LineNumber,
                 warning.LinePosition)).ToArray());
+
+        return new WorkflowPublishPreparation(validation, projection.ProjectedBpmnXml);
     }
 }

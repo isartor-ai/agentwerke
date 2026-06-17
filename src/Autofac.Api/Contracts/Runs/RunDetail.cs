@@ -18,6 +18,7 @@ public sealed record RunDetail(
     int PendingApprovals,
     IReadOnlyList<string> Tags,
     IReadOnlyList<RunEvent> Events,
+    CamundaRunLink? Camunda,
     IReadOnlyList<RunStep> Steps,
     IReadOnlyList<RunArtifact> Artifacts,
     IReadOnlyList<ApprovalSummary> Approvals);

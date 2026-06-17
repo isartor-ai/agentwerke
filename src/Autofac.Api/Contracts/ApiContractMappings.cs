@@ -42,7 +42,8 @@ internal static class ApiContractMappings
             workflow.LastEditedAt,
             workflow.ValidationState,
             workflow.Tags.ToArray(),
-            workflow.BpmnXml);
+            workflow.BpmnXml,
+            ToCamundaWorkflowDeployment(workflow));
     }
 
     public static ValidationResponse ToValidationResponse(WorkflowValidationResult validation)
@@ -72,7 +73,11 @@ internal static class ApiContractMappings
 
     public static PublishWorkflowResponse ToPublishWorkflowResponse(WorkflowPublishResult result)
     {
-        return new PublishWorkflowResponse(result.WorkflowId, result.Version, result.PublishedAt);
+        return new PublishWorkflowResponse(
+            result.WorkflowId,
+            result.Version,
+            result.PublishedAt,
+            ToCamundaWorkflowDeployment(result.Camunda));
     }
 
     public static RunSummary ToRunSummary(WorkflowRun run)
@@ -94,7 +99,8 @@ internal static class ApiContractMappings
             run.Events
                 .OrderBy(static item => item.CreatedAt, StringComparer.Ordinal)
                 .Select(ToRunEvent)
-                .ToArray());
+                .ToArray(),
+            ToCamundaRunLink(run));
     }
 
     public static RunDetail ToRunDetail(
@@ -120,6 +126,7 @@ internal static class ApiContractMappings
                 .OrderByDescending(static item => item.CreatedAt, StringComparer.Ordinal)
                 .Select(ToRunEvent)
                 .ToArray(),
+            ToCamundaRunLink(run),
             run.Steps
                 .OrderBy(static item => item.StartedAt ?? item.CompletedAt ?? item.Id, StringComparer.Ordinal)
                 .Select(ToRunStep)
@@ -256,6 +263,52 @@ internal static class ApiContractMappings
             artifact.Name,
             artifact.SizeBytes,
             artifact.LastModifiedAt);
+    }
+
+    private static CamundaWorkflowDeployment? ToCamundaWorkflowDeployment(WorkflowDefinition workflow)
+    {
+        if (string.IsNullOrWhiteSpace(workflow.CamundaDeploymentKey) ||
+            string.IsNullOrWhiteSpace(workflow.CamundaProcessDefinitionId) ||
+            string.IsNullOrWhiteSpace(workflow.CamundaProcessDefinitionKey) ||
+            workflow.CamundaProcessDefinitionVersion is null ||
+            string.IsNullOrWhiteSpace(workflow.CamundaDeployedAt))
+        {
+            return null;
+        }
+
+        return new CamundaWorkflowDeployment(
+            workflow.CamundaDeploymentKey,
+            workflow.CamundaProcessDefinitionId,
+            workflow.CamundaProcessDefinitionKey,
+            workflow.CamundaProcessDefinitionVersion.Value,
+            workflow.CamundaDeployedAt);
+    }
+
+    private static CamundaWorkflowDeployment ToCamundaWorkflowDeployment(WorkflowDeploymentResult result)
+    {
+        return new CamundaWorkflowDeployment(
+            result.DeploymentKey,
+            result.ProcessDefinitionId,
+            result.ProcessDefinitionKey,
+            result.ProcessDefinitionVersion,
+            result.DeployedAt);
+    }
+
+    private static CamundaRunLink? ToCamundaRunLink(WorkflowRun run)
+    {
+        if (string.IsNullOrWhiteSpace(run.CamundaProcessInstanceKey) ||
+            string.IsNullOrWhiteSpace(run.CamundaProcessDefinitionKey) ||
+            string.IsNullOrWhiteSpace(run.CamundaProcessDefinitionId) ||
+            run.CamundaProcessDefinitionVersion is null)
+        {
+            return null;
+        }
+
+        return new CamundaRunLink(
+            run.CamundaProcessInstanceKey,
+            run.CamundaProcessDefinitionKey,
+            run.CamundaProcessDefinitionId,
+            run.CamundaProcessDefinitionVersion.Value);
     }
 
     private static RunStepRuntimeSnapshot ToRunStepRuntimeSnapshot(AgentRuntimeSnapshot snapshot)

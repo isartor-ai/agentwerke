@@ -9,7 +9,8 @@ public sealed record StartRunCommand(
     string WorkflowId,
     string? Initiator,
     /// <summary>Optional metadata from an inbound integration trigger (Jira, GitHub, etc.).</summary>
-    TriggerMetadata? Trigger = null);
+    TriggerMetadata? Trigger = null,
+    JsonElement? Input = null);
 
 /// <summary>Source metadata recorded when a workflow is started by an external webhook.</summary>
 public sealed record TriggerMetadata(
@@ -96,12 +97,46 @@ public sealed record WorkflowRunnerResult(
 public interface IWorkflowRunRepository
 {
     Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken);
-    Task<WorkflowRun> CreatePendingRunAsync(string runId, string workflowId, string workflowName, string workflowVersion, string? initiator, List<string> tags, string? correlationId, CancellationToken cancellationToken);
+    Task<WorkflowRun> CreatePendingRunAsync(
+        string runId,
+        string workflowId,
+        string workflowName,
+        string workflowVersion,
+        string? initiator,
+        List<string> tags,
+        string? correlationId,
+        WorkflowRunCamundaLink? camunda,
+        CancellationToken cancellationToken);
     Task UpdateRunStatusAsync(string runId, string status, CancellationToken cancellationToken);
     Task UpdateCurrentStepAsync(string runId, string? currentStep, CancellationToken cancellationToken);
     Task IncrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
     Task DecrementPendingApprovalsAsync(string runId, CancellationToken cancellationToken);
     Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken);
+}
+
+public sealed record WorkflowRunCamundaLink(
+    string ProcessInstanceKey,
+    string ProcessDefinitionKey,
+    string ProcessDefinitionId,
+    int ProcessDefinitionVersion);
+
+public sealed record WorkflowProcessStartRequest(
+    string RunId,
+    string ProcessDefinitionKey,
+    string ProcessDefinitionId,
+    JsonElement Variables);
+
+public sealed record WorkflowProcessStartResult(
+    string ProcessInstanceKey,
+    string ProcessDefinitionKey,
+    string ProcessDefinitionId,
+    int ProcessDefinitionVersion);
+
+public interface IWorkflowProcessStartService
+{
+    Task<WorkflowProcessStartResult> StartAsync(
+        WorkflowProcessStartRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IRunOutbox
@@ -176,6 +211,23 @@ public sealed class WorkflowNotPublishedException : Exception
 
     public string WorkflowId { get; }
     public string Status { get; }
+}
+
+public sealed record WorkflowRunStartError(
+    string Code,
+    string Message);
+
+public sealed class WorkflowRunStartException : Exception
+{
+    public WorkflowRunStartException(
+        string message,
+        IReadOnlyList<WorkflowRunStartError> errors)
+        : base(message)
+    {
+        Errors = errors;
+    }
+
+    public IReadOnlyList<WorkflowRunStartError> Errors { get; }
 }
 
 public sealed class ApprovalNotFoundException : Exception

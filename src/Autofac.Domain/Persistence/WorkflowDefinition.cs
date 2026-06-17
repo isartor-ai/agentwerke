@@ -23,4 +23,14 @@ public sealed class WorkflowDefinition
     public List<string> Tags { get; set; } = new();
 
     public string BpmnXml { get; set; } = string.Empty;
+
+    public string? CamundaDeploymentKey { get; set; }
+
+    public string? CamundaProcessDefinitionId { get; set; }
+
+    public string? CamundaProcessDefinitionKey { get; set; }
+
+    public int? CamundaProcessDefinitionVersion { get; set; }
+
+    public string? CamundaDeployedAt { get; set; }
 }

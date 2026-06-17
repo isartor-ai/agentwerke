@@ -32,6 +32,14 @@ public sealed class WorkflowRun
 
     public string? CorrelationId { get; set; }
 
+    public string? CamundaProcessInstanceKey { get; set; }
+
+    public string? CamundaProcessDefinitionKey { get; set; }
+
+    public string? CamundaProcessDefinitionId { get; set; }
+
+    public int? CamundaProcessDefinitionVersion { get; set; }
+
     public List<WorkflowRunStep> Steps { get; set; } = new();
 
     public List<WorkflowEvent> Events { get; set; } = new();

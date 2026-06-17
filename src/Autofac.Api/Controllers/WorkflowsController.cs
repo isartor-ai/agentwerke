@@ -88,6 +88,12 @@ public sealed class WorkflowsController : ControllerBase
                 Message: ex.Message,
                 Errors: ex.Validation.Errors.Select(error => error.Message).ToArray()));
         }
+        catch (WorkflowDeploymentException ex)
+        {
+            return BadRequest(new PublishErrorResponse(
+                Message: ex.Message,
+                Errors: ex.Errors.Select(error => error.Message).ToArray()));
+        }
         catch (WorkflowNotFoundException)
         {
             return NotFound();

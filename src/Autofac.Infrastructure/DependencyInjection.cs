@@ -39,6 +39,8 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
         services.AddScoped<IWorkflowValidationService, WorkflowValidationService>();
         services.AddScoped<IWorkflowAuthoringService, WorkflowAuthoringService>();
+        services.AddScoped<IWorkflowDeploymentService, CamundaWorkflowDeploymentService>();
+        services.AddScoped<IWorkflowProcessStartService, CamundaWorkflowProcessStartService>();
         services.AddScoped<IWorkflowRuntimeStore, WorkflowRuntimeStore>();
         services.AddScoped<IWorkflowRunRepository, WorkflowRunRepository>();
         services.AddScoped<IRunContextRepository, RunContextRepository>();
@@ -67,7 +69,10 @@ public static class DependencyInjection
 
         services.AddScoped<IRunOutbox, OutboxRepository>();
         services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();
+        services.AddScoped<ICamundaAgentJobExecutor, CamundaAgentJobExecutor>();
+        services.AddScoped<CamundaAgentJobDispatcher>();
         services.AddHostedService<RunDispatchWorker>();
+        services.AddHostedService<CamundaAgentJobWorker>();
 
         return services;
     }

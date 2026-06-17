@@ -19,7 +19,8 @@ public sealed record WorkflowImportResult(
 public sealed record WorkflowPublishResult(
     string WorkflowId,
     string Version,
-    string PublishedAt);
+    string PublishedAt,
+    WorkflowDeploymentResult Camunda);
 
 public sealed record WorkflowValidationError(
     string Message,
@@ -41,6 +42,31 @@ public sealed record WorkflowValidationResult(
     string? ProcessName,
     IReadOnlyList<WorkflowValidationError> Errors,
     IReadOnlyList<WorkflowValidationWarning> Warnings);
+
+public sealed record WorkflowPublishPreparation(
+    WorkflowValidationResult Validation,
+    string? ProjectedBpmnXml)
+{
+    public bool IsValid => Validation.IsValid && !string.IsNullOrWhiteSpace(ProjectedBpmnXml);
+}
+
+public sealed record WorkflowDeploymentRequest(
+    string WorkflowId,
+    string Version,
+    string ProcessDefinitionId,
+    string ProjectedBpmnXml,
+    string ResourceName);
+
+public sealed record WorkflowDeploymentResult(
+    string DeploymentKey,
+    string ProcessDefinitionId,
+    string ProcessDefinitionKey,
+    int ProcessDefinitionVersion,
+    string DeployedAt);
+
+public sealed record WorkflowDeploymentError(
+    string Code,
+    string Message);
 
 public interface IWorkflowAuthoringService
 {
@@ -76,6 +102,15 @@ public interface IWorkflowDefinitionRepository
 public interface IWorkflowValidationService
 {
     WorkflowValidationResult Validate(string bpmnXml);
+
+    WorkflowPublishPreparation PrepareForPublish(string bpmnXml);
+}
+
+public interface IWorkflowDeploymentService
+{
+    Task<WorkflowDeploymentResult> DeployAsync(
+        WorkflowDeploymentRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class WorkflowNotFoundException : Exception
@@ -98,6 +133,19 @@ public sealed class WorkflowValidationException : Exception
     }
 
     public WorkflowValidationResult Validation { get; }
+}
+
+public sealed class WorkflowDeploymentException : Exception
+{
+    public WorkflowDeploymentException(
+        string message,
+        IReadOnlyList<WorkflowDeploymentError> errors)
+        : base(message)
+    {
+        Errors = errors;
+    }
+
+    public IReadOnlyList<WorkflowDeploymentError> Errors { get; }
 }
 
 public static class WorkflowVersioning
