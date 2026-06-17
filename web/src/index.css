@@ -58,6 +58,7 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -663,6 +664,11 @@ th {
   background: var(--color-surface-container);
 }
 
+.template-card-active {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px rgb(0 220 229 / 0.12);
+}
+
 .template-card header strong {
   display: block;
   margin-bottom: 0.2rem;
@@ -687,6 +693,12 @@ th {
   font-size: 0.72rem;
   color: var(--color-muted);
   background: var(--color-surface-low);
+}
+
+.template-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .validation-panel h3 {
@@ -1141,6 +1153,119 @@ th {
   color: var(--color-text);
   padding: 0.45rem;
   margin: 0.2rem 0 0.45rem;
+}
+
+.factory-builder {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.factory-builder-header,
+.factory-config-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.factory-builder-header h2,
+.factory-config-title h3,
+.factory-config-section h4,
+.factory-status h4 {
+  margin: 0;
+}
+
+.factory-builder-header p,
+.factory-config-title p,
+.factory-status p {
+  margin: 0.25rem 0 0;
+  color: var(--color-muted);
+}
+
+.factory-layout {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.factory-template-list,
+.factory-config-panel {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.factory-config-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  background: var(--color-surface);
+}
+
+.factory-config-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.form-grid label,
+.factory-config-section label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+}
+
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
+  width: 100%;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.25rem;
+  background: var(--color-surface-container);
+  color: var(--color-text);
+  padding: 0.45rem;
+}
+
+.form-span-2 {
+  grid-column: 1 / -1;
+}
+
+.checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.checkbox-row {
+  display: inline-flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 0.35rem !important;
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--color-surface-container);
+  color: var(--color-text) !important;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
+.factory-status {
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.65rem;
+  background: var(--color-surface-container);
 }
 
 .metadata-issues li {
@@ -1708,6 +1833,10 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .factory-layout {
+    grid-template-columns: 1fr;
+  }
+
   .designer-inspector-panel {
     grid-column: 1 / -1;
   }
@@ -1729,6 +1858,10 @@ textarea {
   .run-detail-grid {
     grid-template-columns: 1fr;
   }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 767px) {
@@ -1747,6 +1880,21 @@ textarea {
   }
 
   .page-header {
+    flex-direction: column;
+  }
+
+  .designer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .designer-list-panel,
+  .designer-canvas-panel,
+  .factory-config-panel {
+    min-width: 0;
+  }
+
+  .factory-builder-header,
+  .factory-config-title {
     flex-direction: column;
   }
 
@@ -1794,6 +1942,20 @@ textarea {
   background: #ffffff;
   overflow-y: auto;
   color: #1a1a1a;
+}
+
+@media (max-width: 767px) {
+  .bpmn-modeler {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(28rem, 1fr) 18rem;
+    height: auto;
+    min-height: 46rem;
+  }
+
+  .bpmn-modeler-panel {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
 }
 
 /* Autofac extension accents on the canvas. */
