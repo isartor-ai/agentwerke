@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
         services.AddScoped<IWorkflowValidationService, WorkflowValidationService>();
         services.AddScoped<IWorkflowAuthoringService, WorkflowAuthoringService>();
+        services.AddScoped<ITemplateCatalogService, TemplateCatalogService>();
         services.AddScoped<IWorkflowRuntimeStore, WorkflowRuntimeStore>();
         services.AddScoped<IWorkflowRunRepository, WorkflowRunRepository>();
         services.AddScoped<IRunContextRepository, RunContextRepository>();
