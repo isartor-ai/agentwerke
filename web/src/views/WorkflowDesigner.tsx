@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { setAgentCatalog } from '../bpmn/agentCatalog';
+import { createEmptyDiagram } from '../bpmn/constants';
 import { BpmnModeler, type BpmnModelerHandle } from '../components/BpmnModeler';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { Toolbar } from '../components/Toolbar';
-import { createEmptyDiagram } from '../bpmn/constants';
-import { setAgentCatalog } from '../bpmn/agentCatalog';
-import type { Workflow, WorkflowRun, WorkflowValidationResult } from '../types';
+import { buildConfiguredTemplateBpmn } from '../templates/templateBpmn';
+import type {
+  RuntimeMode,
+  TemplateDetail,
+  TemplateFactoryConfiguration,
+  TemplateSummary,
+  Workflow,
+  WorkflowRun,
+  WorkflowValidationResult,
+} from '../types';
 
 interface DiffLine {
   lineNumber: number;
@@ -17,119 +26,17 @@ interface DiffLine {
   text: string;
 }
 
-interface BpmnTemplate {
-  id: string;
-  name: string;
-  description: string;
-  preview: string[];
-  xml: string;
-}
+type WorkspaceMode = 'factory' | 'advanced' | 'monitor';
+type ConfigurationMapSection = 'requiredInputs' | 'agentAssignments' | 'approvalAssignments' | 'connectors' | 'evidence';
 
-const BPMN_TEMPLATE_LIBRARY: BpmnTemplate[] = [
-  {
-    id: 'tpl-deploy',
-    name: 'Production Deploy Gate',
-    description: 'Build, verify, human approval, and deploy to production.',
-    preview: ['Start', 'Build', 'Approval', 'Deploy', 'End'],
-    xml: `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:autofac="https://autofac.ai/bpmn" id="Defs_Deploy" targetNamespace="https://autofac.ai/bpmn">
-  <bpmn:process id="ProductionDeploy" name="Production Deploy" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_1" name="Start">
-      <bpmn:outgoing>Flow_1</bpmn:outgoing>
-    </bpmn:startEvent>
-    <bpmn:serviceTask id="BuildTask" name="Build Artifact">
-      <bpmn:extensionElements>
-        <autofac:agentTask agent="BuildAgent" action="ci.build_artifact" environment="build" purposeType="build_release" policyTag="build_gateway" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_1</bpmn:incoming>
-      <bpmn:outgoing>Flow_2</bpmn:outgoing>
-    </bpmn:serviceTask>
-    <bpmn:userTask id="ApprovalTask" name="Release Approval">
-      <bpmn:extensionElements>
-        <autofac:approvalTask purposeType="production_deployment" policyTag="deploy_approval" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_2</bpmn:incoming>
-      <bpmn:outgoing>Flow_3</bpmn:outgoing>
-    </bpmn:userTask>
-    <bpmn:serviceTask id="DeployTask" name="Deploy to Production">
-      <bpmn:extensionElements>
-        <autofac:agentTask agent="DeployAgent" action="cloud.deploy_artifact" environment="production" purposeType="production_deployment" policyTag="deploy_gateway" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_3</bpmn:incoming>
-      <bpmn:outgoing>Flow_4</bpmn:outgoing>
-    </bpmn:serviceTask>
-    <bpmn:endEvent id="EndEvent_1" name="Completed">
-      <bpmn:incoming>Flow_4</bpmn:incoming>
-    </bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="BuildTask" />
-    <bpmn:sequenceFlow id="Flow_2" sourceRef="BuildTask" targetRef="ApprovalTask" />
-    <bpmn:sequenceFlow id="Flow_3" sourceRef="ApprovalTask" targetRef="DeployTask" />
-    <bpmn:sequenceFlow id="Flow_4" sourceRef="DeployTask" targetRef="EndEvent_1" />
-  </bpmn:process>
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="ProductionDeploy">
-      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="152" y="142" width="36" height="36" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BuildTask_di" bpmnElement="BuildTask"><dc:Bounds x="240" y="120" width="100" height="80" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="ApprovalTask_di" bpmnElement="ApprovalTask"><dc:Bounds x="400" y="120" width="100" height="80" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="DeployTask_di" bpmnElement="DeployTask"><dc:Bounds x="560" y="120" width="100" height="80" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="722" y="142" width="36" height="36" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="188" y="160" /><di:waypoint x="240" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340" y="160" /><di:waypoint x="400" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="500" y="160" /><di:waypoint x="560" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="660" y="160" /><di:waypoint x="722" y="160" /></bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</bpmn:definitions>`,
-  },
-  {
-    id: 'tpl-ci',
-    name: 'CI Approval Pipeline',
-    description: 'Run tests, then require human approval before merge.',
-    preview: ['Start', 'Test', 'Approval', 'Merge', 'End'],
-    xml: `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:autofac="https://autofac.ai/bpmn" id="Defs_CI" targetNamespace="https://autofac.ai/bpmn">
-  <bpmn:process id="CiApproval" name="CI Approval" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_1" name="Start"><bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>
-    <bpmn:serviceTask id="TestTask" name="Run Tests">
-      <bpmn:extensionElements>
-        <autofac:agentTask agent="TestAgent" action="ci.run_tests" environment="ci" purposeType="quality_gate" policyTag="ci_gateway" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_1</bpmn:incoming><bpmn:outgoing>Flow_2</bpmn:outgoing>
-    </bpmn:serviceTask>
-    <bpmn:userTask id="ApprovalTask" name="Merge Approval">
-      <bpmn:extensionElements>
-        <autofac:approvalTask purposeType="merge_request" policyTag="merge_approval" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_2</bpmn:incoming><bpmn:outgoing>Flow_3</bpmn:outgoing>
-    </bpmn:userTask>
-    <bpmn:serviceTask id="MergeTask" name="Merge PR">
-      <bpmn:extensionElements>
-        <autofac:agentTask agent="MergeAgent" action="github.merge_pr" environment="production" purposeType="merge_request" policyTag="merge_gateway" />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_3</bpmn:incoming><bpmn:outgoing>Flow_4</bpmn:outgoing>
-    </bpmn:serviceTask>
-    <bpmn:endEvent id="EndEvent_1" name="Done"><bpmn:incoming>Flow_4</bpmn:incoming></bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="TestTask" />
-    <bpmn:sequenceFlow id="Flow_2" sourceRef="TestTask" targetRef="ApprovalTask" />
-    <bpmn:sequenceFlow id="Flow_3" sourceRef="ApprovalTask" targetRef="MergeTask" />
-    <bpmn:sequenceFlow id="Flow_4" sourceRef="MergeTask" targetRef="EndEvent_1" />
-  </bpmn:process>
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="CiApproval">
-      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="152" y="142" width="36" height="36" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="TestTask_di" bpmnElement="TestTask"><dc:Bounds x="240" y="120" width="100" height="80" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="ApprovalTask_di" bpmnElement="ApprovalTask"><dc:Bounds x="400" y="120" width="100" height="80" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="MergeTask_di" bpmnElement="MergeTask"><dc:Bounds x="560" y="120" width="100" height="80" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1"><dc:Bounds x="722" y="142" width="36" height="36" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="188" y="160" /><di:waypoint x="240" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="340" y="160" /><di:waypoint x="400" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="500" y="160" /><di:waypoint x="560" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="660" y="160" /><di:waypoint x="722" y="160" /></bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</bpmn:definitions>`,
-  },
+const CONNECTOR_OPTIONS = [
+  { id: 'github', label: 'GitHub' },
+  { id: 'jira', label: 'Jira' },
+  { id: 'ci', label: 'CI' },
+  { id: 'slack', label: 'Slack' },
 ];
+
+const DEFAULT_OWNER = 'platform-eng';
 
 function readFileAsText(file: File): Promise<string> {
   if (typeof file.text === 'function') {
@@ -151,6 +58,12 @@ function normalizeFileName(value: string): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'workflow'
   );
+}
+
+function formatToken(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function buildBpmnDiff(previousXml: string, currentXml: string): DiffLine[] {
@@ -178,6 +91,28 @@ function buildBpmnDiff(previousXml: string, currentXml: string): DiffLine[] {
   return result;
 }
 
+function createTemplateConfiguration(template: TemplateDetail): TemplateFactoryConfiguration {
+  const connectors = Object.fromEntries(
+    CONNECTOR_OPTIONS.map((connector) => [
+      connector.id,
+      template.tags.some((tag) => tag.toLowerCase().includes(connector.id)) ||
+        template.trigger.toLowerCase().includes(connector.id),
+    ]),
+  );
+
+  return {
+    name: template.name,
+    description: template.description,
+    owner: DEFAULT_OWNER,
+    requiredInputs: Object.fromEntries(template.requiredInputs.map((input) => [input, ''])),
+    agentAssignments: Object.fromEntries(template.agentRoles.map((role) => [role, role])),
+    approvalAssignments: Object.fromEntries(template.approvalRoles.map((role) => [role, role])),
+    connectors,
+    policyLevel: template.policyLevel,
+    evidence: Object.fromEntries(template.evidenceExpectations.map((key) => [key, true])),
+  };
+}
+
 export function WorkflowDesigner() {
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -186,6 +121,13 @@ export function WorkflowDesigner() {
   const [currentXml, setCurrentXml] = useState('');
   const [validation, setValidation] = useState<WorkflowValidationResult | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateDetail | null>(null);
+  const [templateConfiguration, setTemplateConfiguration] = useState<TemplateFactoryConfiguration | null>(null);
+  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [templateLoading, setTemplateLoading] = useState(true);
+  const [templateDetailLoading, setTemplateDetailLoading] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [draftCreating, setDraftCreating] = useState(false);
   const [validationLoading, setValidationLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [lastPublishedXml, setLastPublishedXml] = useState('');
@@ -195,11 +137,10 @@ export function WorkflowDesigner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workflowDetailLoading, setWorkflowDetailLoading] = useState(false);
-
-  // Design | Monitor mode toggle
-  const [designerMode, setDesignerMode] = useState<'design' | 'monitor'>('design');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('factory');
   const [monitorRuns, setMonitorRuns] = useState<WorkflowRun[]>([]);
   const [monitorLoading, setMonitorLoading] = useState(false);
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Autofac', camundaEnabled: false });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelerRef = useRef<BpmnModelerHandle | null>(null);
@@ -210,7 +151,6 @@ export function WorkflowDesigner() {
     workflowId: string;
   } | null>(null);
 
-  /** Loads XML into the modeler, queueing if it hasn't mounted yet. */
   const loadXml = (xml: string) => {
     setCurrentXml(xml);
     if (modelerReadyRef.current && modelerRef.current) {
@@ -222,9 +162,10 @@ export function WorkflowDesigner() {
 
   const handleModelerReady = () => {
     modelerReadyRef.current = true;
-    if (pendingXmlRef.current != null) {
-      void modelerRef.current?.importXML(pendingXmlRef.current);
-      pendingXmlRef.current = null;
+    const pendingXml = pendingXmlRef.current;
+    pendingXmlRef.current = null;
+    if (pendingXml != null && pendingXml !== currentXml) {
+      void modelerRef.current?.importXML(pendingXml);
     }
   };
 
@@ -242,26 +183,41 @@ export function WorkflowDesigner() {
     }
   };
 
+  const loadTemplates = async () => {
+    setTemplateLoading(true);
+    setTemplateError(null);
+    try {
+      const data = await apiClient.getTemplates();
+      setTemplates(data);
+    } catch (loadError) {
+      setTemplateError(loadError instanceof Error ? loadError.message : 'Unable to load templates.');
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
   useEffect(() => {
     void loadWorkflows();
-    // Populate the agent catalog so the properties-panel drop-down can render
-    // registered agents synchronously. Best-effort: ignore failures.
+    void loadTemplates();
     void apiClient
       .getAgents()
       .then(setAgentCatalog)
       .catch(() => {});
+    void apiClient
+      .getRuntimeMode()
+      .then(setRuntimeMode)
+      .catch(() => {}); // Non-fatal: default stays Autofac.
   }, []);
 
-  // Poll runs when Monitor tab is active
   useEffect(() => {
-    if (designerMode !== 'monitor') return;
+    if (workspaceMode !== 'monitor') return;
     let cancelled = false;
     const load = async () => {
       setMonitorLoading(true);
       try {
         const all = await apiClient.getRuns();
         if (!cancelled) {
-          setMonitorRuns(selectedId ? all.filter((r) => r.workflowId === selectedId) : all);
+          setMonitorRuns(selectedId ? all.filter((run) => run.workflowId === selectedId) : all);
         }
       } finally {
         if (!cancelled) setMonitorLoading(false);
@@ -269,8 +225,11 @@ export function WorkflowDesigner() {
     };
     void load();
     const timer = setInterval(() => void load(), 10_000);
-    return () => { cancelled = true; clearInterval(timer); };
-  }, [designerMode, selectedId]);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [workspaceMode, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -300,10 +259,10 @@ export function WorkflowDesigner() {
           nextSelectionValidationRef.current = null;
         } else {
           setValidation(null);
+          setPublishMessage(null);
         }
 
         setSelectedTemplateId(null);
-        setPublishMessage(null);
         const xml = workflowDetail.bpmnXml ?? '';
         setLastPublishedXml(xml);
         loadXml(xml);
@@ -350,28 +309,121 @@ export function WorkflowDesigner() {
     return xml.trim() ? xml : currentXml;
   };
 
+  const updateConfigurationField = (
+    field: 'name' | 'description' | 'owner' | 'policyLevel',
+    value: string,
+  ) => {
+    setTemplateConfiguration((current) =>
+      current ? { ...current, [field]: value } : current,
+    );
+  };
+
+  const updateConfigurationMap = (
+    section: ConfigurationMapSection,
+    key: string,
+    value: string | boolean,
+  ) => {
+    setTemplateConfiguration((current) =>
+      current
+        ? {
+            ...current,
+            [section]: {
+              ...current[section],
+              [key]: value,
+            },
+          }
+        : current,
+    );
+  };
+
   const onNewWorkflow = () => {
     setSelectedId(null);
     setSelectedTemplateId(null);
+    setSelectedTemplate(null);
+    setTemplateConfiguration(null);
     setValidation(null);
     setValidationError(null);
     setPublishMessage(null);
     setLastPublishedXml('');
+    setWorkspaceMode('advanced');
     loadXml(createEmptyDiagram());
   };
 
-  const onUseTemplate = (templateId: string) => {
-    const template = BPMN_TEMPLATE_LIBRARY.find((item) => item.id === templateId);
-    if (!template) {
-      return;
-    }
+  const onConfigureTemplate = async (templateId: string) => {
+    setWorkspaceMode('factory');
     setSelectedId(null);
-    setSelectedTemplateId(templateId);
+    setTemplateDetailLoading(true);
+    setTemplateError(null);
     setValidation(null);
     setValidationError(null);
     setPublishMessage(null);
-    setLastPublishedXml('');
-    loadXml(template.xml);
+    setPublishedWorkflowId(null);
+    try {
+      const template = await apiClient.getTemplate(templateId);
+      if (!template) {
+        throw new Error(`Template '${templateId}' was not found.`);
+      }
+
+      setSelectedId(null);
+      setSelectedTemplateId(template.id);
+      setSelectedTemplate(template);
+      setTemplateConfiguration(createTemplateConfiguration(template));
+      setLastPublishedXml('');
+      loadXml(template.bpmnXml);
+    } catch (loadError) {
+      setTemplateError(loadError instanceof Error ? loadError.message : 'Unable to load template.');
+    } finally {
+      setTemplateDetailLoading(false);
+    }
+  };
+
+  const buildConfiguredXml = (): string | null => {
+    if (!selectedTemplate || !templateConfiguration) {
+      return null;
+    }
+    return buildConfiguredTemplateBpmn(selectedTemplate, templateConfiguration);
+  };
+
+  const onOpenTemplateAdvanced = () => {
+    const xml = buildConfiguredXml();
+    if (!xml) {
+      return;
+    }
+    loadXml(xml);
+    setWorkspaceMode('advanced');
+  };
+
+  const onCreateTemplateDraft = async () => {
+    const xml = buildConfiguredXml();
+    if (!xml || !selectedTemplate || !templateConfiguration) {
+      setTemplateError('Select a template before creating a draft.');
+      return;
+    }
+
+    setDraftCreating(true);
+    setTemplateError(null);
+    setValidationError(null);
+    try {
+      const imported = await apiClient.importWorkflowDefinition({
+        fileName: `${normalizeFileName(templateConfiguration.name)}.bpmn`,
+        bpmnXml: xml,
+      });
+      setValidation(imported.validation);
+      setLastPublishedXml(xml);
+      loadXml(xml);
+      setSelectedId(imported.workflowId);
+      setPublishedWorkflowId(null);
+      setPublishMessage(`Draft created from ${selectedTemplate.name}.`);
+      nextSelectionValidationRef.current = {
+        validation: imported.validation,
+        workflowId: imported.workflowId,
+      };
+      await loadWorkflows(imported.workflowId);
+    } catch (createError) {
+      setTemplateError(createError instanceof Error ? createError.message : 'Unable to create draft.');
+    } finally {
+      setDraftCreating(false);
+    }
   };
 
   const validateCurrentBpmn = async () => {
@@ -396,6 +448,7 @@ export function WorkflowDesigner() {
   };
 
   const onImportClick = () => {
+    setWorkspaceMode('advanced');
     fileInputRef.current?.click();
   };
 
@@ -405,7 +458,9 @@ export function WorkflowDesigner() {
       setValidationError('Nothing to export. Design a workflow or choose a template first.');
       return;
     }
-    const fileNameBase = normalizeFileName(selectedWorkflow?.name ?? selectedTemplateId ?? 'workflow');
+    const fileNameBase = normalizeFileName(
+      selectedWorkflow?.name ?? templateConfiguration?.name ?? selectedTemplateId ?? 'workflow',
+    );
     const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -422,6 +477,7 @@ export function WorkflowDesigner() {
     if (!file) {
       return;
     }
+    setWorkspaceMode('advanced');
     setValidationLoading(true);
     setValidationError(null);
     try {
@@ -429,6 +485,8 @@ export function WorkflowDesigner() {
       loadXml(xml);
       setLastPublishedXml(xml);
       setSelectedTemplateId(null);
+      setSelectedTemplate(null);
+      setTemplateConfiguration(null);
       const uploaded = await apiClient.importWorkflowDefinition({ fileName: file.name, bpmnXml: xml });
       setValidation(uploaded.validation);
       if (uploaded.workflowId) {
@@ -458,8 +516,8 @@ export function WorkflowDesigner() {
     try {
       let workflowId = selectedId;
       if (!workflowId) {
-        const draftName = selectedTemplateId
-          ? `${normalizeFileName(selectedTemplateId)}.bpmn`
+        const draftName = templateConfiguration
+          ? `${normalizeFileName(templateConfiguration.name)}.bpmn`
           : 'workflow.bpmn';
         const imported = await apiClient.importWorkflowDefinition({ fileName: draftName, bpmnXml: xml });
         workflowId = imported.workflowId;
@@ -472,7 +530,7 @@ export function WorkflowDesigner() {
       const publishResult = await apiClient.publishWorkflowDefinition({
         workflowId,
         bpmnXml: xml,
-        description: selectedWorkflow?.description,
+        description: templateConfiguration?.description ?? selectedWorkflow?.description,
       });
       setLastPublishedXml(xml);
       setSelectedTemplateId(null);
@@ -510,18 +568,84 @@ export function WorkflowDesigner() {
     return <ErrorState message={error} onRetry={loadWorkflows} />;
   }
 
+  const validationPanel = (
+    <section className="panel validation-panel" aria-label="BPMN validation results">
+      <h3>Validation Results</h3>
+      {workflowDetailLoading ? <p>Loading persisted workflow detail...</p> : null}
+      {validationLoading ? <p>Validating BPMN...</p> : null}
+      {validationError ? <p className="validation-error">{validationError}</p> : null}
+
+      {validation ? (
+        <div>
+          <p>
+            Status: <strong>{validation.isValid ? 'Valid' : 'Invalid'}</strong>
+          </p>
+          {validation.processId ? (
+            <p>
+              Process: {validation.processName ?? validation.processId} ({validation.processId})
+            </p>
+          ) : null}
+
+          <section className="validation-section" aria-label="Runtime errors">
+            <h4>Runtime Errors</h4>
+            <p className="validation-section-hint">
+              Issues that block execution on the {runtimeMode.mode} runtime. Fix these before publishing.
+            </p>
+            {validation.errors.length > 0 ? (
+              <ul className="validation-list">
+                {validation.errors.map((item, index) => (
+                  <li key={`${item.elementId ?? item.elementName ?? 'error'}-${index}`} className="validation-item validation-item-error">
+                    <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                    {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                    {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                    {item.linePosition ? `, col ${item.linePosition}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="validation-ok">No runtime errors — this workflow is compatible with the {runtimeMode.mode} runtime.</p>
+            )}
+          </section>
+
+          {validation.warnings.length > 0 ? (
+            <section className="validation-section" aria-label="Compatibility warnings">
+              <h4>Compatibility Warnings</h4>
+              <p className="validation-section-hint">
+                {runtimeMode.camundaEnabled
+                  ? 'Elements outside the Camunda adapter\'s supported subset. Review adapter settings.'
+                  : 'Elements outside the governed default-runtime subset. These are not supported unless a compatible adapter is active.'}
+              </p>
+              <ul className="validation-list">
+                {validation.warnings.map((item, index) => (
+                  <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`} className="validation-item validation-item-warning">
+                    <strong>{item.elementName ?? 'element'}:</strong> {item.message}
+                    {item.elementId ? ` [id: ${item.elementId}]` : ''}
+                    {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
+                    {item.linePosition ? `, col ${item.linePosition}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+      ) : (
+        <p>Validate the workflow to see actionable errors on the canvas.</p>
+      )}
+    </section>
+  );
+
   return (
     <section>
       <PageHeader
-        title="Workflow Designer"
-        description="Drag, configure, validate, and publish BPMN workflows with Autofac agent and approval tasks."
+        title="SDLC Factory"
+        description="Start from a governed SDLC template, assign agents and approvals, then open BPMN only when advanced editing is needed."
         actions={
           <div className="inline-actions">
             <button type="button" className="btn btn-secondary" onClick={onImportClick}>
               Import BPMN
             </button>
             <button type="button" className="btn btn-primary" onClick={onNewWorkflow}>
-              New Workflow
+              Blank BPMN
             </button>
             <input
               ref={fileInputRef}
@@ -535,7 +659,7 @@ export function WorkflowDesigner() {
         }
       />
 
-      <section className="designer-grid" aria-label="Workflow designer shell">
+      <section className="designer-grid" aria-label="Workflow authoring shell">
         <article className="panel designer-list-panel">
           <label htmlFor="workflow-search" className="sr-only">
             Search workflows
@@ -554,7 +678,10 @@ export function WorkflowDesigner() {
                   <button
                     type="button"
                     className={`workflow-item ${selectedId === workflow.id ? 'workflow-item-active' : ''}`}
-                    onClick={() => setSelectedId(workflow.id)}
+                    onClick={() => {
+                      setSelectedId(workflow.id);
+                      setWorkspaceMode('advanced');
+                    }}
                   >
                     <strong>{workflow.name}</strong>
                     <span>
@@ -570,58 +697,263 @@ export function WorkflowDesigner() {
               <p>Create your first workflow, import BPMN, or start from a template.</p>
             </div>
           )}
-
-          <section className="template-gallery" aria-label="BPMN template gallery">
-            <h3>Templates</h3>
-            <div className="template-grid" role="list">
-              {BPMN_TEMPLATE_LIBRARY.map((template) => (
-                <article key={template.id} className="template-card" role="listitem">
-                  <header>
-                    <strong>{template.name}</strong>
-                    <p>{template.description}</p>
-                  </header>
-                  <div className="template-preview" aria-hidden="true">
-                    {template.preview.map((step) => (
-                      <span key={`${template.id}-${step}`}>{step}</span>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => onUseTemplate(template.id)}
-                  >
-                    Use Template
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
         </article>
 
         <article className="panel designer-canvas-panel">
-          {/* Design / Monitor mode toggle */}
-          <div className="designer-mode-tabs" role="tablist" aria-label="Designer mode">
+          <div className="designer-mode-tabs" role="tablist" aria-label="Authoring mode">
             <button
               type="button"
               role="tab"
-              aria-selected={designerMode === 'design'}
-              className={`tab ${designerMode === 'design' ? 'tab-active' : ''}`}
-              onClick={() => setDesignerMode('design')}
+              aria-selected={workspaceMode === 'factory'}
+              className={`tab ${workspaceMode === 'factory' ? 'tab-active' : ''}`}
+              onClick={() => setWorkspaceMode('factory')}
             >
-              Design
+              Factory
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={designerMode === 'monitor'}
-              className={`tab ${designerMode === 'monitor' ? 'tab-active' : ''}`}
-              onClick={() => setDesignerMode('monitor')}
+              aria-selected={workspaceMode === 'advanced'}
+              className={`tab ${workspaceMode === 'advanced' ? 'tab-active' : ''}`}
+              onClick={() => setWorkspaceMode('advanced')}
+            >
+              Advanced BPMN
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={workspaceMode === 'monitor'}
+              className={`tab ${workspaceMode === 'monitor' ? 'tab-active' : ''}`}
+              onClick={() => setWorkspaceMode('monitor')}
             >
               Monitor
             </button>
           </div>
 
-          {designerMode === 'design' ? (
+          {workspaceMode === 'factory' ? (
+            <section className="factory-builder" aria-label="Template-first SDLC factory">
+              <div className="factory-builder-header">
+                <div>
+                  <h2>Template Catalog</h2>
+                  <p>Choose a governed path, assign operators, and create a workflow draft.</p>
+                </div>
+                {templateLoading ? <span className="mini-badge neutral">Loading</span> : null}
+              </div>
+
+              {templateError ? <p className="validation-error">{templateError}</p> : null}
+
+              <div className="factory-layout">
+                <div className="factory-template-list" role="list" aria-label="SDLC templates">
+                  {templates.map((template) => (
+                    <article
+                      key={template.id}
+                      className={`template-card ${selectedTemplateId === template.id ? 'template-card-active' : ''}`}
+                      role="listitem"
+                    >
+                      <header>
+                        <strong>{template.name}</strong>
+                        <p>{template.description}</p>
+                      </header>
+                      <div className="template-meta-row">
+                        <span className="chip chip-static">{formatToken(template.policyLevel)}</span>
+                        <span className="chip chip-static">{formatToken(template.trigger)}</span>
+                        <span className="chip chip-static">{template.agentRoles.length} agents</span>
+                        <span className="chip chip-static">{template.approvalRoles.length} approvals</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        aria-label={`Configure ${template.name}`}
+                        onClick={() => void onConfigureTemplate(template.id)}
+                      >
+                        Configure
+                      </button>
+                    </article>
+                  ))}
+                  {!templateLoading && templates.length === 0 ? (
+                    <div className="empty-inline">
+                      <strong>No templates available</strong>
+                      <p>Check the template catalog service and retry.</p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <section className="factory-config-panel" aria-label="Template settings">
+                  {templateDetailLoading ? <LoadingState message="Loading template settings" className="compact-loading" /> : null}
+                  {selectedTemplate && templateConfiguration ? (
+                    <>
+                      <div className="factory-config-title">
+                        <div>
+                          <h3>{selectedTemplate.name}</h3>
+                          <p>{selectedTemplate.description}</p>
+                        </div>
+                        <span className="mini-badge healthy">Default runtime</span>
+                      </div>
+
+                      <div className="form-grid">
+                        <label>
+                          <span>Workflow name</span>
+                          <input
+                            value={templateConfiguration.name}
+                            onChange={(event) => updateConfigurationField('name', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Owner</span>
+                          <input
+                            value={templateConfiguration.owner}
+                            onChange={(event) => updateConfigurationField('owner', event.target.value)}
+                          />
+                        </label>
+                        <label className="form-span-2">
+                          <span>Description</span>
+                          <textarea
+                            rows={3}
+                            value={templateConfiguration.description}
+                            onChange={(event) => updateConfigurationField('description', event.target.value)}
+                          />
+                        </label>
+                      </div>
+
+                      {selectedTemplate.requiredInputs.length > 0 ? (
+                        <section className="factory-config-section">
+                          <h4>Start Inputs</h4>
+                          <div className="form-grid">
+                            {selectedTemplate.requiredInputs.map((input) => (
+                              <label key={input}>
+                                <span>{input}</span>
+                                <input
+                                  value={templateConfiguration.requiredInputs[input] ?? ''}
+                                  onChange={(event) => updateConfigurationMap('requiredInputs', input, event.target.value)}
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
+
+                      <section className="factory-config-section">
+                        <h4>Agent Assignments</h4>
+                        <div className="form-grid">
+                          {selectedTemplate.agentRoles.map((role) => (
+                            <label key={role}>
+                              <span>{role}</span>
+                              <input
+                                value={templateConfiguration.agentAssignments[role] ?? ''}
+                                onChange={(event) => updateConfigurationMap('agentAssignments', role, event.target.value)}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="factory-config-section">
+                        <h4>Approval Owners</h4>
+                        <div className="form-grid">
+                          {selectedTemplate.approvalRoles.map((role) => (
+                            <label key={role}>
+                              <span>{role}</span>
+                              <input
+                                value={templateConfiguration.approvalAssignments[role] ?? ''}
+                                onChange={(event) => updateConfigurationMap('approvalAssignments', role, event.target.value)}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="factory-config-section">
+                        <h4>Connectors</h4>
+                        <div className="checkbox-grid">
+                          {CONNECTOR_OPTIONS.map((connector) => (
+                            <label key={connector.id} className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={templateConfiguration.connectors[connector.id] ?? false}
+                                onChange={(event) => updateConfigurationMap('connectors', connector.id, event.target.checked)}
+                              />
+                              <span>{connector.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="factory-config-section">
+                        <h4>Policy and Evidence</h4>
+                        <div className="form-grid">
+                          <label>
+                            <span>Policy level</span>
+                            <select
+                              value={templateConfiguration.policyLevel}
+                              onChange={(event) => updateConfigurationField('policyLevel', event.target.value)}
+                            >
+                              <option value="standard">Standard</option>
+                              <option value="elevated">Elevated</option>
+                              <option value="critical">Critical</option>
+                            </select>
+                          </label>
+                          <div className="checkbox-grid">
+                            {selectedTemplate.evidenceExpectations.map((evidenceKey) => (
+                              <label key={evidenceKey} className="checkbox-row">
+                                <input
+                                  type="checkbox"
+                                  checked={templateConfiguration.evidence[evidenceKey] ?? false}
+                                  onChange={(event) => updateConfigurationMap('evidence', evidenceKey, event.target.checked)}
+                                />
+                                <span>{evidenceKey}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </section>
+
+                      <Toolbar>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={draftCreating}
+                          onClick={() => void onCreateTemplateDraft()}
+                        >
+                          {draftCreating ? 'Creating...' : 'Create Draft'}
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={onOpenTemplateAdvanced}>
+                          Open Advanced BPMN
+                        </button>
+                      </Toolbar>
+
+                      {publishMessage ? (
+                        <section className="factory-status" aria-label="Factory draft status">
+                          <h4>Draft Status</h4>
+                          <p>{publishMessage}</p>
+                          {validation ? (
+                            <p>
+                              Validation: <strong>{validation.isValid ? 'Valid' : 'Invalid'}</strong>
+                            </p>
+                          ) : null}
+                          {selectedId ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setWorkspaceMode('advanced')}
+                            >
+                              Edit in BPMN editor
+                            </button>
+                          ) : null}
+                        </section>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="empty-inline">
+                      <strong>Select a template</strong>
+                      <p>The configuration panel will show inputs, agents, approval owners, connectors, policy, and evidence.</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </section>
+          ) : null}
+
+          {workspaceMode === 'advanced' ? (
             <>
               <Toolbar>
                 <button type="button" className="btn btn-secondary" onClick={validateCurrentBpmn}>
@@ -633,11 +965,20 @@ export function WorkflowDesigner() {
                 <button type="button" className="btn btn-secondary" onClick={onExportClick}>
                   Export BPMN
                 </button>
+                <span
+                  className={`mini-badge ${runtimeMode.camundaEnabled ? 'neutral' : 'healthy'}`}
+                  aria-label="Active runtime mode"
+                >
+                  {runtimeMode.mode} Runtime
+                </span>
               </Toolbar>
 
               <BpmnModeler
                 ref={modelerRef}
+                initialXml={currentXml}
+                camundaMode={runtimeMode.camundaEnabled}
                 onReady={handleModelerReady}
+                onImportSuccess={() => setValidationError(null)}
                 onChange={(xml) => {
                   setCurrentXml(xml);
                   setPublishMessage(null);
@@ -646,73 +987,22 @@ export function WorkflowDesigner() {
                 validationErrors={validation?.errors ?? []}
               />
 
-              <section className="panel validation-panel" aria-label="BPMN validation results">
-                <h3>Validation Results</h3>
-                {workflowDetailLoading ? <p>Loading persisted workflow detail...</p> : null}
-                {validationLoading ? <p>Validating BPMN...</p> : null}
-                {validationError ? <p className="validation-error">{validationError}</p> : null}
-
-                {validation ? (
-                  <div>
-                    <p>
-                      Status: <strong>{validation.isValid ? 'Valid' : 'Invalid'}</strong>
-                    </p>
-                    {validation.processId ? (
-                      <p>
-                        Process: {validation.processName ?? validation.processId} ({validation.processId})
-                      </p>
-                    ) : null}
-                    {validation.errors.length > 0 ? (
-                      <ul className="validation-list">
-                        {validation.errors.map((item, index) => (
-                          <li key={`${item.elementId ?? item.elementName ?? 'error'}-${index}`}>
-                            <strong>{item.elementName ?? 'element'}:</strong> {item.message}
-                            {item.elementId ? ` [id: ${item.elementId}]` : ''}
-                            {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
-                            {item.linePosition ? `, col ${item.linePosition}` : ''}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>No validation errors.</p>
-                    )}
-                    {validation.warnings.length > 0 ? (
-                      <>
-                        <p>
-                          Warnings: <strong>{validation.warnings.length}</strong>
-                        </p>
-                        <ul className="validation-list">
-                          {validation.warnings.map((item, index) => (
-                            <li key={`${item.elementId ?? item.elementName ?? 'warning'}-${index}`}>
-                              <strong>{item.elementName ?? 'element'}:</strong> {item.message}
-                              {item.elementId ? ` [id: ${item.elementId}]` : ''}
-                              {item.lineNumber ? ` at line ${item.lineNumber}` : ''}
-                              {item.linePosition ? `, col ${item.linePosition}` : ''}
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p>Validate the workflow to see actionable errors on the canvas.</p>
-                )}
-              </section>
+              {validationPanel}
 
               {publishMessage ? (
                 <section className="panel publish-panel" aria-label="Workflow publish status">
                   <h3>Publish Status</h3>
                   <p>{publishMessage}</p>
-                  {publishedWorkflowId && (
+                  {publishedWorkflowId ? (
                     <button
                       type="button"
                       className="btn btn-primary"
                       disabled={startingRun}
                       onClick={() => void onStartRun()}
                     >
-                      {startingRun ? 'Starting…' : 'Start Run'}
+                      {startingRun ? 'Starting...' : 'Start Run'}
                     </button>
-                  )}
+                  ) : null}
                 </section>
               ) : null}
 
@@ -735,8 +1025,9 @@ export function WorkflowDesigner() {
                 </section>
               ) : null}
             </>
-          ) : (
-            /* Monitor mode — run list for the selected workflow */
+          ) : null}
+
+          {workspaceMode === 'monitor' ? (
             <section className="monitor-panel" aria-label="Run monitor">
               <div className="monitor-header">
                 <h3>
@@ -746,15 +1037,15 @@ export function WorkflowDesigner() {
                 </h3>
                 <span className="live-chip">
                   <span aria-hidden="true" />
-                  Live · 10s
+                  Live - 10s
                 </span>
               </div>
               {monitorLoading && monitorRuns.length === 0 ? (
-                <p>Loading runs…</p>
+                <p>Loading runs...</p>
               ) : monitorRuns.length === 0 ? (
                 <p className="monitor-empty">
                   No runs found for this workflow.{' '}
-                  {selectedId && (
+                  {selectedId ? (
                     <button
                       type="button"
                       className="btn btn-primary"
@@ -762,7 +1053,7 @@ export function WorkflowDesigner() {
                     >
                       Start Run
                     </button>
-                  )}
+                  ) : null}
                 </p>
               ) : (
                 <ul className="monitor-run-list" role="list">
@@ -783,7 +1074,7 @@ export function WorkflowDesigner() {
                 </ul>
               )}
             </section>
-          )}
+          ) : null}
         </article>
       </section>
     </section>

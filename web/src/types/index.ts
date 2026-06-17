@@ -193,6 +193,35 @@ export interface WorkflowPublishResult {
   publishedAt: string;
 }
 
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  policyLevel: string;
+  tags: string[];
+  agentRoles: string[];
+  approvalRoles: string[];
+}
+
+export interface TemplateDetail extends TemplateSummary {
+  requiredInputs: string[];
+  evidenceExpectations: string[];
+  bpmnXml: string;
+}
+
+export interface TemplateFactoryConfiguration {
+  name: string;
+  description: string;
+  owner: string;
+  requiredInputs: Record<string, string>;
+  agentAssignments: Record<string, string>;
+  approvalAssignments: Record<string, string>;
+  connectors: Record<string, boolean>;
+  policyLevel: string;
+  evidence: Record<string, boolean>;
+}
+
 export interface ApprovalRequest {
   id: string;
   runId: string;
@@ -227,6 +256,11 @@ export interface AgentSummary {
   supportedEnvironments: string[];
   supportedPolicyTags: string[];
   source: string;
+}
+
+export interface RuntimeMode {
+  mode: 'Autofac' | 'Camunda';
+  camundaEnabled: boolean;
 }
 
 export interface AuthUser {

@@ -1,6 +1,9 @@
 import type {
   AgentSummary,
   ApprovalRequest,
+  RuntimeMode,
+  TemplateDetail,
+  TemplateSummary,
   WorkflowPublishResult,
   WorkflowValidationResult,
   Workflow,
@@ -49,6 +52,10 @@ function extractErrorMessage(errorText: string): string | null {
 }
 
 export const apiClient = {
+  async getRuntimeMode(): Promise<RuntimeMode> {
+    return requestJson<RuntimeMode>('/api/health/runtime');
+  },
+
   getRunArtifactDownloadUrl(runId: string, artifactName: string): string {
     return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactName)}`;
   },
@@ -69,6 +76,34 @@ export const apiClient = {
 
   async getAgents(): Promise<AgentSummary[]> {
     return requestJson<AgentSummary[]>('/api/agents', undefined, WORKFLOW_API_BASE_URL);
+  },
+
+  async getTemplates(): Promise<TemplateSummary[]> {
+    return requestJson<TemplateSummary[]>('/api/templates', undefined, WORKFLOW_API_BASE_URL);
+  },
+
+  async getTemplate(id: string): Promise<TemplateDetail | undefined> {
+    return requestJson<TemplateDetail>(`/api/templates/${id}`, undefined, WORKFLOW_API_BASE_URL);
+  },
+
+  async cloneTemplate(payload: {
+    templateId: string;
+    name?: string;
+    description?: string;
+    owner?: string;
+  }): Promise<{ workflowId: string; name: string }> {
+    return requestJson<{ workflowId: string; name: string }>(
+      `/api/templates/${encodeURIComponent(payload.templateId)}/clone`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: payload.name,
+          description: payload.description,
+          owner: payload.owner,
+        }),
+      },
+      WORKFLOW_API_BASE_URL,
+    );
   },
 
   async getWorkflow(id: string): Promise<Workflow | undefined> {
