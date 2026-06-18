@@ -1,0 +1,158 @@
+###############################################################################
+# Autofac — Pilot test stack (4 scenarios)
+#
+# Scenario A — GitHub Branch + PR    (wf-pilot-001) — no API key needed
+# Scenario B — Approval Gate         (wf-pilot-002) — no API key needed
+# Scenario C — Policy Block          (wf-pilot-003) — no API key needed
+# Scenario D — LLM Agent             (wf-pilot-004) — requires ANTHROPIC__APIKEY
+#
+# Quick start (copy env template first):
+#   cp docker/.env.pilot docker/.env.pilot.local
+#   # optional: add your Anthropic key for Scenario D
+#   docker compose -f docker/docker-compose.pilot.yml --env-file docker/.env.pilot.local up --build
+#
+# Stop and remove volumes:
+#   docker compose -f docker/docker-compose.pilot.yml --env-file docker/.env.pilot.local down -v
+#
+# Ports (intentionally different from the manual stack so both can run at once):
+#   http://localhost:3003   Web UI
+#   http://localhost:8082   API  (e.g. http://localhost:8082/api/health/live)
+#   http://localhost:9091   WireMock admin (inspect GitHub stub hits)
+#   http://localhost:5435   Postgres (psql, pgAdmin, etc.)
+#
+# Auth:
+#   Dev-only JWT — the web UI is pre-signed and works without login.
+#   DO NOT use these credentials in production.
+###############################################################################
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autofac_pilot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_pilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: build
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot;Username=postgres;Password=postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # WireMock catches all GitHub API calls so no real PAT is needed.
+  # Catch-all returns {"id":1,"number":1,"html_url":"...","state":"open"}.
+  # Admin UI: http://localhost:9091/__admin/mappings
+  wiremock:
+    image: wiremock/wiremock:3.10.0
+    command: --port 8080
+    ports:
+      - "9091:8080"
+    volumes:
+      - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github-catchall.json:ro
+      - ./wiremock-pilot-stubs.json:/home/wiremock/mappings/github-pilot.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      # Empty skills directory — agent tasks go straight to the model runner.
+      Agents__Skills__SkillsDirectory: ""
+      # Docker sandbox disabled — no containers spawned for service tasks.
+      Sandboxes__Docker__Enabled: "false"
+      # Route all GitHub API calls through WireMock.
+      Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
+      Integrations__GitHub__PersonalAccessToken: "mock-token"
+      Integrations__GitHub__RepositoryOwner: "mock-owner"
+      Integrations__GitHub__RepositoryName: "mock-repo"
+      Integrations__Jira__WebhookSecret: ""
+      Integrations__GitHub__WebhookSecret: ""
+      # Same signing key as the manual stack so the same pre-signed admin token works.
+      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
+      Jwt__Issuer: "autofac-dev"
+      Jwt__Audience: "autofac-dev"
+      Jwt__DevTokensEnabled: "true"
+      # ── Scenario D: set this to enable real Anthropic API calls ──────────
+      # Leave blank or unset to use NullLanguageModelClient (graceful failure).
+      Anthropic__ApiKey: "${ANTHROPIC__APIKEY:-}"
+    volumes:
+      - api_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      wiremock:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Seeds the 4 pilot workflow definitions and pre-baked run history.
+  seed:
+    image: postgres:16-alpine
+    command: >
+      psql --set ON_ERROR_STOP=1
+      "host=postgres port=5432 dbname=autofac_pilot user=postgres password=postgres"
+      -f /seed/seed-pilot.sql
+    volumes:
+      - ./seed-pilot.sql:/seed/seed-pilot.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+        # Same pre-signed HS256 admin token as docker-compose.manual.yml.
+        # Signed with "autofac-dev-manual-testing-key-2026". DO NOT use in production.
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+    restart: unless-stopped
+    ports:
+      - "3003:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  api_storage:

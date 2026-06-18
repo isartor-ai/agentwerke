@@ -1,0 +1,64 @@
+{
+  "mappings": [
+    {
+      "priority": 1,
+      "name": "GitHub GET git/ref/heads/* — returns a fake branch SHA",
+      "request": {
+        "method": "GET",
+        "urlPathPattern": ".*/git/ref/heads/.*"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "ref": "refs/heads/main",
+          "node_id": "REF_stub",
+          "url": "https://api.github.com/repos/mock-owner/mock-repo/git/refs/heads/main",
+          "object": {
+            "type": "commit",
+            "sha": "abc123def456abc123def456abc123def456abc1",
+            "url": "https://api.github.com/repos/mock-owner/mock-repo/git/commits/abc123def456abc123def456abc123def456abc1"
+          }
+        }
+      }
+    },
+    {
+      "priority": 1,
+      "name": "GitHub PUT contents/* — returns a fake commit SHA for marker files",
+      "request": {
+        "method": "PUT",
+        "urlPathPattern": ".*/contents/.*"
+      },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "content": {
+            "name": "stub.md",
+            "path": ".autofac/stub.md"
+          },
+          "commit": {
+            "sha": "def456abc123def456abc123def456abc123def4",
+            "message": "Autofac stub commit"
+          }
+        }
+      }
+    },
+    {
+      "priority": 1,
+      "name": "GitHub GET pulls?* — returns empty list (no existing PRs)",
+      "request": {
+        "method": "GET",
+        "urlPathPattern": ".*/pulls",
+        "queryParameters": {
+          "state": { "equalTo": "open" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": "[]"
+      }
+    }
+  ]
+}
