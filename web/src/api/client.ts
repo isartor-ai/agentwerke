@@ -243,7 +243,9 @@ export const apiClient = {
           buffer = parts.pop() ?? '';
 
           for (const line of parts) {
-            if (line.startsWith('event: ')) {
+            if (line.startsWith(':')) {
+              // SSE comment / heartbeat — ignore
+            } else if (line.startsWith('event: ')) {
               eventType = line.slice(7).trim();
             } else if (line.startsWith('data: ')) {
               dataLine = line.slice(6);
