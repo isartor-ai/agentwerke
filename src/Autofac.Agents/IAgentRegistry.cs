@@ -17,28 +17,45 @@ public interface IAgentRegistry
 /// </summary>
 public sealed class FileAgentRegistry : IAgentRegistry
 {
-    private readonly Dictionary<string, AgentProfile> _byId;
+    private readonly Func<IReadOnlyList<AgentProfile>> _fileProfileLoader;
 
     public FileAgentRegistry(IReadOnlyList<AgentProfile> fileProfiles)
+        : this(() => fileProfiles)
     {
-        _byId = new Dictionary<string, AgentProfile>(StringComparer.OrdinalIgnoreCase);
+    }
 
-        foreach (var profile in AgentRegistry.All())
-        {
-            _byId[profile.AgentId] = profile;
-        }
+    public FileAgentRegistry(string agentsDirectory)
+        : this(() => MarkdownAgentLoader.LoadFromDirectory(agentsDirectory))
+    {
+    }
 
-        foreach (var profile in fileProfiles)
-        {
-            _byId[profile.AgentId] = profile;
-        }
+    private FileAgentRegistry(Func<IReadOnlyList<AgentProfile>> fileProfileLoader)
+    {
+        _fileProfileLoader = fileProfileLoader;
     }
 
     public AgentProfile? Find(string agentId) =>
-        _byId.TryGetValue(agentId, out var profile) ? profile : null;
+        BuildCatalog().TryGetValue(agentId, out var profile) ? profile : null;
 
     public IReadOnlyList<AgentProfile> All() =>
-        _byId.Values
+        BuildCatalog().Values
             .OrderBy(static p => p.AgentId, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    private Dictionary<string, AgentProfile> BuildCatalog()
+    {
+        var byId = new Dictionary<string, AgentProfile>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var profile in AgentRegistry.All())
+        {
+            byId[profile.AgentId] = profile;
+        }
+
+        foreach (var profile in _fileProfileLoader())
+        {
+            byId[profile.AgentId] = profile;
+        }
+
+        return byId;
+    }
 }

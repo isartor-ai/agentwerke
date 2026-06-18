@@ -2,27 +2,47 @@ namespace Autofac.Agents.Skills;
 
 public sealed class SkillRepository : ISkillRepository
 {
-    private readonly IReadOnlyDictionary<string, SkillManifest> _byId;
-    private readonly IReadOnlyDictionary<string, SkillManifest> _byName;
-    private readonly IReadOnlyList<SkillManifest> _all;
+    private readonly Func<IReadOnlyList<SkillManifest>> _manifestLoader;
 
     public SkillRepository(IReadOnlyList<SkillManifest> manifests)
+        : this(() => manifests)
     {
-        _all = manifests;
-        _byId = manifests.ToDictionary(m => m.SkillId, StringComparer.OrdinalIgnoreCase);
-        _byName = manifests
-            .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    public SkillRepository(string skillsDirectory)
+        : this(() => MarkdownSkillLoader.LoadFromDirectory(skillsDirectory))
+    {
+    }
+
+    private SkillRepository(Func<IReadOnlyList<SkillManifest>> manifestLoader)
+    {
+        _manifestLoader = manifestLoader;
     }
 
     public SkillManifest? FindById(string skillId) =>
-        _byId.TryGetValue(skillId, out var m) ? m : null;
+        CreateSnapshot().ById.TryGetValue(skillId, out var manifest) ? manifest : null;
 
     public SkillManifest? FindByName(string name) =>
-        _byName.TryGetValue(name, out var m) ? m : null;
+        CreateSnapshot().ByName.TryGetValue(name, out var manifest) ? manifest : null;
 
     public SkillManifest? FindByReference(string skillIdOrName) =>
         FindById(skillIdOrName) ?? FindByName(skillIdOrName);
 
-    public IReadOnlyList<SkillManifest> All() => _all;
+    public IReadOnlyList<SkillManifest> All() => CreateSnapshot().All;
+
+    private SkillRepositorySnapshot CreateSnapshot()
+    {
+        var manifests = _manifestLoader();
+        var byId = manifests.ToDictionary(manifest => manifest.SkillId, StringComparer.OrdinalIgnoreCase);
+        var byName = manifests
+            .GroupBy(manifest => manifest.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return new SkillRepositorySnapshot(manifests, byId, byName);
+    }
+
+    private sealed record SkillRepositorySnapshot(
+        IReadOnlyList<SkillManifest> All,
+        IReadOnlyDictionary<string, SkillManifest> ById,
+        IReadOnlyDictionary<string, SkillManifest> ByName);
 }

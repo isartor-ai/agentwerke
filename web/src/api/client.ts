@@ -1,8 +1,11 @@
 import type {
+  AgentDetail,
+  AgentSkillBinding,
   AgentSummary,
   ApprovalRequest,
   RunEvent,
   RuntimeMode,
+  SkillSummary,
   TemplateDetail,
   TemplateSummary,
   WorkflowPublishResult,
@@ -103,6 +106,48 @@ export const apiClient = {
 
   async getAgents(): Promise<AgentSummary[]> {
     return requestJson<AgentSummary[]>('/api/agents', undefined, WORKFLOW_API_BASE_URL);
+  },
+
+  async getAgent(agentId: string): Promise<AgentDetail | undefined> {
+    return requestJson<AgentDetail>(`/api/agents/${encodeURIComponent(agentId)}`, undefined, WORKFLOW_API_BASE_URL);
+  },
+
+  async updateAgent(agent: {
+    agentId: string;
+    name: string;
+    description: string;
+    category: string;
+    runner: string;
+    model?: string;
+    dockerImage?: string;
+    network?: string;
+    tools: string[];
+    deniedTools: string[];
+    supportedActions: string[];
+    skills: AgentSkillBinding[];
+    supportedEnvironments: string[];
+    supportedPolicyTags: string[];
+    secrets: string[];
+    systemPrompt?: string;
+  }): Promise<AgentDetail> {
+    return requestJson<AgentDetail>(`/api/agents/${encodeURIComponent(agent.agentId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(agent),
+    }, WORKFLOW_API_BASE_URL);
+  },
+
+  async uploadAgent(file: File): Promise<AgentDetail> {
+    return requestJson<AgentDetail>('/api/agents/upload', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileName: file.name,
+        content: await file.text(),
+      }),
+    }, WORKFLOW_API_BASE_URL);
+  },
+
+  async getSkills(): Promise<SkillSummary[]> {
+    return requestJson<SkillSummary[]>('/api/skills', undefined, WORKFLOW_API_BASE_URL);
   },
 
   async getTemplates(): Promise<TemplateSummary[]> {

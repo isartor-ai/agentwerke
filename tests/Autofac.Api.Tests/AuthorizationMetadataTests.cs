@@ -31,6 +31,8 @@ public sealed class AuthorizationMetadataTests
     }
 
     [Theory]
+    [InlineData(typeof(AgentsController), nameof(AgentsController.Upsert), AutofacPolicies.Admin)]
+    [InlineData(typeof(AgentsController), nameof(AgentsController.Upload), AutofacPolicies.Admin)]
     [InlineData(typeof(WorkflowsController), nameof(WorkflowsController.Import), AutofacPolicies.Operator)]
     [InlineData(typeof(WorkflowsController), nameof(WorkflowsController.Validate), AutofacPolicies.Operator)]
     [InlineData(typeof(WorkflowsController), nameof(WorkflowsController.PolicySimulation), AutofacPolicies.Operator)]

@@ -116,4 +116,65 @@ public sealed class MarkdownAgentLoaderTests
         // Unknown id resolves to null.
         Assert.Null(registry.Find("does-not-exist"));
     }
+
+    [Fact]
+    public void Parse_SkillBindingsJson_PreservesManifestAndSupportedActions()
+    {
+        const string md = """
+            ---
+            id: github-agent
+            name: GitHub Agent
+            supportedActions:
+              - github.create_branch
+              - github.create_pull_request
+            skillBindings:
+              - {"skillId":"github-branching","name":"GitHub Branching","description":"Create branches","supportedActions":["github.create_branch"],"skillManifestId":"git-workflow-and-versioning"}
+              - {"skillId":"github-pr","name":"GitHub Pull Request","description":"Create pull requests","supportedActions":["github.create_pull_request"],"skillManifestId":"git-workflow-and-versioning"}
+            ---
+            Use GitHub.
+            """;
+
+        var profile = MarkdownAgentLoader.Parse("github-agent", md);
+
+        Assert.Equal(2, profile.Skills.Count);
+        Assert.Equal("git-workflow-and-versioning", profile.Skills[0].SkillManifestId);
+        Assert.Equal(["github.create_branch"], profile.Skills[0].SupportedActions);
+        Assert.Equal("GitHub Pull Request", profile.Skills[1].Name);
+    }
+
+    [Fact]
+    public void FileAgentRegistry_DirectoryBackedRegistry_ReloadsWrittenFiles()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"agents_{Guid.NewGuid():N}");
+        var agentDir = Path.Combine(root, "reloadable");
+        Directory.CreateDirectory(agentDir);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(agentDir, "AGENT.md"), """
+                ---
+                name: Before
+                category: quality
+                ---
+                Original prompt.
+                """);
+
+            var registry = new FileAgentRegistry(root);
+            Assert.Equal("Before", registry.Find("reloadable")!.Name);
+
+            File.WriteAllText(Path.Combine(agentDir, "AGENT.md"), """
+                ---
+                name: After
+                category: quality
+                ---
+                Updated prompt.
+                """);
+
+            Assert.Equal("After", registry.Find("reloadable")!.Name);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }

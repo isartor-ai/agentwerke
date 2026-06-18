@@ -9,6 +9,7 @@ interface AppShellProps {
 const navItems = [
   { label: 'Runs', path: '/runs' },
   { label: 'Workflows', path: '/workflows' },
+  { label: 'Agents', path: '/agents' },
   { label: 'Approvals', path: '/approvals' },
   { label: 'Policies', path: '/policies' },
   { label: 'Audit', path: '/audit' },

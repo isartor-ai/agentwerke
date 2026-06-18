@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace Autofac.Agents;
 
@@ -50,13 +51,10 @@ public static class MarkdownAgentLoader
 
         var id = meta.Scalar("id") ?? directoryId;
         var supportedActions = meta.List("supportedActions");
-
-        // Each declared skill becomes a descriptive ref carrying the agent's
-        // supported actions. SkillManifestId is intentionally left unset so runs
-        // don't fail when the skills directory has no matching manifest yet.
-        var skills = meta.List("skills")
-            .Select(skillId => new AgentSkillRef(skillId, skillId, string.Empty, supportedActions))
-            .ToList();
+        var skills = ParseSkillBindings(
+            meta.List("skillBindings"),
+            meta.List("skills"),
+            supportedActions);
 
         return new AgentProfile
         {
@@ -79,6 +77,62 @@ public static class MarkdownAgentLoader
             Fingerprint = fingerprint,
             Source = "file"
         };
+    }
+
+    private static IReadOnlyList<AgentSkillRef> ParseSkillBindings(
+        IReadOnlyList<string> rawSkillBindings,
+        IReadOnlyList<string> fallbackSkillIds,
+        IReadOnlyList<string> defaultSupportedActions)
+    {
+        if (rawSkillBindings.Count > 0)
+        {
+            return rawSkillBindings.Select(binding => ParseSkillBinding(binding, defaultSupportedActions)).ToArray();
+        }
+
+        // Each declared skill becomes a descriptive ref carrying the agent's
+        // supported actions. SkillManifestId is intentionally left unset so runs
+        // don't fail when the skills directory has no matching manifest yet.
+        return fallbackSkillIds
+            .Select(skillId => new AgentSkillRef(skillId, skillId, string.Empty, defaultSupportedActions))
+            .ToArray();
+    }
+
+    private static AgentSkillRef ParseSkillBinding(string rawBinding, IReadOnlyList<string> defaultSupportedActions)
+    {
+        var trimmed = Unquote(rawBinding.Trim());
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            throw new InvalidOperationException("Agent skill binding entries cannot be empty.");
+        }
+
+        if (!trimmed.StartsWith('{') || !trimmed.EndsWith('}'))
+        {
+            return new AgentSkillRef(trimmed, trimmed, string.Empty, defaultSupportedActions);
+        }
+
+        try
+        {
+            var payload = JsonSerializer.Deserialize<SkillBindingPayload>(trimmed, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            if (payload is null || string.IsNullOrWhiteSpace(payload.SkillId))
+            {
+                throw new InvalidOperationException("Agent skill binding payload must contain a skillId.");
+            }
+
+            var supportedActions = payload.SupportedActions is { Count: > 0 }
+                ? payload.SupportedActions
+                : defaultSupportedActions;
+
+            return new AgentSkillRef(
+                payload.SkillId,
+                string.IsNullOrWhiteSpace(payload.Name) ? payload.SkillId : payload.Name,
+                payload.Description ?? string.Empty,
+                supportedActions.ToArray(),
+                payload.SkillManifestId);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Agent skill binding '{trimmed}' is not valid JSON.", ex);
+        }
     }
 
     private static (string Frontmatter, string Body) SplitFrontmatter(string raw)
@@ -229,5 +283,18 @@ public static class MarkdownAgentLoader
 
         public IReadOnlyList<string> List(string key) =>
             Lists.TryGetValue(key, out var v) ? v.AsReadOnly() : [];
+    }
+
+    private sealed class SkillBindingPayload
+    {
+        public string SkillId { get; set; } = string.Empty;
+
+        public string? Name { get; set; }
+
+        public string? Description { get; set; }
+
+        public List<string>? SupportedActions { get; set; }
+
+        public string? SkillManifestId { get; set; }
     }
 }
