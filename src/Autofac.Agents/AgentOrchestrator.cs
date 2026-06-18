@@ -4,6 +4,7 @@ using Autofac.Agents.Hooks;
 using Autofac.Agents.Mcp;
 using Autofac.Agents.Models;
 using Autofac.Agents.Prompts;
+using Autofac.Agents.Security;
 using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
 using Autofac.Application.Workflows;
@@ -520,7 +521,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             NodeId = node.Id,
             AgentName = metadata.Agent,
             Action = metadata.Action,
-            Prompt = promptSnapshot,
+            Prompt = RedactPromptSnapshot(promptSnapshot),
             Contract = metadata.RuntimeContract ?? new AgentRuntimeContract(),
             Skills = auditSkills,
             PermissionDecision = new AgentPermissionDecisionRecord
@@ -531,6 +532,15 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             }
         };
     }
+
+    private static AgentPromptSnapshot RedactPromptSnapshot(AgentPromptSnapshot snapshot) =>
+        snapshot with
+        {
+            FinalPrompt = PromptRedactor.Redact(snapshot.FinalPrompt),
+            Sections = snapshot.Sections
+                .Select(static s => s with { Content = PromptRedactor.Redact(s.Content) })
+                .ToArray()
+        };
 
     private async Task<AgentTaskOutcome> MaybeOffloadOutputAsync(
         string runId,

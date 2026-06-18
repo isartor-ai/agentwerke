@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Autofac.Agents.Tools;
+using Autofac.Application.Observability;
 using Autofac.Domain.AgentRuntime;
 using Microsoft.Extensions.Options;
 
@@ -9,17 +11,20 @@ public sealed class AgentModelRunner : IAgentModelRunner
     private readonly ILanguageModelClient _modelClient;
     private readonly IToolGateway _toolGateway;
     private readonly IToolRegistry _toolRegistry;
+    private readonly IWorkflowMetrics _metrics;
     private readonly LanguageModelOptions _options;
 
     public AgentModelRunner(
         ILanguageModelClient modelClient,
         IToolGateway toolGateway,
         IToolRegistry toolRegistry,
+        IWorkflowMetrics metrics,
         IOptions<LanguageModelOptions> options)
     {
         _modelClient = modelClient;
         _toolGateway = toolGateway;
         _toolRegistry = toolRegistry;
+        _metrics = metrics;
         _options = options.Value;
     }
 
@@ -39,10 +44,24 @@ public sealed class AgentModelRunner : IAgentModelRunner
             Tools: toolDefinitions,
             MaxTokens: _options.MaxTokens);
 
+        var sw = Stopwatch.StartNew();
         var response = await _modelClient.RunAsync(
             llmRequest,
             toolExecutor: (call, ct) => ExecuteToolCallAsync(call, request, invocations, artifacts, ct),
             cancellationToken);
+        sw.Stop();
+
+        var elapsedMs = sw.Elapsed.TotalMilliseconds;
+        var tokenUsage = ToTokenUsage(response, elapsedMs);
+        var costUsd = CalculateCost(response.Usage.InputTokens, response.Usage.OutputTokens);
+        _metrics.ModelInvoked(
+            request.AgentName,
+            response.ModelId ?? _options.Model,
+            response.Usage.InputTokens,
+            response.Usage.OutputTokens,
+            elapsedMs,
+            costUsd,
+            response.Succeeded);
 
         if (!response.Succeeded)
         {
@@ -52,7 +71,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
                 FailureReason: response.FailureReason,
                 ToolInvocations: invocations,
                 Artifacts: artifacts.Count > 0 ? artifacts : null,
-                TokenUsage: ToTokenUsage(response));
+                TokenUsage: tokenUsage,
+                ElapsedMs: elapsedMs);
         }
 
         return new ModelRunResult(
@@ -61,7 +81,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
             FailureReason: null,
             ToolInvocations: invocations,
             Artifacts: artifacts.Count > 0 ? artifacts : null,
-            TokenUsage: ToTokenUsage(response));
+            TokenUsage: tokenUsage,
+            ElapsedMs: elapsedMs);
     }
 
     private async Task<LanguageModelToolResult> ExecuteToolCallAsync(
@@ -98,6 +119,14 @@ public sealed class AgentModelRunner : IAgentModelRunner
         {
             foreach (var (name, uri) in result.Artifacts)
                 artifacts[name] = uri;
+        }
+
+        // Emit a policy-denial metric whenever the gateway rejected or escalated the tool call.
+        var kind = result.Invocation.PolicyDecisionKind;
+        if (!string.IsNullOrEmpty(kind) &&
+            !string.Equals(kind, "allow", StringComparison.OrdinalIgnoreCase))
+        {
+            _metrics.ToolPolicyDenied(request.AgentName, request.PolicyTag, kind);
         }
 
         return new LanguageModelToolResult(
@@ -146,7 +175,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
         return string.Join(" ", parts);
     }
 
-    private static AgentModelTokenUsage? ToTokenUsage(LanguageModelResponse response)
+    private static AgentModelTokenUsage? ToTokenUsage(LanguageModelResponse response, double elapsedMs)
     {
         if (response.Usage.InputTokens == 0 && response.Usage.OutputTokens == 0)
             return null;
@@ -154,6 +183,11 @@ public sealed class AgentModelRunner : IAgentModelRunner
         return new AgentModelTokenUsage(
             response.Usage.InputTokens,
             response.Usage.OutputTokens,
-            response.ModelId);
+            response.ModelId,
+            elapsedMs);
     }
+
+    private double CalculateCost(int inputTokens, int outputTokens) =>
+        (double)((inputTokens * _options.InputCostPerMillionTokens +
+                  outputTokens * _options.OutputCostPerMillionTokens) / 1_000_000m);
 }

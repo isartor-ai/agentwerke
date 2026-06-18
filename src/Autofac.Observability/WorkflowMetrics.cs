@@ -21,6 +21,13 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
     private readonly Counter<long> _connectorsSucceeded;
     private readonly Counter<long> _connectorsFailed;
     private readonly Histogram<double> _connectorDurationMs;
+    private readonly Counter<long> _modelInvocationsSucceeded;
+    private readonly Counter<long> _modelInvocationsFailed;
+    private readonly Histogram<double> _modelLatencyMs;
+    private readonly Counter<long> _modelInputTokens;
+    private readonly Counter<long> _modelOutputTokens;
+    private readonly Histogram<double> _modelCostUsd;
+    private readonly Counter<long> _toolPolicyDenials;
 
     public WorkflowMetrics()
     {
@@ -42,6 +49,14 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
         _connectorsSucceeded = _meter.CreateCounter<long>("workflow.connectors.succeeded", description: "Connector invocations completed successfully.");
         _connectorsFailed = _meter.CreateCounter<long>("workflow.connectors.failed", description: "Connector invocations that failed or were blocked.");
         _connectorDurationMs = _meter.CreateHistogram<double>("workflow.connector.duration_ms", unit: "ms", description: "Connector invocation duration.");
+
+        _modelInvocationsSucceeded = _meter.CreateCounter<long>("agent.model.invocations.succeeded", description: "Successful language-model invocations.");
+        _modelInvocationsFailed = _meter.CreateCounter<long>("agent.model.invocations.failed", description: "Failed language-model invocations.");
+        _modelLatencyMs = _meter.CreateHistogram<double>("agent.model.latency_ms", unit: "ms", description: "Language-model round-trip latency including tool iterations.");
+        _modelInputTokens = _meter.CreateCounter<long>("agent.model.tokens.input", description: "Cumulative input tokens consumed by language-model invocations.");
+        _modelOutputTokens = _meter.CreateCounter<long>("agent.model.tokens.output", description: "Cumulative output tokens produced by language-model invocations.");
+        _modelCostUsd = _meter.CreateHistogram<double>("agent.model.cost_usd", unit: "USD", description: "Estimated USD cost per language-model invocation.");
+        _toolPolicyDenials = _meter.CreateCounter<long>("agent.tool.policy_denials", description: "Tool calls denied or escalated by policy enforcement.");
     }
 
     public void RunStarted(string workflowId, string workflowName)
@@ -122,6 +137,33 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
         }
 
         _connectorDurationMs.Record(durationMs, tags);
+    }
+
+    public void ModelInvoked(string agentName, string modelId, int inputTokens, int outputTokens, double latencyMs, double costUsd, bool succeeded)
+    {
+        var tags = new[]
+        {
+            new KeyValuePair<string, object?>("agent.name", agentName),
+            new KeyValuePair<string, object?>("model.id", modelId)
+        };
+
+        if (succeeded)
+            _modelInvocationsSucceeded.Add(1, tags);
+        else
+            _modelInvocationsFailed.Add(1, tags);
+
+        _modelLatencyMs.Record(latencyMs, tags);
+        _modelInputTokens.Add(inputTokens, tags);
+        _modelOutputTokens.Add(outputTokens, tags);
+        _modelCostUsd.Record(costUsd, tags);
+    }
+
+    public void ToolPolicyDenied(string agentName, string policyTag, string kind)
+    {
+        _toolPolicyDenials.Add(1,
+            new KeyValuePair<string, object?>("agent.name", agentName),
+            new KeyValuePair<string, object?>("policy.tag", policyTag),
+            new KeyValuePair<string, object?>("denial.kind", kind));
     }
 
     public void Dispose() => _meter.Dispose();

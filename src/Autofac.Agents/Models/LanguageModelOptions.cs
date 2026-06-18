@@ -11,4 +11,10 @@ public sealed class LanguageModelOptions
     public int MaxTokens { get; set; } = 4096;
 
     public int MaxToolIterations { get; set; } = 10;
+
+    /// <summary>Cost in USD per million input tokens. Used for the agent.model.cost_usd metric.</summary>
+    public decimal InputCostPerMillionTokens { get; set; } = 3.00m;
+
+    /// <summary>Cost in USD per million output tokens. Used for the agent.model.cost_usd metric.</summary>
+    public decimal OutputCostPerMillionTokens { get; set; } = 15.00m;
 }

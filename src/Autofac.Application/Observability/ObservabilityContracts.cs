@@ -40,6 +40,17 @@ public interface IWorkflowMetrics
     void ApprovalDecided(string decision, string riskLevel);
     void WebhookReceived(string source, bool triggered);
     void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded);
+
+    /// <summary>
+    /// Records a language-model invocation by an agent: latency, token usage, estimated cost, and outcome.
+    /// </summary>
+    void ModelInvoked(string agentName, string modelId, int inputTokens, int outputTokens, double latencyMs, double costUsd, bool succeeded);
+
+    /// <summary>
+    /// Records a tool-call that was denied by policy enforcement.
+    /// <paramref name="kind"/> is "reject" or "escalate".
+    /// </summary>
+    void ToolPolicyDenied(string agentName, string policyTag, string kind);
 }
 
 /// <summary>
