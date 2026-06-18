@@ -38,4 +38,5 @@ public sealed record ModelRunResult(
     string? FailureReason,
     IReadOnlyList<AgentToolInvocationRecord> ToolInvocations,
     IReadOnlyDictionary<string, string>? Artifacts,
-    AgentModelTokenUsage? TokenUsage);
+    AgentModelTokenUsage? TokenUsage,
+    double ElapsedMs = 0);

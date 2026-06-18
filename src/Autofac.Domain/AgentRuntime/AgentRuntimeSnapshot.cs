@@ -128,4 +128,4 @@ public sealed record AgentPermissionDecisionRecord
     public string? Rationale { get; init; }
 }
 
-public sealed record AgentModelTokenUsage(int InputTokens, int OutputTokens, string? ModelId);
+public sealed record AgentModelTokenUsage(int InputTokens, int OutputTokens, string? ModelId, double? ElapsedMs = null);
