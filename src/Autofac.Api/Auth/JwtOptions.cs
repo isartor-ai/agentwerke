@@ -9,4 +9,24 @@ public sealed class JwtOptions
     public string? SecretKey { get; set; }
     public string? Authority { get; set; }
     public bool DevTokensEnabled { get; set; }
+    public bool DevIdentityEnabled { get; set; }
+    public string DevIdentitySubject { get; set; } = "dev:admin";
+    public string[] DevIdentityRoles { get; set; } = [AutofacRoles.Admin];
+    public string[] RoleClaimTypes { get; set; } =
+    [
+        System.Security.Claims.ClaimTypes.Role,
+        "role",
+        "roles",
+        "groups"
+    ];
+    public string[] NameClaimTypes { get; set; } =
+    [
+        System.Security.Claims.ClaimTypes.Name,
+        System.Security.Claims.ClaimTypes.NameIdentifier,
+        "sub",
+        "oid",
+        "preferred_username",
+        "upn",
+        "email"
+    ];
 }

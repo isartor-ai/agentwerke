@@ -1,4 +1,5 @@
 using Autofac.Api.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -10,6 +11,7 @@ namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[AllowAnonymous]
 public sealed class AuthController : ControllerBase
 {
     private readonly JwtOptions _jwt;
@@ -22,13 +24,22 @@ public sealed class AuthController : ControllerBase
     [HttpGet("config")]
     public IActionResult GetAuthConfig()
     {
+        var mode = !string.IsNullOrWhiteSpace(_jwt.Authority)
+            ? "oidc"
+            : !string.IsNullOrWhiteSpace(_jwt.SecretKey)
+                ? "symmetric-jwt"
+                : _jwt.DevIdentityEnabled
+                    ? "development-identity"
+                    : "unconfigured";
+
         return Ok(new
         {
-            authentication = string.IsNullOrWhiteSpace(_jwt.Authority) ? "symmetric-jwt" : "oidc",
+            authentication = mode,
             issuer = _jwt.Issuer,
             audience = _jwt.Audience,
             authority = _jwt.Authority,
             devTokensEnabled = _jwt.DevTokensEnabled,
+            devIdentityEnabled = _jwt.DevIdentityEnabled,
             roles = new[] { AutofacRoles.Viewer, AutofacRoles.Operator, AutofacRoles.Approver, AutofacRoles.Admin }
         });
     }

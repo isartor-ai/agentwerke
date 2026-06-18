@@ -6,12 +6,12 @@ using Autofac.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/approvals")]
+[Authorize(Policy = AutofacPolicies.Viewer)]
 public sealed class ApprovalsController : ControllerBase
 {
     private readonly AutofacDbContext _dbContext;
@@ -71,9 +71,7 @@ public sealed class ApprovalsController : ControllerBase
                 return NotFound();
             }
 
-            var decidedBy = User.FindFirstValue(ClaimTypes.Name)
-                ?? User.FindFirstValue("sub")
-                ?? "api-user";
+            var decidedBy = AuthenticatedPrincipal.ResolveSubject(User);
 
             await _orchestrationService.ResumeRunAsync(
                 new ResumeRunCommand(

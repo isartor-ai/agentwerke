@@ -1,12 +1,15 @@
+using Autofac.Api.Auth;
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Templates;
 using Autofac.Application.Workflows;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/templates")]
+[Authorize(Policy = AutofacPolicies.Viewer)]
 public sealed class TemplatesController : ControllerBase
 {
     private readonly ITemplateCatalogService _catalog;
@@ -39,6 +42,7 @@ public sealed class TemplatesController : ControllerBase
         return Ok(ApiContractMappings.ToTemplateDetail(template));
     }
 
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("{templateId}/clone")]
     public async Task<IActionResult> Clone(string templateId, [FromBody] CloneTemplateRequest? request, CancellationToken ct)
     {

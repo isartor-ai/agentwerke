@@ -12,6 +12,8 @@ vi.mock('../api/client', () => ({
     getRun: vi.fn(),
     getWorkflow: vi.fn(),
     getRunArtifactDownloadUrl: vi.fn(),
+    getRunEvidencePackDownloadUrl: vi.fn(),
+    downloadRunEvidencePack: vi.fn(),
     decideApproval: vi.fn(),
     cancelRun: vi.fn(),
   },
@@ -29,6 +31,10 @@ describe('RunDetail integration', () => {
     vi.mocked(apiClient.getRunArtifactDownloadUrl).mockImplementation(
       (runId, artifactName) => `/api/runs/${runId}/artifacts/${artifactName}`,
     );
+    vi.mocked(apiClient.getRunEvidencePackDownloadUrl).mockImplementation(
+      (runId) => `/api/runs/${runId}/evidence-pack/download`,
+    );
+    vi.mocked(apiClient.downloadRunEvidencePack).mockResolvedValue(undefined);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     vi.mocked(apiClient.cancelRun).mockResolvedValue(undefined);
   });
@@ -53,6 +59,11 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Summary' })).toBeInTheDocument();
+    expect(screen.getByText('Evidence Pack')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Export Evidence Pack' }));
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.downloadRunEvidencePack)).toHaveBeenCalledWith('run-0421');
+    });
     expect(screen.getByText('Runtime Events')).toBeInTheDocument();
     expect(screen.getByText('Retry scheduled after transient failure.')).toBeInTheDocument();
     expect(screen.getByText('Timeout boundary triggered on security scan.')).toBeInTheDocument();

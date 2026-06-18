@@ -8,12 +8,8 @@ vi.mock('../components/BpmnModeler');
 
 vi.mock('../api/client', () => ({
   apiClient: {
-    getRuntimeMode: vi.fn(),
     getRuns: vi.fn(),
     getRun: vi.fn(),
-    getTemplates: vi.fn(),
-    getTemplate: vi.fn(),
-    getAgents: vi.fn(),
     getWorkflows: vi.fn(),
     getWorkflow: vi.fn(),
     getApprovals: vi.fn(),
@@ -23,7 +19,6 @@ vi.mock('../api/client', () => ({
 
 describe('App integration', () => {
   beforeEach(() => {
-    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
     vi.mocked(apiClient.getRuns).mockResolvedValue(runsFixture);
     vi.mocked(apiClient.getRun).mockResolvedValue(runsFixture[0]);
     vi.mocked(apiClient.getWorkflows).mockResolvedValue(workflowsFixture);
@@ -32,9 +27,6 @@ describe('App integration', () => {
       bpmnXml:
         '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="AppFlow" name="App Flow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>',
     }));
-    vi.mocked(apiClient.getTemplates).mockResolvedValue([]);
-    vi.mocked(apiClient.getTemplate).mockResolvedValue(undefined);
-    vi.mocked(apiClient.getAgents).mockResolvedValue([]);
     vi.mocked(apiClient.getApprovals).mockResolvedValue(approvalsFixture);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     window.history.pushState({}, '', '/runs');
@@ -51,7 +43,7 @@ describe('App integration', () => {
 
     fireEvent.click(screen.getByRole('link', { name: 'Workflows' }));
     await waitFor(() => {
-      expect(screen.getByText('SDLC Factory')).toBeInTheDocument();
+      expect(screen.getByText('Workflow Designer')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('link', { name: 'Approvals' }));

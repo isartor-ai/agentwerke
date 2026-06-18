@@ -9,6 +9,7 @@ namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/workflows")]
+[Authorize(Policy = AutofacPolicies.Viewer)]
 public sealed class WorkflowsController : ControllerBase
 {
     private readonly IWorkflowAuthoringService _workflowAuthoringService;
@@ -38,7 +39,7 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(ApiContractMappings.ToWorkflowDetail(workflow));
     }
 
-    [Authorize(Policy = AutofacPolicies.Admin)]
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("import")]
     public async Task<IActionResult> Import([FromBody] ImportWorkflowRequest request)
     {
@@ -48,6 +49,7 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(ApiContractMappings.ToImportWorkflowResponse(result));
     }
 
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("validate")]
     public IActionResult Validate([FromBody] ValidateWorkflowRequest request)
     {
@@ -55,6 +57,7 @@ public sealed class WorkflowsController : ControllerBase
         return Ok(ApiContractMappings.ToValidationResponse(validation));
     }
 
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("{workflowId}/policy-simulation")]
     public IActionResult PolicySimulation(string workflowId, [FromBody] PolicySimulationRequest? request = null)
     {
