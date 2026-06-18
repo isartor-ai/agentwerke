@@ -1035,10 +1035,22 @@ export function WorkflowDesigner() {
                     ? `Runs for ${selectedWorkflow.name}`
                     : 'All Runs'}
                 </h3>
-                <span className="live-chip">
-                  <span aria-hidden="true" />
-                  Live - 10s
-                </span>
+                <div className="monitor-header-actions">
+                  {selectedId ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={startingRun}
+                      onClick={() => void onStartRun()}
+                    >
+                      {startingRun ? 'Starting...' : 'Start Run'}
+                    </button>
+                  ) : null}
+                  <span className="live-chip">
+                    <span aria-hidden="true" />
+                    Live - 10s
+                  </span>
+                </div>
               </div>
               {monitorLoading && monitorRuns.length === 0 ? (
                 <p>Loading runs...</p>

@@ -65,7 +65,7 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                 .HasColumnType("jsonb");
             entity.Property(e => e.CorrelationId).HasMaxLength(128);
             entity.HasMany(e => e.Steps).WithOne().HasForeignKey("RunId");
-            entity.HasMany(e => e.Events).WithOne().HasForeignKey("RunId");
+            entity.HasMany(e => e.Events).WithOne().HasForeignKey(e => e.RunId);
         });
 
         modelBuilder.Entity<WorkflowRunStep>(entity =>
@@ -106,6 +106,7 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
         {
             entity.ToTable("workflow_events");
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
             entity.Property(e => e.Type).HasMaxLength(128).IsRequired();
             entity.Property(e => e.Message).HasMaxLength(2048);
         });
