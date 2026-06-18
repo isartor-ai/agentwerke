@@ -825,16 +825,10 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         {
             foreach (var skillRef in profile.Skills)
             {
-                if (string.IsNullOrWhiteSpace(skillRef.SkillManifestId))
-                {
-                    continue;
-                }
-
-                var manifest = _skillRepository.FindById(skillRef.SkillManifestId);
+                var manifest = ResolveSkillManifest(skillRef);
                 if (manifest is null)
                 {
-                    return SkillResolution.Fail(
-                        $"Agent profile '{profile.AgentId}' references missing skill manifest '{skillRef.SkillManifestId}' for action '{skillRef.SkillId}'.");
+                    continue;
                 }
 
                 availableSkills[manifest.SkillId] = new ResolvedSkill(manifest, "agent-profile", Selected: false, Invoked: false);
@@ -870,13 +864,13 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         {
             primarySkill = explicitSelections.FirstOrDefault(static skill => skill.Selected) ?? explicitSelections[0];
         }
-        else if (matchedSkillRef?.SkillManifestId is not null)
+        else if (matchedSkillRef is not null)
         {
-            var manifest = _skillRepository.FindById(matchedSkillRef.SkillManifestId);
+            var manifest = ResolveSkillManifest(matchedSkillRef);
             if (manifest is null)
             {
                 return SkillResolution.Fail(
-                    $"Agent profile action '{matchedSkillRef.SkillId}' references unknown skill manifest '{matchedSkillRef.SkillManifestId}'.");
+                    $"Agent profile action '{matchedSkillRef.SkillId}' references unknown skill '{matchedSkillRef.SkillManifestId ?? matchedSkillRef.SkillId}'.");
             }
 
             primarySkill = new ResolvedSkill(manifest, "agent-profile", Selected: true, Invoked: true);
@@ -908,6 +902,17 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             .ToArray();
 
         return SkillResolution.Success(primarySkill?.Manifest, auditSkills);
+    }
+
+    private SkillManifest? ResolveSkillManifest(AgentSkillRef skillRef)
+    {
+        if (!string.IsNullOrWhiteSpace(skillRef.SkillManifestId))
+        {
+            return _skillRepository.FindById(skillRef.SkillManifestId);
+        }
+
+        return _skillRepository.FindByReference(skillRef.SkillId)
+            ?? (string.IsNullOrWhiteSpace(skillRef.Name) ? null : _skillRepository.FindByReference(skillRef.Name));
     }
 
     private static AgentPromptSnapshot CreateEmptyPromptSnapshot() =>

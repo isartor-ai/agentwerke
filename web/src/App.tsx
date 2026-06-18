@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import { AppShell } from './layout/AppShell';
 import type { AuthState } from './types';
 import { ApprovalsDashboard } from './views/ApprovalsDashboard';
+import { AgentRegistry } from './views/AgentRegistry';
 import { Login } from './views/Login';
 import { NotFound } from './views/NotFound';
 import { Placeholder } from './views/Placeholder';
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/runs" element={<RunBoard />} />
             <Route path="/runs/:runId" element={<RunDetail />} />
             <Route path="/workflows" element={<WorkflowDesigner />} />
+            <Route path="/agents" element={<AgentRegistry />} />
             <Route path="/approvals" element={<ApprovalsDashboard />} />
             <Route
               path="/policies"

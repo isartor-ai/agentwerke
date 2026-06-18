@@ -255,11 +255,47 @@ export interface AgentSummary {
   runner: string;
   model?: string;
   dockerImage?: string;
+  network: string;
   tools: string[];
+  deniedTools: string[];
   supportedActions: string[];
+  skills: AgentSkillBinding[];
   supportedEnvironments: string[];
   supportedPolicyTags: string[];
+  secrets: string[];
   source: string;
+  fingerprint?: string;
+}
+
+export interface AgentSkillBinding {
+  skillId: string;
+  name: string;
+  description: string;
+  supportedActions: string[];
+  skillManifestId?: string;
+}
+
+export interface AgentDetail extends AgentSummary {
+  systemPrompt?: string;
+  rawMarkdown: string;
+  effectiveFilePath: string;
+  sourceFilePath?: string;
+}
+
+export interface SkillSummary {
+  skillId: string;
+  name: string;
+  description: string;
+  version?: string;
+  invocationRules: string[];
+  requiredFiles: string[];
+  optionalTools: string[];
+  fingerprint: string;
+  filePath: string;
+}
+
+export interface SkillDetail extends SkillSummary {
+  content: string;
 }
 
 export interface RuntimeMode {

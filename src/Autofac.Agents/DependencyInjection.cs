@@ -17,31 +17,11 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var options = new SkillOptions();
-        configuration.GetSection(SkillOptions.Section).Bind(options);
-
-        var skillsDir = string.IsNullOrWhiteSpace(options.SkillsDirectory)
-            ? options.SkillsDirectory
-            : Path.IsPathRooted(options.SkillsDirectory)
-                ? options.SkillsDirectory
-                : Path.GetFullPath(options.SkillsDirectory);
-
-        var manifests = MarkdownSkillLoader.LoadFromDirectory(skillsDir);
-        var repository = new SkillRepository(manifests);
-
-        var agentOptions = new AgentOptions();
-        configuration.GetSection(AgentOptions.Section).Bind(agentOptions);
-
-        var agentsDir = string.IsNullOrWhiteSpace(agentOptions.AgentsDirectory)
-            ? agentOptions.AgentsDirectory
-            : Path.IsPathRooted(agentOptions.AgentsDirectory)
-                ? agentOptions.AgentsDirectory
-                : Path.GetFullPath(agentOptions.AgentsDirectory);
-
-        var fileAgents = MarkdownAgentLoader.LoadFromDirectory(agentsDir);
-        services.AddSingleton<IAgentRegistry>(new FileAgentRegistry(fileAgents));
-
-        services.AddSingleton<ISkillRepository>(repository);
+        var paths = AgentRegistryPaths.Resolve(configuration);
+        services.AddSingleton(paths);
+        services.AddSingleton<IAgentRegistry>(new FileAgentRegistry(paths.AgentsDirectory));
+        services.AddSingleton<ISkillRepository>(new SkillRepository(paths.SkillsDirectory));
+        services.AddSingleton<IAgentRegistryEditor, FileAgentRegistryEditor>();
         services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
         services.AddScoped<IAgentTool, GitHubCreateBranchTool>();
         services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();

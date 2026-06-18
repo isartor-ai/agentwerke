@@ -1238,6 +1238,143 @@ th {
   grid-column: 1 / -1;
 }
 
+.agent-registry-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.agent-registry-list-panel,
+.agent-registry-editor-panel,
+.agent-editor,
+.agent-registry-section,
+.agent-skill-catalog {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.agent-search-label {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+}
+
+.agent-registry-list-panel input[type="search"],
+.agent-skill-add-row input {
+  width: 100%;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.25rem;
+  background: var(--color-surface-container);
+  color: var(--color-text);
+  padding: 0.45rem;
+}
+
+.agent-list {
+  display: grid;
+  gap: 0.65rem;
+  max-height: calc(100vh - 18rem);
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.agent-list-item {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.agent-list-item:hover {
+  border-color: var(--color-brand-ring);
+  background: rgb(0 220 229 / 0.06);
+}
+
+.agent-list-item-active {
+  border-color: var(--color-brand);
+  background: rgb(0 220 229 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(0 220 229 / 0.25);
+}
+
+.agent-list-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.agent-list-head strong,
+.agent-skill-catalog-item strong {
+  color: var(--color-text-strong);
+}
+
+.agent-list-item p,
+.agent-skill-catalog-item p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.agent-registry-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+}
+
+.agent-registry-section dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-skill-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+}
+
+.agent-skill-bindings,
+.agent-skill-catalog-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.agent-skill-binding,
+.agent-skill-catalog-item {
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+  padding: 0.75rem;
+}
+
+.agent-skill-binding {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.agent-skill-catalog-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.agent-source-preview {
+  min-height: 20rem;
+  background: var(--color-surface-low);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.agent-empty-state {
+  padding: 0.9rem;
+}
+
 .checkbox-grid {
   display: flex;
   flex-wrap: wrap;
@@ -1824,6 +1961,7 @@ textarea {
     grid-template-columns: 1fr 1fr;
   }
 
+  .agent-registry-grid,
   .ops-hero-grid,
   .run-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1849,6 +1987,10 @@ textarea {
 
   .sidebar {
     display: none;
+  }
+
+  .agent-registry-grid {
+    grid-template-columns: 1fr;
   }
 
   .kpi-grid {
@@ -1881,6 +2023,20 @@ textarea {
 
   .page-header {
     flex-direction: column;
+  }
+
+  .agent-list {
+    max-height: none;
+  }
+
+  .agent-list-head,
+  .agent-skill-catalog-item {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .agent-skill-add-row {
+    grid-template-columns: 1fr;
   }
 
   .designer-grid {
