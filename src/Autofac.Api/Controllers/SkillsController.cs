@@ -1,10 +1,13 @@
 using Autofac.Agents.Skills;
+using Autofac.Api.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/skills")]
+[Authorize(Policy = AutofacPolicies.Viewer)]
 public sealed class SkillsController : ControllerBase
 {
     private readonly ISkillRepository _repository;

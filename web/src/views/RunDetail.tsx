@@ -97,7 +97,8 @@ export function RunDetail() {
     return () => clearInterval(timer);
   }, [loadRun, run, isTerminal]);
 
-  // SSE live event stream: open while run is non-terminal
+  // SSE live event stream: open while run is non-terminal, auto-reconnect on drop
+  const [sseRevision, setSseRevision] = useState(0);
   useEffect(() => {
     if (!runId || isTerminal) return;
     const controller = new AbortController();
@@ -111,11 +112,18 @@ export function RunDetail() {
           return { ...prev, events: [...existing, event] };
         });
       },
-      () => { void loadRun(); },
+      () => {
+        void loadRun();
+        // If the component is still mounted and the run isn't terminal yet,
+        // increment the revision to re-open the SSE stream.
+        if (!controller.signal.aborted) {
+          setSseRevision((r) => r + 1);
+        }
+      },
       controller.signal,
     );
     return () => { controller.abort(); };
-  }, [runId, isTerminal, loadRun]);
+  }, [runId, isTerminal, loadRun, sseRevision]);
 
   // Auto-track: open panel for newly active step
   useEffect(() => {

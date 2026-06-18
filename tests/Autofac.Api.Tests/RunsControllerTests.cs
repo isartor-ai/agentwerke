@@ -1,0 +1,176 @@
+using Autofac.Api.Controllers;
+using Autofac.Api.Contracts.Runs;
+using Autofac.Application.Workflows;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using System.Security.Claims;
+
+namespace Autofac.Api.Tests;
+
+public sealed class RunsControllerTests
+{
+    [Fact]
+    public async Task Start_UsesAuthenticatedPrincipalAsInitiator()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService();
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim("sub", "user-123")],
+                        "test"))
+                }
+            }
+        };
+
+        var result = await controller.Start(new StartRunRequest("wf_1"));
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var response = Assert.IsType<StartRunResponse>(accepted.Value);
+        Assert.Equal("run_1", response.RunId);
+        Assert.NotNull(orchestration.StartCommand);
+        Assert.Equal("user-123", orchestration.StartCommand!.Initiator);
+    }
+
+    [Fact]
+    public async Task GetEvidencePack_KnownRun_ReturnsGeneratedPack()
+    {
+        var pack = SampleEvidencePack("run_1");
+        var controller = BuildEvidenceController(new FakeEvidencePackService(pack));
+
+        var result = await controller.GetEvidencePack("run_1");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(pack, ok.Value);
+    }
+
+    [Fact]
+    public async Task DownloadEvidencePack_KnownRun_ReturnsJsonFile()
+    {
+        var controller = BuildEvidenceController(new FakeEvidencePackService(SampleEvidencePack("run_1")));
+
+        var result = await controller.DownloadEvidencePack("run_1");
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/json", file.ContentType);
+        Assert.Equal("run_1-evidence-pack.json", file.FileDownloadName);
+        var json = JsonSerializer.Deserialize<JsonElement>(file.FileContents);
+        Assert.Equal("run_1", json.GetProperty("runId").GetString());
+        Assert.Equal(EvidencePackBuilder.SchemaVersion, json.GetProperty("schemaVersion").GetString());
+    }
+
+    [Fact]
+    public async Task GetEvidencePack_UnknownRun_ReturnsNotFound()
+    {
+        var controller = BuildEvidenceController(new FakeEvidencePackService());
+
+        var result = await controller.GetEvidencePack("missing");
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    private static RunsController BuildEvidenceController(IEvidencePackService evidencePackService)
+    {
+        return new RunsController(
+            dbContext: null!,
+            artifactStorage: null!,
+            orchestrationService: new CapturingWorkflowRunOrchestrationService(),
+            evidencePackService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+    }
+
+    private static EvidencePack SampleEvidencePack(string runId)
+    {
+        return new EvidencePack(
+            SchemaVersion: EvidencePackBuilder.SchemaVersion,
+            RunId: runId,
+            GeneratedAt: "2026-06-18T10:00:00.0000000Z",
+            Workflow: new EvidenceWorkflow(
+                WorkflowId: "wf_1",
+                Name: "Workflow",
+                Version: "v1",
+                DefinitionVersion: "v1",
+                BpmnSha256: "abc123",
+                HashAlgorithm: "SHA-256"),
+            Runtime: new EvidenceRuntime("Autofac", CamundaEnabled: false),
+            Run: new EvidenceRun(
+                RunId: runId,
+                Status: "completed",
+                RiskLevel: "low",
+                RequestedBy: "operator@example.com",
+                StartedAt: "2026-06-18T09:00:00.0000000Z",
+                CompletedAt: "2026-06-18T09:01:00.0000000Z",
+                DurationMs: 60000,
+                PendingApprovals: 0,
+                CorrelationId: "corr_1",
+                Tags: ["test"]),
+            AgentSnapshots: [],
+            Approvals: [],
+            PolicyDecisions: [],
+            ToolCalls: [],
+            ConnectorCalls: [],
+            Artifacts: [],
+            AuditLog: [],
+            Logs: [],
+            RunEvents: [],
+            Camunda: null);
+    }
+
+    private sealed class CapturingWorkflowRunOrchestrationService : IWorkflowRunOrchestrationService
+    {
+        public StartRunCommand? StartCommand { get; private set; }
+
+        public Task<StartRunResult> StartRunAsync(
+            StartRunCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            StartCommand = command;
+            return Task.FromResult(new StartRunResult("run_1", command.WorkflowId, "pending", null));
+        }
+
+        public Task<ResumeRunResult> ResumeRunAsync(
+            ResumeRunCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<RecoverRunResult> RecoverRunAsync(
+            string runId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    private sealed class FakeEvidencePackService : IEvidencePackService
+    {
+        private readonly EvidencePack? _pack;
+
+        public FakeEvidencePackService(EvidencePack? pack = null)
+        {
+            _pack = pack;
+        }
+
+        public Task<EvidencePack> GenerateAsync(
+            string runId,
+            CancellationToken cancellationToken = default)
+        {
+            if (_pack is null || !string.Equals(_pack.RunId, runId, StringComparison.Ordinal))
+            {
+                throw new EvidencePackNotFoundException(runId);
+            }
+
+            return Task.FromResult(_pack);
+        }
+    }
+}

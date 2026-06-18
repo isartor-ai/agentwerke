@@ -32,6 +32,14 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             new(RoleType.User, request.UserPrompt, null!)
         };
 
+        // Anthropic requires tool names to match ^[a-zA-Z0-9_-]{1,64}$.
+        // Dots in names like "github.create_branch" are replaced with "__".
+        // A reverse map lets us restore the original name when tool calls come back.
+        var sanitizedToOriginal = request.Tools.ToDictionary(
+            t => SanitizeName(t.Name),
+            t => t.Name,
+            StringComparer.OrdinalIgnoreCase);
+
         var allToolCalls = new List<LanguageModelToolCall>();
         int totalInputTokens = 0;
         int totalOutputTokens = 0;
@@ -89,9 +97,14 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             var toolResults = new List<ContentBase>();
             foreach (var toolUse in toolUses)
             {
+                // Restore the original dotted tool name before dispatching
+                var originalName = sanitizedToOriginal.TryGetValue(toolUse.Name, out var orig)
+                    ? orig
+                    : toolUse.Name;
+
                 var call = new LanguageModelToolCall(
                     Id: toolUse.Id,
-                    Name: toolUse.Name,
+                    Name: originalName,
                     Input: ExtractInput(toolUse.Input));
 
                 allToolCalls.Add(call);
@@ -123,12 +136,15 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             ModelId: modelId);
     }
 
+    private static string SanitizeName(string name) =>
+        name.Replace('.', '_').Replace(' ', '_');
+
     private static List<Anthropic.SDK.Common.Tool> BuildTools(
         IReadOnlyList<LanguageModelToolDefinition> tools)
     {
         return tools
             .Select(t => new Anthropic.SDK.Common.Tool(
-                new Function(t.Name, t.Description, BuildSchemaJson(t.Parameters))))
+                new Function(SanitizeName(t.Name), t.Description, BuildSchemaJson(t.Parameters))))
             .ToList();
     }
 

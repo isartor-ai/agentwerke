@@ -43,6 +43,11 @@ Secure, BPMN-native, Docker-sandboxed autonomous software factory.
 		 - `POST /api/runs/{runId}/artifacts/{artifactName}`
 	 - Download artifact:
 		 - `GET /api/runs/{runId}/artifacts/{artifactName}`
+5. Evidence pack export by run ID:
+	 - Generate evidence pack JSON:
+		 - `GET /api/runs/{runId}/evidence-pack`
+	 - Download evidence pack JSON:
+		 - `GET /api/runs/{runId}/evidence-pack/download`
 
 See `CONTRIBUTING.md` for contribution standards.
 
@@ -67,6 +72,9 @@ Autofac selects its workflow execution runtime through the `WorkflowRuntime:Mode
 
 ## Persistence
 - Phase-1 schema documentation: `docs/persistence-schema.md`
+
+## Authentication and Data Residency
+- Enterprise SSO/RBAC and self-hosted data boundary guidance: `docs/deployment-auth-data-residency.md`
 
 ## Architecture Decisions
 - Default workflow runtime decision (current): `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`

@@ -745,7 +745,7 @@ These are the load-bearing gaps between the running system and the target archit
 1. **Agent execution is simulated.** `AgentOrchestrator.BuildSimulatedOutput` produces deterministic text; there is **no LLM/model client** anywhere in the solution. The Docker sandbox runs a fixed shell entrypoint that writes `result.json` — it does not invoke a model.
 2. **Runtime strategy has been reset to Autofac-default.** The current implementation executes through `WorkflowInstanceEngine`, backed by Postgres persistence, run context, outbox dispatch, and recovery. This is now the default path for MVP and pilots, not a temporary gap. Camunda work is optional adapter groundwork only.
 3. ~~**No asynchronous backbone.**~~ **Resolved (Phase C).** `WorkflowRunOrchestrationService.StartRunAsync` now creates a `pending` run and enqueues an outbox entry; the API returns 202 immediately. `RunDispatchWorker` (BackgroundService) polls the `run_outbox` table every 2 s, executes via `WorkflowRunExecutor`, and handles crash recovery on startup.
-4. **Authentication/RBAC is stubbed.** `AuthController` returns `501 Not Implemented`; there is no SSO, no token validation, and no role enforcement on controllers.
+4. ~~**Authentication/RBAC is stubbed.**~~ **Resolved (Phase B baseline).** `AuthController` exposes auth configuration and dev-token issuance, JWT/OIDC bearer validation is wired, product controllers enforce Viewer/Operator/Approver/Admin policies, and approval decisions record the authenticated principal. Secret-provider integration remains future work.
 5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
 6. ~~**One outbound connector.**~~ **Resolved (Phase E).** `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF), Slack, Teams connectors registered via `IConnectorRegistry`; email/CI-CD remain future work.
 7. ~~**No distributed tracing.**~~ **Resolved (Phase F).** `WithTracing` + OTLP exporter wired; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application`; engine and connectors emit spans to Jaeger.
@@ -765,7 +765,7 @@ These are the load-bearing gaps between the running system and the target archit
 | Human approvals | Implemented | — | Create/decide/resume + audit |
 | Policy engine | Hardcoded MVP rules | Medium | Needs policy-as-data + store |
 | Async coordination / outbox | Postgres outbox + BackgroundService worker | — | **Resolved (Phase C)**: 202-async API; crash recovery; timer scheduling |
-| AuthN / RBAC / SSO | Stubbed (501) | **Critical** | Endpoints unauthenticated |
+| AuthN / RBAC / SSO | JWT/OIDC bearer validation + RBAC policies | — | **Resolved (Phase B baseline)**: Viewer/Operator/Approver/Admin policies protect product APIs; local development has explicit dev identity/token modes |
 | Secret management | Config/env only | High | No vault/secret provider |
 | Connectors | GitHub, Jira (ADF), Slack, Teams; `IConnector`/`ConnectorBase`; data-driven policy store | — | **Resolved (Phase E)**; email/CI-CD remain future work |
 | Observability — metrics | Implemented (Prometheus) | — | Good coverage |
@@ -776,7 +776,7 @@ These are the load-bearing gaps between the running system and the target archit
 | Deployment | docker-compose + Helm chart (api/worker/web/postgres/RBAC/HPA); Grafana + Prometheus alerts | — | **Resolved (Phase F)** |
 | Timers / true parallelism | Real timer scheduling (Phase C); sequential branches (Phase D standalone) | Low | Parallel concurrency available via Phase C `Task.WhenAll` |
 
-**Critical path:** the two `Critical` items (real LLM execution and authentication) gate any production or pilot use. The runtime should be hardened only within the bounded SDLC-template scope; Camunda migration is not on the default critical path.
+**Critical path:** real LLM execution remains the main pilot blocker after the Phase B auth baseline. The runtime should be hardened only within the bounded SDLC-template scope; Camunda migration is not on the default critical path.
 
 ## 23. Implementation Roadmap
 
@@ -795,12 +795,12 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 ### Phase B — Authentication, authorization, and secrets (Critical)
 
-1. Replace the stub `AuthController` with OIDC/JWT bearer validation (`AddAuthentication().AddJwtBearer`), configurable issuer/audience for enterprise SSO.
-2. Introduce a role model (e.g. `Viewer`, `Operator`, `Approver`, `Admin`) and apply `[Authorize]` policies per controller/endpoint — especially run start, approval decisions, and workflow publish.
+1. ✓ Replace the stub `AuthController` with OIDC/JWT bearer validation (`AddAuthentication().AddJwtBearer`), configurable issuer/audience for enterprise SSO.
+2. ✓ Introduce a role model (`Viewer`, `Operator`, `Approver`, `Admin`) and apply `[Authorize]` policies per controller/endpoint — especially run start, approval decisions, and workflow publish.
 3. Add a secret-provider abstraction (`ISecretStore`) with a first implementation (env/file for dev, then a vault driver). Route `GitHubOptions.PersonalAccessToken` and future connector creds through it.
-4. Enforce that approval decisions record the authenticated principal, not `api-user`.
+4. ✓ Enforce that approval decisions record the authenticated principal, not `api-user`.
 
-*Exit:* every state-changing endpoint requires an authenticated, authorized principal; credentials are not read from plain config in production.
+*Exit:* every state-changing endpoint requires an authenticated, authorized principal; credentials are not read from plain config in production. The auth/RBAC portion is complete; secret-provider integration is still pending.
 
 ### Phase C — Durable, asynchronous execution backbone (High) ✓ **Default runtime foundation**
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Autofac.Application.Workflows;
 using Autofac.Integrations;
 using Autofac.Integrations.Webhooks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,7 @@ namespace Autofac.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("webhooks")]
+[AllowAnonymous]
 public sealed class WebhooksController : ControllerBase
 {
     private readonly IWorkflowRunOrchestrationService _orchestrationService;

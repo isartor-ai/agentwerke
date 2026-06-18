@@ -127,6 +127,10 @@ export interface RunStep {
   output?: string;
   error?: string;
   policyDecision?: PolicyDecision;
+  promptSnapshot?: RunStepPromptSnapshot;
+  skills?: RunStepSkillUsage[];
+  toolInvocations?: RunStepToolInvocation[];
+  hookExecutions?: RunStepHookExecution[];
   runtimeSnapshot?: RunStepRuntimeSnapshot;
 }
 

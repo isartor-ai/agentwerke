@@ -50,10 +50,12 @@ internal sealed class NoOpWorkflowMetrics : IWorkflowMetrics
     public void ApprovalCreated(string riskLevel) { }
     public void ApprovalDecided(string decision, string riskLevel) { }
     public void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded) { }
+    public void ModelInvoked(string agentName, string modelId, int inputTokens, int outputTokens, double latencyMs, double costUsd, bool succeeded) { }
     public void RunCompleted(string workflowId, string workflowName, double durationMs) { }
     public void RunFailed(string workflowId, string workflowName, string reason) { }
     public void RunStarted(string workflowId, string workflowName) { }
     public void StepCompleted(string stepType, string agentName, double durationMs, bool succeeded) { }
+    public void ToolPolicyDenied(string agentName, string policyTag, string kind) { }
     public void WebhookReceived(string source, bool triggered) { }
 }
 

@@ -1,10 +1,12 @@
 using Autofac.Infrastructure;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/health")]
+[AllowAnonymous]
 public sealed class HealthController : ControllerBase
 {
     private readonly ICamundaRuntimeStatusService _camundaRuntimeStatusService;

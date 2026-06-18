@@ -59,6 +59,7 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: /app/skills
+      Agents__Registry__AgentsDirectory: /app/agents
       Sandboxes__Docker__Enabled: "false"
       Sandboxes__Docker__DockerEndpoint: "unix:///var/run/docker.sock"
       Tracing__OtlpEndpoint: "http://jaeger:4317"
@@ -66,6 +67,7 @@ services:
     volumes:
       - api_storage:/app/storage
       - ../.github/skills:/app/skills:ro
+      - ../agents:/app/agents:ro
       # Uncomment to enable Docker sandbox (also set Sandboxes__Docker__Enabled=true above):
       # - /var/run/docker.sock:/var/run/docker.sock
     depends_on:

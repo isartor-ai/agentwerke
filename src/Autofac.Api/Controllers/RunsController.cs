@@ -217,6 +217,7 @@ public sealed class RunsController : ControllerBase
         Response.ContentType = "text/event-stream";
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
+        HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
 
         var terminalStatuses = new[] { "completed", "failed", "cancelled" };
         var seenIds = new HashSet<string>();
@@ -240,9 +241,19 @@ public sealed class RunsController : ControllerBase
             return;
         }
 
+        var pollCount = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(2_000, cancellationToken);
+            pollCount++;
+
+            // Send a comment heartbeat every ~15 s to keep the connection alive
+            // (browsers and proxies can close idle connections after ~30 s)
+            if (pollCount % 8 == 0)
+            {
+                await Response.WriteAsync(":\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
 
             var seenList = seenIds.ToList();
             var fresh = await _dbContext.WorkflowEvents

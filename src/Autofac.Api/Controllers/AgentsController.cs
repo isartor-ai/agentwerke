@@ -1,10 +1,13 @@
+using Autofac.Api.Auth;
 using Autofac.Agents;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/agents")]
+[Authorize(Policy = AutofacPolicies.Viewer)]
 public sealed class AgentsController : ControllerBase
 {
     private readonly IAgentRegistry _agentRegistry;
@@ -43,6 +46,7 @@ public sealed class AgentsController : ControllerBase
         model = p.Model,
         dockerImage = p.DockerImage,
         tools = p.Tools,
+        deniedTools = p.DeniedTools,
         supportedActions = p.SupportedActions,
         skills = p.Skills.Select(s => new
         {
@@ -54,6 +58,7 @@ public sealed class AgentsController : ControllerBase
         }),
         supportedEnvironments = p.SupportedEnvironments,
         supportedPolicyTags = p.SupportedPolicyTags,
-        source = p.Source
+        source = p.Source,
+        fingerprint = p.Fingerprint
     };
 }
