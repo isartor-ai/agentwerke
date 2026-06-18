@@ -23,3 +23,6 @@ coverage.*
 # OS
 .DS_Store
 Thumbs.db
+
+# Local environment overrides
+docker/.env.pilot.local
