@@ -22,6 +22,14 @@ function formatBytes(sizeBytes: number): string {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function countToolInvocations(run: WorkflowRun): number {
+  return (run.steps ?? []).reduce((count, step) => (
+    count +
+    (step.toolInvocations?.length ?? 0) +
+    (step.runtimeSnapshot?.toolInvocations?.length ?? 0)
+  ), 0);
+}
+
 export function RunDetail() {
   const { runId } = useParams();
   const navigate = useNavigate();
@@ -33,6 +41,8 @@ export function RunDetail() {
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [exportingEvidence, setExportingEvidence] = useState(false);
+  const [evidenceExportError, setEvidenceExportError] = useState<string | null>(null);
 
   // Workflow BPMN XML for the viewer + diff modal
   const [workflowXml, setWorkflowXml] = useState('');
@@ -80,12 +90,32 @@ export function RunDetail() {
 
   useEffect(() => { void loadRun(); }, [loadRun]);
 
-  // Polling: 10s while in-flight
+  // Polling: 10s while in-flight (fallback when SSE stream is unavailable)
   useEffect(() => {
     if (!run || isTerminal) return;
     const timer = setInterval(() => void loadRun(), 10_000);
     return () => clearInterval(timer);
   }, [loadRun, run, isTerminal]);
+
+  // SSE live event stream: open while run is non-terminal
+  useEffect(() => {
+    if (!runId || isTerminal) return;
+    const controller = new AbortController();
+    apiClient.streamRunEvents(
+      runId,
+      (event) => {
+        setRun((prev) => {
+          if (!prev) return prev;
+          const existing = prev.events ?? [];
+          if (existing.some((e) => e.id === event.id)) return prev;
+          return { ...prev, events: [...existing, event] };
+        });
+      },
+      () => { void loadRun(); },
+      controller.signal,
+    );
+    return () => { controller.abort(); };
+  }, [runId, isTerminal, loadRun]);
 
   // Auto-track: open panel for newly active step
   useEffect(() => {
@@ -134,6 +164,26 @@ export function RunDetail() {
 
   const runApprovals = useMemo(() => run?.approvals ?? [], [run]);
 
+  const evidenceSummary = useMemo(() => {
+    if (!run) return null;
+
+    const policyDecisionCount = (run.steps ?? []).filter((step) => Boolean(step.policyDecision)).length;
+    const readiness = run.status === 'completed'
+      ? 'Ready'
+      : isTerminal
+        ? 'Available'
+        : 'Collecting';
+
+    return {
+      readiness,
+      approvals: run.approvals?.length ?? 0,
+      artifacts: run.artifacts?.length ?? 0,
+      policyDecisions: policyDecisionCount,
+      toolCalls: countToolInvocations(run),
+      events: run.events?.length ?? 0,
+    };
+  }, [isTerminal, run]);
+
   const handleApprovalDecision = async (
     approvalId: string,
     decision: 'approve' | 'reject' | 'escalate',
@@ -170,18 +220,43 @@ export function RunDetail() {
     }
   };
 
+  const handleEvidenceExport = async () => {
+    if (!runId) return;
+    setExportingEvidence(true);
+    setEvidenceExportError(null);
+    try {
+      await apiClient.downloadRunEvidencePack(runId);
+    } catch (err) {
+      setEvidenceExportError(err instanceof Error ? err.message : 'Failed to export evidence pack.');
+    } finally {
+      setExportingEvidence(false);
+    }
+  };
+
   const renderTabContent = () => {
     if (!run) return null;
     switch (activeTab) {
       case 'Summary':
         return (
-          <dl className="definition-list">
-            <div><dt>Run ID</dt><dd>{run.id}</dd></div>
-            <div><dt>Workflow</dt><dd>{run.workflowName}</dd></div>
-            <div><dt>Status</dt><dd>{run.status.replace('_', ' ')}</dd></div>
-            <div><dt>Current Step</dt><dd>{run.currentStep ?? '-'}</dd></div>
-            <div><dt>Tags</dt><dd>{run.tags.join(', ') || '-'}</dd></div>
-          </dl>
+          <>
+            <dl className="definition-list">
+              <div><dt>Run ID</dt><dd>{run.id}</dd></div>
+              <div><dt>Workflow</dt><dd>{run.workflowName}</dd></div>
+              <div><dt>Status</dt><dd>{run.status.replace('_', ' ')}</dd></div>
+              <div><dt>Current Step</dt><dd>{run.currentStep ?? '-'}</dd></div>
+              <div><dt>Evidence Pack</dt><dd>{evidenceSummary?.readiness ?? 'Unavailable'}</dd></div>
+              <div><dt>Tags</dt><dd>{run.tags.join(', ') || '-'}</dd></div>
+            </dl>
+            {evidenceSummary ? (
+              <div className="tag-row" aria-label="Evidence pack contents">
+                <span className="chip chip-static">{evidenceSummary.approvals} approval(s)</span>
+                <span className="chip chip-static">{evidenceSummary.policyDecisions} policy decision(s)</span>
+                <span className="chip chip-static">{evidenceSummary.toolCalls} tool call(s)</span>
+                <span className="chip chip-static">{evidenceSummary.artifacts} artifact(s)</span>
+                <span className="chip chip-static">{evidenceSummary.events} event(s)</span>
+              </div>
+            ) : null}
+          </>
         );
 
       case 'Logs':
@@ -469,6 +544,9 @@ export function RunDetail() {
           </section>
 
           <div className="action-row">
+            {evidenceExportError ? (
+              <p className="validation-error">{evidenceExportError}</p>
+            ) : null}
             <button
               type="button"
               className="btn btn-secondary"
@@ -479,8 +557,13 @@ export function RunDetail() {
             <button type="button" className="btn btn-secondary" onClick={() => navigate('/approvals')}>
               Request Approval
             </button>
-            <button type="button" className="btn btn-secondary">
-              Export Audit Bundle
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={exportingEvidence}
+              onClick={() => void handleEvidenceExport()}
+            >
+              {exportingEvidence ? 'Exporting…' : 'Export Evidence Pack'}
             </button>
             <button
               type="button"

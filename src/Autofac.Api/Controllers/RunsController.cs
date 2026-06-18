@@ -7,25 +7,37 @@ using Autofac.Storage.Artifacts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/runs")]
+[Authorize(Policy = AutofacPolicies.Viewer)]
 public sealed class RunsController : ControllerBase
 {
+    private static readonly JsonSerializerOptions EvidenceJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
+
+    private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly AutofacDbContext _dbContext;
     private readonly IArtifactStorage _artifactStorage;
     private readonly IWorkflowRunOrchestrationService _orchestrationService;
+    private readonly IEvidencePackService _evidencePackService;
 
     public RunsController(
         AutofacDbContext dbContext,
         IArtifactStorage artifactStorage,
-        IWorkflowRunOrchestrationService orchestrationService)
+        IWorkflowRunOrchestrationService orchestrationService,
+        IEvidencePackService evidencePackService)
     {
         _dbContext = dbContext;
         _artifactStorage = artifactStorage;
         _orchestrationService = orchestrationService;
+        _evidencePackService = evidencePackService;
     }
 
     [HttpGet]
@@ -65,13 +77,45 @@ public sealed class RunsController : ControllerBase
     }
 
     [Authorize(Policy = AutofacPolicies.Operator)]
+    [HttpGet("{runId}/evidence-pack")]
+    public async Task<IActionResult> GetEvidencePack(string runId)
+    {
+        try
+        {
+            var pack = await _evidencePackService.GenerateAsync(runId, HttpContext.RequestAborted);
+            return Ok(pack);
+        }
+        catch (EvidencePackNotFoundException)
+        {
+            return NotFound(new { message = $"Run '{runId}' not found." });
+        }
+    }
+
+    [Authorize(Policy = AutofacPolicies.Operator)]
+    [HttpGet("{runId}/evidence-pack/download")]
+    public async Task<IActionResult> DownloadEvidencePack(string runId)
+    {
+        try
+        {
+            var pack = await _evidencePackService.GenerateAsync(runId, HttpContext.RequestAborted);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(pack, EvidenceJsonOptions);
+            var fileName = $"{runId}-evidence-pack.json";
+            return File(bytes, "application/json", fileName);
+        }
+        catch (EvidencePackNotFoundException)
+        {
+            return NotFound(new { message = $"Run '{runId}' not found." });
+        }
+    }
+
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost]
     public async Task<IActionResult> Start([FromBody] StartRunRequest request)
     {
         try
         {
             var result = await _orchestrationService.StartRunAsync(
-                new StartRunCommand(request.WorkflowId, Initiator: "api"),
+                new StartRunCommand(request.WorkflowId, Initiator: AuthenticatedPrincipal.ResolveSubject(User)),
                 HttpContext.RequestAborted);
 
             return Accepted(new StartRunResponse(
@@ -154,6 +198,86 @@ public sealed class RunsController : ControllerBase
             artifactName,
             status = "stored"
         });
+    }
+
+    [HttpGet("{runId}/events/stream")]
+    public async Task StreamEvents(string runId, CancellationToken cancellationToken)
+    {
+        var run = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Select(r => new { r.Id, r.Status })
+            .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
+
+        if (run == null)
+        {
+            Response.StatusCode = 404;
+            return;
+        }
+
+        Response.ContentType = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        var terminalStatuses = new[] { "completed", "failed", "cancelled" };
+        var seenIds = new HashSet<string>();
+
+        var existing = await _dbContext.WorkflowEvents
+            .AsNoTracking()
+            .Where(e => e.RunId == runId)
+            .OrderBy(e => e.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        foreach (var evt in existing)
+        {
+            seenIds.Add(evt.Id);
+            await WriteSseEventAsync(evt, cancellationToken);
+        }
+
+        if (Array.Exists(terminalStatuses, s => string.Equals(s, run.Status, StringComparison.Ordinal)))
+        {
+            await Response.WriteAsync("event: done\ndata: {}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+            return;
+        }
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await Task.Delay(2_000, cancellationToken);
+
+            var seenList = seenIds.ToList();
+            var fresh = await _dbContext.WorkflowEvents
+                .AsNoTracking()
+                .Where(e => e.RunId == runId && !seenList.Contains(e.Id))
+                .OrderBy(e => e.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            foreach (var evt in fresh)
+            {
+                seenIds.Add(evt.Id);
+                await WriteSseEventAsync(evt, cancellationToken);
+            }
+
+            var current = await _dbContext.WorkflowRuns
+                .AsNoTracking()
+                .Select(r => new { r.Id, r.Status })
+                .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
+
+            if (current == null || Array.Exists(terminalStatuses, s => string.Equals(s, current.Status, StringComparison.Ordinal)))
+            {
+                await Response.WriteAsync("event: done\ndata: {}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+                return;
+            }
+        }
+    }
+
+    private async Task WriteSseEventAsync(Domain.Persistence.WorkflowEvent evt, CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Serialize(
+            new { evt.Id, evt.RunId, evt.Type, evt.Message, evt.CreatedAt },
+            SseJsonOptions);
+        await Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
+        await Response.Body.FlushAsync(cancellationToken);
     }
 
     [HttpGet("{runId}/artifacts/{artifactName}")]

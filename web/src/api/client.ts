@@ -1,6 +1,7 @@
 import type {
   AgentSummary,
   ApprovalRequest,
+  RunEvent,
   RuntimeMode,
   TemplateDetail,
   TemplateSummary,
@@ -58,6 +59,32 @@ export const apiClient = {
 
   getRunArtifactDownloadUrl(runId: string, artifactName: string): string {
     return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactName)}`;
+  },
+
+  getRunEvidencePackDownloadUrl(runId: string): string {
+    return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/evidence-pack/download`;
+  },
+
+  async downloadRunEvidencePack(runId: string): Promise<void> {
+    const response = await fetch(this.getRunEvidencePackDownloadUrl(runId), {
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const errorMessage = extractErrorMessage(errorText) ?? `Evidence export failed: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${runId}-evidence-pack.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
   },
 
   async importWorkflowDefinition(payload: {
@@ -186,6 +213,57 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ decision, comment }),
     });
+  },
+
+  streamRunEvents(
+    runId: string,
+    onEvent: (event: RunEvent) => void,
+    onDone: () => void,
+    signal?: AbortSignal,
+  ): void {
+    void (async () => {
+      try {
+        const response = await fetch(
+          `${WORKFLOW_API_BASE_URL}/api/runs/${encodeURIComponent(runId)}/events/stream`,
+          { headers: authHeaders(), signal },
+        );
+        if (!response.ok || !response.body) { onDone(); return; }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let eventType = '';
+        let dataLine = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n');
+          buffer = parts.pop() ?? '';
+
+          for (const line of parts) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              dataLine = line.slice(6);
+            } else if (line === '') {
+              if (eventType === 'done') { onDone(); return; }
+              if (dataLine) {
+                try {
+                  onEvent(JSON.parse(dataLine) as RunEvent);
+                } catch { /* ignore malformed */ }
+              }
+              eventType = '';
+              dataLine = '';
+            }
+          }
+        }
+      } catch {
+        // AbortError or network error — stream ended
+      }
+      onDone();
+    })();
   },
 };
 
