@@ -2,12 +2,18 @@ using System.Text.Json;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Autofac.Infrastructure.Persistence;
 
 public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options) : DbContext(options)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private static readonly ValueComparer<List<string>> StringListComparer = new(
+        (a, b) => a != null && b != null && a.SequenceEqual(b),
+        c => c.Aggregate(0, (h, v) => HashCode.Combine(h, v.GetHashCode(StringComparison.Ordinal))),
+        c => c.ToList());
 
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
 
@@ -43,7 +49,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                 .HasConversion(
                     list => SerializeStringList(list),
                     json => DeserializeStringList(json))
-                .HasColumnType("jsonb");
+                .HasColumnType("jsonb")
+                .Metadata.SetValueComparer(StringListComparer);
             entity.Property(e => e.BpmnXml).IsRequired();
         });
 
@@ -62,7 +69,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                 .HasConversion(
                     list => SerializeStringList(list),
                     json => DeserializeStringList(json))
-                .HasColumnType("jsonb");
+                .HasColumnType("jsonb")
+                .Metadata.SetValueComparer(StringListComparer);
             entity.Property(e => e.CorrelationId).HasMaxLength(128);
             entity.HasMany(e => e.Steps).WithOne().HasForeignKey("RunId");
             entity.HasMany(e => e.Events).WithOne().HasForeignKey(e => e.RunId);
@@ -93,12 +101,14 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                     .HasConversion(
                     list => SerializeStringList(list),
                     json => DeserializeStringList(json))
-                    .HasColumnType("jsonb");
+                    .HasColumnType("jsonb")
+                    .Metadata.SetValueComparer(StringListComparer);
                 pd.Property(p => p.Constraints)
                     .HasConversion(
                     list => SerializeStringList(list),
                     json => DeserializeStringList(json))
-                    .HasColumnType("jsonb");
+                    .HasColumnType("jsonb")
+                    .Metadata.SetValueComparer(StringListComparer);
             });
         });
 
@@ -126,12 +136,14 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
                 .HasConversion(
                     list => SerializeStringList(list),
                     json => DeserializeStringList(json))
-                .HasColumnType("jsonb");
+                .HasColumnType("jsonb")
+                .Metadata.SetValueComparer(StringListComparer);
             entity.Property(e => e.AffectedSystems)
                 .HasConversion(
                     list => SerializeStringList(list),
                     json => DeserializeStringList(json))
-                .HasColumnType("jsonb");
+                .HasColumnType("jsonb")
+                .Metadata.SetValueComparer(StringListComparer);
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Priority).HasMaxLength(64);
             entity.Property(e => e.DecisionComment).HasMaxLength(2048);
