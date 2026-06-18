@@ -102,7 +102,7 @@ flowchart TB
         api["Platform API\nC# ASP.NET Core"]
         workflow["Workflow Runtime Engine\nBPMN execution, run state, scheduling"]
         agent["Agent Orchestrator\nplanning, task dispatch, coordination"]
-        sandbox["Sandbox Execution Manager\nDocker sandbox lifecycle"]
+        sandbox["Sandbox Execution Manager\nOpenSandbox control plane / local Docker fallback"]
         policy["Policy and Approval Service\nRBAC, approval gates, action policy"]
         integration["Integration Hub\nSlack, Teams, Jira, GitHub, Email, Webhooks, CI/CD"]
         plugin["Plugin Runtime\ncustom triggers, tools, nodes, connectors"]
@@ -226,11 +226,13 @@ SDLC agent profiles registered in `AgentRegistry`: `business-analyst`,
 ### 6.5 Sandbox Execution Manager
 
 Responsibilities:
-- Provision Docker-based agent sandboxes
+- Provision agent sandboxes through a provider-neutral execution boundary
 - Apply runtime controls for file system, network, secrets, and CPU/memory
 - Mount approved artifacts and workspaces
 - Collect outputs, logs, traces, and artifacts
 - Destroy or recycle isolated environments safely
+
+Target direction: use OpenSandbox as the preferred sandbox control plane, with Kata-class secure runtimes for production and Docker kept as a local fallback. See `docs/decisions/ADR-003-use-opensandbox-control-plane-with-kata-runtime.md`.
 
 ### 6.6 Policy and Approval Service
 
@@ -429,7 +431,7 @@ Security is central to Autofac because the platform can perform code generation,
 - Approval-based control for sensitive actions
 - Policy-based tool authorization
 - Secret isolation and least-privilege access
-- Docker sandbox isolation
+- Secure sandbox isolation with runtime-specific controls
 - Network egress restrictions for agents
 - Audit logs for all user and agent actions
 - Environment separation for dev, test, and production
@@ -491,7 +493,7 @@ flowchart TB
         end
 
         subgraph jobs["Execution Namespace"]
-            sandbox["Ephemeral Agent Sandbox Pods / Containers"]
+            sandbox["Ephemeral Agent Sandbox Pods / Secure Containers"]
         end
 
         subgraph data["Platform Data Services"]
@@ -545,7 +547,8 @@ flowchart TB
 
 ### Runtime and Infrastructure
 
-- Docker for agent sandboxing
+- OpenSandbox as the preferred sandbox control plane
+- Kata-class secure runtimes for production agent isolation, with Docker retained for local fallback
 - Kubernetes for orchestration and scaling
 - Message bus for asynchronous coordination
 - Centralized telemetry pipeline for logs, metrics, traces, and audit
@@ -605,6 +608,50 @@ Rationale:
 - `BPMN Engine Adapter` = runtime boundary for optional engines such as Camunda 8
 - `React BPMN UI` = template-first SDLC builder plus advanced `bpmn-js` editor; BPMN XML remains the design artifact
 - `WorkflowInstanceEngine` = default runtime until a measured re-decision trigger requires a different engine
+
+### 14.2 Sandbox Runtime Strategy
+
+Autofac's sandbox layer also needs two distinct choices:
+- a control plane that manages lifecycle, command execution, files, resources, and cleanup
+- a runtime that provides the actual isolation boundary for agent execution
+
+These choices are deliberately separated. The current implementation is Docker-specific, but the target production architecture should not be.
+
+#### Candidate Comparison
+
+| Candidate | Strengths | Risks / Constraints | Fit for Autofac |
+| --- | --- | --- | --- |
+| OpenSandbox control plane with Kata runtime | Matches Autofac's need for lifecycle, command, file, resource, network, and credential control while delegating secure-runtime details; aligns with Kubernetes deployment | Adds a new platform dependency and requires an integration spike before full adoption | Preferred target architecture |
+| Direct Kubernetes plus Kata executor | Strong production isolation and direct control of the runtime integration | Autofac must own more lifecycle, exec, artifact, and cleanup behavior directly | Fallback if OpenSandbox fails the spike |
+| gVisor-based runtime path | Better isolation than plain containers with lighter operational weight than Kata in some environments | Weaker isolation than Kata for the most sensitive execution cases | Secondary production option |
+| Docker direct | Already implemented and easy for local development | Daemon-specific, weaker isolation, not the desired long-term production posture | Local and test fallback only |
+| Podman rootless | Cleaner local engine story than Docker in some environments | Does not materially change the production isolation story Autofac needs | Local alternative only |
+| Firecracker direct | Strong microVM posture | Too much platform ownership too early | Deferred |
+
+#### Decision (2026-06-18)
+
+**Autofac will evaluate OpenSandbox as the preferred sandbox control plane and use Kata-class secure runtimes as the default production isolation target.** Docker remains acceptable for local development and narrow integration testing behind the same Autofac sandbox interface.
+
+Rationale:
+- Autofac needs stronger production isolation for untrusted or LLM-generated code than a direct Docker daemon path provides.
+- OpenSandbox already models lifecycle, command execution, files, resource limits, network policy, and credential proxy behavior that Autofac would otherwise have to build.
+- Kata is still the right default production boundary because the key missing property is isolation strength, not only container engine choice.
+- Keeping the Autofac-owned `ISandboxExecutor` boundary allows a clean fallback to direct Kubernetes plus Kata if the OpenSandbox spike proves unsuitable.
+
+#### Sandbox Strategy
+
+- Preferred control plane: OpenSandbox behind an Autofac-owned provider boundary.
+- Default production runtime: Kata Containers, with Kata plus Firecracker allowed when a platform operator wants that stricter microVM posture.
+- Local fallback: Docker behind the same provider-neutral contract.
+- Secondary production runtime: gVisor where customers want a lighter operational profile.
+- Application boundary: `ISandboxExecutor` remains the Autofac interface; OpenSandbox REST or OpenAPI integration should be wrapped behind Autofac-owned client abstractions.
+
+#### Impact on the Architecture
+
+- `Autofac.Sandboxes` remains the Autofac-owned sandbox boundary and should become provider-neutral.
+- The current Docker executor becomes a fallback implementation rather than the target production design.
+- Production deployment should assume `Autofac -> OpenSandbox -> Kubernetes secure runtime` instead of `Autofac -> direct Docker daemon`.
+- Sandbox profiles should eventually map Autofac policy intent into provider resource, network, filesystem, and credential configuration.
 
 ## 15. Key Architectural Decisions
 
@@ -716,7 +763,7 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 | `Autofac.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary | Solid; graph-based traversal, sequence flow parsing |
 | `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Rich, but execution is simulated |
 | `Autofac.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
-| `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; placeholder workload |
+| `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; placeholder workload; target control plane selected in ADR-003 |
 | `Autofac.Integrations` | `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF comments), Slack, Teams connectors; `IConnectorRegistry`; per-connector policy gate, audit, metrics, and OTel spans | Solid (Phase E) |
 | `Autofac.Infrastructure` | EF Core + PostgreSQL (Npgsql), repositories, runtime store, 8 migrations | Solid |
 | `Autofac.Storage` | Artifact storage abstraction; local filesystem + S3 (`AWSSDK.S3`) drivers | Phase E: S3 added |
@@ -761,7 +808,7 @@ These are the load-bearing gaps between the running system and the target archit
 | BPMN execution engine | Bounded Autofac runtime backed by Postgres/outbox | Medium | Keep scope capped to SDLC templates; do not expand into arbitrary BPMN |
 | Agent task execution (LLM) | Simulated only | **Critical** | No model client; blocks the core value prop |
 | Tool Gateway + policy | Implemented | — | Strong; single control point in place |
-| Sandbox isolation | Container lifecycle real; workload placeholder | High | network=none, mem/cpu limits applied |
+| Sandbox isolation | Container lifecycle real; workload placeholder | High | network=none, mem/cpu limits applied; ADR-003 selects OpenSandbox control plane with Kata-class production runtime |
 | Human approvals | Implemented | — | Create/decide/resume + audit |
 | Policy engine | Hardcoded MVP rules | Medium | Needs policy-as-data + store |
 | Async coordination / outbox | Postgres outbox + BackgroundService worker | — | **Resolved (Phase C)**: 202-async API; crash recovery; timer scheduling |
@@ -788,7 +835,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 1. Add an `Autofac.Agents.Models` abstraction: `ILanguageModelClient` with a provider-agnostic request/response (messages, tools, max-tokens, stop). Implement a first provider (Anthropic Claude) behind it; keep the interface so OpenAI/Azure are drop-in.
 2. Wire the client into `AgentOrchestrator`: feed the assembled `PromptSnapshot` + resolved skills + allowed tools into a tool-use loop, routing every tool call through the existing `ToolGateway` (policy stays authoritative).
-3. Run the loop **inside the Docker sandbox** workload (replace the placeholder entrypoint with an agent runner image), or, as an interim step, in-process behind the sandbox interface. Capture token usage, tool invocations, and artifacts into `AgentRuntimeSnapshot`.
+3. Run the loop behind the sandbox interface, preferably through an OpenSandbox-backed provider once the sandbox-control-plane spike is complete. Replace the placeholder workload with an agent runner image and capture token usage, tool invocations, and artifacts into `AgentRuntimeSnapshot`. Docker may remain the interim local fallback.
 4. Add model-call metrics (latency, tokens, cost) and redaction of secrets from prompts/outputs.
 
 *Exit:* a service task drives a real model that reads context, calls policy-gated tools, and produces non-deterministic output with full snapshot capture.

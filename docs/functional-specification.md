@@ -62,7 +62,7 @@ Autofac addresses this by providing a single orchestration layer for SDLC automa
 - CI/CD and deployment automation orchestration
 - Dashboard and workflow observability
 - RBAC and workflow security
-- Docker-based sandbox execution
+- Sandboxed agent execution with secure runtime options
 - Kubernetes-based platform deployment
 - Plugin and extension support
 - Logging, tracing, and monitoring
@@ -128,7 +128,7 @@ A skill is a Markdown-defined capability or instruction package used to shape ag
 
 ### 7.6 Sandbox
 
-A sandbox is an isolated execution environment, typically Docker-based, used to safely run agent tasks with resource, file system, and network controls.
+A sandbox is an isolated execution environment used to safely run agent tasks with resource, file system, network, and secret-access controls. Local development may use Docker-backed sandboxes, while production deployments should support a sandbox control plane and stronger secure runtimes.
 
 ## 8. Functional Overview
 
@@ -384,7 +384,7 @@ Every tool invocation must be subject to logging, tracing, policy checks, and au
 
 ### 10.10 Agent Runtime and Sandbox
 
-- The system must support running agents in Docker sandboxes.
+- The system must support running agents in sandboxed environments. The current implementation may use Docker, but the production architecture must support a sandbox control plane with secure runtime selection.
 - The system must allow sandbox profiles for file system, network, compute, and secret access.
 - The system must capture runtime logs and artifacts from sandbox execution.
 - The system should support multiple sandbox configurations by environment or workflow type.
