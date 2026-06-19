@@ -75,6 +75,6 @@ public sealed class DockerSandboxExecutorTests
     [Fact]
     public void SandboxOptions_Section_IsCorrect()
     {
-        Assert.Equal("Sandboxes:Docker", SandboxOptions.Section);
+        Assert.Equal("Sandboxes", SandboxOptions.Section);
     }
 }

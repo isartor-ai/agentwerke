@@ -19,8 +19,8 @@ namespace Autofac.Agents;
 
 /// <summary>
 /// Bridges BPMN service-task execution to the agent layer.
-/// When <see cref="SandboxOptions.Enabled"/> is true, dispatches to
-/// <see cref="ISandboxExecutor"/> for Docker-isolated execution.
+/// When sandbox execution is enabled, dispatches to <see cref="ISandboxExecutor"/>
+/// for provider-selected isolated execution.
 /// Outputs larger than <see cref="OutputOffloadThresholdBytes"/> are written to artifact
 /// storage and replaced with a reference marker so the DB row stays small.
 /// </summary>
@@ -461,7 +461,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 ExtractToolInput(metadata.RuntimeContract));
         }
 
-        if (_sandboxOptions.Enabled)
+        if (_sandboxOptions.IsEnabled)
         {
             return CreateToolRequest(
                 ToolName: "sandbox.execute",
