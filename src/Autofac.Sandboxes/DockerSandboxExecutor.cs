@@ -51,17 +51,28 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisp
             return Failure($"Container creation failed: {ex.Message}", started);
         }
 
+        SandboxExecutionResult result;
         try
         {
-            return await RunAndCollectAsync(request, containerId, artifactsDir, started, cancellationToken);
+            result = await RunAndCollectAsync(request, containerId, artifactsDir, started, cancellationToken);
         }
-        finally
+        catch
         {
-            if (ShouldDeleteOnCompletion(request))
+            // Unknown outcome — treat like a failure for retention purposes.
+            if (ShouldDeleteOnCompletion(request, succeeded: false))
             {
                 await RemoveContainerQuietlyAsync(containerId);
             }
+
+            throw;
         }
+
+        if (ShouldDeleteOnCompletion(request, result.Succeeded))
+        {
+            await RemoveContainerQuietlyAsync(containerId);
+        }
+
+        return result;
     }
 
     private async Task<string> CreateContainerAsync(
@@ -318,8 +329,16 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisp
             .ToArray();
     }
 
-    private static bool ShouldDeleteOnCompletion(SandboxExecutionRequest request) =>
-        request.Profile?.CleanupPolicy?.DeleteSandboxOnCompletion ?? true;
+    private static bool ShouldDeleteOnCompletion(SandboxExecutionRequest request, bool succeeded)
+    {
+        var cleanupPolicy = request.Profile?.CleanupPolicy;
+        if (!succeeded && cleanupPolicy?.RetainSandboxOnFailure == true)
+        {
+            return false;
+        }
+
+        return cleanupPolicy?.DeleteSandboxOnCompletion ?? true;
+    }
 
     public async ValueTask DisposeAsync()
     {

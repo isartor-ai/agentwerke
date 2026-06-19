@@ -52,6 +52,7 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secretName }}
                   key: JWT_SECRET
+            {{- include "autofac.sandboxEnv" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health/ready
