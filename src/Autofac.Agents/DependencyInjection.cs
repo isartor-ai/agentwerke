@@ -47,6 +47,7 @@ public static class DependencyInjection
             services.AddScoped<ILanguageModelClient, NullLanguageModelClient>();
         }
         services.AddScoped<IAgentModelRunner, AgentModelRunner>();
+        services.AddScoped<ISandboxedAgentRunner, OpenSandboxedAgentRunner>();
 
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();
 

@@ -1,5 +1,14 @@
 namespace Autofac.Domain.AgentRuntime;
 
+public static class AgentExecutionModes
+{
+    public const string Local = "local";
+    public const string ToolSandboxed = "tool_sandboxed";
+    public const string AgentSandboxed = "agent_sandboxed";
+
+    public static readonly IReadOnlyList<string> All = [Local, ToolSandboxed, AgentSandboxed];
+}
+
 public sealed record AgentRuntimeContract
 {
     public AgentPromptContract? Prompt { get; init; }

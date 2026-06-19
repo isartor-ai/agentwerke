@@ -113,6 +113,8 @@ public sealed class OpenSandboxProviderOptions
 
     public string DefaultImage { get; set; } = "alpine:3.19";
 
+    public string AgentRunnerImage { get; set; } = "autofac/agent-runner:latest";
+
     public int DefaultTimeoutSeconds { get; set; } = 60;
 
     public int ReadinessTimeoutSeconds { get; set; } = 30;

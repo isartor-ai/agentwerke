@@ -137,7 +137,8 @@ public sealed class ToolGateway : IToolGateway
                     DurationMs: (int)stopwatch.ElapsedMilliseconds,
                     ArtifactNames: artifactNames),
                 Artifacts: result.Artifacts,
-                ExternalActions: result.ExternalActions);
+                ExternalActions: result.ExternalActions,
+                SandboxExecution: result.SandboxExecution);
         }
         catch (Exception ex)
         {

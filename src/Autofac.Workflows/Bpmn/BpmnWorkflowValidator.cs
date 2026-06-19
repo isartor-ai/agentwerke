@@ -251,6 +251,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var failUntilAttempt = ParseNonNegativeIntAttribute(agentTask, "failUntilAttempt", element, errors);
         var timeoutSeconds = ParseNullableNonNegativeIntAttribute(agentTask, "timeoutSeconds", element, errors);
         var simulateTimeout = ParseBooleanAttribute(agentTask, "simulateTimeout", element, errors);
+        var executionMode = ParseExecutionModeAttribute(agentTask, element, errors);
 
         if (maxRetries > 0 && retryBackoffSeconds == 0)
         {
@@ -281,6 +282,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             SimulateTimeout: simulateTimeout,
             TimeoutSeconds: timeoutSeconds,
             RuntimeContract: runtimeContract,
+            ExecutionMode: executionMode,
             SandboxProfile: agentTask.Attribute("sandboxProfile")?.Value);
     }
 
@@ -319,6 +321,28 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 DeniedTools = deniedTools
             }
         };
+    }
+
+    private static string? ParseExecutionModeAttribute(
+        XElement agentTask,
+        XElement element,
+        ICollection<BpmnValidationError> errors)
+    {
+        var executionMode = agentTask.Attribute("executionMode")?.Value;
+        if (string.IsNullOrWhiteSpace(executionMode))
+        {
+            return null;
+        }
+
+        if (!AgentExecutionModes.All.Contains(executionMode, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add(CreateError(
+                element,
+                $"executionMode must be one of: {string.Join(", ", AgentExecutionModes.All)}."));
+            return null;
+        }
+
+        return executionMode;
     }
 
     private static IReadOnlyList<string> ParseCsvAttribute(XElement element, string attributeName) =>

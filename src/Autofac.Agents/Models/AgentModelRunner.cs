@@ -33,7 +33,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
         CancellationToken cancellationToken)
     {
         var toolDefinitions = BuildToolDefinitions(request.Contract);
-        var systemPrompt = BuildSystemPrompt(request);
+        var systemPrompt = ModelRunPromptFactory.BuildSystemPrompt(request);
 
         var invocations = new List<AgentToolInvocationRecord>();
         var artifacts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -154,26 +154,6 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
     private static string BuildToolDescription(IAgentTool tool) =>
         $"[{tool.Category}] {tool.Name}";
-
-    private static string BuildSystemPrompt(ModelRunRequest request)
-    {
-        var parts = new List<string>
-        {
-            $"You are {request.AgentName}, an AI agent executing the action '{request.Action}'.",
-            $"Purpose: {request.PurposeType}.",
-            $"Environment: {request.Environment ?? "unspecified"}.",
-            $"Attempt: {request.Attempt}."
-        };
-
-        if (request.RequiresEvidence.Count > 0)
-        {
-            parts.Add($"Required evidence: {string.Join(", ", request.RequiresEvidence)}.");
-        }
-
-        parts.Add("Use the available tools to complete the task. Be precise and efficient.");
-
-        return string.Join(" ", parts);
-    }
 
     private static AgentModelTokenUsage? ToTokenUsage(LanguageModelResponse response, double elapsedMs)
     {

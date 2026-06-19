@@ -74,6 +74,7 @@ public sealed class PolicyEvaluationServiceTests
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
             new NullAgentModelRunner(),
+            new StubSandboxedAgentRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
             new FileAgentRegistry([]),
@@ -130,6 +131,7 @@ public sealed class PolicyEvaluationServiceTests
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
             new NullAgentModelRunner(),
+            new StubSandboxedAgentRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
             new FileAgentRegistry([]),
@@ -467,6 +469,115 @@ public sealed class PolicyEvaluationServiceTests
         Assert.True(outcome.Succeeded);
         Assert.Equal(1, sandbox.ExecuteCalls);
         Assert.Equal("offline", sandbox.LastRequest?.Metadata?["autofac.sandboxProfile"]);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_ClaudeCodeAgent_UsesSandboxedAgentRunner()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var sandboxedRunner = new StubSandboxedAgentRunner();
+        var claudeCodeRegistry = new FileAgentRegistry(
+        [
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Name = "Spec Writer",
+                Runner = "claude-code",
+                SupportedActions = ["spec.generate"],
+                SandboxProfiles = ["offline"]
+            }
+        ]);
+
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            gitHub,
+            sandbox,
+            sandboxEnabled: true,
+            registry: claudeCodeRegistry,
+            sandboxedAgentRunner: sandboxedRunner);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WriteSpec",
+                "Write Spec",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "spec-writer",
+                    Action: "spec.generate",
+                    Environment: "ci",
+                    PurposeType: "specification",
+                    PolicyTag: "doc-generation",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Prompt = new Domain.AgentRuntime.AgentPromptContract
+                        {
+                            Inline = "Write a concise spec."
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        Assert.Equal(1, sandboxedRunner.ExecuteCalls);
+        Assert.Equal(AgentExecutionModes.AgentSandboxed, outcome.RuntimeSnapshot!.ExecutionMode);
+        Assert.NotNull(outcome.RuntimeSnapshot.SandboxExecution);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_ClaudeCodeAgent_WhenSandboxDisabled_ReturnsClearFailure()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var sandboxedRunner = new StubSandboxedAgentRunner();
+        var claudeCodeRegistry = new FileAgentRegistry(
+        [
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Name = "Spec Writer",
+                Runner = "claude-code",
+                SupportedActions = ["spec.generate"],
+                SandboxProfiles = ["offline"]
+            }
+        ]);
+
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            gitHub,
+            sandbox,
+            sandboxEnabled: false,
+            registry: claudeCodeRegistry,
+            sandboxedAgentRunner: sandboxedRunner);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WriteSpec",
+                "Write Spec",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "spec-writer",
+                    Action: "spec.generate",
+                    Environment: "ci",
+                    PurposeType: "specification",
+                    PolicyTag: "doc-generation",
+                    RequiresEvidence: [])),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        Assert.Equal(0, sandboxedRunner.ExecuteCalls);
+        Assert.Equal(AgentExecutionModes.AgentSandboxed, outcome.RuntimeSnapshot!.ExecutionMode);
+        Assert.Contains("sandbox execution is not enabled", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -998,10 +1109,12 @@ public sealed class PolicyEvaluationServiceTests
         RecordingGitHubConnector gitHub,
         StubSandboxExecutor sandbox,
         bool sandboxEnabled = false,
-        IMcpToolSessionFactory? mcpSessionFactory = null)
+        IMcpToolSessionFactory? mcpSessionFactory = null,
+        IAgentRegistry? registry = null,
+        ISandboxedAgentRunner? sandboxedAgentRunner = null)
     {
         var policyService = new StubPolicyEvaluationService(policyKind);
-        var registry = new ToolRegistry(
+        var toolRegistry = new ToolRegistry(
         [
             new GitHubCreateBranchTool(gitHub),
             new GitHubCreatePullRequestTool(gitHub),
@@ -1014,12 +1127,13 @@ public sealed class PolicyEvaluationServiceTests
             policyService,
             CreateHookGateway(),
             mcpSessionFactory ?? new StubMcpToolSessionFactory(),
-            registry,
-            new ToolGateway(registry, policyService, new SandboxProfileSelector()),
+            toolRegistry,
+            new ToolGateway(toolRegistry, policyService, new SandboxProfileSelector()),
             new NullAgentModelRunner(),
+            sandboxedAgentRunner ?? new StubSandboxedAgentRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
-            new FileAgentRegistry([]),
+            registry ?? new FileAgentRegistry([]),
             Options.Create(new SandboxOptions
             {
                 Enabled = sandboxEnabled
@@ -1185,6 +1299,35 @@ public sealed class PolicyEvaluationServiceTests
                 FailureReason: null,
                 Duration: TimeSpan.FromSeconds(1),
                 Artifacts: new Dictionary<string, string>()));
+        }
+    }
+
+    private sealed class StubSandboxedAgentRunner : ISandboxedAgentRunner
+    {
+        public int ExecuteCalls { get; private set; }
+
+        public Task<ModelRunResult> RunAsync(
+            ModelRunRequest request,
+            AgentProfile? profile,
+            string sandboxProfileName,
+            CancellationToken cancellationToken)
+        {
+            ExecuteCalls++;
+            return Task.FromResult(new ModelRunResult(
+                Succeeded: true,
+                Output: "sandboxed-output",
+                FailureReason: null,
+                ToolInvocations: [],
+                Artifacts: null,
+                TokenUsage: new AgentModelTokenUsage(10, 20, "claude-sonnet-4-6"),
+                SandboxExecution: new AgentSandboxExecutionRecord
+                {
+                    Provider = "opensandbox",
+                    SandboxId = "sbx-123",
+                    CommandState = "Completed",
+                    ExitCode = 0,
+                    DurationMs = 100
+                }));
         }
     }
 

@@ -39,4 +39,5 @@ public sealed record ModelRunResult(
     IReadOnlyList<AgentToolInvocationRecord> ToolInvocations,
     IReadOnlyDictionary<string, string>? Artifacts,
     AgentModelTokenUsage? TokenUsage,
-    double ElapsedMs = 0);
+    double ElapsedMs = 0,
+    AgentSandboxExecutionRecord? SandboxExecution = null);

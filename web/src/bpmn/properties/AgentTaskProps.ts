@@ -43,6 +43,41 @@ function textField(
   };
 }
 
+function selectField(
+  attribute: string,
+  label: string,
+  options: ReadonlyArray<{ value: string; label: string }>,
+) {
+  return function AgentTaskSelectField(props: any) {
+    const { element, id } = props;
+    const modeling = useService('modeling');
+    const moddle = useService('moddle');
+    const translate = useService('translate');
+
+    const getValue = () => getExtensionProperty(element, AGENT_TASK_TYPE, attribute) ?? '';
+    const setValue = (value: string) =>
+      setExtensionProperty(
+        element,
+        AGENT_TASK_TYPE,
+        { [attribute]: value || undefined },
+        { modeling, moddle },
+      );
+    const getOptions = () => options.map((option) => ({
+      value: option.value,
+      label: translate(option.label),
+    }));
+
+    return html`<${SelectEntry}
+      id=${id}
+      element=${element}
+      label=${translate(label)}
+      getValue=${getValue}
+      setValue=${setValue}
+      getOptions=${getOptions}
+    />`;
+  };
+}
+
 /**
  * Builds the Agent drop-down, populated from the registered-agent catalog
  * (`GET /api/agents`). The stored value is preserved even if it isn't a
@@ -119,6 +154,28 @@ function numberField(attribute: string, label: string) {
   };
 }
 
+const SANDBOX_PROFILE_OPTIONS = [
+  { value: '', label: 'Default (agent or runtime default)' },
+  { value: 'offline', label: 'offline' },
+  { value: 'repo-read', label: 'repo-read' },
+  { value: 'repo-write', label: 'repo-write' },
+  { value: 'deployment', label: 'deployment' },
+] as const;
+
+const EXECUTION_MODE_OPTIONS = [
+  { value: '', label: 'Default (agent or runtime default)' },
+  { value: 'local', label: 'local' },
+  { value: 'tool_sandboxed', label: 'tool_sandboxed' },
+  { value: 'agent_sandboxed', label: 'agent_sandboxed' },
+] as const;
+
+const PERMISSION_LEVEL_OPTIONS = [
+  { value: '', label: 'Default (read-only)' },
+  { value: 'read-only', label: 'read-only' },
+  { value: 'read-write', label: 'read-write' },
+  { value: 'full', label: 'full' },
+] as const;
+
 /**
  * Property entries for the "Agent Task" group, shown for service/script tasks.
  * Mirrors the attributes the backend `BpmnWorkflowValidator` requires.
@@ -130,6 +187,11 @@ export function agentTaskEntries(element: any) {
     { id: 'autofac-environment', component: textField('environment', 'Environment', 'e.g. production'), isEdited: isTextFieldEntryEdited, element },
     { id: 'autofac-purposeType', component: textField('purposeType', 'Purpose type', 'e.g. production_deployment'), isEdited: isTextFieldEntryEdited, element },
     { id: 'autofac-policyTag', component: textField('policyTag', 'Policy tag', 'e.g. deploy_gateway'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'autofac-executionMode', component: selectField('executionMode', 'Execution mode', EXECUTION_MODE_OPTIONS), isEdited: isSelectEntryEdited, element },
+    { id: 'autofac-sandboxProfile', component: selectField('sandboxProfile', 'Sandbox profile', SANDBOX_PROFILE_OPTIONS), isEdited: isSelectEntryEdited, element },
+    { id: 'autofac-permissionLevel', component: selectField('permissionLevel', 'Permission level', PERMISSION_LEVEL_OPTIONS), isEdited: isSelectEntryEdited, element },
+    { id: 'autofac-allowedTools', component: textField('allowedTools', 'Allowed tools', 'comma-separated, e.g. sandbox.execute'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'autofac-deniedTools', component: textField('deniedTools', 'Denied tools', 'comma-separated, e.g. web_search'), isEdited: isTextFieldEntryEdited, element },
     { id: 'autofac-requiresEvidence', component: textField('requiresEvidence', 'Required evidence', 'comma-separated'), isEdited: isTextFieldEntryEdited, element },
     { id: 'autofac-maxRetries', component: numberField('maxRetries', 'Max retries'), isEdited: isNumberFieldEntryEdited, element },
     { id: 'autofac-retryBackoffSeconds', component: numberField('retryBackoffSeconds', 'Retry backoff (s)'), isEdited: isNumberFieldEntryEdited, element },

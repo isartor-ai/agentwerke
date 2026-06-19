@@ -36,6 +36,7 @@ public sealed class ApiContractMappingsTests
                         NodeId = "Deploy",
                         AgentName = "deploy-agent",
                         Action = "cloud.deploy_artifact",
+                        ExecutionMode = AgentExecutionModes.AgentSandboxed,
                         Prompt = new AgentPromptSnapshot(
                             FinalPrompt: "assembled prompt",
                             RenderedAt: "2026-06-14T00:00:00.0000000+00:00",
@@ -93,7 +94,38 @@ public sealed class ApiContractMappingsTests
                                 OutputSummary = "validated",
                                 DurationMs = 5
                             }
-                        ]
+                        ],
+                        Artifacts =
+                        [
+                            new AgentArtifactRecord
+                            {
+                                Name = "spec.md",
+                                Uri = "/api/runs/run-1/artifacts/spec.md",
+                                ContentType = "text/markdown"
+                            }
+                        ],
+                        SandboxExecution = new AgentSandboxExecutionRecord
+                        {
+                            Provider = "opensandbox",
+                            SandboxId = "sbx-123",
+                            CommandState = "Completed",
+                            ExitCode = 0,
+                            DurationMs = 912,
+                            Logs =
+                            [
+                                new AgentSandboxLogRecord
+                                {
+                                    Stream = "stdout",
+                                    Message = "spec generation running",
+                                    Timestamp = "2026-06-19T12:00:00.0000000+00:00"
+                                }
+                            ],
+                            Diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["provider"] = "opensandbox",
+                                ["sandbox.state"] = "Running"
+                            }
+                        }
                     }
                 }
             ]
@@ -117,5 +149,15 @@ public sealed class ApiContractMappingsTests
         var hook = Assert.Single(step.HookExecutions);
         Assert.Equal("policy-guard", hook.HookName);
         Assert.True(hook.Blocking);
+        Assert.NotNull(step.RuntimeSnapshot);
+        Assert.Equal("cloud.deploy_artifact", step.RuntimeSnapshot!.Action);
+        Assert.Equal(AgentExecutionModes.AgentSandboxed, step.RuntimeSnapshot.ExecutionMode);
+        var artifact = Assert.Single(step.RuntimeSnapshot.StepArtifacts);
+        Assert.Equal("spec.md", artifact.Name);
+        Assert.NotNull(step.RuntimeSnapshot.SandboxExecution);
+        Assert.Equal("opensandbox", step.RuntimeSnapshot.SandboxExecution!.Provider);
+        Assert.Equal("sbx-123", step.RuntimeSnapshot.SandboxExecution.SandboxId);
+        Assert.Equal("Running", step.RuntimeSnapshot.SandboxExecution.Diagnostics["sandbox.state"]);
+        Assert.Single(step.RuntimeSnapshot.SandboxExecution.Logs);
     }
 }

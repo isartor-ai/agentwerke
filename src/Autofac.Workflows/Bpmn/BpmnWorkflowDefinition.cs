@@ -35,6 +35,7 @@ public sealed record AutofacTaskMetadata(
     bool SimulateTimeout = false,
     int? TimeoutSeconds = null,
     AgentRuntimeContract? RuntimeContract = null,
+    string? ExecutionMode = null,
     /// <summary>
     /// Named sandbox profile (e.g. "repo-write", "deployment") this task requests. Null
     /// defaults to the most restrictive "offline" profile. Validated against the agent's

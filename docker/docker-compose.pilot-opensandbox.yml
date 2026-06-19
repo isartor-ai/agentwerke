@@ -1,0 +1,223 @@
+###############################################################################
+# Autofac — Pilot OpenSandbox stack
+#
+# Starts a pilot-style local stack that exercises real sandbox-backed agent
+# execution through a local OpenSandbox server running in Docker mode.
+#
+# Quick start:
+#   docker compose -f docker/docker-compose.pilot-opensandbox.yml up --build
+#
+# Stop and remove volumes:
+#   docker compose -f docker/docker-compose.pilot-opensandbox.yml down -v
+#
+# Ports:
+#   http://localhost:3004   Web UI
+#   http://localhost:8084   API  (e.g. http://localhost:8084/api/health/live)
+#   http://localhost:8090   OpenSandbox server health
+#   http://localhost:9092   WireMock admin
+#   http://localhost:5436   Postgres
+#
+# Notes:
+# - This stack enables Sandboxes:Provider=opensandbox.
+# - A bootstrap container uploads a file-backed pilot agent and imports/publishes
+#   the "OpenSandbox Agent Execution" workflow through the API itself, so it
+#   shows up exactly like a user-authored workflow in the UI.
+# - The pilot workflow is allowed to run only the "offline" sandbox profile, so
+#   it proves end-to-end sandbox execution without repository credentials or
+#   outbound network access.
+###############################################################################
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autofac_pilot_opensandbox
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_pilot_opensandbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: build
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot_opensandbox;Username=postgres;Password=postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  wiremock:
+    image: wiremock/wiremock:3.10.0
+    command: --port 8080
+    ports:
+      - "9092:8080"
+    volumes:
+      - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github-catchall.json:ro
+      - ./wiremock-pilot-stubs.json:/home/wiremock/mappings/github-pilot.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  opensandbox:
+    build:
+      context: ..
+      dockerfile: docker/opensandbox/Dockerfile
+      args:
+        OPENSANDBOX_SERVER_VERSION: "${OPENSANDBOX_SERVER_VERSION:-}"
+    container_name: autofac-pilot-opensandbox-server
+    restart: unless-stopped
+    environment:
+      OPENSANDBOX_INSECURE_SERVER: "YES"
+      SANDBOX_CONFIG_PATH: "/etc/opensandbox/sandbox.toml"
+    ports:
+      - "8090:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - opensandbox_data:/var/lib/opensandbox
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2).read()\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+    container_name: autofac-pilot-opensandbox-api
+    restart: unless-stopped
+    ports:
+      - "8084:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot_opensandbox;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      Agents__Registry__AgentsDirectory: /app/agents
+      Agents__Skills__SkillsDirectory: ""
+      Sandboxes__Enabled: "true"
+      Sandboxes__Provider: "opensandbox"
+      Sandboxes__OpenSandbox__Enabled: "true"
+      Sandboxes__OpenSandbox__BaseUrl: "http://opensandbox:8080/v1"
+      Sandboxes__OpenSandbox__ServerUrl: "http://opensandbox:8080/v1"
+      Sandboxes__OpenSandbox__DefaultImage: "alpine:3.19"
+      Sandboxes__OpenSandbox__DefaultTimeoutSeconds: "60"
+      Sandboxes__OpenSandbox__ReadinessTimeoutSeconds: "60"
+      Sandboxes__OpenSandbox__UseServerProxy: "false"
+      Sandboxes__OpenSandbox__WorkingDirectory: "/workspace"
+      Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
+      Integrations__GitHub__PersonalAccessToken: "mock-token"
+      Integrations__GitHub__RepositoryOwner: "mock-owner"
+      Integrations__GitHub__RepositoryName: "mock-repo"
+      Integrations__Jira__WebhookSecret: ""
+      Integrations__GitHub__WebhookSecret: ""
+      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
+      Jwt__Issuer: "autofac-dev"
+      Jwt__Audience: "autofac-dev"
+      Jwt__DevTokensEnabled: "true"
+    volumes:
+      - api_storage:/app/storage
+      - api_agents:/app/agents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      wiremock:
+        condition: service_healthy
+      opensandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  bridge-attach:
+    image: docker:27-cli
+    restart: "no"
+    command: >
+      sh -lc '
+      until docker inspect autofac-pilot-opensandbox-server >/dev/null 2>&1; do sleep 1; done;
+      docker network connect bridge autofac-pilot-opensandbox-server 2>/dev/null || true;
+      until docker inspect autofac-pilot-opensandbox-api >/dev/null 2>&1; do sleep 1; done;
+      docker network connect bridge autofac-pilot-opensandbox-api 2>/dev/null || true
+      '
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      opensandbox:
+        condition: service_started
+      api:
+        condition: service_started
+
+  seed:
+    image: postgres:16-alpine
+    command: >
+      sh -lc '
+      psql --set ON_ERROR_STOP=1 \
+      "host=postgres port=5432 dbname=autofac_pilot_opensandbox user=postgres password=postgres"
+      -f /seed/seed-pilot.sql
+      '
+    volumes:
+      - ./seed-pilot.sql:/seed/seed-pilot.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  bootstrap:
+    image: python:3.12-alpine
+    restart: "no"
+    command: >
+      sh -lc '
+      python /bootstrap/bootstrap.py
+      '
+    volumes:
+      - ./pilot-opensandbox-bootstrap:/bootstrap:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+    restart: unless-stopped
+    ports:
+      - "3004:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  api_storage:
+  api_agents:
+  opensandbox_data:

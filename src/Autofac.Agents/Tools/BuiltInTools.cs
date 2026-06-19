@@ -240,7 +240,24 @@ public sealed class SandboxExecutionTool : IAgentTool
             Succeeded: result.Succeeded,
             Output: result.Logs,
             FailureReason: result.FailureReason,
-            Artifacts: result.Artifacts);
+            Artifacts: result.Artifacts,
+            SandboxExecution: new AgentSandboxExecutionRecord
+            {
+                Provider = result.Provider.ToConfigValue(),
+                SandboxId = result.ProviderSandboxId,
+                CommandState = result.CommandState.ToString(),
+                ExitCode = result.ExitCode,
+                DurationMs = (int)Math.Round(result.Duration.TotalMilliseconds),
+                Logs = (result.StructuredLogs ?? [])
+                    .Select(static entry => new AgentSandboxLogRecord
+                    {
+                        Stream = entry.Stream,
+                        Message = entry.Message,
+                        Timestamp = entry.Timestamp.ToString("o")
+                    })
+                    .ToArray(),
+                Diagnostics = result.ProviderDiagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            });
     }
 
     private static void Require(IReadOnlyDictionary<string, string> input, string key)
