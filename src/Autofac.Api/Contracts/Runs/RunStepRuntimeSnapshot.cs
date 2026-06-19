@@ -3,6 +3,7 @@ namespace Autofac.Api.Contracts.Runs;
 public sealed record RunStepRuntimeSnapshot(
     string? AgentName,
     string? Action,
+    string ExecutionMode,
     string? PromptInline,
     PromptSnapshot? Prompt,
     IReadOnlyList<RunStepSkillUsage> Skills,
@@ -15,7 +16,8 @@ public sealed record RunStepRuntimeSnapshot(
     IReadOnlyList<string> DeniedTools,
     bool SubAgentsEnabled,
     RunStepPermissionDecision? PermissionDecision,
-    IReadOnlyList<RunStepArtifactRef> StepArtifacts);
+    IReadOnlyList<RunStepArtifactRef> StepArtifacts,
+    RunStepSandboxExecution? SandboxExecution);
 
 public sealed record RunStepSkillUsage(
     string SkillId,
@@ -56,3 +58,17 @@ public sealed record RunStepArtifactRef(
     string Name,
     string? Uri,
     string? ContentType);
+
+public sealed record RunStepSandboxExecution(
+    string Provider,
+    string? SandboxId,
+    string CommandState,
+    int? ExitCode,
+    int? DurationMs,
+    IReadOnlyList<RunStepSandboxLogEntry> Logs,
+    IReadOnlyDictionary<string, string> Diagnostics);
+
+public sealed record RunStepSandboxLogEntry(
+    string Stream,
+    string Message,
+    string Timestamp);

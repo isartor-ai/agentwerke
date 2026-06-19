@@ -43,7 +43,8 @@ public sealed record AgentToolExecutionResult(
     string? Output,
     string? FailureReason,
     IReadOnlyDictionary<string, string>? Artifacts = null,
-    IReadOnlyList<ExternalActionRecord>? ExternalActions = null);
+    IReadOnlyList<ExternalActionRecord>? ExternalActions = null,
+    Domain.AgentRuntime.AgentSandboxExecutionRecord? SandboxExecution = null);
 
 public sealed record ToolGatewayRequest(
     string ToolName,
@@ -74,4 +75,5 @@ public sealed record ToolGatewayResult(
     PolicyDecision? PolicyDecision,
     Domain.AgentRuntime.AgentToolInvocationRecord Invocation,
     IReadOnlyDictionary<string, string>? Artifacts = null,
-    IReadOnlyList<ExternalActionRecord>? ExternalActions = null);
+    IReadOnlyList<ExternalActionRecord>? ExternalActions = null,
+    Domain.AgentRuntime.AgentSandboxExecutionRecord? SandboxExecution = null);

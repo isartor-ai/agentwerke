@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:autofac="https://autofac.ai/bpmn"
+    id="pilot-opensandbox-defs"
+    targetNamespace="https://autofac.ai/bpmn">
+  <bpmn:process id="pilot-opensandbox" name="OpenSandbox Agent Execution" isExecutable="true">
+    <bpmn:startEvent id="Start" name="Start">
+      <bpmn:outgoing>Flow1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="RunInOpenSandbox" name="Run in OpenSandbox">
+      <bpmn:extensionElements>
+        <autofac:agentTask
+          agent="opensandbox-pilot-agent"
+          action="run-open-sandbox"
+          environment="ci"
+          purposeType="verification"
+          policyTag="opensandbox-pilot"
+          sandboxProfile="offline"
+          permissionLevel="read-write"
+          allowedTools="sandbox.execute" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow1</bpmn:incoming>
+      <bpmn:outgoing>Flow2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End" name="End">
+      <bpmn:incoming>Flow2</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow1" sourceRef="Start" targetRef="RunInOpenSandbox" />
+    <bpmn:sequenceFlow id="Flow2" sourceRef="RunInOpenSandbox" targetRef="End" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_OpenSandbox">
+    <bpmndi:BPMNPlane id="BPMNPlane_OpenSandbox" bpmnElement="pilot-opensandbox">
+      <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
+        <dc:Bounds x="152" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="155" y="185" width="30" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="RunInOpenSandbox_di" bpmnElement="RunInOpenSandbox">
+        <dc:Bounds x="240" y="120" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_di" bpmnElement="End">
+        <dc:Bounds x="432" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="439" y="185" width="22" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow1_di" bpmnElement="Flow1">
+        <di:waypoint x="188" y="160" /><di:waypoint x="240" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow2_di" bpmnElement="Flow2">
+        <di:waypoint x="360" y="160" /><di:waypoint x="432" y="160" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -233,7 +233,8 @@ internal static class ApiContractMappings
                 hook.Blocking,
                 hook.OutputSummary,
                 hook.ErrorMessage,
-                hook.DurationMs)).ToArray() ?? []);
+                hook.DurationMs)).ToArray() ?? [],
+            RuntimeSnapshot: step.RuntimeSnapshot is null ? null : ToRunStepRuntimeSnapshot(step.RuntimeSnapshot));
     }
 
     public static string NormalizeRunStatus(string status)
@@ -291,6 +292,7 @@ internal static class ApiContractMappings
         return new RunStepRuntimeSnapshot(
             AgentName: snapshot.AgentName,
             Action: snapshot.Action,
+            ExecutionMode: snapshot.ExecutionMode,
             PromptInline: snapshot.Prompt?.FinalPrompt ?? contract.Prompt?.Inline,
             Prompt: snapshot.Prompt is null ? null : new PromptSnapshot(
                 snapshot.Prompt.FinalPrompt,
@@ -330,6 +332,16 @@ internal static class ApiContractMappings
                     snapshot.PermissionDecision.Rationale),
             StepArtifacts: snapshot.Artifacts
                 .Select(static a => new RunStepArtifactRef(a.Name, a.Uri, a.ContentType))
-                .ToArray());
+                .ToArray(),
+            SandboxExecution: snapshot.SandboxExecution is null ? null : new RunStepSandboxExecution(
+                snapshot.SandboxExecution.Provider,
+                snapshot.SandboxExecution.SandboxId,
+                snapshot.SandboxExecution.CommandState,
+                snapshot.SandboxExecution.ExitCode,
+                snapshot.SandboxExecution.DurationMs,
+                snapshot.SandboxExecution.Logs
+                    .Select(static log => new RunStepSandboxLogEntry(log.Stream, log.Message, log.Timestamp))
+                    .ToArray(),
+                new Dictionary<string, string>(snapshot.SandboxExecution.Diagnostics, StringComparer.OrdinalIgnoreCase)));
     }
 }

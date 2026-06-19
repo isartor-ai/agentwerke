@@ -37,6 +37,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private readonly IToolRegistry _toolRegistry;
     private readonly IToolGateway _toolGateway;
     private readonly IAgentModelRunner _modelRunner;
+    private readonly ISandboxedAgentRunner _sandboxedAgentRunner;
     private readonly IRunContextRepository _runContextRepository;
     private readonly IAgentRegistry _agentRegistry;
     private readonly string _gitHubBranchPrefix;
@@ -52,6 +53,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         IToolRegistry toolRegistry,
         IToolGateway toolGateway,
         IAgentModelRunner modelRunner,
+        ISandboxedAgentRunner sandboxedAgentRunner,
         IArtifactStorage artifactStorage,
         IRunContextRepository runContextRepository,
         IAgentRegistry agentRegistry,
@@ -66,6 +68,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _toolRegistry = toolRegistry;
         _toolGateway = toolGateway;
         _modelRunner = modelRunner;
+        _sandboxedAgentRunner = sandboxedAgentRunner;
         _artifactStorage = artifactStorage;
         _runContextRepository = runContextRepository;
         _agentRegistry = agentRegistry;
@@ -101,6 +104,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         }
 
         var profile = _agentRegistry.Find(metadata.Agent);
+        var executionMode = ResolveExecutionMode(metadata, profile);
         var matchedSkillRef = ResolveSkillRef(profile, metadata.Action);
         var skillResolution = ResolveSkills(profile, matchedSkillRef, metadata.RuntimeContract);
         if (!skillResolution.Succeeded)
@@ -118,6 +122,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     stepId,
                     node,
                     metadata,
+                    executionMode,
                     attempt,
                     null,
                     skillResolution.AuditSkills,
@@ -151,6 +156,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             stepId,
             node,
             metadata,
+            executionMode,
             attempt,
             skillManifest,
             skillResolution.AuditSkills,
@@ -210,10 +216,10 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 cancellationToken);
         }
 
-        var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt, profile);
-        if (toolRequest is not null)
+        var explicitToolRequest = BuildExplicitToolGatewayRequest(runId, stepId, node, metadata, attempt);
+        if (explicitToolRequest is not null)
         {
-            return await RunViaToolGatewayAsync(toolRequest, node, metadata, attempt, runtimeSnapshot, cancellationToken);
+            return await RunViaToolGatewayAsync(explicitToolRequest, node, metadata, attempt, runtimeSnapshot, cancellationToken);
         }
 
         if (metadata.Action.StartsWith("mcp.", StringComparison.OrdinalIgnoreCase))
@@ -275,7 +281,64 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             PromptSnapshot: promptAssembly.PromptSnapshot,
             Contract: metadata.RuntimeContract ?? new AgentRuntimeContract());
 
-        var modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
+        ModelRunResult modelResult;
+        switch (executionMode)
+        {
+            case AgentExecutionModes.AgentSandboxed:
+                if (!_sandboxOptions.IsEnabled)
+                {
+                    return await FinalizeOutcomeAsync(
+                        node,
+                        metadata,
+                        attempt,
+                        new AgentTaskOutcome(
+                            Succeeded: false,
+                            Output: null,
+                            FailureReason: "Agent-sandboxed execution was requested, but sandbox execution is not enabled.",
+                            PolicyDecision: policyDecision,
+                            RuntimeSnapshot: runtimeSnapshot with
+                            {
+                                ExecutionMode = executionMode
+                            }),
+                        cancellationToken);
+                }
+
+                modelResult = await _sandboxedAgentRunner.RunAsync(
+                    modelRunRequest,
+                    profile,
+                    metadata.SandboxProfile ?? profile?.SandboxProfiles.FirstOrDefault() ?? SandboxProfileNames.Offline,
+                    cancellationToken);
+                break;
+            case AgentExecutionModes.ToolSandboxed:
+            {
+                var sandboxToolRequest = BuildSandboxExecutionToolRequest(runId, stepId, metadata, attempt, profile);
+                if (sandboxToolRequest is null)
+                {
+                    return await FinalizeOutcomeAsync(
+                        node,
+                        metadata,
+                        attempt,
+                        new AgentTaskOutcome(
+                            Succeeded: false,
+                            Output: null,
+                            FailureReason: "Tool-sandboxed execution was requested, but sandbox execution is not enabled.",
+                            PolicyDecision: policyDecision,
+                            RuntimeSnapshot: runtimeSnapshot with
+                            {
+                                ExecutionMode = executionMode
+                            }),
+                        cancellationToken);
+                }
+
+                return await RunViaToolGatewayAsync(sandboxToolRequest, node, metadata, attempt, runtimeSnapshot with
+                {
+                    ExecutionMode = executionMode
+                }, cancellationToken);
+            }
+            default:
+                modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
+                break;
+        }
 
         var permissionDecision = new AgentPermissionDecisionRecord
         {
@@ -289,7 +352,9 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             ToolInvocations = runtimeSnapshot.ToolInvocations.Concat(modelResult.ToolInvocations).ToArray(),
             Artifacts = runtimeSnapshot.Artifacts.Concat(MapArtifacts(modelResult.Artifacts)).ToArray(),
             PermissionDecision = permissionDecision,
-            TokenUsage = modelResult.TokenUsage
+            TokenUsage = modelResult.TokenUsage,
+            SandboxExecution = modelResult.SandboxExecution,
+            ExecutionMode = executionMode
         };
 
         var outcome = new AgentTaskOutcome(
@@ -356,6 +421,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         {
             ToolInvocations = runtimeSnapshot.ToolInvocations.Concat([result.Invocation]).ToArray(),
             Artifacts = runtimeSnapshot.Artifacts.Concat(MapArtifacts(result.Artifacts)).ToArray(),
+            SandboxExecution = result.SandboxExecution ?? runtimeSnapshot.SandboxExecution,
             PermissionDecision = new AgentPermissionDecisionRecord
             {
                 Allowed = result.Succeeded,
@@ -400,13 +466,12 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         return await FinalizeOutcomeAsync(node, metadata, attempt, toolOutcome, cancellationToken);
     }
 
-    private ToolGatewayRequest? BuildToolGatewayRequest(
+    private ToolGatewayRequest? BuildExplicitToolGatewayRequest(
         string runId,
         string stepId,
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
-        int attempt,
-        AgentProfile? profile)
+        int attempt)
     {
         var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
         if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
@@ -463,36 +528,43 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 ExtractToolInput(metadata.RuntimeContract));
         }
 
-        if (_sandboxOptions.IsEnabled)
+        return null;
+    }
+
+    private ToolGatewayRequest? BuildSandboxExecutionToolRequest(
+        string runId,
+        string stepId,
+        AutofacTaskMetadata metadata,
+        int attempt,
+        AgentProfile? profile)
+    {
+        if (!_sandboxOptions.IsEnabled)
         {
-            return CreateToolRequest(
-                ToolName: "sandbox.execute",
-                Action: metadata.Action,
-                runId,
-                stepId,
-                metadata,
-                attempt,
-                permissions,
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["agent_name"] = metadata.Agent,
-                    ["action"] = metadata.Action,
-                    ["environment"] = metadata.Environment ?? string.Empty,
-                    ["purpose_type"] = metadata.PurposeType,
-                    ["policy_tag"] = metadata.PolicyTag,
-                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    // An explicit workflow-task profile always wins. Otherwise default to the
-                    // agent's own primary declared profile so capability-bearing agents (e.g.
-                    // deploy-agent) work without every task having to repeat the profile, while
-                    // agents that declare nothing still default to the least-privilege "offline".
-                    ["sandbox_profile"] = metadata.SandboxProfile
-                        ?? profile?.SandboxProfiles.FirstOrDefault()
-                        ?? SandboxProfileNames.Offline
-                },
-                allowedSandboxProfiles: profile?.SandboxProfiles ?? []);
+            return null;
         }
 
-        return null;
+        var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
+        return CreateToolRequest(
+            ToolName: "sandbox.execute",
+            Action: metadata.Action,
+            runId,
+            stepId,
+            metadata,
+            attempt,
+            permissions,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["agent_name"] = metadata.Agent,
+                ["action"] = metadata.Action,
+                ["environment"] = metadata.Environment ?? string.Empty,
+                ["purpose_type"] = metadata.PurposeType,
+                ["policy_tag"] = metadata.PolicyTag,
+                ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["sandbox_profile"] = metadata.SandboxProfile
+                    ?? profile?.SandboxProfiles.FirstOrDefault()
+                    ?? SandboxProfileNames.Offline
+            },
+            allowedSandboxProfiles: profile?.SandboxProfiles ?? []);
     }
 
     private async Task<McpPreparationResult> PrepareMcpToolsAsync(
@@ -519,6 +591,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string stepId,
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
+        string executionMode,
         int attempt,
         SkillManifest? skillManifest,
         IReadOnlyList<AgentSkillUsageRecord> auditSkills,
@@ -531,6 +604,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             NodeId = node.Id,
             AgentName = metadata.Agent,
             Action = metadata.Action,
+            ExecutionMode = executionMode,
             Prompt = RedactPromptSnapshot(promptSnapshot),
             Contract = metadata.RuntimeContract ?? new AgentRuntimeContract(),
             Skills = auditSkills,
@@ -1016,6 +1090,23 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Name = name
             })
             .ToArray();
+    }
+
+    private string ResolveExecutionMode(AutofacTaskMetadata metadata, AgentProfile? profile)
+    {
+        if (!string.IsNullOrWhiteSpace(metadata.ExecutionMode))
+        {
+            return metadata.ExecutionMode;
+        }
+
+        if (string.Equals(profile?.Runner, "claude-code", StringComparison.OrdinalIgnoreCase))
+        {
+            return AgentExecutionModes.AgentSandboxed;
+        }
+
+        return _sandboxOptions.IsEnabled
+            ? AgentExecutionModes.ToolSandboxed
+            : AgentExecutionModes.Local;
     }
 
     private sealed record McpPreparationResult(

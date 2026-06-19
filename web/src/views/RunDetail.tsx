@@ -77,7 +77,9 @@ export function RunDetail() {
       if (!data) { setError(`Run ${runId} was not found.`); return; }
       if (firstLoad) {
         isFirstLoad.current = false;
-        setExpandedStepId(data.steps?.[data.steps.length - 1]?.id ?? null);
+        const initialStepId = data.steps?.[data.steps.length - 1]?.id ?? null;
+        setExpandedStepId(initialStepId);
+        setPanelStepId(initialStepId);
         prevCurrentStep.current = data.currentStep;
       }
       setRun(data);
@@ -284,12 +286,85 @@ export function RunDetail() {
 
       case 'I/O':
         return selectedStep ? (
-          <dl className="definition-list">
-            <div><dt>Selected Step</dt><dd>{selectedStep.name}</dd></div>
-            <div><dt>Agent</dt><dd>{selectedStep.agentName ?? '-'}</dd></div>
-            <div><dt>Output</dt><dd>{selectedStep.output ?? 'No output captured.'}</dd></div>
-            <div><dt>Error</dt><dd>{selectedStep.error ?? 'No error captured.'}</dd></div>
-          </dl>
+          <>
+            <dl className="definition-list">
+              <div><dt>Selected Step</dt><dd>{selectedStep.name}</dd></div>
+              <div><dt>Agent</dt><dd>{selectedStep.agentName ?? selectedStep.runtimeSnapshot?.agentName ?? '-'}</dd></div>
+              <div><dt>Action</dt><dd>{selectedStep.runtimeSnapshot?.action ?? '-'}</dd></div>
+              <div><dt>Output</dt><dd>{selectedStep.output ?? 'No output captured.'}</dd></div>
+              <div><dt>Error</dt><dd>{selectedStep.error ?? 'No error captured.'}</dd></div>
+            </dl>
+            {selectedStep.runtimeSnapshot?.promptInline ? (
+              <section className="policy-box">
+                <h3>Prompt</h3>
+                <pre className="adp-pre">{selectedStep.runtimeSnapshot.promptInline}</pre>
+              </section>
+            ) : null}
+            {selectedStep.runtimeSnapshot ? (
+              <section className="policy-box">
+                <h3>Execution</h3>
+                <dl className="definition-list">
+                  <div><dt>Mode</dt><dd>{selectedStep.runtimeSnapshot.executionMode}</dd></div>
+                  <div>
+                    <dt>LLM in sandbox</dt>
+                    <dd>{selectedStep.runtimeSnapshot.executionMode === 'agent_sandboxed' ? 'yes' : 'no'}</dd>
+                  </div>
+                </dl>
+              </section>
+            ) : null}
+            {(selectedStep.runtimeSnapshot?.stepArtifacts?.length ?? 0) > 0 ? (
+              <section className="policy-box">
+                <h3>Step artifacts</h3>
+                <ul className="event-list" role="list">
+                  {selectedStep.runtimeSnapshot!.stepArtifacts.map((artifact) => (
+                    <li key={artifact.name}>
+                      <strong>{artifact.name}</strong>
+                      {artifact.contentType ? <p>{artifact.contentType}</p> : null}
+                      {artifact.uri ? (
+                        <a className="btn btn-secondary" href={artifact.uri}>
+                          Download
+                        </a>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {selectedStep.runtimeSnapshot?.sandboxExecution ? (
+              <section className="policy-box">
+                <h3>Sandbox diagnostics</h3>
+                <dl className="definition-list">
+                  <div><dt>Provider</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.provider}</dd></div>
+                  <div><dt>Sandbox ID</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.sandboxId ?? '-'}</dd></div>
+                  <div><dt>State</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.commandState}</dd></div>
+                  <div><dt>Exit code</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.exitCode ?? '-'}</dd></div>
+                  <div><dt>Duration</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.durationMs?.toLocaleString() ?? '-'} ms</dd></div>
+                </dl>
+                {selectedStep.runtimeSnapshot.sandboxExecution.logs.length > 0 ? (
+                  <>
+                    <h3>Sandbox logs</h3>
+                    <pre className="adp-pre">
+                      {selectedStep.runtimeSnapshot.sandboxExecution.logs.map((entry) => (
+                        `[${entry.stream}] ${entry.message}`
+                      )).join('\n')}
+                    </pre>
+                  </>
+                ) : null}
+                {Object.keys(selectedStep.runtimeSnapshot.sandboxExecution.diagnostics).length > 0 ? (
+                  <>
+                    <h3>Sandbox metadata</h3>
+                    <dl className="definition-list">
+                      {Object.entries(selectedStep.runtimeSnapshot.sandboxExecution.diagnostics)
+                        .sort(([left], [right]) => left.localeCompare(right))
+                        .map(([key, value]) => (
+                          <div key={key}><dt>{key}</dt><dd>{value || '-'}</dd></div>
+                        ))}
+                    </dl>
+                  </>
+                ) : null}
+              </section>
+            ) : null}
+          </>
         ) : (
           <p>Select a step in the timeline to inspect its inputs and outputs.</p>
         );
@@ -497,9 +572,14 @@ export function RunDetail() {
           <StepTimeline
             steps={run.steps ?? []}
             expandedStepId={expandedStepId}
-            onToggleStep={(stepId) =>
-              setExpandedStepId((current) => (current === stepId ? null : stepId))
-            }
+            onToggleStep={(stepId) => {
+              const next = expandedStepId === stepId ? null : stepId;
+              setExpandedStepId(next);
+              setPanelStepId(next);
+              if (next) {
+                lastManualSelectAt.current = Date.now();
+              }
+            }}
           />
 
           <article className="panel event-monitor-panel" aria-label="Run event monitor">

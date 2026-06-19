@@ -14,7 +14,8 @@ public sealed record RunStep(
     PromptSnapshot? PromptSnapshot,
     IReadOnlyList<SkillAuditRecord> Skills,
     IReadOnlyList<ToolInvocationRecord> ToolInvocations,
-    IReadOnlyList<HookExecutionRecord> HookExecutions);
+    IReadOnlyList<HookExecutionRecord> HookExecutions,
+    RunStepRuntimeSnapshot? RuntimeSnapshot);
 
 public sealed record SkillAuditRecord(
     string SkillId,

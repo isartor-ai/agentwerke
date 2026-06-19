@@ -11,6 +11,7 @@ vi.mock('../api/client', () => ({
   apiClient: {
     getRun: vi.fn(),
     getWorkflow: vi.fn(),
+    streamRunEvents: vi.fn(),
     getRunArtifactDownloadUrl: vi.fn(),
     getRunEvidencePackDownloadUrl: vi.fn(),
     downloadRunEvidencePack: vi.fn(),
@@ -31,6 +32,7 @@ describe('RunDetail integration', () => {
     vi.mocked(apiClient.getRunArtifactDownloadUrl).mockImplementation(
       (runId, artifactName) => `/api/runs/${runId}/artifacts/${artifactName}`,
     );
+    vi.mocked(apiClient.streamRunEvents).mockImplementation(() => undefined);
     vi.mocked(apiClient.getRunEvidencePackDownloadUrl).mockImplementation(
       (runId) => `/api/runs/${runId}/evidence-pack/download`,
     );
@@ -73,10 +75,11 @@ describe('RunDetail integration', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
     expect(screen.getByText('scan-report.json')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Download' })).toHaveAttribute(
-      'href',
-      '/api/runs/run-0421/artifacts/scan-report.json',
-    );
+    expect(
+      screen.getAllByRole('link', { name: 'Download' }).some(
+        (link) => link.getAttribute('href') === '/api/runs/run-0421/artifacts/scan-report.json',
+      ),
+    ).toBe(true);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Approvals' }));
     expect(screen.getByText('Merge branch feature/auth-refactor to main')).toBeInTheDocument();
@@ -85,6 +88,36 @@ describe('RunDetail integration', () => {
       screen.getByRole('button', { name: 'Cancel run and stop further execution' }),
     );
     expect(screen.getByRole('dialog', { name: 'Cancel this run?' })).toBeInTheDocument();
+  });
+
+  it('shows prompt, output, and step artifacts in the I/O tab for a selected step', async () => {
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'I/O' }));
+    expect(screen.getAllByText('Specification generated successfully.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Write a concise technical specification.').length).toBeGreaterThan(0);
+    expect(screen.getByText('spec.generate')).toBeInTheDocument();
+    expect(screen.getAllByText('agent_sandboxed').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('yes').length).toBeGreaterThan(0);
+    expect(screen.getByText('Step artifacts')).toBeInTheDocument();
+    expect(screen.getAllByText('spec.md').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('link', { name: 'Download' }).some(
+        (link) => link.getAttribute('href') === '/api/runs/run-0421/artifacts/spec.md',
+      ),
+    ).toBe(true);
+    expect(screen.getByText('Sandbox diagnostics')).toBeInTheDocument();
+    expect(screen.getAllByText('opensandbox').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('sbx-42').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, element) => (
+        element?.tagName === 'PRE' &&
+        (element.textContent?.includes('spec generation running') ?? false)
+      )).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('execd.run.request_id').length).toBeGreaterThan(0);
   });
 
   it('loads workflow BPMN XML and renders the viewer with step statuses', async () => {

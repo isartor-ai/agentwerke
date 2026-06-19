@@ -12,6 +12,8 @@ public sealed record AgentRuntimeSnapshot
 
     public string? Action { get; init; }
 
+    public string ExecutionMode { get; init; } = AgentExecutionModes.Local;
+
     public AgentPromptSnapshot? Prompt { get; init; }
 
     public AgentRuntimeContract Contract { get; init; } = new();
@@ -27,6 +29,8 @@ public sealed record AgentRuntimeSnapshot
     public AgentPermissionDecisionRecord? PermissionDecision { get; init; }
 
     public AgentModelTokenUsage? TokenUsage { get; init; }
+
+    public AgentSandboxExecutionRecord? SandboxExecution { get; init; }
 }
 
 public sealed record AgentPromptSnapshot(
@@ -129,3 +133,29 @@ public sealed record AgentPermissionDecisionRecord
 }
 
 public sealed record AgentModelTokenUsage(int InputTokens, int OutputTokens, string? ModelId, double? ElapsedMs = null);
+
+public sealed record AgentSandboxExecutionRecord
+{
+    public string Provider { get; init; } = string.Empty;
+
+    public string? SandboxId { get; init; }
+
+    public string CommandState { get; init; } = "unknown";
+
+    public int? ExitCode { get; init; }
+
+    public int? DurationMs { get; init; }
+
+    public IReadOnlyList<AgentSandboxLogRecord> Logs { get; init; } = [];
+
+    public IReadOnlyDictionary<string, string> Diagnostics { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed record AgentSandboxLogRecord
+{
+    public required string Stream { get; init; }
+
+    public required string Message { get; init; }
+
+    public required string Timestamp { get; init; }
+}

@@ -158,6 +158,19 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
               </section>
             )}
 
+            {step.runtimeSnapshot && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Execution</h3>
+                <dl className="definition-list">
+                  <div><dt>Mode</dt><dd>{step.runtimeSnapshot.executionMode}</dd></div>
+                  <div>
+                    <dt>LLM in sandbox</dt>
+                    <dd>{step.runtimeSnapshot.executionMode === 'agent_sandboxed' ? 'yes' : 'no'}</dd>
+                  </div>
+                </dl>
+              </section>
+            )}
+
             {/* ── Skills ── */}
             {(step.runtimeSnapshot?.skills?.length ?? 0) > 0 && (
               <section className="adp-section">
@@ -281,6 +294,46 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
                     </li>
                   ))}
                 </ul>
+              </section>
+            )}
+
+            {step.runtimeSnapshot?.sandboxExecution && (
+              <section className="adp-section">
+                <h3 className="adp-section-label">Sandbox Diagnostics</h3>
+                <dl className="definition-list">
+                  <div><dt>Provider</dt><dd>{step.runtimeSnapshot.sandboxExecution.provider}</dd></div>
+                  <div><dt>Sandbox ID</dt><dd>{step.runtimeSnapshot.sandboxExecution.sandboxId ?? '-'}</dd></div>
+                  <div><dt>State</dt><dd>{step.runtimeSnapshot.sandboxExecution.commandState}</dd></div>
+                  <div><dt>Exit code</dt><dd>{step.runtimeSnapshot.sandboxExecution.exitCode ?? '-'}</dd></div>
+                  <div><dt>Duration</dt><dd>{step.runtimeSnapshot.sandboxExecution.durationMs?.toLocaleString() ?? '-'} ms</dd></div>
+                </dl>
+
+                {Object.keys(step.runtimeSnapshot.sandboxExecution.diagnostics).length > 0 && (
+                  <>
+                    <h3 className="adp-section-label">Metadata</h3>
+                    <dl className="definition-list">
+                      {Object.entries(step.runtimeSnapshot.sandboxExecution.diagnostics)
+                        .sort(([left], [right]) => left.localeCompare(right))
+                        .map(([key, value]) => (
+                          <div key={key}>
+                            <dt>{key}</dt>
+                            <dd>{value || '-'}</dd>
+                          </div>
+                        ))}
+                    </dl>
+                  </>
+                )}
+
+                {step.runtimeSnapshot.sandboxExecution.logs.length > 0 && (
+                  <>
+                    <h3 className="adp-section-label">Sandbox Logs</h3>
+                    <pre className="adp-pre">
+                      {step.runtimeSnapshot.sandboxExecution.logs.map((entry) => (
+                        `[${entry.stream}] ${entry.message}`
+                      )).join('\n')}
+                    </pre>
+                  </>
+                )}
               </section>
             )}
 

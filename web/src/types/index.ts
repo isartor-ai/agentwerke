@@ -97,9 +97,26 @@ export interface RunStepArtifactRef {
   contentType?: string;
 }
 
+export interface RunStepSandboxLogEntry {
+  stream: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface RunStepSandboxExecution {
+  provider: string;
+  sandboxId?: string;
+  commandState: string;
+  exitCode?: number;
+  durationMs?: number;
+  logs: RunStepSandboxLogEntry[];
+  diagnostics: Record<string, string>;
+}
+
 export interface RunStepRuntimeSnapshot {
   agentName?: string;
   action?: string;
+  executionMode: string;
   promptInline?: string;
   prompt?: RunStepPromptSnapshot;
   skills: RunStepSkillUsage[];
@@ -113,6 +130,7 @@ export interface RunStepRuntimeSnapshot {
   subAgentsEnabled: boolean;
   permissionDecision?: RunStepPermissionDecision;
   stepArtifacts: RunStepArtifactRef[];
+  sandboxExecution?: RunStepSandboxExecution;
 }
 
 export interface RunStep {

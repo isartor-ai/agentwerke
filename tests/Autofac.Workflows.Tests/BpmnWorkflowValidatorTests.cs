@@ -94,6 +94,36 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenExecutionModeAttributeIsPresent_ParsesIntoMetadata()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
+                <bpmn:serviceTask id="DeployTask" name="Deploy">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="spec-writer"
+                      action="spec.generate"
+                      environment="staging"
+                      purposeType="specification"
+                      policyTag="doc-generation"
+                      executionMode="agent_sandboxed" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var deployNode = Assert.Single(result.Definition!.Nodes, node => node.Id == "DeployTask");
+        Assert.Equal(AgentExecutionModes.AgentSandboxed, deployNode.Metadata!.ExecutionMode);
+    }
+
+    [Fact]
     public void Validate_WhenSandboxProfileAttributeIsAbsent_MetadataSandboxProfileIsNull()
     {
         var xml = """
@@ -186,6 +216,36 @@ public sealed class BpmnWorkflowValidatorTests
         var error = Assert.Single(result.Errors);
         Assert.Equal("SandboxTask", error.ElementId);
         Assert.Contains("permissionLevel must be one of", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_WhenExecutionModeIsUnknown_ReturnsActionableError()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="SandboxWorkflow" name="Sandbox Workflow">
+                <bpmn:serviceTask id="SandboxTask" name="Run sandbox">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="sandbox-e2e-agent"
+                      action="run-open-sandbox"
+                      environment="ci"
+                      purposeType="verification"
+                      policyTag="opensandbox-e2e"
+                      executionMode="super-sandbox" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("SandboxTask", error.ElementId);
+        Assert.Contains("executionMode must be one of", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

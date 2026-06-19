@@ -18,6 +18,9 @@ public sealed class AgentRuntimeContractTests
         Assert.Empty(contract.Tools);
         Assert.Empty(contract.McpServers);
         Assert.Empty(contract.Hooks);
+        Assert.Contains(AgentExecutionModes.Local, AgentExecutionModes.All);
+        Assert.Contains(AgentExecutionModes.ToolSandboxed, AgentExecutionModes.All);
+        Assert.Contains(AgentExecutionModes.AgentSandboxed, AgentExecutionModes.All);
     }
 
     [Fact]
