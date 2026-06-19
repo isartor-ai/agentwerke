@@ -98,7 +98,16 @@ public sealed class OpenSandboxProviderOptions
 {
     public bool Enabled { get; set; } = false;
 
-    public string BaseUrl { get; set; } = "http://localhost:8080/v1";
+    public string ServerUrl { get; set; } = "http://localhost:8080/v1";
+
+    /// <summary>
+    /// Backward-compatible alias for <see cref="ServerUrl"/>.
+    /// </summary>
+    public string BaseUrl
+    {
+        get => ServerUrl;
+        set => ServerUrl = value;
+    }
 
     public string ApiKey { get; set; } = string.Empty;
 
@@ -106,13 +115,19 @@ public sealed class OpenSandboxProviderOptions
 
     public int DefaultTimeoutSeconds { get; set; } = 60;
 
+    public int ReadinessTimeoutSeconds { get; set; } = 30;
+
     public int DefaultMemoryLimitMb { get; set; } = 256;
 
     public int DefaultCpuMilliCores { get; set; } = 500;
 
+    public bool UseServerProxy { get; set; } = false;
+
     public string WorkingDirectory { get; set; } = "/workspace";
 
     public List<string> DefaultArtifactPaths { get; set; } = ["/output"];
+
+    public SandboxExecutionProfile DefaultProfile { get; set; } = new();
 }
 
 public sealed class KubernetesKataSandboxProviderOptions

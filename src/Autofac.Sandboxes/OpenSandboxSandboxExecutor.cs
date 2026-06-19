@@ -27,6 +27,8 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
         var started = DateTimeOffset.UtcNow;
         string? sandboxId = null;
         SandboxCommandState commandState = SandboxCommandState.Unknown;
+        IReadOnlyDictionary<string, string>? createDiagnostics = null;
+        var succeeded = false;
 
         try
         {
@@ -36,6 +38,7 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
 
             var sandbox = await _client.CreateAsync(createRequest, cancellationToken);
             sandboxId = sandbox.SandboxId;
+            createDiagnostics = sandbox.Metadata;
 
             var commandResult = await _client.RunCommandAsync(sandboxId, commandRequest, cancellationToken);
             commandState = commandResult.State;
@@ -43,17 +46,22 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
             var artifacts = await _client.CollectArtifactsAsync(sandboxId, artifactRequest, cancellationToken);
             var endpoints = await ResolveEndpointsAsync(sandboxId, request, cancellationToken);
 
-            var succeeded = commandResult.State == SandboxCommandState.Completed
+            succeeded = commandResult.State == SandboxCommandState.Completed
                 && (commandResult.ExitCode is null or 0);
 
-            var diagnostics = succeeded
-                ? new Dictionary<string, string>()
-                : (await _client.GetDiagnosticsAsync(sandboxId, cancellationToken)).Entries;
+            var diagnostics = MergeDiagnostics(
+                createDiagnostics,
+                commandResult.Diagnostics,
+                succeeded || !ShouldCaptureDiagnosticsOnFailure(request)
+                    ? null
+                    : (await _client.GetDiagnosticsAsync(sandboxId, cancellationToken)).Entries);
 
             return new SandboxExecutionResult(
                 Succeeded: succeeded,
                 Logs: commandResult.Logs,
-                FailureReason: succeeded ? null : $"OpenSandbox command finished with state {commandResult.State}.",
+                FailureReason: succeeded
+                    ? null
+                    : commandResult.FailureReason ?? $"OpenSandbox command finished with state {commandResult.State}.",
                 Artifacts: artifacts.ToDictionary(static item => item.Path, static item => item.Content),
                 ExitCode: commandResult.ExitCode,
                 Duration: DateTimeOffset.UtcNow - started,
@@ -64,9 +72,38 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
                 Endpoints: endpoints,
                 Provider: ProviderKind);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            var diagnostics = MergeDiagnostics(
+                createDiagnostics,
+                sandboxId is null || !ShouldCaptureDiagnosticsOnFailure(request)
+                    ? null
+                    : await TryGetDiagnosticsAsync(sandboxId));
+
+            return new SandboxExecutionResult(
+                Succeeded: false,
+                Logs: string.Empty,
+                FailureReason: "OpenSandbox execution was cancelled.",
+                Artifacts: new Dictionary<string, string>(),
+                ExitCode: null,
+                Duration: DateTimeOffset.UtcNow - started,
+                ProviderSandboxId: sandboxId,
+                CommandState: SandboxCommandState.Cancelled,
+                StructuredLogs: [],
+                ProviderDiagnostics: diagnostics,
+                Endpoints: [],
+                Provider: ProviderKind);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OpenSandbox execution failed for step {StepId}", request.StepId);
+
+            var diagnostics = MergeDiagnostics(
+                createDiagnostics,
+                BuildExceptionDiagnostics(ex),
+                sandboxId is null || !ShouldCaptureDiagnosticsOnFailure(request)
+                    ? null
+                    : await TryGetDiagnosticsAsync(sandboxId));
 
             return new SandboxExecutionResult(
                 Succeeded: false,
@@ -78,17 +115,13 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
                 ProviderSandboxId: sandboxId,
                 CommandState: commandState == SandboxCommandState.Unknown ? SandboxCommandState.Failed : commandState,
                 StructuredLogs: [],
-                ProviderDiagnostics: new Dictionary<string, string>
-                {
-                    ["exception"] = ex.GetType().Name,
-                    ["provider"] = ProviderKind.ToConfigValue()
-                },
+                ProviderDiagnostics: diagnostics,
                 Endpoints: [],
                 Provider: ProviderKind);
         }
         finally
         {
-            if (sandboxId is not null && ShouldDeleteOnCompletion(request))
+            if (sandboxId is not null && ShouldDeleteOnCompletion(request, succeeded))
             {
                 try
                 {
@@ -130,6 +163,79 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
         return endpoints;
     }
 
-    private static bool ShouldDeleteOnCompletion(SandboxExecutionRequest request) =>
-        request.Profile?.CleanupPolicy?.DeleteSandboxOnCompletion ?? true;
+    private static IReadOnlyDictionary<string, string> MergeDiagnostics(
+        params IReadOnlyDictionary<string, string>?[] sources)
+    {
+        var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["provider"] = SandboxProviderKind.OpenSandbox.ToConfigValue()
+        };
+
+        foreach (var source in sources)
+        {
+            if (source is null)
+            {
+                continue;
+            }
+
+            foreach (var (key, value) in source)
+            {
+                merged[key] = value;
+            }
+        }
+
+        return merged;
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildExceptionDiagnostics(Exception exception)
+    {
+        var diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["exception"] = exception.GetType().Name
+        };
+
+        if (exception is OpenSandboxApiException apiException)
+        {
+            diagnostics["status_code"] = apiException.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            if (!string.IsNullOrWhiteSpace(apiException.RequestId))
+            {
+                diagnostics["request_id"] = apiException.RequestId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(apiException.ErrorCode))
+            {
+                diagnostics["error_code"] = apiException.ErrorCode;
+            }
+        }
+
+        return diagnostics;
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>?> TryGetDiagnosticsAsync(string sandboxId)
+    {
+        try
+        {
+            return (await _client.GetDiagnosticsAsync(sandboxId, CancellationToken.None)).Entries;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Unable to collect OpenSandbox diagnostics for sandbox {SandboxId}", sandboxId);
+            return null;
+        }
+    }
+
+    private static bool ShouldCaptureDiagnosticsOnFailure(SandboxExecutionRequest request) =>
+        request.Profile?.CleanupPolicy?.CaptureDiagnosticsOnFailure ?? true;
+
+    private static bool ShouldDeleteOnCompletion(SandboxExecutionRequest request, bool succeeded)
+    {
+        var cleanupPolicy = request.Profile?.CleanupPolicy;
+        if (!succeeded && cleanupPolicy?.RetainSandboxOnFailure == true)
+        {
+            return false;
+        }
+
+        return cleanupPolicy?.DeleteSandboxOnCompletion ?? true;
+    }
 }

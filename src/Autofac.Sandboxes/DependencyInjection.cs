@@ -2,6 +2,7 @@ using Docker.DotNet;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Net.Http;
 
 namespace Autofac.Sandboxes;
 
@@ -21,7 +22,12 @@ public static class DependencyInjection
             return new DockerClientConfiguration(uri).CreateClient();
         });
 
-        services.AddSingleton<IOpenSandboxClient, UnimplementedOpenSandboxClient>();
+        services.AddSingleton(_ => new HttpClient
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        });
+
+        services.AddScoped<IOpenSandboxClient, OpenSandboxApiClient>();
         services.AddScoped<OpenSandboxRequestMapper>();
         services.AddScoped<ISandboxProviderExecutor, DockerSandboxExecutor>();
         services.AddScoped<ISandboxProviderExecutor, OpenSandboxSandboxExecutor>();

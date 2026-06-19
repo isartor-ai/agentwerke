@@ -15,9 +15,9 @@ public sealed class OpenSandboxRequestMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var profile = request.Profile ?? new SandboxExecutionProfile();
-        var resources = profile.Resources ?? new SandboxResourceLimits();
         var providerOptions = _options.OpenSandbox;
+        var profile = GetEffectiveProfile(request);
+        var resources = profile.Resources ?? new SandboxResourceLimits();
         var environment = BuildEnvironment(request);
         var metadata = BuildMetadata(request);
 
@@ -50,6 +50,7 @@ public sealed class OpenSandboxRequestMapper
                 endpoint.Port,
                 endpoint.Name,
                 endpoint.SecureAccess)).ToArray() ?? [],
+            SecureAccess: request.EndpointRequests?.Any(static endpoint => endpoint.SecureAccess) == true,
             WorkingDirectory: request.Command?.WorkingDirectory ?? providerOptions.WorkingDirectory,
             CommandExecutionMode: profile.CommandExecutionMode);
     }
@@ -58,15 +59,17 @@ public sealed class OpenSandboxRequestMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var profile = request.Profile ?? new SandboxExecutionProfile();
+        var profile = GetEffectiveProfile(request);
         var command = SandboxRequestDefaults.ResolveCommand(request);
         var environment = BuildCommandEnvironment(request, command);
+        var timeoutSeconds = profile.Resources?.TimeoutSeconds ?? _options.OpenSandbox.DefaultTimeoutSeconds;
 
         return new OpenSandboxRunCommandRequest(
             Arguments: command.Arguments,
             Mode: profile.CommandExecutionMode,
             WorkingDirectory: command.WorkingDirectory ?? _options.OpenSandbox.WorkingDirectory,
             EnvironmentVariables: environment,
+            TimeoutSeconds: timeoutSeconds,
             StandardInput: command.StandardInput,
             StreamOutput: command.StreamOutput);
     }
@@ -83,6 +86,36 @@ public sealed class OpenSandboxRequestMapper
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         return new OpenSandboxInterruptCommandRequest(sessionId);
+    }
+
+    private SandboxExecutionProfile GetEffectiveProfile(SandboxExecutionRequest request)
+    {
+        var defaults = _options.OpenSandbox.DefaultProfile ?? new SandboxExecutionProfile();
+        var profile = request.Profile;
+
+        return new SandboxExecutionProfile(
+            Resources: MergeResources(defaults.Resources, profile?.Resources),
+            NetworkPolicy: profile?.NetworkPolicy ?? defaults.NetworkPolicy,
+            FilesystemMounts: profile?.FilesystemMounts ?? defaults.FilesystemMounts,
+            CredentialBindings: profile?.CredentialBindings ?? defaults.CredentialBindings,
+            CleanupPolicy: profile?.CleanupPolicy ?? defaults.CleanupPolicy,
+            CommandExecutionMode: profile?.CommandExecutionMode ?? defaults.CommandExecutionMode);
+    }
+
+    private static SandboxResourceLimits? MergeResources(
+        SandboxResourceLimits? defaults,
+        SandboxResourceLimits? requested)
+    {
+        if (defaults is null && requested is null)
+        {
+            return null;
+        }
+
+        return new SandboxResourceLimits(
+            CpuMilliCores: requested?.CpuMilliCores ?? defaults?.CpuMilliCores,
+            MemoryMb: requested?.MemoryMb ?? defaults?.MemoryMb,
+            TimeoutSeconds: requested?.TimeoutSeconds ?? defaults?.TimeoutSeconds,
+            GpuCount: requested?.GpuCount ?? defaults?.GpuCount);
     }
 
     private static IReadOnlyDictionary<string, string> BuildEnvironment(SandboxExecutionRequest request)

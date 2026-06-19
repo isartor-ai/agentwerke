@@ -90,6 +90,7 @@ public sealed record OpenSandboxCreateSandboxRequest(
     OpenSandboxNetworkPolicy? NetworkPolicy,
     IReadOnlyList<OpenSandboxCredentialBinding> CredentialBindings,
     IReadOnlyList<OpenSandboxResolveEndpointRequest> RequestedEndpoints,
+    bool SecureAccess,
     string? WorkingDirectory,
     SandboxCommandExecutionMode CommandExecutionMode);
 
@@ -98,6 +99,7 @@ public sealed record OpenSandboxRunCommandRequest(
     SandboxCommandExecutionMode Mode,
     string? WorkingDirectory,
     IReadOnlyDictionary<string, string> EnvironmentVariables,
+    int TimeoutSeconds,
     string? StandardInput,
     bool StreamOutput);
 
@@ -105,7 +107,7 @@ public sealed record OpenSandboxCollectArtifactsRequest(
     IReadOnlyList<string> Paths);
 
 public sealed record OpenSandboxInterruptCommandRequest(
-    string SessionId);
+    string CommandId);
 
 public sealed record OpenSandboxResolveEndpointRequest(
     int Port,
@@ -121,7 +123,10 @@ public sealed record OpenSandboxCommandResult(
     int? ExitCode,
     string Logs,
     IReadOnlyList<SandboxLogEntry> StructuredLogs,
-    string? SessionId = null);
+    string? ExecutionId = null,
+    string? SessionId = null,
+    string? FailureReason = null,
+    IReadOnlyDictionary<string, string>? Diagnostics = null);
 
 public sealed record OpenSandboxArtifactFile(
     string Path,

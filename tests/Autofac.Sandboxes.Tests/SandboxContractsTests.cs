@@ -19,6 +19,8 @@ public sealed class SandboxContractsTests
         Assert.Equal(50_000L, opts.CpuQuota);
         Assert.Equal("unix:///var/run/docker.sock", opts.DockerEndpoint);
         Assert.Equal("http://localhost:8080/v1", opts.OpenSandbox.BaseUrl);
+        Assert.Equal(30, opts.OpenSandbox.ReadinessTimeoutSeconds);
+        Assert.False(opts.OpenSandbox.UseServerProxy);
         Assert.Equal("kata", opts.KubernetesKata.RuntimeClassName);
     }
 
