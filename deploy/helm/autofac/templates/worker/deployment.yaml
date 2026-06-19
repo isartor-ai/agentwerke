@@ -43,5 +43,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secretName }}
                   key: ANTHROPIC_API_KEY
+            {{- include "autofac.sandboxEnv" . | nindent 12 }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}

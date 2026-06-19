@@ -39,3 +39,32 @@ Postgres connection string
 {{- $host := printf "%s-postgres" (include "autofac.fullname" .) }}
 Host={{ $host }};Port=5432;Database={{ .Values.postgres.credentials.database }};Username={{ .Values.postgres.credentials.username }};Password=$(POSTGRES_PASSWORD)
 {{- end }}
+
+{{/*
+Sandbox provider env vars, shared between the api and worker deployments.
+See values.yaml `sandbox` block and ADR-003.
+*/}}
+{{- define "autofac.sandboxEnv" -}}
+- name: Sandboxes__Provider
+  value: {{ .Values.sandbox.provider | quote }}
+- name: Sandboxes__OpenSandbox__Enabled
+  value: {{ .Values.sandbox.openSandbox.enabled | quote }}
+- name: Sandboxes__OpenSandbox__ServerUrl
+  value: {{ .Values.sandbox.openSandbox.serverUrl | quote }}
+- name: Sandboxes__OpenSandbox__UseServerProxy
+  value: {{ .Values.sandbox.openSandbox.useServerProxy | quote }}
+- name: Sandboxes__OpenSandbox__DefaultImage
+  value: {{ .Values.sandbox.openSandbox.defaultImage | quote }}
+- name: Sandboxes__OpenSandbox__DefaultTimeoutSeconds
+  value: {{ .Values.sandbox.openSandbox.defaultTimeoutSeconds | quote }}
+- name: Sandboxes__OpenSandbox__ReadinessTimeoutSeconds
+  value: {{ .Values.sandbox.openSandbox.readinessTimeoutSeconds | quote }}
+{{- if .Values.sandbox.openSandbox.enabled }}
+- name: Sandboxes__OpenSandbox__ApiKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.secretName }}
+      key: OPEN_SANDBOX_API_KEY
+      optional: true
+{{- end }}
+{{- end }}
