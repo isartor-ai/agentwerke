@@ -276,7 +276,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             RetryBackoffSeconds: retryBackoffSeconds,
             FailUntilAttempt: failUntilAttempt,
             SimulateTimeout: simulateTimeout,
-            TimeoutSeconds: timeoutSeconds);
+            TimeoutSeconds: timeoutSeconds,
+            SandboxProfile: agentTask.Attribute("sandboxProfile")?.Value);
     }
 
     private static AutofacApprovalMetadata? ValidateApprovalMetadata(

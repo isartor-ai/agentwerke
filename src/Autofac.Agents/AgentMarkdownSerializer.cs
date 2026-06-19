@@ -49,6 +49,7 @@ public static class AgentMarkdownSerializer
         AppendList(sb, "supportedActions", profile.SupportedActions);
         AppendList(sb, "supportedEnvironments", profile.SupportedEnvironments);
         AppendList(sb, "supportedPolicyTags", profile.SupportedPolicyTags);
+        AppendList(sb, "sandboxProfiles", profile.SandboxProfiles);
         sb.AppendLine("---");
 
         if (!string.IsNullOrWhiteSpace(profile.SystemPrompt))

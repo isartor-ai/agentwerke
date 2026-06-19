@@ -64,6 +64,64 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenSandboxProfileAttributeIsPresent_ParsesIntoMetadata()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
+                <bpmn:serviceTask id="DeployTask" name="Deploy">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="deploy-agent"
+                      action="deploy"
+                      environment="production"
+                      purposeType="production_deployment"
+                      policyTag="production_deployment_gateway"
+                      sandboxProfile="deployment" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var deployNode = Assert.Single(result.Definition!.Nodes, node => node.Id == "DeployTask");
+        Assert.Equal("deployment", deployNode.Metadata!.SandboxProfile);
+    }
+
+    [Fact]
+    public void Validate_WhenSandboxProfileAttributeIsAbsent_MetadataSandboxProfileIsNull()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
+                <bpmn:serviceTask id="DeployTask" name="Deploy">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="deploy-agent"
+                      action="deploy"
+                      environment="production"
+                      purposeType="production_deployment"
+                      policyTag="production_deployment_gateway" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        var deployNode = Assert.Single(result.Definition!.Nodes, node => node.Id == "DeployTask");
+        Assert.Null(deployNode.Metadata!.SandboxProfile);
+    }
+
+    [Fact]
     public void Validate_WhenUnsupportedElementIsPresent_ReturnsActionableError()
     {
         var xml = """

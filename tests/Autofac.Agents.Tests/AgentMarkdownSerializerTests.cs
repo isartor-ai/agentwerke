@@ -66,6 +66,7 @@ public sealed class AgentMarkdownSerializerTests
                 "supportedPolicyTags:",
                 "  - requirement-design",
                 "  - doc-generation",
+                "sandboxProfiles: []",
                 "---",
                 string.Empty,
                 "You are a senior Business Analyst.",
@@ -133,5 +134,25 @@ public sealed class AgentMarkdownSerializerTests
 
         Assert.Contains("description: \"\"", markdown, StringComparison.Ordinal);
         Assert.Equal(string.Empty, roundTripped.Description);
+    }
+
+    [Fact]
+    public void Serialize_SandboxProfiles_RoundTrips()
+    {
+        var profile = new AgentProfile
+        {
+            AgentId = "deploy-agent",
+            Name = "Deploy Agent",
+            Description = "Deploys things.",
+            Category = "devops",
+            Runner = "agent-model",
+            SandboxProfiles = ["deployment"],
+        };
+
+        var markdown = AgentMarkdownSerializer.Serialize(profile);
+        var roundTripped = MarkdownAgentLoader.Parse("deploy-agent", markdown);
+
+        Assert.Contains($"sandboxProfiles:{Environment.NewLine}  - deployment", markdown, StringComparison.Ordinal);
+        Assert.Equal(["deployment"], roundTripped.SandboxProfiles);
     }
 }

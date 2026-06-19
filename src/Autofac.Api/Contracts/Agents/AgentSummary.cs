@@ -17,4 +17,5 @@ public sealed record AgentSummary(
     IReadOnlyList<string> SupportedPolicyTags,
     IReadOnlyList<string> Secrets,
     string Source,
-    string? Fingerprint);
+    string? Fingerprint,
+    IReadOnlyList<string> SandboxProfiles);

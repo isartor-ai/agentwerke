@@ -234,6 +234,23 @@ Responsibilities:
 
 Target direction: use OpenSandbox as the preferred sandbox control plane, with Kata-class secure runtimes for production and Docker kept as a local fallback. See `docs/decisions/ADR-003-use-opensandbox-control-plane-with-kata-runtime.md`.
 
+#### Sandbox Profiles
+
+Agents do not get an open-ended sandbox. Every sandbox-routed action requests one of four named profiles (`Autofac.Sandboxes.SandboxProfileCatalog`), and the profile name determines the OpenSandbox `resourceLimits`, `networkPolicy`, `volumes`, and credential-vault bindings the sandbox receives:
+
+| Profile | Network egress | Repository mount | Credentials | Typical agents |
+| --- | --- | --- | --- | --- |
+| `offline` (default) | None | None | None | `business-analyst`, `solution-architect`, `technical-analyst` |
+| `repo-read` | Restricted to GitHub hosts | Read-only `/workspace` | Read-only `github-token` (file-mounted) | `senior-code-reviewer`, `test-agent`, `security-agent` |
+| `repo-write` | Restricted to GitHub hosts | Writable `/workspace` | Read-only `github-token` (file-mounted) | `github-agent`, `implementation-engineer` |
+| `deployment` | Restricted, target-specific allow-list | None | `deployment-credentials` (file-mounted) | `deploy-agent`, `infra-agent` |
+
+Credentials are always bound by name from the secret/vault layer at a fixed file path inside the sandbox; they are never inlined as command arguments or written to logs.
+
+**Selection.** Each `AgentProfile` declares the profiles it may request (`AgentProfile.SandboxProfiles`; empty means "offline" only — least privilege by default). A BPMN service task may pin a specific profile with the `autofac:agentTask` `sandboxProfile` attribute; if omitted, the agent's first declared profile is used (or "offline" if it declares none). `Autofac.AgentSecOps.ISandboxProfileSelector` checks the requested profile against the agent's declared allow-list and, as defense in depth, rejects the `deployment` profile outright when the action-level policy decision's risk level is `critical` — independent of what the agent declares. Rejections happen in `ToolGateway` before any sandbox is created, are recorded in the run's tool-invocation history with status `profile_rejected`, and carry a diagnostic trail explaining which check failed.
+
+This is a second, narrower gate than the action-level allow/deny/escalate decision from `IPolicyEvaluationService`: that decision answers "is this action permitted at all"; the sandbox profile answers "what can the sandbox running it touch."
+
 ### 6.6 Policy and Approval Service
 
 Responsibilities:

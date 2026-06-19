@@ -10,6 +10,7 @@ using Autofac.Agents.Tools;
 using Autofac.Application.Workflows;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
+using Autofac.Sandboxes;
 using Autofac.Storage.Artifacts;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
@@ -209,7 +210,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 cancellationToken);
         }
 
-        var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt);
+        var toolRequest = BuildToolGatewayRequest(runId, stepId, node, metadata, attempt, profile);
         if (toolRequest is not null)
         {
             return await RunViaToolGatewayAsync(toolRequest, node, metadata, attempt, runtimeSnapshot, cancellationToken);
@@ -404,7 +405,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string stepId,
         BpmnNodeDefinition node,
         AutofacTaskMetadata metadata,
-        int attempt)
+        int attempt,
+        AgentProfile? profile)
     {
         var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
         if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
@@ -478,8 +480,16 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     ["environment"] = metadata.Environment ?? string.Empty,
                     ["purpose_type"] = metadata.PurposeType,
                     ["policy_tag"] = metadata.PolicyTag,
-                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                });
+                    ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    // An explicit workflow-task profile always wins. Otherwise default to the
+                    // agent's own primary declared profile so capability-bearing agents (e.g.
+                    // deploy-agent) work without every task having to repeat the profile, while
+                    // agents that declare nothing still default to the least-privilege "offline".
+                    ["sandbox_profile"] = metadata.SandboxProfile
+                        ?? profile?.SandboxProfiles.FirstOrDefault()
+                        ?? SandboxProfileNames.Offline
+                },
+                allowedSandboxProfiles: profile?.SandboxProfiles ?? []);
         }
 
         return null;
@@ -956,7 +966,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         AutofacTaskMetadata metadata,
         int attempt,
         AgentPermissionContract permissions,
-        IReadOnlyDictionary<string, string> input) =>
+        IReadOnlyDictionary<string, string> input,
+        IReadOnlyList<string>? allowedSandboxProfiles = null) =>
         new(
             ToolName,
             Action,
@@ -971,7 +982,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             permissions.Level,
             permissions.AllowedTools,
             permissions.DeniedTools,
-            input);
+            input,
+            allowedSandboxProfiles ?? []);
 
     private static IReadOnlyDictionary<string, string> ExtractToolInput(AgentRuntimeContract? runtimeContract)
     {

@@ -36,6 +36,12 @@ public sealed class AgentProfile
     /// <summary>Actions this agent answers to (for action→agent resolution).</summary>
     public IReadOnlyList<string> SupportedActions { get; init; } = [];
 
+    /// <summary>
+    /// Named sandbox profiles (see Autofac.Sandboxes.SandboxProfileCatalog) this agent may
+    /// request. Empty means the agent may only use the "offline" profile (least privilege).
+    /// </summary>
+    public IReadOnlyList<string> SandboxProfiles { get; init; } = [];
+
     /// <summary>System prompt / standing instructions (the AGENT.md body).</summary>
     public string? SystemPrompt { get; init; }
 
@@ -68,7 +74,8 @@ public static class AgentRegistry
                     ["health-check", "verify"])
             ],
             SupportedEnvironments = ["staging", "production", "dev"],
-            SupportedPolicyTags = ["deploy-staging", "deploy-production", "deploy-rollback"]
+            SupportedPolicyTags = ["deploy-staging", "deploy-production", "deploy-rollback"],
+            SandboxProfiles = ["deployment"]
         },
         ["security-agent"] = new AgentProfile
         {
@@ -84,7 +91,8 @@ public static class AgentRegistry
                     ["scan", "audit"], SkillManifestId: "security-and-hardening")
             ],
             SupportedEnvironments = ["all"],
-            SupportedPolicyTags = ["secret-rotation", "security-scan", "compliance-check"]
+            SupportedPolicyTags = ["secret-rotation", "security-scan", "compliance-check"],
+            SandboxProfiles = ["repo-read"]
         },
         ["infra-agent"] = new AgentProfile
         {
@@ -100,7 +108,8 @@ public static class AgentRegistry
                     ["scale-up", "scale-down"])
             ],
             SupportedEnvironments = ["aws", "gcp", "azure"],
-            SupportedPolicyTags = ["infra-change", "scale-event", "resource-provision"]
+            SupportedPolicyTags = ["infra-change", "scale-event", "resource-provision"],
+            SandboxProfiles = ["deployment"]
         },
         ["test-agent"] = new AgentProfile
         {
@@ -116,7 +125,8 @@ public static class AgentRegistry
                     ["coverage-report"], SkillManifestId: "test-driven-development")
             ],
             SupportedEnvironments = ["all"],
-            SupportedPolicyTags = ["test-gate", "quality-check"]
+            SupportedPolicyTags = ["test-gate", "quality-check"],
+            SandboxProfiles = ["repo-read"]
         },
         ["github-agent"] = new AgentProfile
         {
@@ -140,7 +150,8 @@ public static class AgentRegistry
                     SkillManifestId: "git-workflow-and-versioning")
             ],
             SupportedEnvironments = ["github"],
-            SupportedPolicyTags = ["repo-change", "pull-request", "branch-create"]
+            SupportedPolicyTags = ["repo-change", "pull-request", "branch-create"],
+            SandboxProfiles = ["repo-write"]
         },
 
         // ── SDLC agents (autonomous software-delivery workflow) ──────────────────
@@ -205,7 +216,8 @@ public static class AgentRegistry
                     ["implement", "github.create_pull_request", "github.create_pr"])
             ],
             SupportedEnvironments = ["sandbox", "ci", "github"],
-            SupportedPolicyTags = ["implementation", "pull-request", "repo-change"]
+            SupportedPolicyTags = ["implementation", "pull-request", "repo-change"],
+            SandboxProfiles = ["repo-write"]
         },
         ["senior-code-reviewer"] = new AgentProfile
         {
@@ -220,7 +232,8 @@ public static class AgentRegistry
                     ["review-code", "code-review"])
             ],
             SupportedEnvironments = ["sandbox", "github"],
-            SupportedPolicyTags = ["code-review", "quality-check"]
+            SupportedPolicyTags = ["code-review", "quality-check"],
+            SandboxProfiles = ["repo-read"]
         }
     };
 

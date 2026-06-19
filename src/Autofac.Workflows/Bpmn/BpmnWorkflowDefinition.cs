@@ -34,7 +34,13 @@ public sealed record AutofacTaskMetadata(
     int FailUntilAttempt = 0,
     bool SimulateTimeout = false,
     int? TimeoutSeconds = null,
-    AgentRuntimeContract? RuntimeContract = null);
+    AgentRuntimeContract? RuntimeContract = null,
+    /// <summary>
+    /// Named sandbox profile (e.g. "repo-write", "deployment") this task requests. Null
+    /// defaults to the most restrictive "offline" profile. Validated against the agent's
+    /// declared allow-list and policy risk level before the sandbox is created.
+    /// </summary>
+    string? SandboxProfile = null);
 
 public sealed record AutofacApprovalMetadata(
     string PurposeType,
