@@ -153,4 +153,37 @@ public sealed class OpenSandboxRequestMapperTests
         Assert.Equal(["/reports"], mapper.MapCollectArtifactsRequest(explicitRequest).Paths);
         Assert.Equal(["/output", "/logs"], mapper.MapCollectArtifactsRequest(implicitRequest).Paths);
     }
+
+    [Fact]
+    public void MapRunCommandRequest_UsesOpenSandboxDefaultProfileWhenRequestProfileMissing()
+    {
+        var mapper = new OpenSandboxRequestMapper(Options.Create(new SandboxOptions
+        {
+            OpenSandbox = new OpenSandboxProviderOptions
+            {
+                WorkingDirectory = "/workspace",
+                DefaultTimeoutSeconds = 60,
+                DefaultProfile = new SandboxExecutionProfile(
+                    Resources: new SandboxResourceLimits(TimeoutSeconds: 90),
+                    CommandExecutionMode: SandboxCommandExecutionMode.Session)
+            }
+        }));
+
+        var request = new SandboxExecutionRequest(
+            RunId: "run-1",
+            StepId: "step-1",
+            AgentName: "agent",
+            Action: "test",
+            Environment: null,
+            PurposeType: "implementation",
+            PolicyTag: "policy",
+            Attempt: 1,
+            Command: new SandboxCommandSpec(["python", "main.py"]));
+
+        var mapped = mapper.MapRunCommandRequest(request);
+
+        Assert.Equal(SandboxCommandExecutionMode.Session, mapped.Mode);
+        Assert.Equal(90, mapped.TimeoutSeconds);
+        Assert.Equal("/workspace", mapped.WorkingDirectory);
+    }
 }
