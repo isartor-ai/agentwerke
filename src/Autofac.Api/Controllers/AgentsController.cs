@@ -2,6 +2,7 @@ using Autofac.Api.Auth;
 using Autofac.Api.Contracts.Agents;
 using Autofac.Agents;
 using Autofac.Agents.Skills;
+using Autofac.Sandboxes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -98,7 +99,8 @@ public sealed class AgentsController : ControllerBase
             profile.SupportedPolicyTags.ToArray(),
             profile.Secrets.ToArray(),
             profile.Source,
-            profile.Fingerprint);
+            profile.Fingerprint,
+            profile.SandboxProfiles.ToArray());
 
     private AgentDetail ToDetail(ManagedAgentDocument document)
     {
@@ -121,6 +123,7 @@ public sealed class AgentsController : ControllerBase
             profile.Secrets.ToArray(),
             profile.Source,
             profile.Fingerprint,
+            profile.SandboxProfiles.ToArray(),
             profile.SystemPrompt,
             document.RawMarkdown,
             document.EffectiveFilePath,
@@ -170,9 +173,23 @@ public sealed class AgentsController : ControllerBase
             SupportedActions = supportedActions,
             SupportedEnvironments = NormalizeList(request.SupportedEnvironments),
             SupportedPolicyTags = NormalizeList(request.SupportedPolicyTags),
+            SandboxProfiles = NormalizeSandboxProfiles(request.SandboxProfiles),
             SystemPrompt = NormalizeOptionalMultiline(request.SystemPrompt),
             Source = "file"
         };
+    }
+
+    private static IReadOnlyList<string> NormalizeSandboxProfiles(IReadOnlyList<string>? values)
+    {
+        var normalized = NormalizeList(values);
+        var unknown = normalized.Where(name => !SandboxProfileCatalog.TryGet(name, out _)).ToArray();
+        if (unknown.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Unknown sandbox profile(s): {string.Join(", ", unknown)}. Known profiles: {string.Join(", ", SandboxProfileCatalog.Names)}.");
+        }
+
+        return normalized;
     }
 
     private static IReadOnlyList<string> NormalizeList(IReadOnlyList<string>? values) =>

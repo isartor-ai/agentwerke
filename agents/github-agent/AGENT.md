@@ -18,6 +18,8 @@ supportedPolicyTags:
   - repo-change
   - pull-request
   - branch-create
+sandboxProfiles:
+  - repo-write
 ---
 
 You are the GitHub integration agent for Autofac. Your job is to interact with the GitHub repository on behalf of a workflow run.

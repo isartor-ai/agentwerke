@@ -128,6 +128,43 @@ public sealed class AgentsControllerTests
         Assert.Contains("Agent id may only contain", badRequest.Value!.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Upsert_WhenSandboxProfileIsUnknown_ReturnsBadRequest()
+    {
+        using var fixture = new AgentRegistryFixture();
+        var controller = fixture.CreateController();
+
+        var result = controller.Upsert("custom-agent", new UpsertAgentRequest(
+            AgentId: "custom-agent",
+            Name: "Custom Agent",
+            Description: "Handles custom work.",
+            Category: "engineering",
+            Runner: "agent-model",
+            SandboxProfiles: ["super-admin"]));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Unknown sandbox profile", badRequest.Value!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Upsert_WhenSandboxProfileIsKnown_PersistsAndReturnsIt()
+    {
+        using var fixture = new AgentRegistryFixture();
+        var controller = fixture.CreateController();
+
+        var result = controller.Upsert("custom-agent", new UpsertAgentRequest(
+            AgentId: "custom-agent",
+            Name: "Custom Agent",
+            Description: "Handles custom work.",
+            Category: "engineering",
+            Runner: "agent-model",
+            SandboxProfiles: ["repo-write"]));
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<AgentDetail>(ok.Value);
+        Assert.Equal(["repo-write"], detail.SandboxProfiles);
+    }
+
     private sealed class AgentRegistryFixture : IDisposable
     {
         public AgentRegistryFixture()

@@ -207,6 +207,21 @@ public sealed class SandboxExecutionTool : IAgentTool
         IReadOnlyDictionary<string, string> input,
         CancellationToken cancellationToken)
     {
+        // ToolGateway has already authorized the requested profile and written the
+        // selected name (and its rationale) back into the input before dispatching here.
+        var profileName = ReadOptional(input, "sandbox_profile") ?? SandboxProfileCatalog.Default;
+        var resolvedProfile = SandboxProfileCatalog.Resolve(profileName, context.RunId);
+
+        var diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["autofac.sandboxProfile"] = profileName
+        };
+        var rationale = ReadOptional(input, "sandbox_profile_rationale");
+        if (rationale is not null)
+        {
+            diagnostics["autofac.sandboxProfileRationale"] = rationale;
+        }
+
         var result = await _sandboxExecutor.ExecuteAsync(
             new SandboxExecutionRequest(
                 RunId: context.RunId,
@@ -216,7 +231,9 @@ public sealed class SandboxExecutionTool : IAgentTool
                 Environment: ReadOptional(input, "environment"),
                 PurposeType: input["purpose_type"],
                 PolicyTag: input["policy_tag"],
-                Attempt: int.Parse(input["attempt"], System.Globalization.CultureInfo.InvariantCulture)),
+                Attempt: int.Parse(input["attempt"], System.Globalization.CultureInfo.InvariantCulture),
+                Profile: resolvedProfile,
+                Metadata: diagnostics),
             cancellationToken);
 
         return new AgentToolExecutionResult(

@@ -368,6 +368,176 @@ public sealed class PolicyEvaluationServiceTests
     }
 
     [Fact]
+    public async Task AgentOrchestrator_DeployAgent_DefaultsToDeclaredDeploymentProfile()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract { Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, sandbox.ExecuteCalls);
+        Assert.Equal("deployment", sandbox.LastRequest?.Metadata?["autofac.sandboxProfile"]);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenWorkflowRequestsProfileAgentIsNotAllowedToUse_RejectsBeforeSandboxCreate()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Review",
+                "Review",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "security-agent",
+                    Action: "scan",
+                    Environment: null,
+                    PurposeType: "security-scan",
+                    PolicyTag: "security-scan",
+                    RequiresEvidence: [],
+                    SandboxProfile: "deployment",
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract { Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        Assert.Contains("not authorized", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
+        Assert.Equal("profile_rejected", invocation.Status);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_GenericAgentWithNoDeclaredProfiles_DefaultsToOffline()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Analyze",
+                "Analyze",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "not-a-registered-agent",
+                    Action: "analyze",
+                    Environment: null,
+                    PurposeType: "analysis",
+                    PolicyTag: "doc-generation",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract { Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(1, sandbox.ExecuteCalls);
+        Assert.Equal("offline", sandbox.LastRequest?.Metadata?["autofac.sandboxProfile"]);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenAgentRequestsUnknownProfileName_RejectsBeforeSandboxCreate()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "deploy",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    SandboxProfile: "super-admin",
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract { Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        Assert.Contains("Unknown sandbox profile", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_GitHubAgent_RequestsDeploymentProfile_RejectedAsNotInAllowList()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Sync",
+                "Sync",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: "github.sync_status",
+                    Environment: null,
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    SandboxProfile: "deployment",
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract { Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, sandbox.ExecuteCalls);
+        Assert.Contains("not authorized", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task AgentOrchestrator_WhenGitHubToolExecutes_RecordsInvocationAndExternalActions()
     {
         var gitHub = new RecordingGitHubConnector();
@@ -845,7 +1015,7 @@ public sealed class PolicyEvaluationServiceTests
             CreateHookGateway(),
             mcpSessionFactory ?? new StubMcpToolSessionFactory(),
             registry,
-            new ToolGateway(registry, policyService),
+            new ToolGateway(registry, policyService, new SandboxProfileSelector()),
             new NullAgentModelRunner(),
             new NullArtifactStorage(),
             new InMemoryRunContextRepository(),
@@ -882,7 +1052,7 @@ public sealed class PolicyEvaluationServiceTests
             new SandboxExecutionTool(sandbox)
         ]);
 
-        return new ToolGateway(registry, policyService);
+        return new ToolGateway(registry, policyService, new SandboxProfileSelector());
     }
 
     private static SkillManifest[] CreateKnownSkills() =>
@@ -1002,9 +1172,12 @@ public sealed class PolicyEvaluationServiceTests
     {
         public int ExecuteCalls { get; private set; }
 
+        public SandboxExecutionRequest? LastRequest { get; private set; }
+
         public Task<SandboxExecutionResult> ExecuteAsync(SandboxExecutionRequest request, CancellationToken cancellationToken)
         {
             ExecuteCalls++;
+            LastRequest = request;
             return Task.FromResult(new SandboxExecutionResult(
                 Succeeded: true,
                 ExitCode: 0,

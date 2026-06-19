@@ -59,7 +59,13 @@ public sealed record ToolGatewayRequest(
     string PermissionLevel,
     IReadOnlyList<string> AllowedTools,
     IReadOnlyList<string> DeniedTools,
-    IReadOnlyDictionary<string, string> Input);
+    IReadOnlyDictionary<string, string> Input,
+    /// <summary>
+    /// Named sandbox profiles (see Autofac.Sandboxes.SandboxProfileCatalog) the requesting
+    /// agent is declared allowed to use. Empty means offline-only. Only consulted for the
+    /// "sandbox.execute" tool.
+    /// </summary>
+    IReadOnlyList<string>? AllowedSandboxProfiles = null);
 
 public sealed record ToolGatewayResult(
     bool Succeeded,

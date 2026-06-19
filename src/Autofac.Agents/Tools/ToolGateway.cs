@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Text.Json;
 using Autofac.AgentSecOps;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Domain.Persistence;
+using Autofac.Sandboxes;
 
 namespace Autofac.Agents.Tools;
 
@@ -12,17 +14,24 @@ public interface IToolGateway
 
 public sealed class ToolGateway : IToolGateway
 {
+    private const string SandboxExecuteToolName = "sandbox.execute";
+    private const string SandboxProfileInputKey = "sandbox_profile";
+    private const string SandboxProfileRationaleInputKey = "sandbox_profile_rationale";
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IToolRegistry _toolRegistry;
     private readonly IPolicyEvaluationService _policyEvaluationService;
+    private readonly ISandboxProfileSelector _sandboxProfileSelector;
 
     public ToolGateway(
         IToolRegistry toolRegistry,
-        IPolicyEvaluationService policyEvaluationService)
+        IPolicyEvaluationService policyEvaluationService,
+        ISandboxProfileSelector sandboxProfileSelector)
     {
         _toolRegistry = toolRegistry;
         _policyEvaluationService = policyEvaluationService;
+        _sandboxProfileSelector = sandboxProfileSelector;
     }
 
     public async Task<ToolGatewayResult> ExecuteAsync(ToolGatewayRequest request, CancellationToken cancellationToken)
@@ -82,6 +91,17 @@ public sealed class ToolGateway : IToolGateway
                     ArtifactNames: []));
         }
 
+        if (string.Equals(request.ToolName, SandboxExecuteToolName, StringComparison.OrdinalIgnoreCase))
+        {
+            var (gatedRequest, rejection) = GateSandboxProfile(request, tool.Category, policyDecision);
+            if (rejection is not null)
+            {
+                return rejection;
+            }
+
+            request = gatedRequest;
+        }
+
         var stopwatch = Stopwatch.StartNew();
         try
         {
@@ -139,6 +159,69 @@ public sealed class ToolGateway : IToolGateway
                     DurationMs: (int)stopwatch.ElapsedMilliseconds,
                     ArtifactNames: []));
         }
+    }
+
+    private (ToolGatewayRequest Request, ToolGatewayResult? Rejection) GateSandboxProfile(
+        ToolGatewayRequest request,
+        string toolCategory,
+        PolicyDecision policyDecision)
+    {
+        var requestedProfile = request.Input.TryGetValue(SandboxProfileInputKey, out var rawProfile) && !string.IsNullOrWhiteSpace(rawProfile)
+            ? rawProfile
+            : SandboxProfileCatalog.Default;
+
+        if (!SandboxProfileCatalog.TryGet(requestedProfile, out _))
+        {
+            var unknownRationale = $"Unknown sandbox profile '{requestedProfile}'. Known profiles: {string.Join(", ", SandboxProfileCatalog.Names)}.";
+            return (request, RejectSandboxProfile(request, toolCategory, policyDecision, unknownRationale));
+        }
+
+        var selection = _sandboxProfileSelector.Select(new SandboxProfileSelectionRequest(
+            AgentName: request.AgentName,
+            Action: request.Action,
+            RequestedProfile: requestedProfile,
+            AgentAllowedProfiles: request.AllowedSandboxProfiles ?? [],
+            Environment: request.Environment,
+            PolicyTag: request.PolicyTag,
+            PurposeType: request.PurposeType,
+            RiskLevel: policyDecision.RiskLevel));
+
+        if (!selection.Allowed)
+        {
+            return (request, RejectSandboxProfile(request, toolCategory, policyDecision, selection.Rationale));
+        }
+
+        var enrichedInput = new Dictionary<string, string>(request.Input, StringComparer.OrdinalIgnoreCase)
+        {
+            [SandboxProfileInputKey] = selection.SelectedProfile!,
+            [SandboxProfileRationaleInputKey] = selection.Rationale
+        };
+
+        return (request with { Input = enrichedInput }, null);
+    }
+
+    private static ToolGatewayResult RejectSandboxProfile(
+        ToolGatewayRequest request,
+        string toolCategory,
+        PolicyDecision policyDecision,
+        string rationale)
+    {
+        return new ToolGatewayResult(
+            Succeeded: false,
+            Output: null,
+            FailureReason: rationale,
+            PolicyDecision: policyDecision,
+            Invocation: CreateInvocation(
+                request,
+                toolCategory,
+                Status: "profile_rejected",
+                policyDecision.PolicyId,
+                policyDecision.Kind,
+                InputSummary: Serialize(request.Input),
+                OutputSummary: null,
+                ErrorMessage: rationale,
+                DurationMs: 0,
+                ArtifactNames: []));
     }
 
     private static bool IsDenied(ToolGatewayRequest request, IAgentTool tool, out string failureReason)

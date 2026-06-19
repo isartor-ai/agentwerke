@@ -25,6 +25,7 @@ public sealed class MarkdownAgentLoaderTests
             supportedEnvironments: [all]
             supportedPolicyTags: [requirement-design, doc-generation]
             secrets: [ANTHROPIC_API_KEY]
+            sandboxProfiles: [repo-read]
             ---
 
             You are a senior Business Analyst. Read {{input.body}} and write a spec.
@@ -44,6 +45,7 @@ public sealed class MarkdownAgentLoaderTests
         Assert.Equal(["ANTHROPIC_API_KEY"], profile.Secrets);
         Assert.Equal(["requirement-design", "design-requirements"], profile.SupportedActions);
         Assert.Equal(["all"], profile.SupportedEnvironments);
+        Assert.Equal(["repo-read"], profile.SandboxProfiles);
         Assert.Equal("file", profile.Source);
         Assert.NotNull(profile.SystemPrompt);
         Assert.Contains("senior Business Analyst", profile.SystemPrompt);

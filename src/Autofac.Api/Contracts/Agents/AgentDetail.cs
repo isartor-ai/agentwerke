@@ -18,6 +18,7 @@ public sealed record AgentDetail(
     IReadOnlyList<string> Secrets,
     string Source,
     string? Fingerprint,
+    IReadOnlyList<string> SandboxProfiles,
     string? SystemPrompt,
     string RawMarkdown,
     string EffectiveFilePath,
