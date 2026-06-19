@@ -105,6 +105,38 @@ public sealed class OpenSandboxRequestMapperTests
     }
 
     [Fact]
+    public void MapCreateRequest_SanitizesMetadataValuesForOpenSandboxLabels()
+    {
+        var mapper = new OpenSandboxRequestMapper(Options.Create(new SandboxOptions()));
+        var request = new SandboxExecutionRequest(
+            RunId: "run-1",
+            StepId: "step-1",
+            AgentName: "opensandbox-e2e-688c0bf7d7b748de84497646bf317f20",
+            Action: "run-open-sandbox",
+            Environment: "ci",
+            PurposeType: "verification",
+            PolicyTag: "opensandbox-e2e",
+            Attempt: 1,
+            Metadata: new Dictionary<string, string>
+            {
+                ["autofac.sandboxProfileRationale"] =
+                    "Sandbox profile 'offline' is authorized for agent 'opensandbox-e2e-688c0bf7d7b748de84497646bf317f20'."
+            });
+
+        var mapped = mapper.MapCreateRequest(request);
+        var value = mapped.Metadata["autofac.sandboxProfileRationale"];
+
+        Assert.True(value.Length <= 63);
+        Assert.All(value, ch => Assert.True(
+            char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.',
+            $"Unexpected metadata character '{ch}' in '{value}'."));
+        Assert.True(char.IsAsciiLetterOrDigit(value[0]));
+        Assert.True(char.IsAsciiLetterOrDigit(value[^1]));
+        Assert.DoesNotContain(" ", value, StringComparison.Ordinal);
+        Assert.DoesNotContain("'", value, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MapRunCommandRequest_WithoutExplicitCommand_UsesPlaceholderScript()
     {
         var mapper = new OpenSandboxRequestMapper(Options.Create(new SandboxOptions()));
@@ -122,6 +154,7 @@ public sealed class OpenSandboxRequestMapperTests
 
         Assert.Equal("sh", mapped.Arguments[0]);
         Assert.Equal("-c", mapped.Arguments[1]);
+        Assert.Equal("/", mapped.WorkingDirectory);
         Assert.Contains("autofac-sandbox: starting task", mapped.Arguments[2]);
         Assert.Equal("deploy", mapped.EnvironmentVariables["AUTOFAC_ACTION"]);
     }

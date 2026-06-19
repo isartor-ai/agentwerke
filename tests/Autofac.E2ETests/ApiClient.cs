@@ -61,6 +61,23 @@ public sealed class ApiClient
         resp.EnsureSuccessStatusCode();
     }
 
+    // ── Agents ───────────────────────────────────────────────────────────────
+
+    public async Task<JsonObject> UploadAgentAsync(string fileName, string content, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync("/api/agents/upload",
+            new { fileName, content }, JsonOpts, ct);
+        resp.EnsureSuccessStatusCode();
+        return (await resp.Content.ReadFromJsonAsync<JsonObject>(JsonOpts, ct))!;
+    }
+
+    public async Task<JsonObject> GetAgentAsync(string agentId, CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"/api/agents/{agentId}", ct);
+        resp.EnsureSuccessStatusCode();
+        return (await resp.Content.ReadFromJsonAsync<JsonObject>(JsonOpts, ct))!;
+    }
+
     // ── Runs ──────────────────────────────────────────────────────────────────
 
     public async Task<(string RunId, string Status)> StartRunAsync(string workflowId, CancellationToken ct = default)

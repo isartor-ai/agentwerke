@@ -1,5 +1,7 @@
+using Autofac.AgentSecOps;
 using Autofac.Api.Controllers;
 using Autofac.Infrastructure;
+using Autofac.Infrastructure.Policies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,6 +103,24 @@ public sealed class WorkflowRuntimeModeTests
 
         Assert.Equal("Autofac", mode);
         Assert.Equal(false, camundaEnabled);
+    }
+
+    [Fact]
+    public void AddAutofacInfrastructure_RegistersFilePolicyRuleStore()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=autofac;Username=test;Password=test"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddAutofacInfrastructure(configuration);
+
+        var descriptor = Assert.Single(services, item => item.ServiceType == typeof(IPolicyRuleStore));
+        Assert.Equal(typeof(FilePolicyRuleStore), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
     }
 
     private static IConfiguration BuildConfiguration(string mode)

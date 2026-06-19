@@ -91,12 +91,26 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
 
         await EnsureExecdReadyAsync(sandboxId, cancellationToken);
 
-        return request.Mode switch
+        using var readinessCts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ReadinessTimeoutSeconds));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, readinessCts.Token);
+
+        while (true)
         {
-            SandboxCommandExecutionMode.Background => await RunBackgroundCommandAsync(sandboxId, request, cancellationToken),
-            SandboxCommandExecutionMode.Session => await RunInSessionAsync(sandboxId, request, cancellationToken),
-            _ => await RunForegroundCommandAsync(sandboxId, request, cancellationToken)
-        };
+            try
+            {
+                return request.Mode switch
+                {
+                    SandboxCommandExecutionMode.Background => await RunBackgroundCommandAsync(sandboxId, request, linkedCts.Token),
+                    SandboxCommandExecutionMode.Session => await RunInSessionAsync(sandboxId, request, linkedCts.Token),
+                    _ => await RunForegroundCommandAsync(sandboxId, request, linkedCts.Token)
+                };
+            }
+            catch (OpenSandboxApiException ex) when (IsTransientApiFailure(ex))
+            {
+                RecordDiagnostic(sandboxId, "execd.last_error", ex.Message);
+                await Task.Delay(TimeSpan.FromMilliseconds(250), linkedCts.Token);
+            }
+        }
     }
 
     public async Task<IReadOnlyList<OpenSandboxArtifactFile>> CollectArtifactsAsync(
@@ -403,40 +417,30 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         IDictionary<string, string> artifacts,
         CancellationToken cancellationToken)
     {
-        var infoResponse = await SendExecdAsync<Dictionary<string, ExecdFileInfoDto>>(
+        // The deployed execd (opensandbox/execd:v1.0.18) does not return a "type"
+        // field on files/info or files/search entries, so directory vs. file can't
+        // be distinguished from response shape alone. Try files/search first —
+        // if requestedPath is a directory, this enumerates its files; if it's a
+        // file, search legitimately finds nothing and the path is downloaded
+        // directly instead. (An earlier version of this method branched on
+        // info.Type, which was always empty against this execd build and made
+        // every requested path — including plain directories like the default
+        // "/output" — fall through to downloading the directory itself as if it
+        // were a file, which execd does not support.)
+        var searchResponse = await SendExecdAsync<List<ExecdFileInfoDto>>(
             sandboxId,
             HttpMethod.Get,
-            $"files/info?path={Uri.EscapeDataString(requestedPath)}",
+            $"files/search?path={Uri.EscapeDataString(requestedPath)}&pattern={Uri.EscapeDataString("**")}",
             body: null,
             accept: "application/json",
             cancellationToken);
 
-        RecordRequestId(sandboxId, "execd.files.info.request_id", infoResponse.RequestId);
+        RecordRequestId(sandboxId, "execd.files.search.request_id", searchResponse.RequestId);
 
-        if (infoResponse.Body is null || !infoResponse.Body.TryGetValue(requestedPath, out var info))
+        if (searchResponse.Body is { Count: > 0 } files)
         {
-            return;
-        }
-
-        if (string.Equals(info.Type, "directory", StringComparison.OrdinalIgnoreCase))
-        {
-            var searchResponse = await SendExecdAsync<List<ExecdFileInfoDto>>(
-                sandboxId,
-                HttpMethod.Get,
-                $"files/search?path={Uri.EscapeDataString(requestedPath)}&pattern={Uri.EscapeDataString("**")}",
-                body: null,
-                accept: "application/json",
-                cancellationToken);
-
-            RecordRequestId(sandboxId, "execd.files.search.request_id", searchResponse.RequestId);
-
-            foreach (var file in searchResponse.Body ?? [])
+            foreach (var file in files)
             {
-                if (!string.Equals(file.Type, "file", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
                 await DownloadArtifactAsync(sandboxId, requestedPath, file.Path, artifacts, cancellationToken);
             }
 
@@ -488,25 +492,36 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         {
             while (true)
             {
-                var response = await SendLifecycleAsync<LifecycleSandboxDto>(
-                    HttpMethod.Get,
-                    $"sandboxes/{Uri.EscapeDataString(sandboxId)}",
-                    body: null,
-                    linkedCts.Token);
-
-                RecordRequestId(sandboxId, "lifecycle.inspect.request_id", response.RequestId);
-
-                var state = response.Body?.Status?.State;
-                if (string.Equals(state, "Running", StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    return;
+                    var response = await SendLifecycleAsync<LifecycleSandboxDto>(
+                        HttpMethod.Get,
+                        $"sandboxes/{Uri.EscapeDataString(sandboxId)}",
+                        body: null,
+                        linkedCts.Token);
+
+                    RecordRequestId(sandboxId, "lifecycle.inspect.request_id", response.RequestId);
+
+                    var state = response.Body?.Status?.State;
+                    if (string.Equals(state, "Running", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    if (string.Equals(state, "Failed", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(state, "Terminated", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"OpenSandbox sandbox {sandboxId} failed to start: {response.Body?.Status?.Message ?? response.Body?.Status?.Reason ?? state}.");
+                    }
                 }
-
-                if (string.Equals(state, "Failed", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(state, "Terminated", StringComparison.OrdinalIgnoreCase))
+                catch (OpenSandboxApiException ex) when (
+                    ex.StatusCode == (int)HttpStatusCode.NotFound ||
+                    ex.StatusCode == (int)HttpStatusCode.Conflict ||
+                    ex.StatusCode == (int)HttpStatusCode.BadGateway ||
+                    ex.StatusCode == (int)HttpStatusCode.ServiceUnavailable)
                 {
-                    throw new InvalidOperationException(
-                        $"OpenSandbox sandbox {sandboxId} failed to start: {response.Body?.Status?.Message ?? response.Body?.Status?.Reason ?? state}.");
+                    RecordDiagnostic(sandboxId, "lifecycle.inspect.last_error", ex.Message);
                 }
 
                 await Task.Delay(TimeSpan.FromMilliseconds(250), linkedCts.Token);
@@ -615,7 +630,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         }
 
         return new ResolvedLifecycleEndpoint(
-            EnsureAbsoluteEndpoint(response.Body.Endpoint, _lifecycleBaseUri.Scheme),
+            EnsureAbsoluteEndpoint(response.Body.Endpoint, _lifecycleBaseUri),
             response.Body.Headers ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
     }
 
@@ -1146,7 +1161,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         return normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
     }
 
-    private static string EnsureAbsoluteEndpoint(string endpoint, string defaultScheme)
+    private static string EnsureAbsoluteEndpoint(string endpoint, Uri lifecycleBaseUri)
     {
         if (endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -1154,7 +1169,20 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
             return endpoint;
         }
 
-        return $"{defaultScheme}://{endpoint}";
+        if (endpoint.StartsWith("/", StringComparison.Ordinal))
+        {
+            var origin = new Uri($"{lifecycleBaseUri.Scheme}://{lifecycleBaseUri.Authority}");
+            return new Uri(origin, endpoint).ToString();
+        }
+
+        var firstSegment = endpoint.Split('/', 2)[0];
+        if (firstSegment.Contains('.', StringComparison.Ordinal) ||
+            firstSegment.Contains(':', StringComparison.Ordinal))
+        {
+            return $"{lifecycleBaseUri.Scheme}://{endpoint}";
+        }
+
+        return new Uri(lifecycleBaseUri, endpoint).ToString();
     }
 
     private static DateTimeOffset ToTimestamp(long? unixMilliseconds) =>
@@ -1261,6 +1289,12 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         message?.Contains("cancel", StringComparison.OrdinalIgnoreCase) == true ||
         message?.Contains("interrupt", StringComparison.OrdinalIgnoreCase) == true;
 
+    private static bool IsTransientApiFailure(OpenSandboxApiException exception) =>
+        exception.StatusCode is (int)HttpStatusCode.NotFound
+            or (int)HttpStatusCode.Conflict
+            or (int)HttpStatusCode.BadGateway
+            or (int)HttpStatusCode.ServiceUnavailable;
+
     private static Uri NormalizeLifecycleBaseUri(string serverUrl)
     {
         if (string.IsNullOrWhiteSpace(serverUrl))
@@ -1359,6 +1393,8 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
     {
         var requestId = GetRequestId(response.Headers);
         var body = await response.Content.ReadAsStringAsync();
+        var requestUri = response.RequestMessage?.RequestUri?.ToString();
+        var requestMethod = response.RequestMessage?.Method.Method;
 
         string? errorCode = null;
         string? errorMessage = null;
@@ -1382,7 +1418,9 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
             statusCode: (int)response.StatusCode,
             requestId: requestId,
             errorCode: errorCode,
-            message: errorMessage);
+            message: string.IsNullOrWhiteSpace(requestUri)
+                ? errorMessage
+                : $"{errorMessage} [request: {requestMethod ?? "?"} {requestUri}]");
     }
 
     private sealed record OpenSandboxHttpResponse<T>(T Body, string? RequestId);

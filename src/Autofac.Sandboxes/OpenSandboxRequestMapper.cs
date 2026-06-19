@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Autofac.Sandboxes;
 
@@ -36,7 +38,14 @@ public sealed class OpenSandboxRequestMapper
                 mount.Source,
                 mount.MountPath,
                 mount.ReadOnly)).ToArray() ?? [],
-            NetworkPolicy: profile.NetworkPolicy is null
+            // Omit networkPolicy entirely for "None" rather than sending an explicit
+            // no-egress policy: OpenSandbox treats the field's mere presence (any mode,
+            // including "none") as "enforce a policy" and spins up an egress sidecar for
+            // it, regardless of mode. "None" needs no enforcement, so there is nothing
+            // to gain from asking for it and a real cost — the sidecar adds ~30s of
+            // latency per sandbox and, depending on the server's [egress] mode, may not
+            // even become ready (see docs/manual-test-opensandbox.md).
+            NetworkPolicy: profile.NetworkPolicy is null or { Mode: SandboxNetworkAccessMode.None }
                 ? null
                 : new OpenSandboxNetworkPolicy(
                     profile.NetworkPolicy.Mode,
@@ -165,6 +174,45 @@ public sealed class OpenSandboxRequestMapper
             metadata[pair.Key] = pair.Value;
         }
 
-        return metadata;
+        return metadata.ToDictionary(
+            static pair => pair.Key,
+            static pair => SanitizeMetadataValue(pair.Value),
+            StringComparer.OrdinalIgnoreCase);
     }
+
+    private static string SanitizeMetadataValue(string value)
+    {
+        var sanitized = new string(value
+            .Select(static ch => IsMetadataValueCharacter(ch) ? ch : '-')
+            .ToArray())
+            .Trim('-', '_', '.');
+
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            sanitized = "empty";
+        }
+
+        if (sanitized.Length <= 63)
+        {
+            return sanitized;
+        }
+
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))
+            .ToLowerInvariant()[..8];
+        var prefixLength = 63 - hash.Length - 1;
+        var prefix = sanitized[..Math.Min(prefixLength, sanitized.Length)].TrimEnd('-', '_', '.');
+
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            prefix = "value";
+        }
+
+        return $"{prefix}-{hash}";
+    }
+
+    private static bool IsMetadataValueCharacter(char ch) =>
+        (ch >= 'a' && ch <= 'z') ||
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9') ||
+        ch is '-' or '_' or '.';
 }

@@ -25,6 +25,52 @@ Autofac is a *client* of OpenSandbox's REST API (`Autofac.Sandboxes.OpenSandboxA
 
 This is the contributor loop: no Kata cluster, no Kubernetes — OpenSandbox's own server runs as a container and talks to your local Docker daemon underneath.
 
+### Step 0: Run the automated workflow/agent/OpenSandbox E2E stack
+
+Use this first when you want to prove the full Autofac path:
+
+```bash
+scripts/run-opensandbox-e2e.sh
+```
+
+Equivalent manual sequence:
+
+```bash
+docker compose -f docker/docker-compose.e2e.yml \
+  --profile opensandbox \
+  up --build -d \
+  postgres-opensandbox migrate-opensandbox wiremock opensandbox api-opensandbox
+
+curl --fail --retry 60 --retry-delay 2 http://localhost:8083/api/health/live
+
+docker compose -f docker/docker-compose.e2e.yml \
+  --profile opensandbox \
+  build e2e-tests-opensandbox
+
+docker compose -f docker/docker-compose.e2e.yml \
+  --profile opensandbox \
+  run --rm e2e-tests-opensandbox
+```
+
+This profile builds and starts:
+
+- Postgres for an isolated OpenSandbox E2E database.
+- A local OpenSandbox server in Docker runtime mode (`http://localhost:8089/health` from the host).
+- An Autofac API instance configured with `Sandboxes:Provider=opensandbox` (`http://localhost:8083/api/health/live` from the host).
+- The `OpenSandboxWorkflowE2ETests` runner.
+
+The E2E test uploads a temporary agent through `POST /api/agents/upload`, imports and publishes a BPMN workflow that references that agent, starts a run, and asserts the service task completed through the `sandbox.execute` tool with the `offline` sandbox profile.
+
+Expected result: the `e2e-tests-opensandbox` container exits with code 0 and the run step output contains `autofac-sandbox: task complete`.
+
+The OpenSandbox log line below is expected in this local scenario and is not the failure:
+
+```text
+server.api_key is not configured. Proceeding because OPENSANDBOX_INSECURE_SERVER explicitly acknowledges the insecure server mode.
+```
+
+This stack intentionally runs the server in insecure local-dev mode (`OPENSANDBOX_INSECURE_SERVER=YES`). The actual failure mode to watch for is `api-opensandbox` never becoming healthy, or the `e2e-tests-opensandbox` container exiting non-zero.
+
 ### Step 1: Start an OpenSandbox server locally
 
 Follow the OpenSandbox project's own Docker-mode instructions: https://github.com/opensandbox-group/OpenSandbox/blob/main/docs/architecture.md. In Docker mode the server typically listens on a local port (this scenario assumes `http://localhost:8080/v1`, matching `OpenSandboxProviderOptions.ServerUrl`'s default).

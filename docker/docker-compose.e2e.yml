@@ -1,20 +1,21 @@
 ###############################################################################
 # Autofac E2E test stack
 #
-# Core profile (default API + workflow tests, built-in BPMN engine):
-#   docker compose -f docker/docker-compose.e2e.yml --profile core up --build --abort-on-container-exit
+# The profiles include one-shot migration services. Avoid `up
+# --abort-on-container-exit` for the full stack because Compose will stop when
+# migration exits successfully. Use dedicated runner scripts or a two-phase flow
+# (bring dependencies up, then run the test container).
 #
-# Camunda profile (adds Zeebe 8 for the issue-#69 spike):
-#   docker compose -f docker/docker-compose.e2e.yml --profile camunda up --build --abort-on-container-exit
-#
-# Both profiles can run together:
-#   docker compose -f docker/docker-compose.e2e.yml --profile core --profile camunda up --build --abort-on-container-exit
+# OpenSandbox profile (local OpenSandbox server + real agent sandbox execution):
+#   scripts/run-opensandbox-e2e.sh
 #
 # What gets mocked
 # ----------------
 # • GitHub API  → WireMock (catch-all 200), so no real PAT is needed.
 # • Agent LLM   → Sandbox is disabled; AgentOrchestrator falls back to the
 #                  no-op skill path that returns success immediately.
+# • OpenSandbox → Not mocked in the opensandbox profile. The API talks to a
+#                  local OpenSandbox server that uses the host Docker daemon.
 ###############################################################################
 
 services:
@@ -64,6 +65,72 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── OpenSandbox E2E infrastructure ─────────────────────────────────────────
+
+  postgres-opensandbox:
+    profiles: [opensandbox]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: autofac_e2e_opensandbox
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_opensandbox_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_e2e_opensandbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate-opensandbox:
+    profiles: [opensandbox]
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: build
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=autofac_e2e_opensandbox;Username=postgres;Password=postgres"
+    depends_on:
+      postgres-opensandbox:
+        condition: service_healthy
+    restart: "no"
+
+  opensandbox:
+    profiles: [opensandbox]
+    build:
+      context: ..
+      dockerfile: docker/opensandbox/Dockerfile
+      args:
+        OPENSANDBOX_SERVER_VERSION: "${OPENSANDBOX_SERVER_VERSION:-}"
+    environment:
+      OPENSANDBOX_INSECURE_SERVER: "YES"
+      SANDBOX_CONFIG_PATH: "/etc/opensandbox/sandbox.toml"
+    ports:
+      - "8089:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - opensandbox_data:/var/lib/opensandbox
+    # sandbox.toml pins [docker] network_mode = "bridge" because OpenSandbox's
+    # egress sidecar enforcement rejects any other network_mode. The sandboxes
+    # and egress sidecars this server creates via the mounted Docker socket
+    # land on Docker's literal "bridge" network, so this container also needs
+    # to be reachable there. Compose can't declare that attachment itself —
+    # Docker's daemon rejects network-scoped aliases on non-user-defined
+    # networks — so scripts/run-opensandbox-e2e.sh runs
+    # `docker network connect bridge <container>` imperatively after this
+    # container starts.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2).read()\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 20
+
   api:
     build:
       context: ..
@@ -94,6 +161,66 @@ services:
       timeout: 5s
       retries: 20
 
+  api-opensandbox:
+    profiles: [opensandbox]
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+    ports:
+      - "8083:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=autofac_e2e_opensandbox;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      Agents__Registry__AgentsDirectory: /app/agents
+      Agents__Skills__SkillsDirectory: ""
+      Sandboxes__Enabled: "true"
+      Sandboxes__Provider: "opensandbox"
+      Sandboxes__OpenSandbox__Enabled: "true"
+      Sandboxes__OpenSandbox__BaseUrl: "http://opensandbox:8080/v1"
+      Sandboxes__OpenSandbox__ServerUrl: "http://opensandbox:8080/v1"
+      Sandboxes__OpenSandbox__DefaultImage: "alpine:3.19"
+      Sandboxes__OpenSandbox__DefaultTimeoutSeconds: "60"
+      Sandboxes__OpenSandbox__ReadinessTimeoutSeconds: "60"
+      # use_server_proxy=true routes execd traffic through the opensandbox
+      # server, but its proxy mis-frames the execd SSE stream's response
+      # headers (observed: an immediate "Cannot write more bytes to the
+      # buffer than the configured maximum buffer size" failure on the very
+      # first read — looks like a bogus declared content length on the
+      # proxied response, not something fixable from the client side).
+      # Going direct avoids the proxy entirely; scripts/run-opensandbox-e2e.sh
+      # attaches this container to Docker's literal "bridge" network (where
+      # sandbox containers land, see sandbox.toml [docker] network_mode) so
+      # the direct connection is actually reachable.
+      Sandboxes__OpenSandbox__UseServerProxy: "false"
+      Sandboxes__OpenSandbox__WorkingDirectory: "/workspace"
+      Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
+      Integrations__GitHub__PersonalAccessToken: "mock-token"
+      Integrations__GitHub__RepositoryOwner: "mock-owner"
+      Integrations__GitHub__RepositoryName: "mock-repo"
+      Integrations__Jira__WebhookSecret: ""
+      Integrations__GitHub__WebhookSecret: ""
+      Jwt__DevIdentityEnabled: "true"
+      Jwt__DevIdentitySubject: "dev:admin"
+      Jwt__DevIdentityRoles__0: "Admin"
+    volumes:
+      - opensandbox_api_storage:/app/storage
+      - opensandbox_agents:/app/agents
+    depends_on:
+      postgres-opensandbox:
+        condition: service_healthy
+      migrate-opensandbox:
+        condition: service_completed_successfully
+      wiremock:
+        condition: service_healthy
+      opensandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # ── Core E2E tests (built-in BPMN engine) ───────────────────────────────────
 
   e2e-tests:
@@ -106,6 +233,22 @@ services:
       CAMUNDA_ENABLED: "false"
     depends_on:
       api:
+        condition: service_healthy
+
+  # ── OpenSandbox-backed agent execution E2E ─────────────────────────────────
+
+  e2e-tests-opensandbox:
+    profiles: [opensandbox]
+    build:
+      context: ..
+      dockerfile: docker/e2e/Dockerfile
+    command: ["--filter", "FullyQualifiedName~OpenSandboxWorkflowE2ETests"]
+    environment:
+      AUTOFAC_API_URL: "http://api-opensandbox:8080"
+      AUTOFAC_OPEN_SANDBOX_E2E: "true"
+      CAMUNDA_ENABLED: "false"
+    depends_on:
+      api-opensandbox:
         condition: service_healthy
 
   # ── Camunda 8 spike (issue #69) ─────────────────────────────────────────────
@@ -160,3 +303,16 @@ services:
         condition: service_healthy
       zeebe:
         condition: service_healthy
+
+volumes:
+  postgres_opensandbox_data:
+  opensandbox_api_storage:
+  opensandbox_agents:
+  opensandbox_data:
+
+networks:
+  # Pinned (not auto-derived from the cwd basename) purely for a stable, predictable
+  # network name across checkouts; service-to-service DNS (e.g. api-opensandbox ->
+  # opensandbox) works the same as compose's auto-named default network.
+  default:
+    name: autofac-e2e-default
