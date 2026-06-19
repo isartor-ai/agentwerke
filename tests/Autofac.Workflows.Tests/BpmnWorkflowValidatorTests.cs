@@ -122,6 +122,73 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenRuntimePermissionAttributesArePresent_ParsesRuntimeContract()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="SandboxWorkflow" name="Sandbox Workflow">
+                <bpmn:serviceTask id="SandboxTask" name="Run sandbox">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="sandbox-e2e-agent"
+                      action="run-open-sandbox"
+                      environment="ci"
+                      purposeType="verification"
+                      policyTag="opensandbox-e2e"
+                      sandboxProfile="offline"
+                      permissionLevel="read-write"
+                      allowedTools="sandbox.execute, sandbox.execute"
+                      deniedTools="web_search" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var sandboxNode = Assert.Single(result.Definition!.Nodes, node => node.Id == "SandboxTask");
+        var contract = sandboxNode.Metadata!.RuntimeContract;
+        Assert.NotNull(contract);
+        Assert.Equal("read-write", contract!.Permissions.Level);
+        Assert.Equal(["sandbox.execute"], contract.Permissions.AllowedTools);
+        Assert.Equal(["web_search"], contract.Permissions.DeniedTools);
+    }
+
+    [Fact]
+    public void Validate_WhenRuntimePermissionLevelIsUnknown_ReturnsActionableError()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="SandboxWorkflow" name="Sandbox Workflow">
+                <bpmn:serviceTask id="SandboxTask" name="Run sandbox">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="sandbox-e2e-agent"
+                      action="run-open-sandbox"
+                      environment="ci"
+                      purposeType="verification"
+                      policyTag="opensandbox-e2e"
+                      permissionLevel="superuser" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("SandboxTask", error.ElementId);
+        Assert.Contains("permissionLevel must be one of", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_WhenUnsupportedElementIsPresent_ReturnsActionableError()
     {
         var xml = """

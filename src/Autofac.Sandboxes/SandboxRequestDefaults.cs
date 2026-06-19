@@ -26,7 +26,7 @@ internal static class SandboxRequestDefaults
 
         return new SandboxCommandSpec(
             Arguments: ["sh", "-c", BuildPlaceholderEntrypointScript()],
-            WorkingDirectory: null,
+            WorkingDirectory: "/",
             EnvironmentVariables: null,
             StandardInput: null,
             StreamOutput: true);

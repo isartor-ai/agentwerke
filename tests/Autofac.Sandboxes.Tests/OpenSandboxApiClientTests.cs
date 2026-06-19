@@ -88,6 +88,138 @@ public sealed class OpenSandboxApiClientTests
     }
 
     [Fact]
+    public async Task CreateAsync_WithPathRelativeProxyEndpoint_ResolvesAgainstLifecycleOrigin()
+    {
+        var handler = new SequencedHttpMessageHandler();
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(HttpStatusCode.Accepted, """{"id":"sbx-1"}""", "create-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"status":{"state":"Running"}}""",
+                "inspect-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal(
+                "http://sandbox.local:8080/v1/sandboxes/sbx-1/endpoints/44772?use_server_proxy=true",
+                request.RequestUri?.ToString());
+
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"endpoint":"/v1/sandboxes/sbx-1/proxy/44772","headers":{"X-EXECD-ACCESS-TOKEN":"execd-token"}}""",
+                "endpoint-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1/proxy/44772/ping", request.RequestUri?.ToString());
+            Assert.Equal("execd-token", request.Headers.GetValues("X-EXECD-ACCESS-TOKEN").Single());
+            return Task.FromResult(EmptyResponse(HttpStatusCode.OK, "ping-req"));
+        });
+
+        var client = CreateClient(handler, options: new OpenSandboxProviderOptions
+        {
+            ServerUrl = "http://sandbox.local:8080/v1",
+            UseServerProxy = true,
+            ReadinessTimeoutSeconds = 5
+        });
+
+        var handle = await client.CreateAsync(
+            new OpenSandboxCreateSandboxRequest(
+                Image: "python:3.12",
+                TimeoutSeconds: 120,
+                ResourceLimits: new OpenSandboxResourceLimits(500, 512, 120, null),
+                EnvironmentVariables: new Dictionary<string, string>(),
+                Metadata: new Dictionary<string, string>(),
+                Volumes: [],
+                NetworkPolicy: null,
+                CredentialBindings: [],
+                RequestedEndpoints: [],
+                SecureAccess: false,
+                WorkingDirectory: "/",
+                CommandExecutionMode: SandboxCommandExecutionMode.Foreground),
+            CancellationToken.None);
+
+        Assert.Equal("sbx-1", handle.SandboxId);
+        handler.AssertCompleted();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenInitialInspectReturnsNotFound_RetriesUntilSandboxIsVisible()
+    {
+        var handler = new SequencedHttpMessageHandler();
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(HttpStatusCode.Accepted, """{"id":"sbx-1"}""", "create-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.NotFound,
+                """{"code":"NOT_FOUND","message":"Not Found"}""",
+                "inspect-miss"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"status":{"state":"Running"}}""",
+                "inspect-hit"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1/endpoints/44772", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"endpoint":"execd.local","headers":{"X-EXECD-ACCESS-TOKEN":"execd-token"}}""",
+                "endpoint-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/ping", request.RequestUri?.ToString());
+            Assert.Equal("execd-token", request.Headers.GetValues("X-EXECD-ACCESS-TOKEN").Single());
+            return Task.FromResult(EmptyResponse(HttpStatusCode.OK, "ping-req"));
+        });
+
+        var client = CreateClient(handler, options: new OpenSandboxProviderOptions
+        {
+            ServerUrl = "http://sandbox.local:8080/v1",
+            ReadinessTimeoutSeconds = 5
+        });
+
+        var handle = await client.CreateAsync(
+            new OpenSandboxCreateSandboxRequest(
+                Image: "python:3.12",
+                TimeoutSeconds: 120,
+                ResourceLimits: new OpenSandboxResourceLimits(500, 512, 120, null),
+                EnvironmentVariables: new Dictionary<string, string>(),
+                Metadata: new Dictionary<string, string>(),
+                Volumes: [],
+                NetworkPolicy: null,
+                CredentialBindings: [],
+                RequestedEndpoints: [],
+                SecureAccess: false,
+                WorkingDirectory: "/",
+                CommandExecutionMode: SandboxCommandExecutionMode.Foreground),
+            CancellationToken.None);
+
+        Assert.Equal("sbx-1", handle.SandboxId);
+        Assert.Equal("inspect-hit", handle.Metadata!["lifecycle.inspect.request_id"]);
+        Assert.Contains("OpenSandbox API request failed (404)", handle.Metadata["lifecycle.inspect.last_error"], StringComparison.Ordinal);
+        handler.AssertCompleted();
+    }
+
+    [Fact]
     public async Task RunCommandAsync_SessionMode_StreamsOutputAndDeletesSession()
     {
         var handler = new SequencedHttpMessageHandler();
@@ -168,6 +300,74 @@ data: {"type":"execution_complete","timestamp":3}
     }
 
     [Fact]
+    public async Task RunCommandAsync_WhenForegroundCommandReturnsNotFound_RetriesAndSucceeds()
+    {
+        var handler = new SequencedHttpMessageHandler();
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1/endpoints/44772", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"endpoint":"execd.local","headers":{"X-EXECD-ACCESS-TOKEN":"execd-token"}}""",
+                "endpoint-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/ping", request.RequestUri?.ToString());
+            return Task.FromResult(EmptyResponse(HttpStatusCode.OK, "ping-req"));
+        });
+        handler.Enqueue(async (request, cancellationToken) =>
+        {
+            Assert.Equal("http://execd.local/command", request.RequestUri?.ToString());
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            Assert.Contains("echo", body.RootElement.GetProperty("command").GetString(), StringComparison.Ordinal);
+            return JsonResponse(HttpStatusCode.NotFound, """{"code":"NOT_FOUND","message":"Not Found"}""", "command-miss");
+        });
+        handler.Enqueue(async (request, cancellationToken) =>
+        {
+            Assert.Equal("http://execd.local/command", request.RequestUri?.ToString());
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            Assert.Contains("echo", body.RootElement.GetProperty("command").GetString(), StringComparison.Ordinal);
+
+            const string sse = """
+data: {"type":"init","text":"cmd-1","timestamp":1}
+
+data: {"type":"stdout","text":"hello\n","timestamp":2}
+
+data: {"type":"execution_complete","timestamp":3}
+
+""";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(sse, Encoding.UTF8, "text/event-stream"),
+                Headers = { { "X-Request-ID", "run-req" } }
+            };
+        });
+
+        var client = CreateClient(handler);
+
+        var result = await client.RunCommandAsync(
+            "sbx-1",
+            new OpenSandboxRunCommandRequest(
+                Arguments: ["echo", "hello"],
+                Mode: SandboxCommandExecutionMode.Foreground,
+                WorkingDirectory: "/workspace",
+                EnvironmentVariables: new Dictionary<string, string>(),
+                TimeoutSeconds: 30,
+                StandardInput: null,
+                StreamOutput: true),
+            CancellationToken.None);
+
+        Assert.Equal(SandboxCommandState.Completed, result.State);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("hello\n", result.Logs);
+        Assert.NotNull(result.Diagnostics);
+        Assert.Equal("run-req", result.Diagnostics!["execd.run.request_id"]);
+        Assert.Contains("OpenSandbox API request failed (404)", result.Diagnostics["execd.last_error"], StringComparison.Ordinal);
+        handler.AssertCompleted();
+    }
+
+    [Fact]
     public async Task CollectArtifactsAsync_DownloadsTextFilesAndSkipsMissingPaths()
     {
         var handler = new SequencedHttpMessageHandler();
@@ -186,18 +386,14 @@ data: {"type":"execution_complete","timestamp":3}
         });
         handler.Enqueue((request, _) =>
         {
-            Assert.Equal("http://execd.local/files/info?path=%2Foutput", request.RequestUri?.ToString());
-            return Task.FromResult(JsonResponse(
-                HttpStatusCode.OK,
-                """{"/output":{"path":"/output","type":"directory"}}""",
-                "files-info-req"));
-        });
-        handler.Enqueue((request, _) =>
-        {
+            // Deployed execd builds (e.g. opensandbox/execd:v1.0.18) don't include a
+            // "type" field on files/info or files/search entries, so directory vs.
+            // file can't be told apart from response shape — files/search is tried
+            // first for every requested path and used directly when it has results.
             Assert.Equal("http://execd.local/files/search?path=%2Foutput&pattern=%2A%2A", request.RequestUri?.ToString());
             return Task.FromResult(JsonResponse(
                 HttpStatusCode.OK,
-                """[{"path":"/output/result.json","type":"file"},{"path":"/output/sub","type":"directory"},{"path":"/output/sub/report.txt","type":"file"}]""",
+                """[{"path":"/output/result.json"},{"path":"/output/sub/report.txt"}]""",
                 "files-search-req"));
         });
         handler.Enqueue((request, _) =>
@@ -220,7 +416,7 @@ data: {"type":"execution_complete","timestamp":3}
         });
         handler.Enqueue((request, _) =>
         {
-            Assert.Equal("http://execd.local/files/info?path=%2Fmissing", request.RequestUri?.ToString());
+            Assert.Equal("http://execd.local/files/search?path=%2Fmissing&pattern=%2A%2A", request.RequestUri?.ToString());
             return Task.FromResult(JsonResponse(
                 HttpStatusCode.NotFound,
                 """{"code":"NOT_FOUND","message":"missing"}""",
@@ -246,6 +442,57 @@ data: {"type":"execution_complete","timestamp":3}
                 Assert.Equal("sub/report.txt", artifact.Path);
                 Assert.Equal("ok", artifact.Content);
             });
+
+        handler.AssertCompleted();
+    }
+
+    [Fact]
+    public async Task CollectArtifactsAsync_WhenSearchFindsNoEntries_FallsBackToDirectFileDownload()
+    {
+        var handler = new SequencedHttpMessageHandler();
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1/endpoints/44772", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"endpoint":"execd.local","headers":{"X-EXECD-ACCESS-TOKEN":"execd-token"}}""",
+                "endpoint-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/ping", request.RequestUri?.ToString());
+            return Task.FromResult(EmptyResponse(HttpStatusCode.OK, "ping-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            // files/search against a single file path (rather than a directory) is
+            // observed to return that file itself (see the other test in this
+            // class), but an empty array is a plausible response for some execd
+            // builds — the client must fall back to a direct download in that case
+            // rather than silently collecting nothing.
+            Assert.Equal("http://execd.local/files/search?path=%2Foutput%2Fresult.json&pattern=%2A%2A", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]", "files-search-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/files/download?path=%2Foutput%2Fresult.json", request.RequestUri?.ToString());
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                Headers = { { "X-Request-ID", "download-1" } }
+            });
+        });
+
+        var client = CreateClient(handler);
+
+        var artifacts = await client.CollectArtifactsAsync(
+            "sbx-1",
+            new OpenSandboxCollectArtifactsRequest(["/output/result.json"]),
+            CancellationToken.None);
+
+        var artifact = Assert.Single(artifacts);
+        Assert.Equal("result.json", artifact.Path);
+        Assert.Equal("{}", artifact.Content);
 
         handler.AssertCompleted();
     }

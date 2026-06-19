@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using Autofac.Domain.AgentRuntime;
 
 namespace Autofac.Workflows.Bpmn;
 
@@ -265,6 +266,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 "autofac:agentTask sets simulateTimeout='true' without timeoutSeconds. Timeout simulation may be hard to reason about."));
         }
 
+        var runtimeContract = ParseRuntimeContract(agentTask, element, errors);
+
         return new AutofacTaskMetadata(
             Agent: agent!,
             Action: action!,
@@ -277,8 +280,57 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             FailUntilAttempt: failUntilAttempt,
             SimulateTimeout: simulateTimeout,
             TimeoutSeconds: timeoutSeconds,
+            RuntimeContract: runtimeContract,
             SandboxProfile: agentTask.Attribute("sandboxProfile")?.Value);
     }
+
+    private static AgentRuntimeContract? ParseRuntimeContract(
+        XElement agentTask,
+        XElement element,
+        ICollection<BpmnValidationError> errors)
+    {
+        var permissionLevel = agentTask.Attribute("permissionLevel")?.Value;
+        var allowedTools = ParseCsvAttribute(agentTask, "allowedTools");
+        var deniedTools = ParseCsvAttribute(agentTask, "deniedTools");
+
+        if (string.IsNullOrWhiteSpace(permissionLevel) && allowedTools.Count == 0 && deniedTools.Count == 0)
+        {
+            return null;
+        }
+
+        var normalizedPermissionLevel = string.IsNullOrWhiteSpace(permissionLevel)
+            ? AgentPermissionLevels.ReadOnly
+            : permissionLevel.Trim();
+
+        if (!IsKnownPermissionLevel(normalizedPermissionLevel))
+        {
+            errors.Add(CreateError(
+                element,
+                "autofac:agentTask permissionLevel must be one of: read-only, read-write, full."));
+            return null;
+        }
+
+        return new AgentRuntimeContract
+        {
+            Permissions = new AgentPermissionContract
+            {
+                Level = normalizedPermissionLevel,
+                AllowedTools = allowedTools,
+                DeniedTools = deniedTools
+            }
+        };
+    }
+
+    private static IReadOnlyList<string> ParseCsvAttribute(XElement element, string attributeName) =>
+        (element.Attribute(attributeName)?.Value ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static bool IsKnownPermissionLevel(string value) =>
+        string.Equals(value, AgentPermissionLevels.ReadOnly, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, AgentPermissionLevels.ReadWrite, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, AgentPermissionLevels.Full, StringComparison.OrdinalIgnoreCase);
 
     private static AutofacApprovalMetadata? ValidateApprovalMetadata(
         XElement element,

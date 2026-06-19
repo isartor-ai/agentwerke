@@ -1,0 +1,58 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+max_sandbox_timeout_seconds = 86400
+
+[log]
+level = "INFO"
+
+[runtime]
+type = "docker"
+execd_image = "opensandbox/execd:v1.0.18"
+
+[storage]
+allowed_host_paths = []
+volume_default_size = "1Gi"
+
+[store]
+type = "sqlite"
+path = "/var/lib/opensandbox/opensandbox.db"
+
+[docker]
+# OpenSandbox rejects networkPolicy requests on any network_mode other than
+# "bridge" (its egress sidecar enforcement only supports Docker's default
+# bridge network). The opensandbox service in docker-compose.e2e.yml is
+# therefore also attached to that literal "bridge" network (in addition to
+# the compose-managed network), so the server can reach the sandbox/egress
+# sidecar containers it creates there via the mounted host Docker socket.
+network_mode = "bridge"
+# Without this, the server returns its own container IP on the compose
+# network as the endpoint host for sandbox ports — unreachable from clients
+# on a different network, since the published port is bound on the Docker
+# host, not on the server's own container address. host.docker.internal is
+# Docker Desktop/Rancher Desktop's stable address for "the host that
+# publishes container ports", reachable from any container regardless of
+# which network it's on.
+host_ip = "host.docker.internal"
+drop_capabilities = [
+  "AUDIT_WRITE",
+  "MKNOD",
+  "NET_ADMIN",
+  "NET_RAW",
+  "SYS_ADMIN",
+  "SYS_MODULE",
+  "SYS_PTRACE",
+  "SYS_TIME",
+  "SYS_TTY_CONFIG"
+]
+no_new_privileges = true
+apparmor_profile = ""
+pids_limit = 4096
+seccomp_profile = ""
+
+[ingress]
+mode = "direct"
+
+[egress]
+image = "opensandbox/egress:v1.1.0"
+mode = "dns"

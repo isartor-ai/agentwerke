@@ -1,7 +1,9 @@
 using Autofac.Application.Observability;
 using Autofac.Application.Secrets;
 using Autofac.Application.Workflows;
+using Autofac.AgentSecOps;
 using Autofac.Infrastructure.Persistence;
+using Autofac.Infrastructure.Policies;
 using Autofac.Infrastructure.Workers;
 using Autofac.Infrastructure.Secrets;
 using Autofac.Infrastructure.Workflows;
@@ -9,6 +11,7 @@ using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Autofac.Infrastructure;
@@ -33,9 +36,14 @@ public static class DependencyInjection
         services.AddDbContext<AutofacDbContext>(options =>
             options.UseNpgsql(dataSource));
 
+        var runtimeOptions = WorkflowRuntimeOptions.Resolve(configuration);
+        services.AddSingleton(runtimeOptions);
+        services.AddHostedService<WorkflowRuntimeStartupLogger>();
+
         services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
         services.AddScoped<IWorkflowValidationService, WorkflowValidationService>();
         services.AddScoped<IWorkflowAuthoringService, WorkflowAuthoringService>();
+        services.AddScoped<ITemplateCatalogService, TemplateCatalogService>();
         services.AddScoped<IWorkflowRuntimeStore, WorkflowRuntimeStore>();
         services.AddScoped<IWorkflowRunRepository, WorkflowRunRepository>();
         services.AddScoped<IRunContextRepository, RunContextRepository>();
@@ -44,6 +52,34 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
+
+        // Camunda services are only wired when the runtime is explicitly opted into
+        // Camunda mode. The default Autofac runtime keeps those dependencies inactive.
+        if (runtimeOptions.Mode == WorkflowRuntimeMode.Camunda)
+        {
+            services.Configure<CamundaOptions>(o =>
+                configuration.GetSection(CamundaOptions.Section).Bind(o));
+            services.AddHttpClient<CamundaClient>((sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<CamundaOptions>>().Value;
+                if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri))
+                {
+                    client.BaseAddress = baseUri;
+                }
+
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds > 0 ? options.TimeoutSeconds : 10);
+                client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+            });
+            services.AddScoped<ICamundaClient>(sp => sp.GetRequiredService<CamundaClient>());
+            services.AddScoped<ICamundaRuntimeStatusService, CamundaRuntimeStatusService>();
+        }
+        else
+        {
+            services.AddSingleton<ICamundaRuntimeStatusService, DisabledCamundaRuntimeStatusService>();
+        }
+
+        services.Configure<PolicyStoreOptions>(configuration.GetSection(PolicyStoreOptions.SectionName));
+        services.AddSingleton<IPolicyRuleStore, FilePolicyRuleStore>();
 
         services.AddScoped<IRunOutbox, OutboxRepository>();
         services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();
