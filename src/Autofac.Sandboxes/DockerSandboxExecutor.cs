@@ -9,7 +9,7 @@ namespace Autofac.Sandboxes;
 /// Runs one agent task inside an ephemeral Docker container, captures logs and
 /// artifacts from /output, then removes the container.
 /// </summary>
-public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
+public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisposable
 {
     private readonly IDockerClient _docker;
     private readonly SandboxOptions _options;
@@ -24,6 +24,8 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
         _options = options.Value;
         _logger = logger;
     }
+
+    public SandboxProviderKind ProviderKind => SandboxProviderKind.Docker;
 
     public async Task<SandboxExecutionResult> ExecuteAsync(
         SandboxExecutionRequest request,
@@ -55,7 +57,10 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
         }
         finally
         {
-            await RemoveContainerQuietlyAsync(containerId);
+            if (ShouldDeleteOnCompletion(request))
+            {
+                await RemoveContainerQuietlyAsync(containerId);
+            }
         }
     }
 
@@ -65,43 +70,21 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
         string artifactsDir,
         CancellationToken cancellationToken)
     {
-        var env = new List<string>
+        var env = SandboxRequestDefaults.BuildExecutionEnvironment(request)
+            .Concat(request.EnvironmentVariables?.AsEnumerable() ?? Enumerable.Empty<KeyValuePair<string, string>>())
+            .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        var command = SandboxRequestDefaults.ResolveCommand(request);
+        foreach (var pair in command.EnvironmentVariables?.AsEnumerable() ?? Enumerable.Empty<KeyValuePair<string, string>>())
         {
-            $"AUTOFAC_RUN_ID={request.RunId}",
-            $"AUTOFAC_STEP_ID={request.StepId}",
-            $"AUTOFAC_AGENT={request.AgentName}",
-            $"AUTOFAC_ACTION={request.Action}",
-            $"AUTOFAC_ENVIRONMENT={request.Environment ?? string.Empty}",
-            $"AUTOFAC_PURPOSE={request.PurposeType}",
-            $"AUTOFAC_POLICY={request.PolicyTag}",
-            $"AUTOFAC_ATTEMPT={request.Attempt}",
-        };
-
-        // MVP entry point: write a structured result file and echo to stdout.
-        const string entrypoint = """
-            set -e
-            echo "autofac-sandbox: starting task"
-            echo "agent=$AUTOFAC_AGENT action=$AUTOFAC_ACTION env=$AUTOFAC_ENVIRONMENT attempt=$AUTOFAC_ATTEMPT"
-            mkdir -p /output
-            cat > /output/result.json <<EOF
-            {
-              "runId": "$AUTOFAC_RUN_ID",
-              "stepId": "$AUTOFAC_STEP_ID",
-              "agent": "$AUTOFAC_AGENT",
-              "action": "$AUTOFAC_ACTION",
-              "environment": "$AUTOFAC_ENVIRONMENT",
-              "status": "completed",
-              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            }
-            EOF
-            echo "autofac-sandbox: task complete"
-            """;
+            env[pair.Key] = pair.Value;
+        }
 
         var createParams = new CreateContainerParameters
         {
             Image = image,
-            Cmd = ["sh", "-c", entrypoint],
-            Env = env,
+            Cmd = [.. command.Arguments],
+            WorkingDir = command.WorkingDirectory,
+            Env = [.. env.Select(static pair => $"{pair.Key}={pair.Value}")],
             HostConfig = new HostConfig
             {
                 Memory = (long)_options.MemoryLimitMb * 1024 * 1024,
@@ -150,7 +133,17 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
                 FailureReason: $"Timed out after {_options.TimeoutSeconds}s",
                 Artifacts: CollectArtifacts(artifactsDir),
                 ExitCode: null,
-                Duration: DateTimeOffset.UtcNow - started);
+                Duration: DateTimeOffset.UtcNow - started,
+                ProviderSandboxId: containerId,
+                CommandState: SandboxCommandState.TimedOut,
+                StructuredLogs: CreateStructuredLogs(logs, started),
+                ProviderDiagnostics: new Dictionary<string, string>
+                {
+                    ["provider"] = ProviderKind.ToConfigValue(),
+                    ["reason"] = "timeout"
+                },
+                Endpoints: [],
+                Provider: ProviderKind);
         }
 
         var exitCode = (int)waitResponse.StatusCode;
@@ -170,7 +163,16 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
                 FailureReason: $"Container exited with code {exitCode}",
                 Artifacts: artifacts,
                 ExitCode: exitCode,
-                Duration: duration);
+                Duration: duration,
+                ProviderSandboxId: containerId,
+                CommandState: SandboxCommandState.Failed,
+                StructuredLogs: CreateStructuredLogs(logsOutput, started),
+                ProviderDiagnostics: new Dictionary<string, string>
+                {
+                    ["provider"] = ProviderKind.ToConfigValue()
+                },
+                Endpoints: [],
+                Provider: ProviderKind);
         }
 
         return new SandboxExecutionResult(
@@ -179,7 +181,16 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
             FailureReason: null,
             Artifacts: artifacts,
             ExitCode: exitCode,
-            Duration: duration);
+            Duration: duration,
+            ProviderSandboxId: containerId,
+            CommandState: SandboxCommandState.Completed,
+            StructuredLogs: CreateStructuredLogs(logsOutput, started),
+            ProviderDiagnostics: new Dictionary<string, string>
+            {
+                ["provider"] = ProviderKind.ToConfigValue()
+            },
+            Endpoints: [],
+            Provider: ProviderKind);
     }
 
     private async Task<string> CollectLogsAsync(string containerId, CancellationToken cancellationToken)
@@ -283,7 +294,32 @@ public sealed class DockerSandboxExecutor : ISandboxExecutor, IAsyncDisposable
             FailureReason: reason,
             Artifacts: new Dictionary<string, string>(),
             ExitCode: null,
-            Duration: DateTimeOffset.UtcNow - started);
+            Duration: DateTimeOffset.UtcNow - started,
+            ProviderSandboxId: null,
+            CommandState: SandboxCommandState.Failed,
+            StructuredLogs: [],
+            ProviderDiagnostics: new Dictionary<string, string>
+            {
+                ["provider"] = SandboxProviderKind.Docker.ToConfigValue()
+            },
+            Endpoints: [],
+            Provider: SandboxProviderKind.Docker);
+
+    private static IReadOnlyList<SandboxLogEntry> CreateStructuredLogs(string logs, DateTimeOffset timestamp)
+    {
+        if (string.IsNullOrWhiteSpace(logs))
+        {
+            return [];
+        }
+
+        return logs
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => new SandboxLogEntry("combined", line, timestamp))
+            .ToArray();
+    }
+
+    private static bool ShouldDeleteOnCompletion(SandboxExecutionRequest request) =>
+        request.Profile?.CleanupPolicy?.DeleteSandboxOnCompletion ?? true;
 
     public async ValueTask DisposeAsync()
     {

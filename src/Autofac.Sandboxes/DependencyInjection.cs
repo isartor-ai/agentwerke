@@ -21,7 +21,13 @@ public static class DependencyInjection
             return new DockerClientConfiguration(uri).CreateClient();
         });
 
-        services.AddScoped<ISandboxExecutor, DockerSandboxExecutor>();
+        services.AddSingleton<IOpenSandboxClient, UnimplementedOpenSandboxClient>();
+        services.AddScoped<OpenSandboxRequestMapper>();
+        services.AddScoped<ISandboxProviderExecutor, DockerSandboxExecutor>();
+        services.AddScoped<ISandboxProviderExecutor, OpenSandboxSandboxExecutor>();
+        services.AddScoped<ISandboxProviderExecutor, KubernetesKataSandboxExecutor>();
+        services.AddScoped<ConfiguredSandboxExecutor>();
+        services.AddScoped<ISandboxExecutor>(sp => sp.GetRequiredService<ConfiguredSandboxExecutor>());
 
         return services;
     }

@@ -6,3 +6,8 @@ public interface ISandboxExecutor
         SandboxExecutionRequest request,
         CancellationToken cancellationToken);
 }
+
+public interface ISandboxProviderExecutor : ISandboxExecutor
+{
+    SandboxProviderKind ProviderKind { get; }
+}
