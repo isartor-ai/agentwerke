@@ -5,6 +5,7 @@ using Autofac.Agents.Skills;
 using Autofac.Agents.Tools;
 using Autofac.Agents.Mcp;
 using Autofac.AgentSecOps;
+using Autofac.Domain.AgentRuntime;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Autofac.Storage.Artifacts;

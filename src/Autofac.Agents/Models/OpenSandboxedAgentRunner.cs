@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Autofac.Application.Secrets;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Domain.Security;
 using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,10 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 {
     private const string ResultArtifactName = "agent-run-result.json";
     private const string EnvelopeEnvironmentVariable = "AUTOFAC_AGENT_RUN_ENVELOPE_B64";
-    private const string DefaultModelApiKeyEnvironmentVariable = "ANTHROPIC_API_KEY";
+    private const string ModelApiKeyEnvironmentVariable = "AUTOFAC_MODEL_API_KEY";
+    private const string ModelProviderEnvironmentVariable = "AUTOFAC_MODEL_PROVIDER";
+    private const string ModelIdEnvironmentVariable = "AUTOFAC_MODEL_ID";
+    private const string ModelApiBaseUrlEnvironmentVariable = "AUTOFAC_MODEL_API_BASE_URL";
 
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
@@ -67,8 +71,20 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 TokenUsage: null);
         }
 
-        var effectiveProfile = BuildEffectiveSandboxProfile(sandboxProfileName, request.RunId);
-        var environmentVariables = await BuildEnvironmentVariablesAsync(profile, toolResolution.Tools, cancellationToken);
+        var modelRuntime = await ResolveModelRuntimeAsync(profile, cancellationToken);
+        if (modelRuntime.FailureReason is not null)
+        {
+            return new ModelRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: modelRuntime.FailureReason,
+                ToolInvocations: [],
+                Artifacts: null,
+                TokenUsage: null);
+        }
+
+        var effectiveProfile = BuildEffectiveSandboxProfile(sandboxProfileName, request.RunId, modelRuntime.EndpointHost);
+        var environmentVariables = await BuildEnvironmentVariablesAsync(profile, toolResolution.Tools, modelRuntime, cancellationToken);
         var envelope = new SandboxedAgentRunEnvelope(
             request.RunId,
             request.StepId,
@@ -116,14 +132,14 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 ArtifactPaths: ["/output"]),
             cancellationToken);
 
-        var sandboxExecution = ToSandboxExecutionRecord(sandboxResult);
+        var sandboxExecution = ToSandboxExecutionRecord(sandboxResult, modelRuntime, effectiveProfile);
 
         if (!sandboxResult.Artifacts.TryGetValue(ResultArtifactName, out var resultPayload))
         {
             return new ModelRunResult(
                 Succeeded: false,
-                Output: sandboxResult.Logs,
-                FailureReason: sandboxResult.FailureReason ?? "Sandboxed agent run did not produce an agent-run-result.json artifact.",
+                Output: SecretRedactor.Redact(sandboxResult.Logs),
+                FailureReason: SecretRedactor.Redact(sandboxResult.FailureReason ?? "Sandboxed agent run did not produce an agent-run-result.json artifact."),
                 ToolInvocations: [],
                 Artifacts: RemoveInternalArtifacts(sandboxResult.Artifacts),
                 TokenUsage: null,
@@ -140,8 +156,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         {
             return new ModelRunResult(
                 Succeeded: false,
-                Output: sandboxResult.Logs,
-                FailureReason: $"Sandboxed agent run returned invalid result JSON: {ex.Message}",
+                Output: SecretRedactor.Redact(sandboxResult.Logs),
+                FailureReason: SecretRedactor.Redact($"Sandboxed agent run returned invalid result JSON: {ex.Message}"),
                 ToolInvocations: [],
                 Artifacts: RemoveInternalArtifacts(sandboxResult.Artifacts),
                 TokenUsage: null,
@@ -153,7 +169,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         {
             return new ModelRunResult(
                 Succeeded: false,
-                Output: sandboxResult.Logs,
+                Output: SecretRedactor.Redact(sandboxResult.Logs),
                 FailureReason: "Sandboxed agent run returned an empty result payload.",
                 ToolInvocations: [],
                 Artifacts: RemoveInternalArtifacts(sandboxResult.Artifacts),
@@ -174,28 +190,60 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         return new ModelRunResult(
             Succeeded: sandboxResult.Succeeded && runResult.Succeeded,
             Output: runResult.Output,
-            FailureReason: runResult.FailureReason ?? sandboxResult.FailureReason,
-            ToolInvocations: runResult.ToolInvocations ?? [],
+            FailureReason: RedactOptional(runResult.FailureReason ?? sandboxResult.FailureReason),
+            ToolInvocations: SanitizeToolInvocations(runResult.ToolInvocations ?? []),
             Artifacts: artifacts.Count == 0 ? null : artifacts,
             TokenUsage: runResult.TokenUsage,
             ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
             SandboxExecution: sandboxExecution);
     }
 
+    private async Task<ModelRuntimeResolution> ResolveModelRuntimeAsync(
+        AgentProfile? profile,
+        CancellationToken cancellationToken)
+    {
+        var secretStoreApiKey = await _secretStore.GetSecretAsync("Anthropic:ApiKey", cancellationToken);
+        var apiKey = secretStoreApiKey ?? _languageModelOptions.ApiKey;
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new ModelRuntimeResolution(
+                null,
+                NormalizeModelApiBaseUrl(_languageModelOptions.ApiBaseUrl),
+                ResolveModelEndpointHost(_languageModelOptions.ApiBaseUrl),
+                profile?.Model ?? _languageModelOptions.Model,
+                "missing",
+                "Sandboxed agent runtime model credential is not configured. Set 'Anthropic:ApiKey' via secret store or configuration.");
+        }
+
+        return new ModelRuntimeResolution(
+            apiKey,
+            NormalizeModelApiBaseUrl(_languageModelOptions.ApiBaseUrl),
+            ResolveModelEndpointHost(_languageModelOptions.ApiBaseUrl),
+            profile?.Model ?? _languageModelOptions.Model,
+            !string.IsNullOrWhiteSpace(secretStoreApiKey) ? "secret-store" : "configuration",
+            null);
+    }
+
     private async Task<Dictionary<string, string>> BuildEnvironmentVariablesAsync(
         AgentProfile? profile,
         IReadOnlyList<SandboxedToolContract> resolvedTools,
+        ModelRuntimeResolution modelRuntime,
         CancellationToken cancellationToken)
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrWhiteSpace(_languageModelOptions.ApiKey))
-        {
-            environment[DefaultModelApiKeyEnvironmentVariable] = _languageModelOptions.ApiKey;
-        }
+        environment[ModelProviderEnvironmentVariable] = "anthropic";
+        environment[ModelIdEnvironmentVariable] = modelRuntime.ModelId;
+        environment[ModelApiBaseUrlEnvironmentVariable] = modelRuntime.ApiBaseUrl;
+        environment[ModelApiKeyEnvironmentVariable] = modelRuntime.ApiKey!;
 
         foreach (var secretName in profile?.Secrets ?? [])
         {
+            if (IsReservedSandboxSecret(secretName))
+            {
+                continue;
+            }
+
             var secretValue = await _secretStore.GetSecretAsync(secretName, cancellationToken);
             if (!string.IsNullOrWhiteSpace(secretValue))
             {
@@ -331,22 +379,22 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         return new SubAgentResolution(profiles, null);
     }
 
-    private static SandboxExecutionProfile BuildEffectiveSandboxProfile(string sandboxProfileName, string runId)
+    private static SandboxExecutionProfile BuildEffectiveSandboxProfile(string sandboxProfileName, string runId, string modelEndpointHost)
     {
         var profile = SandboxProfileCatalog.Resolve(sandboxProfileName, runId);
         var networkPolicy = profile.NetworkPolicy;
-        var anthropicHosts = new[] { "api.anthropic.com" };
+        var modelHosts = new[] { modelEndpointHost };
 
         SandboxNetworkPolicy? effectiveNetwork = networkPolicy switch
         {
-            null => new SandboxNetworkPolicy(SandboxNetworkAccessMode.Restricted, anthropicHosts),
-            { Mode: SandboxNetworkAccessMode.None } => new SandboxNetworkPolicy(SandboxNetworkAccessMode.Restricted, anthropicHosts),
+            null => new SandboxNetworkPolicy(SandboxNetworkAccessMode.Restricted, modelHosts),
+            { Mode: SandboxNetworkAccessMode.None } => new SandboxNetworkPolicy(SandboxNetworkAccessMode.Restricted, modelHosts),
             { Mode: SandboxNetworkAccessMode.Restricted } => new SandboxNetworkPolicy(
                 SandboxNetworkAccessMode.Restricted,
                 networkPolicy.AllowedHosts?
-                    .Concat(anthropicHosts)
+                    .Concat(modelHosts)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray() ?? anthropicHosts),
+                    .ToArray() ?? modelHosts),
             _ => networkPolicy
         };
 
@@ -361,8 +409,29 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             .Where(static item => !string.Equals(item.Key, ResultArtifactName, StringComparison.OrdinalIgnoreCase))
             .ToDictionary(static item => item.Key, static item => item.Value, StringComparer.OrdinalIgnoreCase);
 
-    private static AgentSandboxExecutionRecord ToSandboxExecutionRecord(SandboxExecutionResult result) =>
-        new()
+    private static AgentSandboxExecutionRecord ToSandboxExecutionRecord(
+        SandboxExecutionResult result,
+        ModelRuntimeResolution modelRuntime,
+        SandboxExecutionProfile profile)
+    {
+        var diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["model.provider"] = "anthropic",
+            ["model.id"] = modelRuntime.ModelId,
+            ["model.api_base_url"] = modelRuntime.ApiBaseUrl,
+            ["model.endpoint_host"] = modelRuntime.EndpointHost,
+            ["model.credential_source"] = modelRuntime.CredentialSource,
+            ["model.credential_binding"] = ModelApiKeyEnvironmentVariable,
+            ["sandbox.network.mode"] = (profile.NetworkPolicy?.Mode ?? SandboxNetworkAccessMode.None).ToString(),
+            ["sandbox.network.allowed_hosts"] = string.Join(",", profile.NetworkPolicy?.AllowedHosts ?? [])
+        };
+
+        foreach (var pair in result.ProviderDiagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))
+        {
+            diagnostics[pair.Key] = SecretRedactor.Redact(pair.Value);
+        }
+
+        return new AgentSandboxExecutionRecord
         {
             Provider = result.Provider.ToConfigValue(),
             SandboxId = result.ProviderSandboxId,
@@ -373,17 +442,57 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 .Select(static entry => new AgentSandboxLogRecord
                 {
                     Stream = entry.Stream,
-                    Message = entry.Message,
+                    Message = SecretRedactor.Redact(entry.Message),
                     Timestamp = entry.Timestamp.ToString("o")
                 })
                 .ToArray(),
-            Diagnostics = result.ProviderDiagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            Diagnostics = diagnostics
         };
+    }
+
+    private static IReadOnlyList<AgentToolInvocationRecord> SanitizeToolInvocations(IReadOnlyList<AgentToolInvocationRecord> toolInvocations) =>
+        toolInvocations
+                .Select(static tool => tool with
+            {
+                InputSummary = RedactOptional(tool.InputSummary),
+                OutputSummary = RedactOptional(tool.OutputSummary),
+                ErrorMessage = RedactOptional(tool.ErrorMessage)
+            })
+            .ToArray();
 
     private static string CanonicalizeToolName(string toolName) =>
         string.Equals(toolName, "github.create_pr", StringComparison.OrdinalIgnoreCase)
             ? "github.create_pull_request"
             : toolName;
+
+    private static bool IsReservedSandboxSecret(string secretName) =>
+        string.Equals(secretName, "Anthropic:ApiKey", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(secretName, "ANTHROPIC_API_KEY", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(secretName, ModelApiKeyEnvironmentVariable, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeModelApiBaseUrl(string? apiBaseUrl)
+    {
+        if (Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var uri))
+        {
+            return uri.ToString();
+        }
+
+        return LanguageModelOptions.DefaultApiBaseUrl;
+    }
+
+    private static string ResolveModelEndpointHost(string? apiBaseUrl)
+    {
+        if (Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var uri) &&
+            !string.IsNullOrWhiteSpace(uri.Host))
+        {
+            return uri.Host;
+        }
+
+        return new Uri(LanguageModelOptions.DefaultApiBaseUrl, UriKind.Absolute).Host;
+    }
+
+    private static string? RedactOptional(string? value) =>
+        value is null ? null : SecretRedactor.Redact(value);
 
     private static bool TryResolveSupportedTool(string toolName, out SandboxedToolContract? tool)
     {
@@ -410,5 +519,13 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private sealed record SubAgentResolution(
         IReadOnlyList<SandboxedSubAgentProfile> Profiles,
+        string? FailureReason);
+
+    private sealed record ModelRuntimeResolution(
+        string? ApiKey,
+        string ApiBaseUrl,
+        string EndpointHost,
+        string ModelId,
+        string CredentialSource,
         string? FailureReason);
 }

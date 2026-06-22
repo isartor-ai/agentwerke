@@ -60,6 +60,8 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.Equal("opensandbox", result.SandboxExecution!.Provider);
         Assert.Single(result.ToolInvocations);
         Assert.Equal("mcp.weather.lookup", result.ToolInvocations[0].ToolName);
+        Assert.DoesNotContain("token=secret", result.ToolInvocations[0].InputSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[redacted]", result.ToolInvocations[0].InputSummary);
     }
 
     [Fact]
@@ -68,6 +70,11 @@ public sealed class OpenSandboxedAgentRunnerTests
         var sandbox = new RecordingSandboxExecutor();
         var runner = CreateRunner(
             sandbox,
+            secretStore: new StubSecretStore(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Anthropic:ApiKey"] = "sk-ant-api03-SECRET-FROM-STORE",
+                ["Integrations:GitHub:PersonalAccessToken"] = "ghp_secret_token_abcdefghijklmnopqrstuvwxyz123456"
+            }),
             integrationOptions: new IntegrationOptions
             {
                 GitHub = new GitHubOptions
@@ -103,8 +110,54 @@ public sealed class OpenSandboxedAgentRunnerTests
         var tool = Assert.Single(envelope!.ResolvedTools);
         Assert.Equal("github.create_branch", tool.Name);
         Assert.Equal(AgentToolCategories.Integration, tool.Category);
+        Assert.Equal("sk-ant-api03-SECRET-FROM-STORE", sandbox.LastRequest.EnvironmentVariables["AUTOFAC_MODEL_API_KEY"]);
+        Assert.DoesNotContain(sandbox.LastRequest.EnvironmentVariables.Keys, key => string.Equals(key, "ANTHROPIC_API_KEY", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("anthropic", sandbox.LastRequest.EnvironmentVariables["AUTOFAC_MODEL_PROVIDER"]);
         Assert.Equal("isartor-ai", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryOwner"]);
         Assert.Equal("autofac", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCustomModelEndpointConfigured_AllowlistsHostAndRedactsDiagnostics()
+    {
+        var sandbox = new RecordingSandboxExecutor(
+            logs: "Authorization: Bearer sk-ant-api03-VERY-SECRET",
+            diagnostics: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["provider"] = "opensandbox",
+                ["execd.last_error"] = "token=sk-ant-api03-VERY-SECRET"
+            });
+        var runner = CreateRunner(
+            sandbox,
+            secretStore: new StubSecretStore(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Anthropic:ApiKey"] = "sk-ant-api03-VERY-SECRET"
+            }),
+            languageModelOptions: new LanguageModelOptions
+            {
+                Model = "claude-sonnet-4-6",
+                MaxTokens = 2048,
+                ApiBaseUrl = "https://sandbox.anthropic.internal/v1/"
+            });
+
+        var result = await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Runner = "claude-code"
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        Assert.Contains("sandbox.anthropic.internal", sandbox.LastRequest!.Profile!.NetworkPolicy!.AllowedHosts!);
+        Assert.Equal("https://sandbox.anthropic.internal/v1/", result.SandboxExecution!.Diagnostics["model.api_base_url"]);
+        Assert.Equal("sandbox.anthropic.internal", result.SandboxExecution.Diagnostics["model.endpoint_host"]);
+        Assert.Equal("secret-store", result.SandboxExecution.Diagnostics["model.credential_source"]);
+        Assert.DoesNotContain("sk-ant-api03-", result.SandboxExecution.Diagnostics["execd.last_error"]);
+        Assert.Contains("[redacted]", result.SandboxExecution.Diagnostics["execd.last_error"]);
+        Assert.DoesNotContain("sk-ant-api03-", Assert.Single(result.SandboxExecution.Logs).Message);
+        Assert.Contains("[redacted]", Assert.Single(result.SandboxExecution.Logs).Message);
     }
 
     [Fact]
@@ -194,13 +247,15 @@ public sealed class OpenSandboxedAgentRunnerTests
     private static OpenSandboxedAgentRunner CreateRunner(
         RecordingSandboxExecutor sandbox,
         IAgentRegistry? registry = null,
-        IntegrationOptions? integrationOptions = null) =>
+        IntegrationOptions? integrationOptions = null,
+        LanguageModelOptions? languageModelOptions = null,
+        ISecretStore? secretStore = null) =>
         new(
             sandbox,
-            new StubSecretStore(),
+            secretStore ?? new StubSecretStore(),
             registry ?? new FileAgentRegistry([]),
             Options.Create(integrationOptions ?? new IntegrationOptions()),
-            Options.Create(new LanguageModelOptions
+            Options.Create(languageModelOptions ?? new LanguageModelOptions
             {
                 ApiKey = "test-key",
                 Model = "claude-sonnet-4-6",
@@ -235,12 +290,33 @@ public sealed class OpenSandboxedAgentRunnerTests
 
     private sealed class StubSecretStore : ISecretStore
     {
+        private readonly IReadOnlyDictionary<string, string> _secrets;
+
+        public StubSecretStore(IReadOnlyDictionary<string, string>? secrets = null)
+        {
+            _secrets = secrets ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
         public Task<string?> GetSecretAsync(string key, CancellationToken cancellationToken = default) =>
-            Task.FromResult<string?>(null);
+            Task.FromResult(_secrets.TryGetValue(key, out var value) ? value : null);
     }
 
     private sealed class RecordingSandboxExecutor : ISandboxExecutor
     {
+        private readonly string _logs;
+        private readonly IReadOnlyDictionary<string, string> _diagnostics;
+
+        public RecordingSandboxExecutor(
+            string logs = "sandbox logs",
+            IReadOnlyDictionary<string, string>? diagnostics = null)
+        {
+            _logs = logs;
+            _diagnostics = diagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["provider"] = "opensandbox"
+            };
+        }
+
         public SandboxExecutionRequest? LastRequest { get; private set; }
 
         public Task<SandboxExecutionResult> ExecuteAsync(SandboxExecutionRequest request, CancellationToken cancellationToken)
@@ -257,13 +333,15 @@ public sealed class OpenSandboxedAgentRunnerTests
                     {
                         ToolName = "mcp.weather.lookup",
                         Category = AgentToolCategories.Mcp,
-                        Status = "completed"
+                        Status = "completed",
+                        InputSummary = "token=ghp_abcdefghijklmnopqrstuvwxyz123456789012",
+                        OutputSummary = "Authorization: Bearer sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                     }
                 ]);
 
             return Task.FromResult(new SandboxExecutionResult(
                 Succeeded: true,
-                Logs: "sandbox logs",
+                Logs: _logs,
                 FailureReason: null,
                 Artifacts: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -275,12 +353,9 @@ public sealed class OpenSandboxedAgentRunnerTests
                 CommandState: SandboxCommandState.Completed,
                 StructuredLogs:
                 [
-                    new SandboxLogEntry("stdout", "sandboxed spec", DateTimeOffset.UtcNow)
+                    new SandboxLogEntry("stdout", _logs, DateTimeOffset.UtcNow)
                 ],
-                ProviderDiagnostics: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["provider"] = "opensandbox"
-                },
+                ProviderDiagnostics: new Dictionary<string, string>(_diagnostics, StringComparer.OrdinalIgnoreCase),
                 Provider: SandboxProviderKind.OpenSandbox));
         }
     }

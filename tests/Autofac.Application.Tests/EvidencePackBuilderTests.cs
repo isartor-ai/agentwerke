@@ -65,8 +65,8 @@ public sealed class EvidencePackBuilderTests
                                 Status = "completed",
                                 PolicyDecisionId = "policy_release",
                                 PolicyDecisionKind = "allow",
-                                InputSummary = "branch=release",
-                                OutputSummary = "pull request created",
+                                InputSummary = "branch=release token=ghp_abcdefghijklmnopqrstuvwxyz123456789012",
+                                OutputSummary = "pull request created with Authorization: Bearer sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ",
                                 ArtifactNames = ["release-notes.md"],
                                 DurationMs = 125
                             }
@@ -89,7 +89,7 @@ public sealed class EvidencePackBuilderTests
                 {
                     Id = "evt_1",
                     Type = "run_completed",
-                    Message = "Run completed.",
+                    Message = "Run completed with secret=hunter2.",
                     CreatedAt = "2026-06-18T09:05:00.0000000Z"
                 }
             ]
@@ -135,7 +135,7 @@ public sealed class EvidencePackBuilderTests
                 ResourceType = "connector",
                 ResourceId = "github",
                 Outcome = "success",
-                Details = "PR created",
+                Details = "PR created with api_key=supersecret",
                 Timestamp = "2026-06-18T09:04:00.0000000Z"
             }
         };
@@ -160,14 +160,21 @@ public sealed class EvidencePackBuilderTests
         Assert.Equal(ExpectedSha256(bpmnXml), pack.Workflow.BpmnSha256);
         Assert.Equal("approver@example.com", Assert.Single(pack.Approvals).DecidedBy);
         Assert.Equal("allow", Assert.Single(pack.PolicyDecisions).Kind);
-        Assert.Equal("github.create_pull_request", Assert.Single(pack.ToolCalls).ToolName);
+        var toolCall = Assert.Single(pack.ToolCalls);
+        Assert.Equal("github.create_pull_request", toolCall.ToolName);
+        Assert.DoesNotContain("ghp_", toolCall.InputSummary);
+        Assert.DoesNotContain("sk-ant-", toolCall.OutputSummary);
+        Assert.Contains("[redacted]", toolCall.InputSummary);
+        Assert.Contains("[redacted]", toolCall.OutputSummary);
         var connector = Assert.Single(pack.ConnectorCalls);
         Assert.Equal("github", connector.ConnectorId);
         Assert.Equal("create_pull_request", connector.Operation);
+        Assert.DoesNotContain("supersecret", connector.Details);
+        Assert.Contains("[redacted]", connector.Details);
         Assert.Contains(pack.Artifacts, artifact => artifact.Name == "scan-report.json" && artifact.Source == "artifact-storage");
         Assert.Contains(pack.Artifacts, artifact => artifact.Name == "agent-output.json" && artifact.Source == "agent-runtime-snapshot");
-        Assert.Contains(pack.Logs, log => log.Source == "workflow-event" && log.Type == "run_completed");
-        Assert.Contains(pack.AuditLog, audit => audit.Action == "connector.github.create_pull_request");
+        Assert.Contains(pack.Logs, log => log.Source == "workflow-event" && log.Type == "run_completed" && log.Message.Contains("[redacted]", StringComparison.Ordinal));
+        Assert.Contains(pack.AuditLog, audit => audit.Action == "connector.github.create_pull_request" && audit.Details!.Contains("[redacted]", StringComparison.Ordinal));
     }
 
     [Fact]

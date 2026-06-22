@@ -6,7 +6,9 @@ using Autofac.Agents.Models;
 using Microsoft.Extensions.Options;
 
 const string EnvelopeEnvironmentVariable = "AUTOFAC_AGENT_RUN_ENVELOPE_B64";
-const string ModelApiKeyEnvironmentVariable = "ANTHROPIC_API_KEY";
+const string ModelApiKeyEnvironmentVariable = "AUTOFAC_MODEL_API_KEY";
+const string LegacyModelApiKeyEnvironmentVariable = "ANTHROPIC_API_KEY";
+const string ModelApiBaseUrlEnvironmentVariable = "AUTOFAC_MODEL_API_BASE_URL";
 const string OutputDirectory = "/output";
 const string ResultFileName = "agent-run-result.json";
 
@@ -49,7 +51,8 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         return new SandboxedAgentRunResult(false, null, "Sandboxed agent envelope was empty.", null);
     }
 
-    var apiKey = Environment.GetEnvironmentVariable(ModelApiKeyEnvironmentVariable);
+    var apiKey = Environment.GetEnvironmentVariable(ModelApiKeyEnvironmentVariable)
+        ?? Environment.GetEnvironmentVariable(LegacyModelApiKeyEnvironmentVariable);
     if (string.IsNullOrWhiteSpace(apiKey))
     {
         return new SandboxedAgentRunResult(false, null, $"Missing {ModelApiKeyEnvironmentVariable}.", null);
@@ -58,6 +61,7 @@ static async Task<SandboxedAgentRunResult> RunAsync()
     var client = new AnthropicLanguageModelClient(Options.Create(new LanguageModelOptions
     {
         ApiKey = apiKey,
+        ApiBaseUrl = Environment.GetEnvironmentVariable(ModelApiBaseUrlEnvironmentVariable) ?? LanguageModelOptions.DefaultApiBaseUrl,
         Model = envelope.Model,
         MaxTokens = envelope.MaxTokens
     }));

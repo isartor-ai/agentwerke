@@ -333,7 +333,13 @@ public sealed class SandboxedAgentRuntimeExecutor
             .Select(static descriptor => new LanguageModelToolDefinition(
                 descriptor.Name,
                 $"[{descriptor.Category}] {descriptor.Name}",
-                descriptor.Parameters))
+                descriptor.Parameters
+                    .Select(static parameter => new LanguageModelToolParameter(
+                        parameter.Name,
+                        parameter.Type,
+                        parameter.Description,
+                        parameter.Required))
+                    .ToArray()))
             .ToArray();
     }
 

@@ -1,4 +1,5 @@
 using Autofac.Domain.Persistence;
+using Autofac.Domain.Security;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -63,9 +64,9 @@ public static class EvidencePackBuilder
                 Status: tool.Status,
                 PolicyDecisionId: tool.PolicyDecisionId,
                 PolicyDecisionKind: tool.PolicyDecisionKind,
-                InputSummary: tool.InputSummary,
-                OutputSummary: tool.OutputSummary,
-                ErrorMessage: tool.ErrorMessage,
+                InputSummary: RedactOptional(tool.InputSummary),
+                OutputSummary: RedactOptional(tool.OutputSummary),
+                ErrorMessage: RedactOptional(tool.ErrorMessage),
                 ArtifactNames: tool.ArtifactNames.ToArray(),
                 DurationMs: tool.DurationMs)))
             .ToArray();
@@ -110,7 +111,7 @@ public static class EvidencePackBuilder
                 ResourceType: record.ResourceType,
                 ResourceId: record.ResourceId,
                 Outcome: record.Outcome,
-                Details: record.Details,
+                Details: RedactOptional(record.Details),
                 Timestamp: record.Timestamp))
             .ToArray();
 
@@ -119,7 +120,7 @@ public static class EvidencePackBuilder
             .Select(runEvent => new EvidenceRunEvent(
                 EventId: runEvent.Id,
                 Type: runEvent.Type,
-                Message: runEvent.Message,
+                Message: RedactOptional(runEvent.Message) ?? string.Empty,
                 CreatedAt: runEvent.CreatedAt))
             .ToArray();
 
@@ -127,12 +128,12 @@ public static class EvidencePackBuilder
             .Select(runEvent => new EvidenceLogEntry(
                 Source: "workflow-event",
                 Type: runEvent.Type,
-                Message: runEvent.Message,
+                Message: RedactOptional(runEvent.Message) ?? string.Empty,
                 Timestamp: runEvent.CreatedAt))
             .Concat(auditLog.Select(audit => new EvidenceLogEntry(
                 Source: "audit",
                 Type: audit.Action,
-                Message: audit.Details ?? $"{audit.ActorType}:{audit.Actor} {audit.Outcome}",
+                Message: RedactOptional(audit.Details ?? $"{audit.ActorType}:{audit.Actor} {audit.Outcome}") ?? string.Empty,
                 Timestamp: audit.Timestamp)))
             .OrderBy(log => log.Timestamp, StringComparer.Ordinal)
             .ToArray();
@@ -214,10 +215,13 @@ public static class EvidencePackBuilder
             Actor: record.Actor,
             Outcome: record.Outcome,
             ResourceId: record.ResourceId,
-            Details: record.Details,
+            Details: RedactOptional(record.Details),
             Timestamp: record.Timestamp,
             CorrelationId: record.CorrelationId);
     }
+
+    private static string? RedactOptional(string? value) =>
+        value is null ? null : SecretRedactor.Redact(value);
 
     private static EvidenceCamundaMetadata BuildCamundaMetadata(IReadOnlyList<RunContextEntry> runContext)
     {
