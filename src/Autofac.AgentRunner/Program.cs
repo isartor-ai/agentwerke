@@ -1,11 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Autofac.AgentRunner;
-using Autofac.AgentSecOps;
-using Autofac.Agents.Tools;
+using Autofac.Agents.Mcp;
 using Autofac.Agents.Models;
-using Autofac.Sandboxes;
-using Autofac.Domain.AgentRuntime;
 using Microsoft.Extensions.Options;
 
 const string EnvelopeEnvironmentVariable = "AUTOFAC_AGENT_RUN_ENVELOPE_B64";
@@ -65,34 +62,9 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         MaxTokens = envelope.MaxTokens
     }));
 
-    var toolRegistry = RunnerToolFactory.CreateRegistry(envelope);
-    var toolGateway = new ToolGateway(toolRegistry, new PolicyEvaluationService(), new SandboxProfileSelector());
-    var modelRunner = new AgentModelRunner(
+    var executor = new SandboxedAgentRuntimeExecutor(
         client,
-        toolGateway,
-        toolRegistry,
-        new RunnerWorkflowMetrics(),
-        Options.Create(new LanguageModelOptions
-        {
-            ApiKey = apiKey,
-            Model = envelope.Model,
-            MaxTokens = envelope.MaxTokens
-        }));
-
-    var executor = new SandboxedAgentRuntimeExecutor(modelRunner);
+        new McpToolSessionFactory(new McpClientFactory()),
+        RunnerToolFactory.CreateRegistry(envelope));
     return await executor.ExecuteAsync(envelope, CancellationToken.None);
-}
-
-file sealed class RunnerWorkflowMetrics : Autofac.Application.Observability.IWorkflowMetrics
-{
-    public void RunStarted(string workflowId, string workflowName) { }
-    public void RunCompleted(string workflowId, string workflowName, double durationMs) { }
-    public void RunFailed(string workflowId, string workflowName, string reason) { }
-    public void StepCompleted(string stepType, string agentName, double durationMs, bool succeeded) { }
-    public void ApprovalCreated(string riskLevel) { }
-    public void ApprovalDecided(string decision, string riskLevel) { }
-    public void WebhookReceived(string source, bool triggered) { }
-    public void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded) { }
-    public void ModelInvoked(string agentName, string modelId, int inputTokens, int outputTokens, double latencyMs, double costUsd, bool succeeded) { }
-    public void ToolPolicyDenied(string agentName, string policyTag, string kind) { }
 }

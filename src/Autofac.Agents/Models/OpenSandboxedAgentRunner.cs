@@ -16,6 +16,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
+    private readonly IAgentRegistry _agentRegistry;
     private readonly IntegrationOptions _integrationOptions;
     private readonly LanguageModelOptions _languageModelOptions;
     private readonly SandboxOptions _sandboxOptions;
@@ -23,12 +24,14 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
     public OpenSandboxedAgentRunner(
         ISandboxExecutor sandboxExecutor,
         ISecretStore secretStore,
+        IAgentRegistry agentRegistry,
         IOptions<IntegrationOptions> integrationOptions,
         IOptions<LanguageModelOptions> languageModelOptions,
         IOptions<SandboxOptions> sandboxOptions)
     {
         _sandboxExecutor = sandboxExecutor;
         _secretStore = secretStore;
+        _agentRegistry = agentRegistry;
         _integrationOptions = integrationOptions.Value;
         _languageModelOptions = languageModelOptions.Value;
         _sandboxOptions = sandboxOptions.Value;
@@ -52,6 +55,18 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 TokenUsage: null);
         }
 
+        var subAgentResolution = ResolveSubAgents(request.Contract.SubAgents);
+        if (subAgentResolution.FailureReason is not null)
+        {
+            return new ModelRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: subAgentResolution.FailureReason,
+                ToolInvocations: [],
+                Artifacts: null,
+                TokenUsage: null);
+        }
+
         var effectiveProfile = BuildEffectiveSandboxProfile(sandboxProfileName, request.RunId);
         var environmentVariables = await BuildEnvironmentVariablesAsync(profile, toolResolution.Tools, cancellationToken);
         var envelope = new SandboxedAgentRunEnvelope(
@@ -69,8 +84,10 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             _languageModelOptions.MaxTokens,
             request.Contract,
             toolResolution.Tools,
-            [],
-            0);
+            subAgentResolution.Profiles,
+            request.Contract.SubAgents?.Enabled == true
+                ? Math.Max(0, request.Contract.SubAgents.MaxDepth)
+                : 0);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;
@@ -211,33 +228,36 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private static ToolResolution ResolveTools(ModelRunRequest request, AgentProfile? profile)
     {
-        if (request.Contract.McpServers.Count > 0)
-        {
-            return new ToolResolution([], "Sandboxed agent runtime does not support MCP servers yet.");
-        }
-
-        if (request.Contract.SubAgents?.Enabled == true)
-        {
-            return new ToolResolution([], "Sandboxed agent runtime does not support sub-agents yet.");
-        }
-
         var requestedToolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var tool in profile?.Tools ?? [])
         {
-            requestedToolNames.Add(CanonicalizeToolName(tool));
+            if (!IsExternallyResolvedTool(tool))
+            {
+                requestedToolNames.Add(CanonicalizeToolName(tool));
+            }
         }
 
         foreach (var tool in request.Contract.Tools)
         {
+            if (string.Equals(tool.Category, AgentToolCategories.Mcp, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tool.Category, AgentToolCategories.SubAgent, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             requestedToolNames.Add(CanonicalizeToolName(tool.Name));
         }
 
         foreach (var tool in request.Contract.Permissions.AllowedTools)
         {
-            requestedToolNames.Add(CanonicalizeToolName(tool));
+            if (!IsExternallyResolvedTool(tool))
+            {
+                requestedToolNames.Add(CanonicalizeToolName(tool));
+            }
         }
 
-        var deniedToolNames = new HashSet<string>(request.Contract.Permissions.DeniedTools, StringComparer.OrdinalIgnoreCase);
+        var deniedToolNames = new HashSet<string>(request.Contract.Permissions.DeniedTools.Select(CanonicalizeToolName), StringComparer.OrdinalIgnoreCase);
         foreach (var tool in profile?.DeniedTools ?? [])
         {
             deniedToolNames.Add(CanonicalizeToolName(tool));
@@ -273,6 +293,42 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 .OrderBy(static tool => tool.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
             null);
+    }
+
+    private SubAgentResolution ResolveSubAgents(AgentSubAgentContract? contract)
+    {
+        if (contract?.Enabled != true || contract.AllowedAgents.Count == 0)
+        {
+            return new SubAgentResolution([], null);
+        }
+
+        var profiles = new List<SandboxedSubAgentProfile>();
+        var missing = new List<string>();
+        foreach (var agentId in contract.AllowedAgents)
+        {
+            var profile = _agentRegistry.Find(agentId);
+            if (profile is null)
+            {
+                missing.Add(agentId);
+                continue;
+            }
+
+            profiles.Add(new SandboxedSubAgentProfile(
+                profile.AgentId,
+                profile.Name,
+                profile.Description,
+                profile.SystemPrompt,
+                profile.Model));
+        }
+
+        if (missing.Count > 0)
+        {
+            return new SubAgentResolution(
+                [],
+                $"Sandboxed agent runtime could not resolve sub-agent profile(s): {string.Join(", ", missing)}.");
+        }
+
+        return new SubAgentResolution(profiles, null);
     }
 
     private static SandboxExecutionProfile BuildEffectiveSandboxProfile(string sandboxProfileName, string runId)
@@ -341,7 +397,18 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         return tool is not null;
     }
 
+    private static bool IsExternallyResolvedTool(string toolName)
+    {
+        var canonical = CanonicalizeToolName(toolName);
+        return canonical.StartsWith("mcp.", StringComparison.OrdinalIgnoreCase) ||
+               canonical.StartsWith("subagent.", StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed record ToolResolution(
         IReadOnlyList<SandboxedToolContract> Tools,
+        string? FailureReason);
+
+    private sealed record SubAgentResolution(
+        IReadOnlyList<SandboxedSubAgentProfile> Profiles,
         string? FailureReason);
 }
