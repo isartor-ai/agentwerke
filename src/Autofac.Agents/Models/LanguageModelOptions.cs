@@ -3,8 +3,11 @@ namespace Autofac.Agents.Models;
 public sealed class LanguageModelOptions
 {
     public const string Section = "Anthropic";
+    public const string DefaultApiBaseUrl = "https://api.anthropic.com/";
 
     public string? ApiKey { get; set; }
+
+    public string ApiBaseUrl { get; set; } = DefaultApiBaseUrl;
 
     public string Model { get; set; } = "claude-sonnet-4-6";
 

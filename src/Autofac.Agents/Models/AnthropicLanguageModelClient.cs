@@ -24,7 +24,8 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             ?? throw new InvalidOperationException(
                 "Anthropic API key is not configured. Set 'Anthropic:ApiKey' in configuration.");
 
-        using var client = new AnthropicClient(new APIAuthentication(apiKey));
+        using var httpClient = BuildHttpClient();
+        using var client = new AnthropicClient(new APIAuthentication(apiKey), httpClient, null);
 
         var tools = BuildTools(request.Tools);
         var messages = new List<Message>
@@ -138,6 +139,17 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
 
     private static string SanitizeName(string name) =>
         name.Replace('.', '_').Replace(' ', '_');
+
+    private HttpClient BuildHttpClient()
+    {
+        var client = new HttpClient();
+        if (Uri.TryCreate(_options.ApiBaseUrl, UriKind.Absolute, out var apiBaseUri))
+        {
+            client.BaseAddress = apiBaseUri;
+        }
+
+        return client;
+    }
 
     private static List<Anthropic.SDK.Common.Tool> BuildTools(
         IReadOnlyList<LanguageModelToolDefinition> tools)

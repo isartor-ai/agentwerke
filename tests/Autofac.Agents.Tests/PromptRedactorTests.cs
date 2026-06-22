@@ -51,14 +51,21 @@ public sealed class PromptRedactorTests
     [InlineData("token=eyJhbGciOiJIUzI1NiJ9")]
     [InlineData("secret=xK9#mP2!vL")]
     [InlineData("ACCESS_TOKEN=abc123xyz")]
+    [InlineData("Authorization: Bearer sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ")]
     public void Redact_GenericSecretAssignment_IsReplaced(string secretFragment)
     {
         var input = $"Run the task with {secretFragment} in the config.";
         var result = PromptRedactor.Redact(input);
         Assert.Contains("[redacted]", result);
-        // The key name should still be present; only the value is hidden.
-        var key = secretFragment.Split('=')[0];
-        Assert.Contains(key, result, StringComparison.OrdinalIgnoreCase);
+        if (secretFragment.Contains('='))
+        {
+            var key = secretFragment.Split('=')[0];
+            Assert.Contains(key, result, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.Contains("Authorization: Bearer", result, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
