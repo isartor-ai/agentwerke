@@ -1,11 +1,23 @@
-import { is } from 'bpmn-js/lib/util/ModelUtil';
+import { getBusinessObject, is } from 'bpmn-js/lib/util/ModelUtil';
 import { Group } from '@bpmn-io/properties-panel';
 import { agentTaskEntries } from './AgentTaskProps';
 import { approvalEntries } from './ApprovalProps';
+import { externalEventEntries } from './ExternalEventProps';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const LOW_PRIORITY = 500;
+
+function isMessageCatchEvent(element: any) {
+  if (!is(element, 'bpmn:IntermediateCatchEvent')) {
+    return false;
+  }
+
+  const businessObject = getBusinessObject(element);
+  return (businessObject?.eventDefinitions ?? []).some(
+    (definition: any) => definition?.$type === 'bpmn:MessageEventDefinition',
+  );
+}
 
 /**
  * Properties-panel provider that injects Autofac groups:
@@ -35,6 +47,15 @@ function AutofacPropertiesProvider(
           id: 'autofacApproval',
           label: translate('Autofac — Approval Gate'),
           entries: approvalEntries(element),
+          component: Group,
+        });
+      }
+
+      if (is(element, 'bpmn:ReceiveTask') || isMessageCatchEvent(element)) {
+        groups.push({
+          id: 'autofacExternalEvent',
+          label: translate('Autofac — External Wait'),
+          entries: externalEventEntries(element),
           component: Group,
         });
       }

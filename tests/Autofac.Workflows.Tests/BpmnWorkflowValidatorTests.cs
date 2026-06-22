@@ -65,6 +65,77 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenMessageCatchEventHasExternalMetadata_ParsesDefinition()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="ExternalWorkflow" name="External Workflow">
+                <bpmn:startEvent id="Start" />
+                <bpmn:intermediateCatchEvent id="WaitForMerge" name="Wait For Merge">
+                  <bpmn:extensionElements>
+                    <autofac:externalEvent
+                      messageName="github.pull_request.merged"
+                      correlationKeyTemplate="{{run_context.branch_name}}" />
+                  </bpmn:extensionElements>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+                <bpmn:receiveTask id="ReceiveWebhook" name="Receive Webhook">
+                  <bpmn:extensionElements>
+                    <autofac:externalEvent
+                      messageName="github.webhook.received"
+                      correlationKeyTemplate="{{run_context.workflow_ref}}" />
+                  </bpmn:extensionElements>
+                </bpmn:receiveTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.True(result.IsValid);
+        Assert.NotNull(result.Definition);
+
+        var waitForMerge = Assert.Single(result.Definition!.Nodes, node => node.Id == "WaitForMerge");
+        Assert.Equal("github.pull_request.merged", waitForMerge.ExternalEventMetadata?.MessageName);
+        Assert.Equal("{{run_context.branch_name}}", waitForMerge.ExternalEventMetadata?.CorrelationKeyTemplate);
+
+        var receiveWebhook = Assert.Single(result.Definition.Nodes, node => node.Id == "ReceiveWebhook");
+        Assert.Equal("receiveTask", receiveWebhook.ElementName);
+        Assert.Equal("github.webhook.received", receiveWebhook.ExternalEventMetadata?.MessageName);
+        Assert.Equal("{{run_context.workflow_ref}}", receiveWebhook.ExternalEventMetadata?.CorrelationKeyTemplate);
+    }
+
+    [Fact]
+    public void Validate_WhenMessageCatchEventMissesCorrelationTemplate_ReturnsActionableError()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="ExternalWorkflow" name="External Workflow">
+                <bpmn:startEvent id="Start" />
+                <bpmn:intermediateCatchEvent id="WaitForMerge">
+                  <bpmn:extensionElements>
+                    <autofac:externalEvent
+                      messageName="github.pull_request.merged" />
+                  </bpmn:extensionElements>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.False(result.IsValid);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("WaitForMerge", error.ElementId);
+        Assert.Contains("correlationKeyTemplate", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_WhenSandboxProfileAttributeIsPresent_ParsesIntoMetadata()
     {
         var xml = """

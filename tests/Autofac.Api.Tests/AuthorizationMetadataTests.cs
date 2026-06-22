@@ -40,6 +40,7 @@ public sealed class AuthorizationMetadataTests
     [InlineData(typeof(RunsController), nameof(RunsController.Start), AutofacPolicies.Operator)]
     [InlineData(typeof(RunsController), nameof(RunsController.Cancel), AutofacPolicies.Operator)]
     [InlineData(typeof(RunsController), nameof(RunsController.Recover), AutofacPolicies.Operator)]
+    [InlineData(typeof(RunsController), nameof(RunsController.ResumeExternal), AutofacPolicies.Operator)]
     [InlineData(typeof(RunsController), nameof(RunsController.UploadArtifact), AutofacPolicies.Operator)]
     [InlineData(typeof(RunsController), nameof(RunsController.GetEvidencePack), AutofacPolicies.Operator)]
     [InlineData(typeof(RunsController), nameof(RunsController.DownloadEvidencePack), AutofacPolicies.Operator)]

@@ -50,7 +50,8 @@ public sealed record BpmnNodeDefinition(
     string ElementName,
     AutofacTaskMetadata? Metadata,
     AutofacApprovalMetadata? ApprovalMetadata = null,
-    string? TimerDuration = null);
+    string? TimerDuration = null,
+    AutofacExternalEventMetadata? ExternalEventMetadata = null);
 
 public sealed record AutofacTaskMetadata(
     string Agent,
@@ -76,3 +77,7 @@ public sealed record AutofacTaskMetadata(
 public sealed record AutofacApprovalMetadata(
     string PurposeType,
     string PolicyTag);
+
+public sealed record AutofacExternalEventMetadata(
+    string MessageName,
+    string CorrelationKeyTemplate);

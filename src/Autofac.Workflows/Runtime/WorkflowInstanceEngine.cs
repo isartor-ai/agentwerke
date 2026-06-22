@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Autofac.Application.Workflows;
 using Autofac.Domain.Persistence;
 using Autofac.Workflows.Bpmn;
@@ -12,9 +13,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
     private const string RunningStatus = "running";
     private const string WaitingUserStatus = "waiting_user";
     private const string WaitingTimerStatus = "waiting_timer";
+    private const string WaitingExternalStatus = "waiting_external";
     private const string CompletedStatus = "completed";
     private const string FailedStatus = "failed";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly Regex TemplateVariablePattern = new("{{\\s*([a-zA-Z0-9_.-]+)\\s*}}", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly IWorkflowRuntimeStore _store;
     private readonly IServiceTaskExecutor _serviceTaskExecutor;
@@ -120,18 +123,49 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         var checkpoint = await GetCheckpointAsync(request.RunId, cancellationToken)
             ?? throw new InvalidOperationException($"No persisted checkpoint exists for run '{request.RunId}'.");
 
-        if (!string.Equals(checkpoint.Status, WaitingUserStatus, StringComparison.Ordinal))
-            throw new InvalidOperationException($"Run '{request.RunId}' is not waiting for user input.");
-
-        await _store.AppendEventAsync(request.RunId, "user_task_completed",
-            Serialize(new
+        if (string.Equals(checkpoint.Status, WaitingUserStatus, StringComparison.Ordinal))
+        {
+            await _store.AppendEventAsync(request.RunId, "user_task_completed",
+                Serialize(new
+                {
+                    runId = request.RunId,
+                    nodeId = checkpoint.WaitingOnNodeId,
+                    approvedBy = request.ApprovedBy,
+                    timestampUtc = DateTime.UtcNow.ToString("o")
+                }),
+                cancellationToken);
+        }
+        else if (string.Equals(checkpoint.Status, WaitingExternalStatus, StringComparison.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(request.ExternalCorrelationKey))
             {
-                runId = request.RunId,
-                nodeId = checkpoint.WaitingOnNodeId,
-                approvedBy = request.ApprovedBy,
-                timestampUtc = DateTime.UtcNow.ToString("o")
-            }),
-            cancellationToken);
+                throw new InvalidOperationException($"Run '{request.RunId}' requires an external correlation key to resume.");
+            }
+
+            if (!string.Equals(checkpoint.ExternalCorrelationKey, request.ExternalCorrelationKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Run '{request.RunId}' correlation key '{request.ExternalCorrelationKey}' does not match the waiting checkpoint.");
+            }
+
+            await MergeExternalPayloadAsync(request.RunId, request.ExternalPayload ?? new Dictionary<string, string>(), cancellationToken);
+
+            await _store.AppendEventAsync(request.RunId, "external_event_received",
+                Serialize(new
+                {
+                    runId = request.RunId,
+                    nodeId = checkpoint.WaitingOnNodeId,
+                    messageName = checkpoint.ExternalMessageName,
+                    correlationKey = request.ExternalCorrelationKey,
+                    payload = request.ExternalPayload ?? new Dictionary<string, string>(),
+                    resumedBy = request.ResumedBy,
+                    timestampUtc = DateTime.UtcNow.ToString("o")
+                }),
+                cancellationToken);
+        }
+        else
+        {
+            throw new InvalidOperationException($"Run '{request.RunId}' is not waiting for resumable input.");
+        }
 
         return await AdvanceAsync(request.RunId, request.Definition, checkpoint.NextNodeId, cancellationToken);
     }
@@ -174,7 +208,19 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 request.RunId,
                 "timer_fired",
                 Serialize(new { runId = request.RunId, nodeId = checkpoint.WaitingOnNodeId, firedAt = DateTime.UtcNow.ToString("o") }),
-                cancellationToken);
+            cancellationToken);
+        }
+
+        if (string.Equals(checkpoint.Status, WaitingExternalStatus, StringComparison.Ordinal))
+        {
+            return new WorkflowExecutionState(
+                RunId: request.RunId,
+                Status: WaitingExternalStatus,
+                NextNodeId: checkpoint.NextNodeId,
+                WaitingOnNodeId: checkpoint.WaitingOnNodeId,
+                CompletedAt: null,
+                WaitingExternalCorrelationKey: checkpoint.ExternalCorrelationKey,
+                WaitingExternalMessageName: checkpoint.ExternalMessageName);
         }
 
         return await AdvanceAsync(request.RunId, request.Definition, checkpoint.NextNodeId, cancellationToken);
@@ -308,7 +354,23 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     break;
 
                 case "intermediateCatchEvent":
+                    if (node.ExternalEventMetadata is not null)
+                    {
+                        return await WaitForExternalEventAsync(
+                            runId,
+                            node,
+                            graph.GetSingleSuccessor(node.Id),
+                            cancellationToken);
+                    }
+
                     return await ScheduleTimerAndPauseAsync(
+                        runId,
+                        node,
+                        graph.GetSingleSuccessor(node.Id),
+                        cancellationToken);
+
+                case "receiveTask":
+                    return await WaitForExternalEventAsync(
                         runId,
                         node,
                         graph.GetSingleSuccessor(node.Id),
@@ -603,6 +665,48 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             TimerDueAt: dueAt);
     }
 
+    private async Task<WorkflowExecutionState> WaitForExternalEventAsync(
+        string runId,
+        BpmnNodeDefinition node,
+        string? nextNodeId,
+        CancellationToken cancellationToken)
+    {
+        var externalEvent = node.ExternalEventMetadata
+            ?? throw new InvalidOperationException($"Node '{node.Id}' is missing external event metadata.");
+
+        var correlationKey = await RenderCorrelationKeyAsync(runId, externalEvent.CorrelationKeyTemplate, cancellationToken);
+
+        await _store.AppendEventAsync(runId, "external_event_waiting",
+            Serialize(new
+            {
+                runId,
+                nodeId = node.Id,
+                messageName = externalEvent.MessageName,
+                correlationKey
+            }),
+            cancellationToken);
+
+        await _store.UpdateRunStatusAsync(runId, WaitingExternalStatus, completedAt: null, cancellationToken);
+        await SaveCheckpointAsync(
+            runId,
+            WaitingExternalStatus,
+            nextNodeId,
+            node.Id,
+            completedAt: null,
+            cancellationToken,
+            externalCorrelationKey: correlationKey,
+            externalMessageName: externalEvent.MessageName);
+
+        return new WorkflowExecutionState(
+            RunId: runId,
+            Status: WaitingExternalStatus,
+            NextNodeId: nextNodeId,
+            WaitingOnNodeId: node.Id,
+            CompletedAt: null,
+            WaitingExternalCorrelationKey: correlationKey,
+            WaitingExternalMessageName: externalEvent.MessageName);
+    }
+
     private Task ExecuteParallelTimerAsync(
         string runId,
         BpmnNodeDefinition node,
@@ -646,10 +750,12 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         string? nextNodeId,
         string? waitingOnNodeId,
         string? completedAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? externalCorrelationKey = null,
+        string? externalMessageName = null)
     {
         await _store.AppendEventAsync(runId, "checkpoint_saved",
-            Serialize(new CheckpointPayload(status, nextNodeId, waitingOnNodeId, completedAt)),
+            Serialize(new CheckpointPayload(status, nextNodeId, waitingOnNodeId, completedAt, externalCorrelationKey, externalMessageName)),
             cancellationToken);
     }
 
@@ -692,10 +798,41 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         return precedingStep?.RuntimeSnapshot?.Artifacts.FirstOrDefault()?.Name;
     }
 
+    private async Task<string> RenderCorrelationKeyAsync(
+        string runId,
+        string template,
+        CancellationToken cancellationToken)
+    {
+        var entries = await _runContext.GetAllAsync(runId, cancellationToken);
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            variables[entry.Key] = entry.Value;
+            variables[$"run_context.{entry.Key}"] = entry.Value;
+        }
+
+        return TemplateVariablePattern.Replace(template, match =>
+        {
+            var key = match.Groups[1].Value;
+            return variables.TryGetValue(key, out var value) ? value : match.Value;
+        });
+    }
+
+    private async Task MergeExternalPayloadAsync(
+        string runId,
+        IReadOnlyDictionary<string, string> payload,
+        CancellationToken cancellationToken)
+    {
+        foreach (var pair in payload)
+        {
+            await _runContext.SetAsync(runId, $"event.{pair.Key}", pair.Value, RunContextKinds.External, cancellationToken);
+        }
+    }
+
     // ── Static helpers ────────────────────────────────────────────────────────
 
     private static bool IsSupportedRuntimeNode(string elementName) =>
-        elementName is "startEvent" or "serviceTask" or "userTask" or "endEvent" or
+        elementName is "startEvent" or "serviceTask" or "userTask" or "receiveTask" or "endEvent" or
                        "exclusiveGateway" or "parallelGateway" or "intermediateCatchEvent" or "boundaryEvent";
 
     private static void ValidateDefinition(BpmnWorkflowDefinition definition)
@@ -737,7 +874,9 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         string Status,
         string? NextNodeId,
         string? WaitingOnNodeId,
-        string? CompletedAt);
+        string? CompletedAt,
+        string? ExternalCorrelationKey,
+        string? ExternalMessageName);
 
     private enum ServiceExecutionResult { Completed, Failed }
 

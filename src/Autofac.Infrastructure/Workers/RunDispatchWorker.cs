@@ -102,7 +102,13 @@ public sealed class RunDispatchWorker : BackgroundService
 
                 case OutboxOperations.Resume:
                     var resumePayload = OutboxResumePayload.Deserialize(entry.Payload);
-                    await executor.ExecuteResumeAsync(entry.RunId, resumePayload?.ApprovedBy, ct);
+                    await executor.ExecuteResumeAsync(
+                        entry.RunId,
+                        resumePayload?.ApprovedBy,
+                        resumePayload?.ExternalCorrelationKey,
+                        resumePayload?.ExternalPayload,
+                        resumePayload?.ResumedBy,
+                        ct);
                     break;
 
                 case OutboxOperations.Recover:

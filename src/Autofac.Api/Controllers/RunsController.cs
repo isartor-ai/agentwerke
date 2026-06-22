@@ -179,6 +179,33 @@ public sealed class RunsController : ControllerBase
     }
 
     [Authorize(Policy = AutofacPolicies.Operator)]
+    [HttpPost("{runId}/resume-external")]
+    public async Task<IActionResult> ResumeExternal(string runId, [FromBody] ResumeExternalRunRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.CorrelationKey))
+        {
+            return BadRequest(new { message = "Correlation key is required." });
+        }
+
+        try
+        {
+            var result = await _orchestrationService.ResumeExternalRunAsync(
+                new ResumeExternalRunCommand(
+                    RunId: runId,
+                    CorrelationKey: request.CorrelationKey,
+                    Payload: request.Payload ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                    ResumedBy: request.ResumedBy ?? AuthenticatedPrincipal.ResolveSubject(User)),
+                HttpContext.RequestAborted);
+
+            return Accepted(new { runId = result.RunId, status = ApiContractMappings.NormalizeRunStatus(result.Status) });
+        }
+        catch (WorkflowRunNotFoundException)
+        {
+            return NotFound(new { message = $"Run '{runId}' not found." });
+        }
+    }
+
+    [Authorize(Policy = AutofacPolicies.Operator)]
     [HttpPost("{runId}/artifacts/{artifactName}")]
     [RequestSizeLimit(50_000_000)]
     public async Task<IActionResult> UploadArtifact(
