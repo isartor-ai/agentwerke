@@ -21,4 +21,5 @@ public sealed record ApprovalSummary(
     string Priority,
     string? DecisionComment = null,
     string? DecidedBy = null,
-    string? DecidedAt = null);
+    string? DecidedAt = null,
+    string? ArtifactName = null);

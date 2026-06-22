@@ -18,6 +18,9 @@ public sealed class ApprovalRequest
 
     public string PolicyRationale { get; set; } = string.Empty;
 
+    /// <summary>Name of the artifact the preceding step produced, for the approval card to render (#134).</summary>
+    public string? ArtifactName { get; set; }
+
     public int RiskScore { get; set; }
 
     public string RiskLevel { get; set; } = "low";

@@ -213,4 +213,51 @@ public sealed class ApiContractMappingsTests
         Assert.Null(step.RuntimeSnapshot!.TokenUsage);
         Assert.Null(step.RuntimeSnapshot.SandboxExecution);
     }
+
+    [Fact]
+    public void ToApprovalSummary_ForwardsArtifactName()
+    {
+        var approval = new ApprovalRequest
+        {
+            Id = "apr-1",
+            RunId = "run-1",
+            WorkflowName = "Requirement Design",
+            ActionRequested = "requirement-design",
+            Requester = "tester",
+            AgentName = "business-analyst",
+            PolicyRationale = "doc-generation",
+            RiskLevel = "low",
+            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Status = "pending",
+            Priority = "normal",
+            ArtifactName = "requirements.md",
+        };
+
+        var summary = ApiContractMappings.ToApprovalSummary(approval);
+
+        Assert.Equal("requirements.md", summary.ArtifactName);
+    }
+
+    [Fact]
+    public void ToApprovalSummary_WhenArtifactNameIsAbsent_SummaryArtifactNameIsNull()
+    {
+        var approval = new ApprovalRequest
+        {
+            Id = "apr-2",
+            RunId = "run-2",
+            WorkflowName = "Deploy",
+            ActionRequested = "deploy",
+            Requester = "tester",
+            AgentName = "deploy-agent",
+            PolicyRationale = "production",
+            RiskLevel = "high",
+            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Status = "pending",
+            Priority = "normal",
+        };
+
+        var summary = ApiContractMappings.ToApprovalSummary(approval);
+
+        Assert.Null(summary.ArtifactName);
+    }
 }
