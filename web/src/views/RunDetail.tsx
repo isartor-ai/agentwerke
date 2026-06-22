@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { AgentDetailPanel } from '../components/AgentDetailPanel';
-import { BpmnRunGraph } from '../components/BpmnRunGraph';
 import { BpmnViewer } from '../components/BpmnViewer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
@@ -502,24 +501,22 @@ export function RunDetail() {
 
       <section className="run-detail-grid">
         <div className="run-detail-left">
-          {/* SVG flow graph — compact token overview */}
-          <BpmnRunGraph
-            steps={run.steps ?? []}
-            currentStep={run.currentStep}
-            runStatus={run.status}
-            selectedStepId={panelStepId}
-            onSelectStep={(id) => {
-              const next = panelStepId === id ? null : id;
-              setPanelStepId(next);
-              if (next) { setExpandedStepId(next); lastManualSelectAt.current = Date.now(); }
-            }}
-          />
-
-          {/* Real BPMN canvas with token colour markers (loads once workflow XML is fetched) */}
+          {/* BPMN canvas: the authored process, with execution status overlaid as
+              colour markers (loads once workflow XML is fetched). Clicking a step
+              selects it, same as the step timeline below. */}
           {workflowXml && (
             <section className="panel graph-panel" aria-label="BPMN workflow canvas">
               <h2>BPMN Canvas</h2>
-              <BpmnViewer xml={workflowXml} stepStatuses={stepStatuses} />
+              <BpmnViewer
+                xml={workflowXml}
+                stepStatuses={stepStatuses}
+                selectedStepName={panelStep?.name ?? null}
+                onSelectStep={(name) => {
+                  const next = name ? run.steps?.find((s) => s.name === name)?.id ?? null : null;
+                  setPanelStepId(next);
+                  if (next) { setExpandedStepId(next); lastManualSelectAt.current = Date.now(); }
+                }}
+              />
               <div className="graph-legend">
                 {[
                   { cls: 'raf-completed', label: 'completed' },
