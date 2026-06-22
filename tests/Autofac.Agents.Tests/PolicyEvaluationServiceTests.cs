@@ -69,8 +69,11 @@ public sealed class PolicyEvaluationServiceTests
             CreateHookGateway(),
             new StubMcpToolSessionFactory(),
             new ToolRegistry([
+                new GitHubReadIssueTool(gitHub),
                 new GitHubCreateBranchTool(gitHub),
                 new GitHubCreatePullRequestTool(gitHub),
+                new GitHubRequestReviewTool(gitHub),
+                new GitHubPostReviewTool(gitHub),
                 new SandboxExecutionTool(sandbox)
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
@@ -126,8 +129,11 @@ public sealed class PolicyEvaluationServiceTests
             CreateHookGateway(),
             new StubMcpToolSessionFactory(),
             new ToolRegistry([
+                new GitHubReadIssueTool(gitHub),
                 new GitHubCreateBranchTool(gitHub),
                 new GitHubCreatePullRequestTool(gitHub),
+                new GitHubRequestReviewTool(gitHub),
+                new GitHubPostReviewTool(gitHub),
                 new SandboxExecutionTool(sandbox)
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
@@ -332,6 +338,52 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal(0, gitHub.CreatePullRequestCalls);
         Assert.NotNull(outcome.RuntimeSnapshot);
         Assert.Equal("blocked", Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations).Status);
+    }
+
+    [Theory]
+    [InlineData("github.read_issue")]
+    [InlineData("github.request_review")]
+    [InlineData("github.post_review")]
+    public async Task AgentOrchestrator_WhenNewGitHubToolIsDenied_BlocksExecutionBeforeConnectorCall(string action)
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", gitHub, sandbox, sandboxEnabled: true);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "GitHubCollaboration",
+                "GitHub Collaboration",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: action,
+                    Environment: "github",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                        {
+                            Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite,
+                            DeniedTools = [action]
+                        },
+                        Metadata = BuildGitHubToolMetadata(action)
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(0, gitHub.GetIssueCalls);
+        Assert.Equal(0, gitHub.RequestReviewersCalls);
+        Assert.Equal(0, gitHub.PostReviewCalls);
+        Assert.NotNull(outcome.RuntimeSnapshot);
+        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
+        Assert.Equal(action, invocation.ToolName);
+        Assert.Equal("blocked", invocation.Status);
     }
 
     [Fact]
@@ -1117,8 +1169,11 @@ public sealed class PolicyEvaluationServiceTests
         var policyService = new StubPolicyEvaluationService(policyKind);
         var toolRegistry = new ToolRegistry(
         [
+            new GitHubReadIssueTool(gitHub),
             new GitHubCreateBranchTool(gitHub),
             new GitHubCreatePullRequestTool(gitHub),
+            new GitHubRequestReviewTool(gitHub),
+            new GitHubPostReviewTool(gitHub),
             new SandboxExecutionTool(sandbox)
         ]);
 
@@ -1162,8 +1217,11 @@ public sealed class PolicyEvaluationServiceTests
     {
         var registry = new ToolRegistry(
         [
+            new GitHubReadIssueTool(gitHub),
             new GitHubCreateBranchTool(gitHub),
             new GitHubCreatePullRequestTool(gitHub),
+            new GitHubRequestReviewTool(gitHub),
+            new GitHubPostReviewTool(gitHub),
             new SandboxExecutionTool(sandbox)
         ]);
 
@@ -1229,6 +1287,27 @@ public sealed class PolicyEvaluationServiceTests
             FilePath: "/skills/incremental-implementation/SKILL.md")
     ];
 
+    private static IReadOnlyDictionary<string, string> BuildGitHubToolMetadata(string action) =>
+        action switch
+        {
+            "github.read_issue" => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tool.input.issue_number"] = "135"
+            },
+            "github.request_review" => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tool.input.pull_number"] = "42",
+                ["tool.input.reviewers"] = "alice,bob"
+            },
+            "github.post_review" => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tool.input.pull_number"] = "42",
+                ["tool.input.body"] = "Looks good.",
+                ["tool.input.event"] = "COMMENT"
+            },
+            _ => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        };
+
     private sealed class NullArtifactStorage : Autofac.Storage.Artifacts.IArtifactStorage
     {
         public Task<IReadOnlyList<Autofac.Storage.Artifacts.ArtifactDescriptor>> ListAsync(string runId, CancellationToken cancellationToken) =>
@@ -1267,8 +1346,24 @@ public sealed class PolicyEvaluationServiceTests
 
     private sealed class RecordingGitHubConnector : IGitHubConnector
     {
+        public int GetIssueCalls { get; private set; }
         public int CreateBranchCalls { get; private set; }
         public int CreatePullRequestCalls { get; private set; }
+        public int RequestReviewersCalls { get; private set; }
+        public int PostReviewCalls { get; private set; }
+
+        public Task<GitHubIssueResult> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default)
+        {
+            GetIssueCalls++;
+            return Task.FromResult(new GitHubIssueResult(
+                issueNumber,
+                "Issue title",
+                "Issue body",
+                ["enhancement"],
+                "open",
+                $"https://example.test/issues/{issueNumber}",
+                []));
+        }
 
         public Task<GitHubBranchResult> CreateBranchAsync(CreateGitHubBranchCommand command, CancellationToken cancellationToken = default)
         {
@@ -1287,6 +1382,18 @@ public sealed class PolicyEvaluationServiceTests
 
         public Task<GitHubCheckStatusResult> GetCheckStatusAsync(string @ref, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<GitHubReviewRequestResult> RequestReviewersAsync(RequestGitHubReviewersCommand command, CancellationToken cancellationToken = default)
+        {
+            RequestReviewersCalls++;
+            return Task.FromResult(new GitHubReviewRequestResult(command.PullNumber, $"https://example.test/pr/{command.PullNumber}", command.Reviewers));
+        }
+
+        public Task<GitHubReviewResult> PostReviewAsync(PostGitHubReviewCommand command, CancellationToken cancellationToken = default)
+        {
+            PostReviewCalls++;
+            return Task.FromResult(new GitHubReviewResult(7, command.PullNumber, $"https://example.test/pr/{command.PullNumber}#review-7", "COMMENTED", command.Event));
+        }
     }
 
     private sealed class StubSandboxExecutor : ISandboxExecutor

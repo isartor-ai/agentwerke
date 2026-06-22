@@ -589,7 +589,6 @@ public sealed class DefaultRuntimeConformanceTests
     [Theory]
     [InlineData("manualTask", "manualTask")]
     [InlineData("callActivity", "callActivity")]
-    [InlineData("receiveTask", "receiveTask")]
     [InlineData("eventBasedGateway", "eventBasedGateway")]
     [InlineData("complexGateway", "complexGateway")]
     [InlineData("adHocSubProcess", "adHocSubProcess")]
@@ -646,27 +645,32 @@ public sealed class DefaultRuntimeConformanceTests
     }
 
     [Fact]
-    public void Unsupported_MessageIntermediateCatchEvent_FailsValidation()
+    public void Supported_MessageIntermediateCatchEvent_WithExternalEventMetadata_PassesValidation()
     {
-        // An intermediateCatchEvent with a messageEventDefinition instead of a timer is
-        // invalid — the default runtime only supports timer-based intermediate events.
-        var xml = $"""
-            <bpmn:definitions xmlns:bpmn="{BpmnNs}">
+        var xml = $$"""
+            <bpmn:definitions xmlns:bpmn="{{BpmnNs}}" xmlns:autofac="{{AutofacNs}}">
               <bpmn:process id="MessageProcess" name="Test">
                 <bpmn:startEvent id="Start" />
                 <bpmn:intermediateCatchEvent id="WaitForMessage">
+                  <bpmn:extensionElements>
+                    <autofac:externalEvent messageName="github.pull_request.merged"
+                                           correlationKeyTemplate="__CORRELATION_TEMPLATE__" />
+                  </bpmn:extensionElements>
                   <bpmn:messageEventDefinition />
                 </bpmn:intermediateCatchEvent>
                 <bpmn:endEvent id="End" />
               </bpmn:process>
             </bpmn:definitions>
-            """;
+            """.Replace("__CORRELATION_TEMPLATE__", "{{run_context.branch_name}}", StringComparison.Ordinal);
 
         var result = _validator.Validate(xml);
 
-        Assert.False(result.IsValid);
-        var error = Assert.Single(result.Errors, e => e.ElementId == "WaitForMessage");
-        Assert.Contains("timerEventDefinition", error.Message, StringComparison.Ordinal);
+        Assert.True(result.IsValid);
+        Assert.NotNull(result.Definition);
+        var waitNode = Assert.Single(result.Definition!.Nodes, node => node.Id == "WaitForMessage");
+        Assert.Equal("intermediateCatchEvent", waitNode.ElementName);
+        Assert.Equal("github.pull_request.merged", waitNode.ExternalEventMetadata?.MessageName);
+        Assert.Equal("{{run_context.branch_name}}", waitNode.ExternalEventMetadata?.CorrelationKeyTemplate);
     }
 
     [Fact]

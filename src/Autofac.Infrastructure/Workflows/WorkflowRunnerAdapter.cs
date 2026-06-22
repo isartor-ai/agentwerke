@@ -36,11 +36,14 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         string runId,
         string bpmnXml,
         string? approvedBy,
+        IReadOnlyDictionary<string, string>? externalPayload,
+        string? externalCorrelationKey,
+        string? resumedBy,
         CancellationToken cancellationToken)
     {
         var definition = ParseOrThrow(bpmnXml);
         var state = await _engine.ResumeAsync(
-            new WorkflowEngineResumeRequest(runId, definition, approvedBy),
+            new WorkflowEngineResumeRequest(runId, definition, approvedBy, externalCorrelationKey, externalPayload, resumedBy),
             cancellationToken);
         return ToResult(state, definition);
     }
@@ -82,7 +85,7 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
 
             var node = nodeIndex.node;
 
-            var agentName = FindPrecedingAgentName(definition, nodeIndex.index);
+            var precedingNode = definition.FindPrecedingServiceTaskNode(state.WaitingOnNodeId);
             var riskLevel = InferRiskLevel(node?.ApprovalMetadata?.PolicyTag);
             var riskScore = RiskLevelToScore(riskLevel);
             var riskFactors = BuildRiskFactors(node?.ApprovalMetadata?.PolicyTag, node?.ApprovalMetadata?.PurposeType);
@@ -93,28 +96,15 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
                 NodeName: node?.Name,
                 PurposeType: node?.ApprovalMetadata?.PurposeType ?? string.Empty,
                 PolicyTag: node?.ApprovalMetadata?.PolicyTag ?? string.Empty,
-                AgentName: agentName,
+                AgentName: precedingNode?.Metadata?.Agent,
                 RiskLevel: riskLevel,
                 RiskScore: riskScore,
                 RiskFactors: riskFactors,
-                AffectedSystems: affectedSystems);
+                AffectedSystems: affectedSystems,
+                ArtifactName: state.WaitingApprovalArtifactName);
         }
 
         return new WorkflowRunnerResult(state.RunId, state.Status, waitingApproval, state.TimerDueAt);
-    }
-
-    private static string? FindPrecedingAgentName(BpmnWorkflowDefinition definition, int userTaskIndex)
-    {
-        for (var i = userTaskIndex - 1; i >= 0; i--)
-        {
-            var node = definition.Nodes[i];
-            if ((node.ElementName is "serviceTask" or "scriptTask") && node.Metadata?.Agent is not null)
-            {
-                return node.Metadata.Agent;
-            }
-        }
-
-        return null;
     }
 
     private static string InferRiskLevel(string? policyTag)

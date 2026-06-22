@@ -21,4 +21,5 @@ public static class RunContextKinds
 {
     public const string Input = "input";
     public const string Output = "output";
+    public const string External = "external";
 }

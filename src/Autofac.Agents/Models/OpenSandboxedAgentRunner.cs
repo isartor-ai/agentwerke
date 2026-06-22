@@ -252,8 +252,11 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         }
 
         if (resolvedTools.Any(static tool =>
+                string.Equals(tool.Name, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(tool.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase)))
+                string.Equals(tool.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tool.Name, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tool.Name, "github.post_review", StringComparison.OrdinalIgnoreCase)))
         {
             environment["Integrations__GitHub__Enabled"] = _integrationOptions.GitHub.Enabled ? "true" : "false";
             environment["Integrations__GitHub__ApiBaseUrl"] = _integrationOptions.GitHub.ApiBaseUrl;
@@ -333,7 +336,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         {
             return new ToolResolution(
                 [],
-                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.create_branch, github.create_pull_request.");
+                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.read_issue, github.create_branch, github.create_pull_request, github.request_review, github.post_review.");
         }
 
         return new ToolResolution(
@@ -498,8 +501,11 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
     {
         tool = toolName switch
         {
+            "github.read_issue" => new SandboxedToolContract("github.read_issue", AgentToolCategories.Integration),
             "github.create_branch" => new SandboxedToolContract("github.create_branch", AgentToolCategories.Integration),
             "github.create_pull_request" => new SandboxedToolContract("github.create_pull_request", AgentToolCategories.Integration),
+            "github.request_review" => new SandboxedToolContract("github.request_review", AgentToolCategories.Integration),
+            "github.post_review" => new SandboxedToolContract("github.post_review", AgentToolCategories.Integration),
             _ => null
         };
 

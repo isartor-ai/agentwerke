@@ -8,6 +8,68 @@ namespace Autofac.Integrations.Tests;
 public sealed class GitHubConnectorTests
 {
     [Fact]
+    public async Task GetIssueAsync_LoadsIssueDetailsAndComments()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/issues/135")
+            {
+                return Json(HttpStatusCode.OK, """
+                    {
+                      "number": 135,
+                      "title": "Implement PR collaboration ops",
+                      "body": "Need reviewer and review support.",
+                      "state": "open",
+                      "html_url": "https://github.com/octo/autofac/issues/135",
+                      "labels": [
+                        { "name": "enhancement" },
+                        { "name": "sdlc" }
+                      ]
+                    }
+                    """);
+            }
+
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/issues/135/comments")
+            {
+                return Json(HttpStatusCode.OK, """
+                    [
+                      {
+                        "body": "Please include comments.",
+                        "created_at": "2026-06-22T15:05:00Z",
+                        "user": { "login": "reviewer-a" }
+                      }
+                    ]
+                    """);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.GetIssueAsync(135, CancellationToken.None);
+
+        Assert.Equal(135, result.Number);
+        Assert.Equal("Implement PR collaboration ops", result.Title);
+        Assert.Equal("Need reviewer and review support.", result.Body);
+        Assert.Equal(["enhancement", "sdlc"], result.Labels);
+        Assert.Equal("open", result.State);
+        Assert.Equal("https://github.com/octo/autofac/issues/135", result.IssueUrl);
+        var comment = Assert.Single(result.Comments);
+        Assert.Equal("reviewer-a", comment.Author);
+        Assert.Equal("Please include comments.", comment.Body);
+
+        Assert.Equal(2, requests.Count);
+        Assert.Equal("/repos/octo/autofac/issues/135", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/autofac/issues/135/comments", requests[1].RequestUri?.AbsolutePath);
+    }
+
+    [Fact]
     public async Task CreateBranchAsync_UsesConfiguredRepositoryAndDefaultBaseBranch()
     {
         var requests = new List<HttpRequestMessage>();
@@ -258,6 +320,85 @@ public sealed class GitHubConnectorTests
 
         Assert.Equal("in_progress", result.Status);
         Assert.Null(result.Conclusion);
+    }
+
+    [Fact]
+    public async Task RequestReviewersAsync_PostsReviewerPayload()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls/42/requested_reviewers")
+            {
+                return Json(HttpStatusCode.Created, """
+                    {
+                      "html_url": "https://github.com/octo/autofac/pull/42",
+                      "requested_reviewers": [
+                        { "login": "alice" },
+                        { "login": "bob" }
+                      ]
+                    }
+                    """);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.RequestReviewersAsync(
+            new RequestGitHubReviewersCommand(42, ["alice", "bob"]),
+            CancellationToken.None);
+
+        Assert.Equal(42, result.PullNumber);
+        Assert.Equal("https://github.com/octo/autofac/pull/42", result.PullRequestUrl);
+        Assert.Equal(["alice", "bob"], result.RequestedReviewers);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"reviewers\":[\"alice\",\"bob\"]", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PostReviewAsync_PostsCommentReview()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls/42/reviews")
+            {
+                return Json(HttpStatusCode.Created, """
+                    {
+                      "id": 9001,
+                      "state": "COMMENTED",
+                      "html_url": "https://github.com/octo/autofac/pull/42#pullrequestreview-9001"
+                    }
+                    """);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.PostReviewAsync(
+            new PostGitHubReviewCommand(42, "Looks good overall.", "COMMENT"),
+            CancellationToken.None);
+
+        Assert.Equal(9001, result.ReviewId);
+        Assert.Equal(42, result.PullNumber);
+        Assert.Equal("COMMENTED", result.State);
+        Assert.Equal("COMMENT", result.Event);
+        Assert.Equal("https://github.com/octo/autofac/pull/42#pullrequestreview-9001", result.ReviewUrl);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"body\":\"Looks good overall.\"", payload, StringComparison.Ordinal);
+        Assert.Contains("\"event\":\"COMMENT\"", payload, StringComparison.Ordinal);
     }
 
     private static GitHubConnector CreateConnector(HttpMessageHandler handler)

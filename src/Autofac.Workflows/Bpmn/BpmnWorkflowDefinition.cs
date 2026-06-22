@@ -6,7 +6,37 @@ public sealed record BpmnWorkflowDefinition(
     string ProcessId,
     string? ProcessName,
     IReadOnlyList<BpmnNodeDefinition> Nodes,
-    IReadOnlyList<BpmnSequenceFlow>? SequenceFlows = null);
+    IReadOnlyList<BpmnSequenceFlow>? SequenceFlows = null)
+{
+    /// <summary>
+    /// Walks backward in document order from <paramref name="fromNodeId"/> to find the
+    /// nearest preceding agent-driven service task — used to attribute a userTask approval
+    /// gate (agent name, produced artifact) to the step that triggered it.
+    /// </summary>
+    public BpmnNodeDefinition? FindPrecedingServiceTaskNode(string fromNodeId)
+    {
+        var fromIndex = -1;
+        for (var i = 0; i < Nodes.Count; i++)
+        {
+            if (string.Equals(Nodes[i].Id, fromNodeId, StringComparison.Ordinal))
+            {
+                fromIndex = i;
+                break;
+            }
+        }
+
+        for (var i = fromIndex - 1; i >= 0; i--)
+        {
+            var node = Nodes[i];
+            if ((node.ElementName is "serviceTask" or "scriptTask") && node.Metadata?.Agent is not null)
+            {
+                return node;
+            }
+        }
+
+        return null;
+    }
+}
 
 public sealed record BpmnSequenceFlow(
     string Id,
@@ -20,7 +50,8 @@ public sealed record BpmnNodeDefinition(
     string ElementName,
     AutofacTaskMetadata? Metadata,
     AutofacApprovalMetadata? ApprovalMetadata = null,
-    string? TimerDuration = null);
+    string? TimerDuration = null,
+    AutofacExternalEventMetadata? ExternalEventMetadata = null);
 
 public sealed record AutofacTaskMetadata(
     string Agent,
@@ -46,3 +77,7 @@ public sealed record AutofacTaskMetadata(
 public sealed record AutofacApprovalMetadata(
     string PurposeType,
     string PolicyTag);
+
+public sealed record AutofacExternalEventMetadata(
+    string MessageName,
+    string CorrelationKeyTemplate);

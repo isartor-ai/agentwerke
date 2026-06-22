@@ -73,6 +73,37 @@ public sealed class RunsControllerTests
         Assert.IsType<NotFoundObjectResult>(result);
     }
 
+    [Fact]
+    public async Task ResumeExternal_UsesAuthenticatedPrincipalWhenRequesterOmitsResumedBy()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService();
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim("sub", "operator-123")],
+                        "test"))
+                }
+            }
+        };
+
+        var result = await controller.ResumeExternal("run_1", new ResumeExternalRunRequest(
+            CorrelationKey: "feature/external-wait",
+            Payload: new Dictionary<string, string> { ["pull_number"] = "42" },
+            ResumedBy: null));
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_1", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("feature/external-wait", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("42", orchestration.ResumeExternalCommand.Payload["pull_number"]);
+        Assert.Equal("operator-123", orchestration.ResumeExternalCommand.ResumedBy);
+        Assert.NotNull(accepted.Value);
+    }
+
     private static RunsController BuildEvidenceController(IEvidencePackService evidencePackService)
     {
         return new RunsController(
@@ -130,6 +161,7 @@ public sealed class RunsControllerTests
     private sealed class CapturingWorkflowRunOrchestrationService : IWorkflowRunOrchestrationService
     {
         public StartRunCommand? StartCommand { get; private set; }
+        public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
 
         public Task<StartRunResult> StartRunAsync(
             StartRunCommand command,
@@ -151,6 +183,14 @@ public sealed class RunsControllerTests
             CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
+        }
+
+        public Task<ResumeExternalRunResult> ResumeExternalRunAsync(
+            ResumeExternalRunCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            ResumeExternalCommand = command;
+            return Task.FromResult(new ResumeExternalRunResult(command.RunId, "pending"));
         }
     }
 

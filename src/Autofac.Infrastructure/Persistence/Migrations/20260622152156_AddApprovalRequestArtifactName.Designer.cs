@@ -3,6 +3,7 @@ using System;
 using Autofac.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Autofac.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AutofacDbContext))]
-    partial class AutofacDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260622152156_AddApprovalRequestArtifactName")]
+    partial class AddApprovalRequestArtifactName
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -164,38 +167,6 @@ namespace Autofac.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("audit_records", "autofac");
-                });
-
-            modelBuilder.Entity("Autofac.Domain.Persistence.ExternalWorkflowEvent", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
-
-                    b.Property<string>("CorrelationHint")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReceivedAt")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CorrelationHint")
-                        .HasDatabaseName("ix_external_workflow_events_correlation_hint");
-
-                    b.ToTable("external_workflow_events", "autofac");
                 });
 
             modelBuilder.Entity("Autofac.Domain.Persistence.OutboxEntry", b =>

@@ -175,7 +175,8 @@ internal static class ApiContractMappings
             approval.Priority,
             approval.DecisionComment,
             approval.DecidedBy,
-            approval.DecidedAt);
+            approval.DecidedAt,
+            approval.ArtifactName);
     }
 
     public static RunEvent ToRunEvent(WorkflowEvent runEvent)

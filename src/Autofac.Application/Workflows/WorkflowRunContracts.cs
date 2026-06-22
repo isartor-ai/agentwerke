@@ -35,6 +35,14 @@ public sealed record ResumeRunCommand(
 
 public sealed record ResumeRunResult(string RunId, string Status, WaitingApprovalInfo? WaitingApproval);
 
+public sealed record ResumeExternalRunCommand(
+    string RunId,
+    string CorrelationKey,
+    IReadOnlyDictionary<string, string> Payload,
+    string? ResumedBy);
+
+public sealed record ResumeExternalRunResult(string RunId, string Status);
+
 public sealed record RecoverRunResult(string RunId, string Status);
 
 public sealed record WaitingApprovalInfo(
@@ -46,7 +54,9 @@ public sealed record WaitingApprovalInfo(
     string RiskLevel = "low",
     int RiskScore = 0,
     IReadOnlyList<string>? RiskFactors = null,
-    IReadOnlyList<string>? AffectedSystems = null);
+    IReadOnlyList<string>? AffectedSystems = null,
+    /// <summary>Artifact the preceding service task produced, for the approval card to render (#134).</summary>
+    string? ArtifactName = null);
 
 // ── Primary service interface ─────────────────────────────────────────────────
 
@@ -55,6 +65,8 @@ public interface IWorkflowRunOrchestrationService
     Task<StartRunResult> StartRunAsync(StartRunCommand command, CancellationToken cancellationToken = default);
 
     Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default);
+
+    Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default);
 
     Task<RecoverRunResult> RecoverRunAsync(string runId, CancellationToken cancellationToken = default);
 }
@@ -79,6 +91,9 @@ public interface IWorkflowRunner
         string runId,
         string bpmnXml,
         string? approvedBy,
+        IReadOnlyDictionary<string, string>? externalPayload,
+        string? externalCorrelationKey,
+        string? resumedBy,
         CancellationToken cancellationToken);
 
     Task<WorkflowRunnerResult> RecoverAsync(
@@ -116,7 +131,13 @@ public interface IRunOutbox
 public interface IWorkflowRunExecutor
 {
     Task ExecuteStartAsync(string runId, string workflowId, string? initiator, string? correlationId, CancellationToken ct);
-    Task ExecuteResumeAsync(string runId, string? approvedBy, CancellationToken ct);
+    Task ExecuteResumeAsync(
+        string runId,
+        string? approvedBy,
+        string? externalCorrelationKey,
+        IReadOnlyDictionary<string, string>? externalPayload,
+        string? resumedBy,
+        CancellationToken ct);
     Task ExecuteRecoverAsync(string runId, CancellationToken ct);
 }
 
@@ -136,7 +157,11 @@ public sealed record OutboxStartPayload(string WorkflowId, string? Initiator, st
         string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<OutboxStartPayload>(json, Options);
 }
 
-public sealed record OutboxResumePayload(string? ApprovedBy)
+public sealed record OutboxResumePayload(
+    string? ApprovedBy,
+    string? ExternalCorrelationKey = null,
+    IReadOnlyDictionary<string, string>? ExternalPayload = null,
+    string? ResumedBy = null)
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
     public string Serialize() => JsonSerializer.Serialize(this, Options);

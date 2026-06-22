@@ -49,5 +49,13 @@ export const autofacModdleDescriptor = {
         { name: 'policyTag', isAttr: true, type: 'String' },
       ],
     },
+    {
+      name: 'ExternalEvent',
+      superClass: ['Element'],
+      properties: [
+        { name: 'messageName', isAttr: true, type: 'String' },
+        { name: 'correlationKeyTemplate', isAttr: true, type: 'String' },
+      ],
+    },
   ],
 };

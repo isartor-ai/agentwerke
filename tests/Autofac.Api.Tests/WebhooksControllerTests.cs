@@ -220,6 +220,9 @@ public sealed class WebhooksControllerTests
         public Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<RecoverRunResult> RecoverRunAsync(string runId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

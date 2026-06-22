@@ -12,6 +12,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         "endEvent",
         "serviceTask",
         "userTask",
+        "receiveTask",
         "scriptTask",
         "exclusiveGateway",
         "parallelGateway",
@@ -136,6 +137,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             AutofacTaskMetadata? metadata = null;
             AutofacApprovalMetadata? approvalMetadata = null;
             string? timerDuration = null;
+            AutofacExternalEventMetadata? externalEventMetadata = null;
 
             if ((localName is "serviceTask" or "scriptTask" or "userTask") &&
                 string.IsNullOrWhiteSpace(element.Attribute("name")?.Value))
@@ -154,8 +156,24 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 case "userTask":
                     approvalMetadata = ValidateApprovalMetadata(element, autofacNamespace, errors, warnings);
                     break;
+                case "receiveTask":
+                    externalEventMetadata = ValidateExternalEventMetadata(element, autofacNamespace, errors, warnings);
+                    break;
                 case "intermediateCatchEvent":
-                    timerDuration = ParseTimerDuration(element, errors);
+                    if (HasChild(element, "timerEventDefinition"))
+                    {
+                        timerDuration = ParseTimerDuration(element, errors);
+                    }
+                    else if (HasChild(element, "messageEventDefinition"))
+                    {
+                        externalEventMetadata = ValidateExternalEventMetadata(element, autofacNamespace, errors, warnings);
+                    }
+                    else
+                    {
+                        errors.Add(CreateError(
+                            element,
+                            "Intermediate catch event must define either bpmn:timerEventDefinition or bpmn:messageEventDefinition."));
+                    }
                     break;
                 case "boundaryEvent":
                     ValidateBoundaryEvent(element, errors);
@@ -168,7 +186,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 ElementName: localName,
                 Metadata: metadata,
                 ApprovalMetadata: approvalMetadata,
-                TimerDuration: timerDuration));
+                TimerDuration: timerDuration,
+                ExternalEventMetadata: externalEventMetadata));
         }
 
         ValidateSequenceFlows(nodes, sequenceFlows, errors);
@@ -405,11 +424,57 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             PolicyTag: policyTag!);
     }
 
+    private static AutofacExternalEventMetadata? ValidateExternalEventMetadata(
+        XElement element,
+        XNamespace autofacNamespace,
+        ICollection<BpmnValidationError> errors,
+        ICollection<BpmnValidationWarning> warnings)
+    {
+        var extensionElements = GetExtensionElements(element);
+        var externalEvent = extensionElements?
+            .Elements(autofacNamespace + "externalEvent")
+            .FirstOrDefault();
+
+        if (externalEvent is null)
+        {
+            errors.Add(CreateError(
+                element,
+                $"{element.Name.LocalName} requires autofac:externalEvent metadata under bpmn:extensionElements."));
+            return null;
+        }
+
+        WarnOnUnexpectedAutofacExtensionElements(
+            extensionElements,
+            autofacNamespace,
+            element,
+            ["externalEvent"],
+            warnings);
+
+        var missingAttributes = new List<string>();
+        var messageName = GetAttribute(externalEvent, "messageName", missingAttributes);
+        var correlationKeyTemplate = GetAttribute(externalEvent, "correlationKeyTemplate", missingAttributes);
+
+        if (missingAttributes.Count > 0)
+        {
+            errors.Add(CreateError(
+                element,
+                $"autofac:externalEvent is missing required attributes: {string.Join(", ", missingAttributes)}."));
+            return null;
+        }
+
+        return new AutofacExternalEventMetadata(
+            MessageName: messageName!,
+            CorrelationKeyTemplate: correlationKeyTemplate!);
+    }
+
     private static XElement? GetExtensionElements(XElement element)
     {
         return element.Elements()
             .FirstOrDefault(static child => child.Name.LocalName == "extensionElements");
     }
+
+    private static bool HasChild(XElement element, string localName) =>
+        element.Elements().Any(child => child.Name.LocalName == localName);
 
     private static void WarnOnUnexpectedAutofacExtensionElements(
         XElement? extensionElements,

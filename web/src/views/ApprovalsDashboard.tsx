@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { apiClient } from '../api/client';
 import { DetailDrawer } from '../components/DetailDrawer';
 import { EmptyState } from '../components/EmptyState';
@@ -22,6 +23,9 @@ export function ApprovalsDashboard() {
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [artifactContent, setArtifactContent] = useState<string | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
+  const [artifactLoading, setArtifactLoading] = useState(false);
 
   const loadApprovals = async () => {
     setLoading(true);
@@ -43,6 +47,37 @@ export function ApprovalsDashboard() {
   }, []);
 
   const selectedApproval = approvals.find((item) => item.id === selectedId) ?? null;
+
+  useEffect(() => {
+    const artifactName = selectedApproval?.artifactName;
+    if (!selectedApproval || !artifactName) {
+      setArtifactContent(null);
+      setArtifactError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setArtifactLoading(true);
+    setArtifactError(null);
+    apiClient
+      .getRunArtifactContent(selectedApproval.runId, artifactName)
+      .then((content) => {
+        if (!cancelled) setArtifactContent(content);
+      })
+      .catch((fetchError: unknown) => {
+        if (!cancelled) {
+          setArtifactContent(null);
+          setArtifactError(fetchError instanceof Error ? fetchError.message : 'Unable to load artifact.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setArtifactLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedApproval]);
 
   const pending = approvals.filter((approval) => approval.status === 'pending');
   const highCritical = pending.filter(
@@ -233,6 +268,21 @@ export function ApprovalsDashboard() {
             <p>
               <strong>SLA:</strong> {new Date(selectedApproval.slaDeadline).toLocaleString()}
             </p>
+
+            {selectedApproval.artifactName ? (
+              <section className="approval-artifact" aria-label="Generated artifact">
+                <strong>Artifact: {selectedApproval.artifactName}</strong>
+                {artifactLoading ? (
+                  <p className="cell-meta">Loading artifact…</p>
+                ) : artifactError ? (
+                  <p className="cell-meta">Unable to load artifact: {artifactError}</p>
+                ) : artifactContent ? (
+                  <div className="approval-artifact-content">
+                    <ReactMarkdown>{artifactContent}</ReactMarkdown>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <label htmlFor="decision-comment">Reason / comment (required for reject)</label>
             <textarea

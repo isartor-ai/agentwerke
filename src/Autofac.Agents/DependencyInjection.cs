@@ -23,8 +23,11 @@ public static class DependencyInjection
         services.AddSingleton<ISkillRepository>(new SkillRepository(paths.SkillsDirectory));
         services.AddSingleton<IAgentRegistryEditor, FileAgentRegistryEditor>();
         services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
+        services.AddScoped<IAgentTool, GitHubReadIssueTool>();
         services.AddScoped<IAgentTool, GitHubCreateBranchTool>();
         services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();
+        services.AddScoped<IAgentTool, GitHubRequestReviewTool>();
+        services.AddScoped<IAgentTool, GitHubPostReviewTool>();
         services.AddScoped<IAgentTool, SandboxExecutionTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();
         services.AddScoped<IAgentHookHandler, TemplateHookHandler>();

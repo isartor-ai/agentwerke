@@ -29,7 +29,10 @@ public sealed record WorkflowEngineStartRequest(
 public sealed record WorkflowEngineResumeRequest(
     string RunId,
     BpmnWorkflowDefinition Definition,
-    string? ApprovedBy);
+    string? ApprovedBy,
+    string? ExternalCorrelationKey = null,
+    IReadOnlyDictionary<string, string>? ExternalPayload = null,
+    string? ResumedBy = null);
 
 public sealed record WorkflowEngineRecoverRequest(
     string RunId,

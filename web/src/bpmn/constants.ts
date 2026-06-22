@@ -13,6 +13,7 @@ export const AUTOFAC_NS_URI = 'https://autofac.ai/bpmn';
 /** Moddle type names (note: serialized lower-camel via the descriptor's tagAlias). */
 export const AGENT_TASK_TYPE = 'autofac:AgentTask';
 export const APPROVAL_TASK_TYPE = 'autofac:ApprovalTask';
+export const EXTERNAL_EVENT_TYPE = 'autofac:ExternalEvent';
 
 /**
  * A blank, DI-complete BPMN 2.0 document used when the user starts a new
