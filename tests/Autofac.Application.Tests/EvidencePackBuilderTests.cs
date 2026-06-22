@@ -79,7 +79,33 @@ public sealed class EvidencePackBuilderTests
                                 Uri = "artifact://run_1/agent-output.json",
                                 ContentType = "application/json"
                             }
-                        ]
+                        ],
+                        SandboxExecution = new AgentSandboxExecutionRecord
+                        {
+                            Provider = "opensandbox",
+                            SandboxId = "sbx-1",
+                            CommandState = "Completed",
+                            ExitCode = 0,
+                            DurationMs = 1450,
+                            Logs =
+                            [
+                                new AgentSandboxLogRecord
+                                {
+                                    Stream = "stdout",
+                                    Message = "deploy running with token=ghp_abcdefghijklmnopqrstuvwxyz123456789012",
+                                    Timestamp = "2026-06-18T09:01:10.0000000Z"
+                                }
+                            ],
+                            Diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["model.credential_source"] = "secret-store api_key=supersecret"
+                            }
+                        },
+                        TokenUsage = new AgentModelTokenUsage(
+                            InputTokens: 300,
+                            OutputTokens: 150,
+                            ModelId: "claude-sonnet-4-6",
+                            ElapsedMs: 980)
                     }
                 }
             ],
@@ -175,6 +201,75 @@ public sealed class EvidencePackBuilderTests
         Assert.Contains(pack.Artifacts, artifact => artifact.Name == "agent-output.json" && artifact.Source == "agent-runtime-snapshot");
         Assert.Contains(pack.Logs, log => log.Source == "workflow-event" && log.Type == "run_completed" && log.Message.Contains("[redacted]", StringComparison.Ordinal));
         Assert.Contains(pack.AuditLog, audit => audit.Action == "connector.github.create_pull_request" && audit.Details!.Contains("[redacted]", StringComparison.Ordinal));
+
+        var sandboxExecution = Assert.Single(pack.SandboxExecutions);
+        Assert.Equal("step_1", sandboxExecution.StepId);
+        Assert.Equal("DeployAgent", sandboxExecution.AgentName);
+        Assert.Equal("opensandbox", sandboxExecution.Provider);
+        Assert.Equal("sbx-1", sandboxExecution.SandboxId);
+        Assert.Equal("Completed", sandboxExecution.CommandState);
+        var sandboxLog = Assert.Single(sandboxExecution.Logs);
+        Assert.DoesNotContain("ghp_", sandboxLog.Message);
+        Assert.Contains("[redacted]", sandboxLog.Message);
+        Assert.DoesNotContain("supersecret", sandboxExecution.Diagnostics["model.credential_source"]);
+        Assert.Contains("[redacted]", sandboxExecution.Diagnostics["model.credential_source"]);
+
+        var modelUsage = Assert.Single(pack.ModelUsage);
+        Assert.Equal("step_1", modelUsage.StepId);
+        Assert.Equal("DeployAgent", modelUsage.AgentName);
+        Assert.Equal("claude-sonnet-4-6", modelUsage.ModelId);
+        Assert.Equal(300, modelUsage.InputTokens);
+        Assert.Equal(150, modelUsage.OutputTokens);
+        Assert.Equal(980, modelUsage.ElapsedMs);
+    }
+
+    [Fact]
+    public void Build_WhenStepHasNoSandboxExecutionOrTokenUsage_SandboxAndModelSectionsAreEmpty()
+    {
+        var run = new WorkflowRun
+        {
+            Id = "run_2",
+            WorkflowId = "wf_1",
+            WorkflowName = "Release",
+            WorkflowVersion = "v2.0.0",
+            Status = "completed",
+            RiskLevel = "low",
+            RequestedBy = "operator@example.com",
+            StartedAt = "2026-06-18T09:00:00.0000000Z",
+            Steps =
+            [
+                new WorkflowRunStep
+                {
+                    Id = "step_1",
+                    Name = "Generate Spec",
+                    Type = "serviceTask",
+                    Status = "completed",
+                    AgentName = "spec-writer",
+                    RuntimeSnapshot = new AgentRuntimeSnapshot
+                    {
+                        RunId = "run_2",
+                        StepId = "step_1",
+                        NodeId = "GenerateSpec",
+                        AgentName = "spec-writer",
+                        Action = "spec.generate"
+                    }
+                }
+            ]
+        };
+
+        var pack = EvidencePackBuilder.Build(
+            run,
+            workflow: null,
+            Array.Empty<ApprovalRequest>(),
+            Array.Empty<AuditRecord>(),
+            Array.Empty<RunContextEntry>(),
+            Array.Empty<EvidenceArtifactInput>(),
+            runtimeMode: "Autofac",
+            camundaEnabled: false,
+            DateTimeOffset.Parse("2026-06-18T10:00:00.0000000Z"));
+
+        Assert.Empty(pack.SandboxExecutions);
+        Assert.Empty(pack.ModelUsage);
     }
 
     [Fact]

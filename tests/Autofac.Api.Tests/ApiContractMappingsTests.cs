@@ -125,7 +125,12 @@ public sealed class ApiContractMappingsTests
                                 ["provider"] = "opensandbox",
                                 ["sandbox.state"] = "Running"
                             }
-                        }
+                        },
+                        TokenUsage = new AgentModelTokenUsage(
+                            InputTokens: 512,
+                            OutputTokens: 256,
+                            ModelId: "claude-sonnet-4-6",
+                            ElapsedMs: 1875)
                     }
                 }
             ]
@@ -159,5 +164,53 @@ public sealed class ApiContractMappingsTests
         Assert.Equal("sbx-123", step.RuntimeSnapshot.SandboxExecution.SandboxId);
         Assert.Equal("Running", step.RuntimeSnapshot.SandboxExecution.Diagnostics["sandbox.state"]);
         Assert.Single(step.RuntimeSnapshot.SandboxExecution.Logs);
+        Assert.NotNull(step.RuntimeSnapshot.TokenUsage);
+        Assert.Equal(512, step.RuntimeSnapshot.TokenUsage!.InputTokens);
+        Assert.Equal(256, step.RuntimeSnapshot.TokenUsage.OutputTokens);
+        Assert.Equal("claude-sonnet-4-6", step.RuntimeSnapshot.TokenUsage.ModelId);
+        Assert.Equal(1875, step.RuntimeSnapshot.TokenUsage.ElapsedMs);
+    }
+
+    [Fact]
+    public void ToRunDetail_WhenTokenUsageIsAbsent_RuntimeSnapshotTokenUsageIsNull()
+    {
+        var run = new WorkflowRun
+        {
+            Id = "run-2",
+            WorkflowId = "wf-1",
+            WorkflowName = "Workflow",
+            WorkflowVersion = "v1",
+            Status = "running",
+            RiskLevel = "low",
+            RequestedBy = "tester",
+            StartedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Steps =
+            [
+                new WorkflowRunStep
+                {
+                    Id = "step-1",
+                    Name = "Generate Spec",
+                    Type = "serviceTask",
+                    Status = "completed",
+                    AgentName = "spec-writer",
+                    RuntimeSnapshot = new AgentRuntimeSnapshot
+                    {
+                        RunId = "run-2",
+                        StepId = "step-1",
+                        NodeId = "GenerateSpec",
+                        AgentName = "spec-writer",
+                        Action = "spec.generate",
+                        ExecutionMode = AgentExecutionModes.Local
+                    }
+                }
+            ]
+        };
+
+        var detail = ApiContractMappings.ToRunDetail(run, Array.Empty<ApprovalRequest>(), Array.Empty<Autofac.Storage.Artifacts.ArtifactDescriptor>());
+
+        var step = Assert.Single(detail.Steps);
+        Assert.NotNull(step.RuntimeSnapshot);
+        Assert.Null(step.RuntimeSnapshot!.TokenUsage);
+        Assert.Null(step.RuntimeSnapshot.SandboxExecution);
     }
 }

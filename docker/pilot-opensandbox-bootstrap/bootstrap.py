@@ -19,6 +19,15 @@ AGENT_FILE = Path("/bootstrap/opensandbox-pilot-agent.md")
 WORKFLOW_FILE = Path("/bootstrap/opensandbox-agent-execution.bpmn")
 WORKFLOW_NAME = "OpenSandbox Agent Execution"
 
+# agent_sandboxed always upgrades its network policy to Restricted (it has to reach
+# the model endpoint), which currently can't complete against this stack's real
+# OpenSandbox server — see docs/manual-test-opensandbox.md, "Validate agent_sandboxed",
+# for the known upstream egress-sidecar limitation. It's still bootstrapped here so the
+# failure is reproducible and visible in the UI rather than silently absent.
+AGENT_SANDBOXED_AGENT_FILE = Path("/bootstrap/opensandbox-pilot-agent-sandboxed.md")
+AGENT_SANDBOXED_WORKFLOW_FILE = Path("/bootstrap/opensandbox-agent-sandboxed-execution.bpmn")
+AGENT_SANDBOXED_WORKFLOW_NAME = "OpenSandbox Agent Execution (agent_sandboxed)"
+
 
 def request_json(method: str, path: str, payload: dict | None = None):
     body = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -51,29 +60,29 @@ def wait_for_api():
     raise RuntimeError("Timed out waiting for Autofac API health endpoint.")
 
 
-def ensure_agent():
-    content = AGENT_FILE.read_text(encoding="utf-8")
+def ensure_agent(agent_file: Path, file_name: str):
+    content = agent_file.read_text(encoding="utf-8")
     request_json(
         "POST",
         "/api/agents/upload",
         {
-            "fileName": "opensandbox-pilot-agent.md",
+            "fileName": file_name,
             "content": content,
         },
     )
 
 
-def ensure_workflow():
-    bpmn = WORKFLOW_FILE.read_text(encoding="utf-8")
+def ensure_workflow(workflow_file: Path, file_name: str, workflow_name: str, description: str):
+    bpmn = workflow_file.read_text(encoding="utf-8")
     workflows = request_json("GET", "/api/workflows") or []
-    existing = next((item for item in workflows if item.get("name") == WORKFLOW_NAME), None)
+    existing = next((item for item in workflows if item.get("name") == workflow_name), None)
 
     if existing is None:
         imported = request_json(
             "POST",
             "/api/workflows/import",
             {
-                "fileName": "opensandbox-agent-execution.bpmn",
+                "fileName": file_name,
                 "bpmnXml": bpmn,
             },
         )
@@ -86,15 +95,29 @@ def ensure_workflow():
         f"/api/workflows/{workflow_id}/publish",
         {
             "bpmnXml": bpmn,
-            "description": "Pilot workflow that proves local sandbox-backed agent execution through OpenSandbox.",
+            "description": description,
         },
     )
 
 
 def main():
     wait_for_api()
-    ensure_agent()
-    ensure_workflow()
+    ensure_agent(AGENT_FILE, "opensandbox-pilot-agent.md")
+    ensure_workflow(
+        WORKFLOW_FILE,
+        "opensandbox-agent-execution.bpmn",
+        WORKFLOW_NAME,
+        "Pilot workflow that proves local sandbox-backed agent execution through OpenSandbox.",
+    )
+    ensure_agent(AGENT_SANDBOXED_AGENT_FILE, "opensandbox-pilot-agent-sandboxed.md")
+    ensure_workflow(
+        AGENT_SANDBOXED_WORKFLOW_FILE,
+        "opensandbox-agent-sandboxed-execution.bpmn",
+        AGENT_SANDBOXED_WORKFLOW_NAME,
+        "Pilot workflow for agent_sandboxed; see docs/manual-test-opensandbox.md for the known "
+        "upstream limitation that currently blocks it from completing against this stack's "
+        "real OpenSandbox server.",
+    )
 
 
 if __name__ == "__main__":

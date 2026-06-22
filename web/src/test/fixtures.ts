@@ -1,4 +1,4 @@
-import type { ApprovalRequest, Workflow, WorkflowRun } from '../types';
+import type { ApprovalRequest, TemplateDetail, TemplateSummary, Workflow, WorkflowRun } from '../types';
 
 export const workflowsFixture: Workflow[] = [
   {
@@ -109,6 +109,12 @@ export const runsFixture: WorkflowRun[] = [
               'execd.run.request_id': 'run-req-123',
             },
           },
+          tokenUsage: {
+            inputTokens: 412,
+            outputTokens: 198,
+            modelId: 'claude-sonnet-4-6',
+            elapsedMs: 2140,
+          },
         },
       },
     ],
@@ -208,3 +214,24 @@ export const approvalsFixture: ApprovalRequest[] = [
     decidedBy: 'reviewer@example.com',
   },
 ];
+
+export const templatesFixture: TemplateSummary[] = [
+  {
+    id: 'tmpl-prod-deploy',
+    name: 'Production Deploy',
+    description: 'Ship a reviewed change to production with a release manager sign-off.',
+    trigger: 'github_pr_merged',
+    policyLevel: 'elevated',
+    tags: ['github'],
+    agentRoles: ['build-agent'],
+    approvalRoles: ['release-manager'],
+  },
+];
+
+export const templateDetailFixture: TemplateDetail = {
+  ...templatesFixture[0],
+  requiredInputs: ['releaseVersion'],
+  evidenceExpectations: ['changelog'],
+  bpmnXml:
+    '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="ProductionDeployFlow" name="Production Deploy"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>',
+};

@@ -27,6 +27,14 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
         using var httpClient = BuildHttpClient();
         using var client = new AnthropicClient(new APIAuthentication(apiKey), httpClient, null);
 
+        // AnthropicClient builds request URLs from ApiUrlFormat (default
+        // "https://api.anthropic.com/{0}/{1}") rather than HttpClient.BaseAddress, so
+        // setting BaseAddress alone silently has no effect on where requests actually go.
+        if (!string.Equals(_options.ApiBaseUrl, LanguageModelOptions.DefaultApiBaseUrl, StringComparison.Ordinal))
+        {
+            client.ApiUrlFormat = $"{_options.ApiBaseUrl.TrimEnd('/')}/{{0}}/{{1}}";
+        }
+
         var tools = BuildTools(request.Tools);
         var messages = new List<Message>
         {
@@ -140,15 +148,11 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
     private static string SanitizeName(string name) =>
         name.Replace('.', '_').Replace(' ', '_');
 
-    private HttpClient BuildHttpClient()
+    // ApiUrlFormat (set in RunAsync), not HttpClient.BaseAddress, is what actually
+    // controls where AnthropicClient sends requests — see the comment at the call site.
+    private static HttpClient BuildHttpClient()
     {
-        var client = new HttpClient();
-        if (Uri.TryCreate(_options.ApiBaseUrl, UriKind.Absolute, out var apiBaseUri))
-        {
-            client.BaseAddress = apiBaseUri;
-        }
-
-        return client;
+        return new HttpClient();
     }
 
     private static List<Anthropic.SDK.Common.Tool> BuildTools(

@@ -101,7 +101,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisp
                 Memory = (long)_options.MemoryLimitMb * 1024 * 1024,
                 CPUQuota = _options.CpuQuota,
                 CPUPeriod = 100_000,
-                NetworkMode = "none",
+                NetworkMode = ResolveNetworkMode(request.Profile?.NetworkPolicy),
                 AutoRemove = false,
                 Binds = [$"{artifactsDir}:/output:rw"],
             },
@@ -328,6 +328,17 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisp
             .Select(line => new SandboxLogEntry("combined", line, timestamp))
             .ToArray();
     }
+
+    // Docker's plain bridge network can't enforce the per-host allow-listing that
+    // SandboxNetworkPolicy.AllowedHosts implies (that requires an egress proxy/sidecar,
+    // which this local fallback provider does not implement) — but a profile asking
+    // for Restricted or Open access still needs *some* network, or every sandboxed
+    // task that calls out (e.g. agent_sandboxed reaching its model endpoint) fails
+    // outright. "None" is the only mode this provider can honor precisely; anything
+    // else gets ordinary bridge networking rather than being silently downgraded to
+    // no network at all.
+    private static string ResolveNetworkMode(SandboxNetworkPolicy? networkPolicy) =>
+        networkPolicy is null or { Mode: SandboxNetworkAccessMode.None } ? "none" : "bridge";
 
     private static bool ShouldDeleteOnCompletion(SandboxExecutionRequest request, bool succeeded)
     {

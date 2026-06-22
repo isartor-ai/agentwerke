@@ -128,6 +128,47 @@ dotnet test tests/Autofac.Sandboxes.Tests/Autofac.Sandboxes.Tests.csproj \
 
 Expected result: real container execution, artifact capture, cleanup-on-success, and retention-on-failure (per `SandboxCleanupPolicy.RetainSandboxOnFailure`) all pass against your local daemon. This is the path the Docker Compose stacks (`docker/docker-compose*.yml`) use; it has no meaningful isolation boundary beyond an ordinary container and is documented as local-only — see the security table below.
 
+### Step 5: Validate `agent_sandboxed`
+
+`agent_sandboxed` is a different execution mode than the `sandbox.execute` tool path above: instead of an in-process agent calling a generic "run this in a sandbox" tool, the *entire* agent — model call, tool loop, the works — runs inside the sandbox container, via `OpenSandboxedAgentRunner` invoking `Autofac.AgentRunner.dll`. It's selected by an explicit `executionMode="agent_sandboxed"` BPMN attribute, or implicitly when the agent's `runner` is `claude-code` (see `AgentOrchestrator.ResolveExecutionMode`).
+
+Because the agent needs to reach a model endpoint, `agent_sandboxed` always upgrades its effective network policy to `Restricted` with the model host allow-listed (`OpenSandboxedAgentRunner.BuildEffectiveSandboxProfile`), even when the BPMN task asks for the `offline` profile. That makes network policy enforcement load-bearing for this mode in a way it isn't for `sandbox.execute`.
+
+#### Recommended: the CI-safe automated path (local Docker provider)
+
+```bash
+scripts/run-agent-sandboxed-e2e.sh
+```
+
+This brings up an isolated Postgres, the shared WireMock instance (now also stubbing the Anthropic Messages API — see `tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json`), and an Autofac API instance with `Sandboxes:Provider=docker` (the legacy local-fallback provider, not OpenSandbox — see "Known limitation" below for why). It builds and tags the `Autofac.AgentRunner` image the sandbox container runs, uploads a `runner: claude-code` agent and an `executionMode="agent_sandboxed"` workflow, starts a run, and asserts on `AgentSandboxedWorkflowE2ETests`: the run completes, `runtimeSnapshot.sandboxExecution.provider` is `docker`, and `runtimeSnapshot.tokenUsage` reflects the (stubbed) model response.
+
+Expected result: `e2e-tests-agent-sandboxed` exits 0 and the test passes.
+
+Equivalent manual sequence:
+
+```bash
+docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed build agent-runner-image
+
+docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed \
+  up --build -d postgres-agent-sandboxed migrate-agent-sandboxed wiremock api-agent-sandboxed
+
+curl --fail --retry 60 --retry-delay 2 http://localhost:8085/api/health/live
+
+docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed build e2e-tests-agent-sandboxed
+docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed run --rm e2e-tests-agent-sandboxed
+```
+
+This path only became possible after two fixes made while building this scenario, both worth knowing about if you're debugging it:
+
+- `DockerSandboxExecutor` used to hard-code `NetworkMode = "none"` regardless of the requested `SandboxNetworkPolicy`, which meant *no* sandboxed task that needed network access (deployment profiles, `agent_sandboxed`, anything beyond `offline`) could ever work through the local Docker fallback. It now maps anything other than `SandboxNetworkAccessMode.None` to Docker's plain `bridge` network. Plain bridge can't enforce the per-host allow-listing `SandboxNetworkPolicy.AllowedHosts` implies — there's no egress proxy in this provider — so this is "the sandbox can reach the network" parity with OpenSandbox's Restricted mode, not allow-list enforcement; treat it as a local development convenience, not a security boundary.
+- `AnthropicLanguageModelClient` used to only set `HttpClient.BaseAddress` from `Anthropic:ApiBaseUrl`. The `Anthropic.SDK` package builds its request URLs from its own `AnthropicClient.ApiUrlFormat` property instead, which ignores `HttpClient.BaseAddress` entirely — so a configured `ApiBaseUrl` silently had no effect, and every call went to the real `api.anthropic.com` regardless of configuration. It now also sets `ApiUrlFormat`, which is what actually controls where requests go. `tests/Autofac.Agents.Tests/AnthropicLanguageModelClientTests.cs` pins this with a fake `HttpListener`-based server.
+
+#### Known limitation: `agent_sandboxed` against the pilot OpenSandbox stack
+
+The pilot stack (`docker/docker-compose.pilot-opensandbox.yml`, see Part A above) bootstraps a second workflow, "OpenSandbox Agent Execution (agent_sandboxed)", alongside the existing `sandbox.execute` one. You can start a run on it from the UI or via `POST /api/runs`, but **it is expected to fail** — not because of an Autofac bug, but because of a confirmed upstream OpenSandbox limitation: the egress sidecar OpenSandbox's server attaches to network-restricted sandboxes listens on port 18080, while the server's own readiness probe for that sidecar checks port 8080. Any sandbox profile other than `None` — which `agent_sandboxed` always requires — hits this mismatch.
+
+What you'll see (verified by actually running it): the run step fails fast — `runtimeSnapshot.sandboxExecution` shows `commandState: "Failed"`, `exitCode: 1`, and an empty `logs` array, with `error: "OpenSandbox command failed with exit code 1: exit status 1"`. There's no command output to point at the real cause because there never was one — `docker logs` on the OpenSandbox server container shows the sandbox and its egress sidecar being created and started normally, then killed and removed a couple of seconds later, before the agent ever ran. That create-start-then-immediately-tear-down pattern, on this specific stack, is the signature of the known limitation rather than a regression — use the CI-safe path above to actually exercise the `agent_sandboxed` code path end to end until OpenSandbox fixes the port mismatch upstream.
+
 ## Part B — Production: OpenSandbox in Kubernetes mode with a secure runtime
 
 Production should default to `Sandboxes:Provider: opensandbox` with the server running in Kubernetes mode, never `docker`. The Helm chart's `sandbox` values block (`deploy/helm/autofac/values.yaml`) wires this:

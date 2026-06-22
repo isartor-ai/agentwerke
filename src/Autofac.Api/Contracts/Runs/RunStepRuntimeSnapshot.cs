@@ -17,7 +17,8 @@ public sealed record RunStepRuntimeSnapshot(
     bool SubAgentsEnabled,
     RunStepPermissionDecision? PermissionDecision,
     IReadOnlyList<RunStepArtifactRef> StepArtifacts,
-    RunStepSandboxExecution? SandboxExecution);
+    RunStepSandboxExecution? SandboxExecution,
+    RunStepTokenUsage? TokenUsage);
 
 public sealed record RunStepSkillUsage(
     string SkillId,
@@ -72,3 +73,9 @@ public sealed record RunStepSandboxLogEntry(
     string Stream,
     string Message,
     string Timestamp);
+
+public sealed record RunStepTokenUsage(
+    int InputTokens,
+    int OutputTokens,
+    string? ModelId,
+    double? ElapsedMs);

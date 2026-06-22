@@ -25,6 +25,12 @@
 # - The pilot workflow is allowed to run only the "offline" sandbox profile, so
 #   it proves end-to-end sandbox execution without repository credentials or
 #   outbound network access.
+# - Bootstrap also publishes a second, agent_sandboxed workflow ("OpenSandbox
+#   Agent Execution (agent_sandboxed)"). Starting a run on it is expected to fail
+#   against this stack's real OpenSandbox server — see docs/manual-test-opensandbox.md,
+#   "Validate agent_sandboxed", for the known upstream egress-sidecar limitation and
+#   the CI-safe alternative (scripts/run-agent-sandboxed-e2e.sh) that actually verifies
+#   the agent_sandboxed code path end to end.
 ###############################################################################
 
 services:
@@ -77,6 +83,18 @@ services:
       timeout: 5s
       retries: 10
 
+  # Built (never started) so Sandboxes__OpenSandbox__AgentRunnerImage below resolves to a
+  # real image — without this, the agent_sandboxed pilot workflow would fail on a missing
+  # image before ever reaching the known OpenSandbox egress-sidecar limitation it's meant
+  # to demonstrate. See docs/manual-test-opensandbox.md, "Validate agent_sandboxed".
+  agent-runner-image:
+    build:
+      context: ..
+      dockerfile: docker/agent-runner/Dockerfile
+    image: autofac-agent-runner:pilot
+    entrypoint: ["true"]
+    restart: "no"
+
   opensandbox:
     build:
       context: ..
@@ -124,6 +142,12 @@ services:
       Sandboxes__OpenSandbox__ReadinessTimeoutSeconds: "60"
       Sandboxes__OpenSandbox__UseServerProxy: "false"
       Sandboxes__OpenSandbox__WorkingDirectory: "/workspace"
+      Sandboxes__OpenSandbox__AgentRunnerImage: "autofac-agent-runner:pilot"
+      # Just needs to be non-empty so the credential-presence check passes — the
+      # agent_sandboxed pilot run is expected to fail at sandbox creation instead,
+      # on the known OpenSandbox limitation (see docs/manual-test-opensandbox.md,
+      # "Validate agent_sandboxed"), before any model call would happen.
+      Anthropic__ApiKey: "pilot-dummy-key"
       Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
       Integrations__GitHub__PersonalAccessToken: "mock-token"
       Integrations__GitHub__RepositoryOwner: "mock-owner"
