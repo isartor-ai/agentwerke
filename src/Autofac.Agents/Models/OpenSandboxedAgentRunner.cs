@@ -15,17 +15,20 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
+    private readonly IAgentRegistry _agentRegistry;
     private readonly LanguageModelOptions _languageModelOptions;
     private readonly SandboxOptions _sandboxOptions;
 
     public OpenSandboxedAgentRunner(
         ISandboxExecutor sandboxExecutor,
         ISecretStore secretStore,
+        IAgentRegistry agentRegistry,
         IOptions<LanguageModelOptions> languageModelOptions,
         IOptions<SandboxOptions> sandboxOptions)
     {
         _sandboxExecutor = sandboxExecutor;
         _secretStore = secretStore;
+        _agentRegistry = agentRegistry;
         _languageModelOptions = languageModelOptions.Value;
         _sandboxOptions = sandboxOptions.Value;
     }
@@ -48,6 +51,18 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 TokenUsage: null);
         }
 
+        var subAgentResolution = ResolveSubAgents(request.Contract.SubAgents);
+        if (subAgentResolution.FailureReason is not null)
+        {
+            return new ModelRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: subAgentResolution.FailureReason,
+                ToolInvocations: [],
+                Artifacts: null,
+                TokenUsage: null);
+        }
+
         var effectiveProfile = BuildEffectiveSandboxProfile(sandboxProfileName, request.RunId);
         var environmentVariables = await BuildEnvironmentVariablesAsync(profile, cancellationToken);
         var envelope = new SandboxedAgentRunEnvelope(
@@ -62,7 +77,12 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             ModelRunPromptFactory.BuildSystemPrompt(request),
             request.PromptSnapshot.FinalPrompt,
             profile?.Model ?? _languageModelOptions.Model,
-            _languageModelOptions.MaxTokens);
+            _languageModelOptions.MaxTokens,
+            request.Contract,
+            subAgentResolution.Profiles,
+            request.Contract.SubAgents?.Enabled == true
+                ? Math.Max(0, request.Contract.SubAgents.MaxDepth)
+                : 0);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;
@@ -150,7 +170,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             Succeeded: sandboxResult.Succeeded && runResult.Succeeded,
             Output: runResult.Output,
             FailureReason: runResult.FailureReason ?? sandboxResult.FailureReason,
-            ToolInvocations: [],
+            ToolInvocations: runResult.ToolInvocations ?? [],
             Artifacts: artifacts.Count == 0 ? null : artifacts,
             TokenUsage: runResult.TokenUsage,
             ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
@@ -187,17 +207,43 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             return "Sandboxed agent runtime does not support in-sandbox tool execution yet. Use local/tool_sandboxed execution for tool-enabled agents.";
         }
 
-        if (request.Contract.McpServers.Count > 0)
-        {
-            return "Sandboxed agent runtime does not support MCP servers yet.";
-        }
-
-        if (request.Contract.SubAgents?.Enabled == true)
-        {
-            return "Sandboxed agent runtime does not support sub-agents yet.";
-        }
-
         return null;
+    }
+
+    private SubAgentResolution ResolveSubAgents(AgentSubAgentContract? contract)
+    {
+        if (contract?.Enabled != true || contract.AllowedAgents.Count == 0)
+        {
+            return new SubAgentResolution([], null);
+        }
+
+        var profiles = new List<SandboxedSubAgentProfile>();
+        var missing = new List<string>();
+        foreach (var agentId in contract.AllowedAgents)
+        {
+            var profile = _agentRegistry.Find(agentId);
+            if (profile is null)
+            {
+                missing.Add(agentId);
+                continue;
+            }
+
+            profiles.Add(new SandboxedSubAgentProfile(
+                profile.AgentId,
+                profile.Name,
+                profile.Description,
+                profile.SystemPrompt,
+                profile.Model));
+        }
+
+        if (missing.Count > 0)
+        {
+            return new SubAgentResolution(
+                [],
+                $"Sandboxed agent runtime could not resolve sub-agent profile(s): {string.Join(", ", missing)}.");
+        }
+
+        return new SubAgentResolution(profiles, null);
     }
 
     private static SandboxExecutionProfile BuildEffectiveSandboxProfile(string sandboxProfileName, string runId)
@@ -248,4 +294,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 .ToArray(),
             Diagnostics = result.ProviderDiagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
+
+    private sealed record SubAgentResolution(
+        IReadOnlyList<SandboxedSubAgentProfile> Profiles,
+        string? FailureReason);
 }

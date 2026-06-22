@@ -1,8 +1,11 @@
+using Autofac.Agents;
 using Autofac.Agents.Models;
 using Autofac.Application.Secrets;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Sandboxes;
 using Microsoft.Extensions.Options;
+using System.Text;
+using System.Text.Json;
 
 namespace Autofac.Agents.Tests;
 
@@ -54,12 +57,101 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.Equal("dotnet", sandbox.LastRequest.Command!.Arguments[0]);
         Assert.NotNull(result.SandboxExecution);
         Assert.Equal("opensandbox", result.SandboxExecution!.Provider);
+        Assert.Single(result.ToolInvocations);
+        Assert.Equal("mcp.weather.lookup", result.ToolInvocations[0].ToolName);
     }
 
-    private static OpenSandboxedAgentRunner CreateRunner(RecordingSandboxExecutor sandbox) =>
+    [Fact]
+    public async Task RunAsync_WhenSubAgentsConfigured_EmbedsResolvedProfilesInEnvelope()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(
+            sandbox,
+            new FileAgentRegistry(
+            [
+                new AgentProfile
+                {
+                    AgentId = "weather-agent",
+                    Name = "Weather Agent",
+                    SystemPrompt = "You are a weather specialist."
+                }
+            ]));
+
+        await runner.RunAsync(
+            MakeRequest() with
+            {
+                Contract = new AgentRuntimeContract
+                {
+                    McpServers =
+                    [
+                        new AgentMcpServerContract { Name = "weather", Transport = "http", Url = "https://example.test/mcp" }
+                    ],
+                    SubAgents = new AgentSubAgentContract
+                    {
+                        Enabled = true,
+                        MaxDepth = 2,
+                        AllowedAgents = ["weather-agent"]
+                    }
+                }
+            },
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Runner = "claude-code"
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
+            Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(envelope);
+        Assert.Single(envelope!.Contract.McpServers);
+        Assert.Equal(2, envelope.RemainingSubAgentDepth);
+        Assert.Single(envelope.SubAgents);
+        Assert.Equal("weather-agent", envelope.SubAgents[0].AgentId);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenAllowedSubAgentIsMissing_ReturnsClearFailure()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(sandbox, new FileAgentRegistry([]));
+
+        var result = await runner.RunAsync(
+            MakeRequest() with
+            {
+                Contract = new AgentRuntimeContract
+                {
+                    SubAgents = new AgentSubAgentContract
+                    {
+                        Enabled = true,
+                        AllowedAgents = ["missing-agent"]
+                    }
+                }
+            },
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Runner = "claude-code"
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("missing-agent", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(sandbox.LastRequest);
+    }
+
+    private static OpenSandboxedAgentRunner CreateRunner(
+        RecordingSandboxExecutor sandbox,
+        IAgentRegistry? registry = null) =>
         new(
             sandbox,
             new StubSecretStore(),
+            registry ?? new FileAgentRegistry([]),
             Options.Create(new LanguageModelOptions
             {
                 ApiKey = "test-key",
@@ -110,7 +202,16 @@ public sealed class OpenSandboxedAgentRunnerTests
                 Succeeded: true,
                 Output: "sandboxed spec",
                 FailureReason: null,
-                TokenUsage: new AgentModelTokenUsage(11, 29, "claude-sonnet-4-6"));
+                TokenUsage: new AgentModelTokenUsage(11, 29, "claude-sonnet-4-6"),
+                ToolInvocations:
+                [
+                    new AgentToolInvocationRecord
+                    {
+                        ToolName = "mcp.weather.lookup",
+                        Category = AgentToolCategories.Mcp,
+                        Status = "completed"
+                    }
+                ]);
 
             return Task.FromResult(new SandboxExecutionResult(
                 Succeeded: true,
