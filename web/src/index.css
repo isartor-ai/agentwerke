@@ -786,18 +786,6 @@ th {
   font-weight: 700;
 }
 
-@keyframes bpmn-pulse {
-  0%   { opacity: 0.8; transform: scale(1); }
-  60%  { opacity: 0.2; transform: scale(1.06); }
-  100% { opacity: 0; transform: scale(1.12); }
-}
-
-.bpmn-pulse-ring {
-  animation: bpmn-pulse 1.8s ease-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
-}
-
 .graph-legend {
   display: flex;
   flex-wrap: wrap;
@@ -2158,39 +2146,54 @@ textarea {
   width: 100%;
   height: 420px;
   border-radius: 0.375rem;
+  border: 1px solid var(--color-border);
   overflow: hidden;
-  background: #1a1a1b;
+  /* bpmn-js renders dark strokes/text by default and assumes a light backdrop
+     (same reasoning as .bpmn-modeler-canvas) — a dark background here made the
+     diagram itself nearly invisible. */
+  background: #fbfbfb;
+}
+
+.bpmn-viewer .djs-element {
+  cursor: pointer;
 }
 
 /* Token-highlight markers applied via canvas.addMarker */
 .raf-completed .djs-visual > :nth-child(1) {
-  stroke: #22c55e !important;
-  fill: rgb(34 197 94 / 0.12) !important;
+  stroke: #16a34a !important;
+  fill: rgb(34 197 94 / 0.14) !important;
   stroke-width: 2px !important;
 }
 
 .raf-running .djs-visual > :nth-child(1) {
-  stroke: #00dce5 !important;
-  fill: rgb(0 220 229 / 0.12) !important;
+  stroke: #0891a8 !important;
+  fill: rgb(0 220 229 / 0.14) !important;
   stroke-width: 2.5px !important;
 }
 
 .raf-awaiting .djs-visual > :nth-child(1) {
-  stroke: #f59e0b !important;
-  fill: rgb(245 158 11 / 0.12) !important;
+  stroke: #d97706 !important;
+  fill: rgb(245 158 11 / 0.14) !important;
   stroke-width: 2.5px !important;
 }
 
 .raf-failed .djs-visual > :nth-child(1) {
-  stroke: #ef4444 !important;
-  fill: rgb(239 68 68 / 0.12) !important;
+  stroke: #dc2626 !important;
+  fill: rgb(239 68 68 / 0.14) !important;
   stroke-width: 2.5px !important;
 }
 
 .raf-cancelled .djs-visual > :nth-child(1) {
-  stroke: #849495 !important;
-  fill: rgb(132 148 149 / 0.08) !important;
+  stroke: #6b7280 !important;
+  fill: rgb(107 114 128 / 0.1) !important;
   stroke-width: 1.5px !important;
+}
+
+/* Selected-step outline — layered alongside (not replacing) the status marker */
+.raf-selected .djs-outline {
+  stroke: #0891a8 !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: 4 3 !important;
 }
 
 /* Legend swatches in RunDetail canvas panel */

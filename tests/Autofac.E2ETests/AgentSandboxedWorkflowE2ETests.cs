@@ -5,9 +5,10 @@ namespace Autofac.E2ETests;
 /// <summary>
 /// Drives the real agent_sandboxed execution path end to end: a claude-code-runner
 /// agent, dispatched through OpenSandboxedAgentRunner, running Autofac.AgentRunner.dll
-/// inside a real container (the local Docker sandbox provider — see
-/// docs/manual-test-opensandbox.md for why OpenSandbox itself is not used here), calling
-/// a WireMock-stubbed Anthropic Messages endpoint so no real model API key is needed.
+/// inside a real container (the local Docker sandbox provider, used here purely so this
+/// CI-safe test doesn't need a real OpenSandbox server — agent_sandboxed works the same
+/// way against a real one, see docs/manual-test-opensandbox.md), calling a
+/// WireMock-stubbed Anthropic Messages endpoint so no real model API key is needed.
 ///
 /// This is deliberately separate from OpenSandboxWorkflowE2ETests, which exercises
 /// tool_sandboxed (the generic sandbox.execute tool) rather than agent_sandboxed (a

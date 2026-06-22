@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -442,6 +443,66 @@ data: {"type":"execution_complete","timestamp":3}
                 Assert.Equal("sub/report.txt", artifact.Path);
                 Assert.Equal("ok", artifact.Content);
             });
+
+        handler.AssertCompleted();
+    }
+
+    [Fact]
+    public async Task CollectArtifactsAsync_WhenExecdServesGenericOctetStream_StillCollectsTheArtifact()
+    {
+        // The deployed execd (opensandbox/execd:v1.0.18) serves every files/download
+        // response as "application/octet-stream" regardless of the file's real
+        // content — it doesn't declare per-file content types. An earlier version of
+        // TryDecodeArtifactContent rejected anything outside a text/json/xml
+        // allowlist, which meant every real artifact (including
+        // agent-run-result.json, the file OpenSandboxedAgentRunner depends on to
+        // surface the real agent failure reason instead of a generic sandbox-command
+        // error) was silently dropped against this execd build.
+        var handler = new SequencedHttpMessageHandler();
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://sandbox.local:8080/v1/sandboxes/sbx-1/endpoints/44772", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"endpoint":"execd.local","headers":{"X-EXECD-ACCESS-TOKEN":"execd-token"}}""",
+                "endpoint-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/ping", request.RequestUri?.ToString());
+            return Task.FromResult(EmptyResponse(HttpStatusCode.OK, "ping-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/files/search?path=%2Foutput&pattern=%2A%2A", request.RequestUri?.ToString());
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """[{"path":"/output/agent-run-result.json"}]""",
+                "files-search-req"));
+        });
+        handler.Enqueue((request, _) =>
+        {
+            Assert.Equal("http://execd.local/files/download?path=%2Foutput%2Fagent-run-result.json", request.RequestUri?.ToString());
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent("""{"succeeded":false}"""u8.ToArray())
+                {
+                    Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") }
+                },
+                Headers = { { "X-Request-ID", "download-1" } }
+            });
+        });
+
+        var client = CreateClient(handler);
+
+        var artifacts = await client.CollectArtifactsAsync(
+            "sbx-1",
+            new OpenSandboxCollectArtifactsRequest(["/output"]),
+            CancellationToken.None);
+
+        var artifact = Assert.Single(artifacts);
+        Assert.Equal("agent-run-result.json", artifact.Path);
+        Assert.Equal("""{"succeeded":false}""", artifact.Content);
 
         handler.AssertCompleted();
     }

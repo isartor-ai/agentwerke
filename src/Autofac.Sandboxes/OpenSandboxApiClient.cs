@@ -466,7 +466,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
 
         RecordRequestId(sandboxId, "execd.files.download.request_id", response.RequestId);
 
-        var content = TryDecodeArtifactContent(response.ContentType, response.Content);
+        var content = TryDecodeArtifactContent(response.Content);
         if (content is null)
         {
             return;
@@ -1105,7 +1105,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         };
     }
 
-    private static string? TryDecodeArtifactContent(string? contentType, byte[] bytes)
+    private static string? TryDecodeArtifactContent(byte[] bytes)
     {
         if (bytes.Length == 0)
         {
@@ -1117,14 +1117,18 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(contentType) &&
-            !contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(contentType, "application/json", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(contentType, "application/xml", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
+        // The deployed execd (opensandbox/execd:v1.0.18) serves every files/download
+        // response as "application/octet-stream" regardless of the file's actual
+        // content — it does not sniff or declare per-file content types (the same
+        // execd quirk noted on CollectPathArtifactsAsync's "type" field above). A
+        // content-type allowlist against that header would reject every artifact
+        // unconditionally, which is exactly what was happening: agent-run-result.json
+        // (and any other text artifact) downloaded fine but was silently dropped here,
+        // so OpenSandboxedAgentRunner never saw it and fell back to the sandbox's
+        // generic command-failure message instead of the real failure reason inside
+        // it. The null-byte check above is the actual binary/text discriminator;
+        // content-type isn't a reliable signal from this execd build and is no longer
+        // consulted.
         return Encoding.UTF8.GetString(bytes);
     }
 

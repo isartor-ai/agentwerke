@@ -140,7 +140,7 @@ Because the agent needs to reach a model endpoint, `agent_sandboxed` always upgr
 scripts/run-agent-sandboxed-e2e.sh
 ```
 
-This brings up an isolated Postgres, the shared WireMock instance (now also stubbing the Anthropic Messages API — see `tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json`), and an Autofac API instance with `Sandboxes:Provider=docker` (the legacy local-fallback provider, not OpenSandbox — see "Known limitation" below for why). It builds and tags the `Autofac.AgentRunner` image the sandbox container runs, uploads a `runner: claude-code` agent and an `executionMode="agent_sandboxed"` workflow, starts a run, and asserts on `AgentSandboxedWorkflowE2ETests`: the run completes, `runtimeSnapshot.sandboxExecution.provider` is `docker`, and `runtimeSnapshot.tokenUsage` reflects the (stubbed) model response.
+This brings up an isolated Postgres, the shared WireMock instance (now also stubbing the Anthropic Messages API — see `tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json`), and an Autofac API instance with `Sandboxes:Provider=docker` (the legacy local-fallback provider — chosen here purely so the test doesn't need a real Anthropic API key; `agent_sandboxed` works the same way against a real OpenSandbox server, see "Validating against the pilot OpenSandbox stack" below). It builds and tags the `Autofac.AgentRunner` image the sandbox container runs, uploads a `runner: claude-code` agent and an `executionMode="agent_sandboxed"` workflow, starts a run, and asserts on `AgentSandboxedWorkflowE2ETests`: the run completes, `runtimeSnapshot.sandboxExecution.provider` is `docker`, and `runtimeSnapshot.tokenUsage` reflects the (stubbed) model response.
 
 Expected result: `e2e-tests-agent-sandboxed` exits 0 and the test passes.
 
@@ -158,16 +158,28 @@ docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed build 
 docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed run --rm e2e-tests-agent-sandboxed
 ```
 
-This path only became possible after two fixes made while building this scenario, both worth knowing about if you're debugging it:
+This path only became possible after four fixes made while building this scenario, all worth knowing about if you're debugging it:
 
 - `DockerSandboxExecutor` used to hard-code `NetworkMode = "none"` regardless of the requested `SandboxNetworkPolicy`, which meant *no* sandboxed task that needed network access (deployment profiles, `agent_sandboxed`, anything beyond `offline`) could ever work through the local Docker fallback. It now maps anything other than `SandboxNetworkAccessMode.None` to Docker's plain `bridge` network. Plain bridge can't enforce the per-host allow-listing `SandboxNetworkPolicy.AllowedHosts` implies — there's no egress proxy in this provider — so this is "the sandbox can reach the network" parity with OpenSandbox's Restricted mode, not allow-list enforcement; treat it as a local development convenience, not a security boundary.
 - `AnthropicLanguageModelClient` used to only set `HttpClient.BaseAddress` from `Anthropic:ApiBaseUrl`. The `Anthropic.SDK` package builds its request URLs from its own `AnthropicClient.ApiUrlFormat` property instead, which ignores `HttpClient.BaseAddress` entirely — so a configured `ApiBaseUrl` silently had no effect, and every call went to the real `api.anthropic.com` regardless of configuration. It now also sets `ApiUrlFormat`, which is what actually controls where requests go. `tests/Autofac.Agents.Tests/AnthropicLanguageModelClientTests.cs` pins this with a fake `HttpListener`-based server.
+- `OpenSandboxApiClient.TryDecodeArtifactContent` rejected anything outside a `text/*`/`application/json`/`application/xml` content-type allowlist — but the deployed execd build (`opensandbox/execd:v1.0.18`) serves every `files/download` response as `application/octet-stream` regardless of the real file content, so this silently dropped every artifact, every time, against a real OpenSandbox server. Since `OpenSandboxedAgentRunner` depends on reading back `agent-run-result.json` to surface the real agent failure reason, every `agent_sandboxed` failure against OpenSandbox instead surfaced as a generic `"OpenSandbox command failed with exit code N: exit status N"` with no further detail. The content-type check is gone; the existing null-byte check is what actually distinguishes binary from text content.
+- `Autofac.AgentRunner`'s `Program.cs` wrote `agent-run-result.json` via `Encoding.UTF8`, which (unlike the parameterless `File.WriteAllTextAsync` overload) emits a byte-order mark. `OpenSandboxedAgentRunner`'s `JsonSerializer.Deserialize` of that same file rejects a leading BOM as invalid JSON. Switched to a BOM-less UTF-8 encoding.
 
-#### Known limitation: `agent_sandboxed` against the pilot OpenSandbox stack
+The combination of the last two bugs is why `agent_sandboxed` looked broken against OpenSandbox specifically: network egress, the egress sidecar, and execd were all working correctly the whole time (verified directly via the OpenSandbox API and `docker exec`, independent of Autofac) — the actual agent failure reason was just never reaching the surface.
 
-The pilot stack (`docker/docker-compose.pilot-opensandbox.yml`, see Part A above) bootstraps a second workflow, "OpenSandbox Agent Execution (agent_sandboxed)", alongside the existing `sandbox.execute` one. You can start a run on it from the UI or via `POST /api/runs`, but **it is expected to fail** — not because of an Autofac bug, but because of a confirmed upstream OpenSandbox limitation: the egress sidecar OpenSandbox's server attaches to network-restricted sandboxes listens on port 18080, while the server's own readiness probe for that sidecar checks port 8080. Any sandbox profile other than `None` — which `agent_sandboxed` always requires — hits this mismatch.
+#### Validating against the pilot OpenSandbox stack
 
-What you'll see (verified by actually running it): the run step fails fast — `runtimeSnapshot.sandboxExecution` shows `commandState: "Failed"`, `exitCode: 1`, and an empty `logs` array, with `error: "OpenSandbox command failed with exit code 1: exit status 1"`. There's no command output to point at the real cause because there never was one — `docker logs` on the OpenSandbox server container shows the sandbox and its egress sidecar being created and started normally, then killed and removed a couple of seconds later, before the agent ever ran. That create-start-then-immediately-tear-down pattern, on this specific stack, is the signature of the known limitation rather than a regression — use the CI-safe path above to actually exercise the `agent_sandboxed` code path end to end until OpenSandbox fixes the port mismatch upstream.
+The pilot stack (`docker/docker-compose.pilot-opensandbox.yml`, see Part A above) bootstraps a second workflow, "OpenSandbox Agent Execution (agent_sandboxed)", alongside the existing `sandbox.execute` one, using `Sandboxes:Provider=opensandbox` (the real server, not the local Docker fallback). Starting a run on it (from the UI or via `POST /api/runs`) now correctly exercises the full path through a real OpenSandbox server.
+
+Without a real Anthropic API key, a run fails with a clean, specific error — `"LLM call failed: Anthropic rejected your authorization... invalid x-api-key"` — surfaced directly from `agent-run-result.json`, with `runtimeSnapshot.tokenUsage` populated from the (rejected) call's usage. To see it succeed end to end, set `ANTHROPIC__APIKEY` in `docker/.env.pilot.local` (same file and variable name `docker-compose.pilot.yml`'s Scenario D uses) and pass `--env-file` when starting the stack:
+
+```bash
+docker compose -f docker/docker-compose.pilot-opensandbox.yml \
+  --env-file docker/.env.pilot.local \
+  up --build
+```
+
+This only takes effect on a freshly created `api` container — if it's already running from a prior `up` without `--env-file`, recreate it (`docker compose -f docker/docker-compose.pilot-opensandbox.yml --env-file docker/.env.pilot.local up -d --force-recreate api`) rather than expecting the existing container to pick up the new value.
 
 ## Part B — Production: OpenSandbox in Kubernetes mode with a secure runtime
 

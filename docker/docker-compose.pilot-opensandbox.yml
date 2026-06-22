@@ -26,11 +26,11 @@
 #   it proves end-to-end sandbox execution without repository credentials or
 #   outbound network access.
 # - Bootstrap also publishes a second, agent_sandboxed workflow ("OpenSandbox
-#   Agent Execution (agent_sandboxed)"). Starting a run on it is expected to fail
-#   against this stack's real OpenSandbox server — see docs/manual-test-opensandbox.md,
-#   "Validate agent_sandboxed", for the known upstream egress-sidecar limitation and
-#   the CI-safe alternative (scripts/run-agent-sandboxed-e2e.sh) that actually verifies
-#   the agent_sandboxed code path end to end.
+#   Agent Execution (agent_sandboxed)"), which runs end to end against this
+#   stack's real OpenSandbox server. Anthropic__ApiKey below is a placeholder, so
+#   a run fails on a clean "invalid x-api-key" error unless you set a real key —
+#   see docs/manual-test-opensandbox.md, "Validating against the pilot OpenSandbox
+#   stack".
 ###############################################################################
 
 services:
@@ -85,8 +85,8 @@ services:
 
   # Built (never started) so Sandboxes__OpenSandbox__AgentRunnerImage below resolves to a
   # real image — without this, the agent_sandboxed pilot workflow would fail on a missing
-  # image before ever reaching the known OpenSandbox egress-sidecar limitation it's meant
-  # to demonstrate. See docs/manual-test-opensandbox.md, "Validate agent_sandboxed".
+  # image instead of running the agent. See docs/manual-test-opensandbox.md, "Validating
+  # against the pilot OpenSandbox stack".
   agent-runner-image:
     build:
       context: ..
@@ -143,11 +143,12 @@ services:
       Sandboxes__OpenSandbox__UseServerProxy: "false"
       Sandboxes__OpenSandbox__WorkingDirectory: "/workspace"
       Sandboxes__OpenSandbox__AgentRunnerImage: "autofac-agent-runner:pilot"
-      # Just needs to be non-empty so the credential-presence check passes — the
-      # agent_sandboxed pilot run is expected to fail at sandbox creation instead,
-      # on the known OpenSandbox limitation (see docs/manual-test-opensandbox.md,
-      # "Validate agent_sandboxed"), before any model call would happen.
-      Anthropic__ApiKey: "pilot-dummy-key"
+      # Falls back to a placeholder when ANTHROPIC__APIKEY isn't set (e.g. via
+      # --env-file docker/.env.pilot.local, the same convention docker-compose.pilot.yml
+      # uses) — the agent_sandboxed pilot run then reaches the real Anthropic API and
+      # fails on a clean "invalid x-api-key" error instead of succeeding. See
+      # docs/manual-test-opensandbox.md, "Validating against the pilot OpenSandbox stack".
+      Anthropic__ApiKey: "${ANTHROPIC__APIKEY:-pilot-dummy-key}"
       Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
       Integrations__GitHub__PersonalAccessToken: "mock-token"
       Integrations__GitHub__RepositoryOwner: "mock-owner"

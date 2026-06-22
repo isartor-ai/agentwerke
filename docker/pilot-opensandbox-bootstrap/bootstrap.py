@@ -20,10 +20,10 @@ WORKFLOW_FILE = Path("/bootstrap/opensandbox-agent-execution.bpmn")
 WORKFLOW_NAME = "OpenSandbox Agent Execution"
 
 # agent_sandboxed always upgrades its network policy to Restricted (it has to reach
-# the model endpoint), which currently can't complete against this stack's real
-# OpenSandbox server — see docs/manual-test-opensandbox.md, "Validate agent_sandboxed",
-# for the known upstream egress-sidecar limitation. It's still bootstrapped here so the
-# failure is reproducible and visible in the UI rather than silently absent.
+# the model endpoint) and runs end to end against this stack's real OpenSandbox
+# server. Anthropic__ApiKey in docker-compose.pilot-opensandbox.yml is a placeholder,
+# so a run fails on a clean "invalid x-api-key" error unless you set a real key —
+# see docs/manual-test-opensandbox.md, "Validating against the pilot OpenSandbox stack".
 AGENT_SANDBOXED_AGENT_FILE = Path("/bootstrap/opensandbox-pilot-agent-sandboxed.md")
 AGENT_SANDBOXED_WORKFLOW_FILE = Path("/bootstrap/opensandbox-agent-sandboxed-execution.bpmn")
 AGENT_SANDBOXED_WORKFLOW_NAME = "OpenSandbox Agent Execution (agent_sandboxed)"
