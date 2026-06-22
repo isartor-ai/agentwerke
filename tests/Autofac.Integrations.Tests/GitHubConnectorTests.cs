@@ -212,6 +212,117 @@ public sealed class GitHubConnectorTests
     }
 
     [Fact]
+    public async Task GetPullRequestAsync_ReturnsStateAndMergeDetails()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls/42")
+            {
+                return Task.FromResult(Json(HttpStatusCode.OK, """
+                    {
+                      "number": 42,
+                      "state": "closed",
+                      "merged": true,
+                      "merge_commit_sha": "feedface1234",
+                      "head": { "ref": "autofac/run-123", "sha": "abc123" },
+                      "base": { "ref": "main", "sha": "def456" }
+                    }
+                    """));
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.GetPullRequestAsync(42, CancellationToken.None);
+
+        Assert.Equal(42, result.Number);
+        Assert.Equal("closed", result.State);
+        Assert.True(result.Merged);
+        Assert.Equal("feedface1234", result.MergeCommitSha);
+        Assert.Equal("autofac/run-123", result.HeadBranch);
+        Assert.Equal("abc123", result.HeadSha);
+        Assert.Equal("main", result.BaseBranch);
+    }
+
+    [Fact]
+    public async Task GetCheckStatusAsync_WhenAllRunsSucceeded_ReturnsCompletedSuccess()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/commits/abc123/check-runs")
+            {
+                return Task.FromResult(Json(HttpStatusCode.OK, """
+                    {
+                      "total_count": 2,
+                      "check_runs": [
+                        { "name": "build", "status": "completed", "conclusion": "success" },
+                        { "name": "test", "status": "completed", "conclusion": "success" }
+                      ]
+                    }
+                    """));
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.GetCheckStatusAsync("abc123", CancellationToken.None);
+
+        Assert.Equal("abc123", result.Ref);
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal("completed", result.Status);
+        Assert.Equal("success", result.Conclusion);
+        Assert.Equal(2, result.CheckRuns.Count);
+    }
+
+    [Fact]
+    public async Task GetCheckStatusAsync_WhenAnyRunFailed_ReturnsCompletedFailure()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(Json(HttpStatusCode.OK, """
+            {
+              "total_count": 2,
+              "check_runs": [
+                { "name": "build", "status": "completed", "conclusion": "success" },
+                { "name": "test", "status": "completed", "conclusion": "failure" }
+              ]
+            }
+            """)));
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.GetCheckStatusAsync("abc123", CancellationToken.None);
+
+        Assert.Equal("completed", result.Status);
+        Assert.Equal("failure", result.Conclusion);
+    }
+
+    [Fact]
+    public async Task GetCheckStatusAsync_WhenAnyRunStillInProgress_ReturnsInProgressWithNullConclusion()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(Json(HttpStatusCode.OK, """
+            {
+              "total_count": 2,
+              "check_runs": [
+                { "name": "build", "status": "completed", "conclusion": "success" },
+                { "name": "test", "status": "in_progress", "conclusion": null }
+              ]
+            }
+            """)));
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.GetCheckStatusAsync("abc123", CancellationToken.None);
+
+        Assert.Equal("in_progress", result.Status);
+        Assert.Null(result.Conclusion);
+    }
+
+    [Fact]
     public async Task RequestReviewersAsync_PostsReviewerPayload()
     {
         var requests = new List<HttpRequestMessage>();
