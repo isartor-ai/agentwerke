@@ -50,6 +50,48 @@ public sealed class WorkflowRunOrchestrationServiceTests
         Assert.Equal("entra-user-42", OutboxResumePayload.Deserialize(outbox.Enqueued[0].Payload)?.ApprovedBy);
     }
 
+    [Fact]
+    public async Task ResumeExternalRunAsync_EnqueuesResumeWithCorrelationPayloadAndAuditActor()
+    {
+        var auditRepository = new CapturingAuditRepository();
+        var outbox = new CapturingRunOutbox();
+        var service = new WorkflowRunOrchestrationService(
+            new UnusedWorkflowDefinitionRepository(),
+            new InMemoryWorkflowRunRepository(new WorkflowRun { Id = "run_2", Status = "waiting_external" }),
+            new NoOpRunContextRepository(),
+            new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "run_2", Status = "pending", RiskLevel = "low" }),
+            auditRepository,
+            outbox,
+            new StubCorrelationContext("corr_2"),
+            new NoOpWorkflowMetrics(),
+            NullLogger<WorkflowRunOrchestrationService>.Instance);
+
+        var result = await service.ResumeExternalRunAsync(new ResumeExternalRunCommand(
+            RunId: "run_2",
+            CorrelationKey: "feature/external-wait",
+            Payload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["pull_number"] = "42"
+            },
+            ResumedBy: "operator-7"));
+
+        Assert.Equal("pending", result.Status);
+        Assert.Single(outbox.Enqueued);
+        Assert.Equal("resume", outbox.Enqueued[0].Operation);
+
+        var payload = OutboxResumePayload.Deserialize(outbox.Enqueued[0].Payload);
+        Assert.NotNull(payload);
+        Assert.Null(payload!.ApprovedBy);
+        Assert.Equal("feature/external-wait", payload.ExternalCorrelationKey);
+        Assert.Equal("42", payload.ExternalPayload!["pull_number"]);
+        Assert.Equal("operator-7", payload.ResumedBy);
+
+        Assert.Contains(auditRepository.Records, static record =>
+            record.Action == "workflow.resume_external" &&
+            record.Actor == "operator-7" &&
+            record.ActorType == "operator");
+    }
+
     private sealed class UnusedWorkflowDefinitionRepository : IWorkflowDefinitionRepository
     {
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken = default) =>

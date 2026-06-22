@@ -36,11 +36,14 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         string runId,
         string bpmnXml,
         string? approvedBy,
+        IReadOnlyDictionary<string, string>? externalPayload,
+        string? externalCorrelationKey,
+        string? resumedBy,
         CancellationToken cancellationToken)
     {
         var definition = ParseOrThrow(bpmnXml);
         var state = await _engine.ResumeAsync(
-            new WorkflowEngineResumeRequest(runId, definition, approvedBy),
+            new WorkflowEngineResumeRequest(runId, definition, approvedBy, externalCorrelationKey, externalPayload, resumedBy),
             cancellationToken);
         return ToResult(state, definition);
     }

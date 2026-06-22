@@ -178,6 +178,41 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         return new ResumeRunResult(command.RunId, PendingStatus, WaitingApproval: null);
     }
 
+    public async Task<ResumeExternalRunResult> ResumeExternalRunAsync(
+        ResumeExternalRunCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        _ = await _runRepository.GetRunAsync(command.RunId, cancellationToken)
+            ?? throw new WorkflowRunNotFoundException(command.RunId);
+
+        var resumedBy = command.ResumedBy ?? "api-user";
+        var correlationId = _correlationContext.CorrelationId;
+
+        var payload = new OutboxResumePayload(
+            ApprovedBy: null,
+            ExternalCorrelationKey: command.CorrelationKey,
+            ExternalPayload: command.Payload,
+            ResumedBy: resumedBy).Serialize();
+
+        await _outbox.EnqueueAsync(OutboxOperations.Resume, command.RunId, payload, ct: cancellationToken);
+
+        await WriteAuditAsync(
+            runId: command.RunId,
+            correlationId: correlationId,
+            actorType: "operator",
+            actor: resumedBy,
+            action: "workflow.resume_external",
+            resourceType: "workflow_run",
+            resourceId: command.RunId,
+            outcome: "enqueued",
+            details: $"correlationKey={command.CorrelationKey}",
+            cancellationToken);
+
+        return new ResumeExternalRunResult(command.RunId, PendingStatus);
+    }
+
     public async Task<RecoverRunResult> RecoverRunAsync(
         string runId,
         CancellationToken cancellationToken = default)

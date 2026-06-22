@@ -74,7 +74,13 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         }
     }
 
-    public async Task ExecuteResumeAsync(string runId, string? approvedBy, CancellationToken ct)
+    public async Task ExecuteResumeAsync(
+        string runId,
+        string? approvedBy,
+        string? externalCorrelationKey,
+        IReadOnlyDictionary<string, string>? externalPayload,
+        string? resumedBy,
+        CancellationToken ct)
     {
         var run = await _runRepository.GetRunAsync(runId, ct)
             ?? throw new InvalidOperationException($"Run '{runId}' not found.");
@@ -96,7 +102,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
 
         try
         {
-            var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, ct);
+            var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, externalPayload, externalCorrelationKey, resumedBy, ct);
             span.SetTag("autofac.result_status", result.Status);
             await HandleResultAsync(runId, result, ct);
         }
@@ -154,6 +160,10 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
                 if (result.TimerDueAt.HasValue)
                     await _outbox.EnqueueAsync(OutboxOperations.Timer, runId, visibleAfter: result.TimerDueAt, ct: ct);
                 await _runRepository.UpdateRunStatusAsync(runId, "waiting_timer", ct);
+                break;
+
+            case "waiting_external":
+                await _runRepository.UpdateRunStatusAsync(runId, "waiting_external", ct);
                 break;
 
             case "completed":

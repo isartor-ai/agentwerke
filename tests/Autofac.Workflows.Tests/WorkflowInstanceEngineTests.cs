@@ -1,5 +1,6 @@
 using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
+using Autofac.Application.Workflows;
 using Autofac.Workflows.Bpmn;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -139,6 +140,85 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal("End", state.NextNodeId);
         Assert.NotNull(state.TimerDueAt);
         Assert.True(state.TimerDueAt >= before.AddSeconds(4));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenMessageCatchEventIsReached_ReturnsWaitingExternalWithRenderedCorrelationKey()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContext = new InMemoryRunContextRepository();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), runContext, NullLogger<WorkflowInstanceEngine>.Instance);
+        var preCreatedRun = await store.CreateRunAsync("ExternalFlow", "system", CancellationToken.None);
+        await runContext.SetAsync(preCreatedRun.Id, "branch_name", "feature/external-wait", RunContextKinds.Input, CancellationToken.None);
+
+        var state = await engine.StartAsync(
+            new WorkflowEngineStartRequest("ExternalFlow", CreateExternalWaitDefinition(), "system", ExistingRunId: preCreatedRun.Id),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal("WaitForMerge", state.WaitingOnNodeId);
+        Assert.Equal("End", state.NextNodeId);
+        Assert.Equal("feature/external-wait", state.WaitingExternalCorrelationKey);
+        Assert.Equal("github.pull_request.merged", state.WaitingExternalMessageName);
+    }
+
+    [Fact]
+    public async Task ResumeAsync_WhenWaitingExternalAndCorrelationKeyMatches_CompletesRunAndMergesPayload()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContext = new InMemoryRunContextRepository();
+        var definition = CreateExternalWaitDefinition();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), runContext, NullLogger<WorkflowInstanceEngine>.Instance);
+        var preCreatedRun = await store.CreateRunAsync("ExternalFlow", "system", CancellationToken.None);
+        await runContext.SetAsync(preCreatedRun.Id, "branch_name", "feature/external-wait", RunContextKinds.Input, CancellationToken.None);
+
+        var started = await engine.StartAsync(
+            new WorkflowEngineStartRequest("ExternalFlow", definition, "system", ExistingRunId: preCreatedRun.Id),
+            CancellationToken.None);
+
+        var resumed = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                preCreatedRun.Id,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "feature/external-wait",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["pull_number"] = "42",
+                    ["merge_sha"] = "abc123"
+                },
+                ResumedBy: "operator"),
+            CancellationToken.None);
+
+        Assert.Equal("completed", resumed.Status);
+
+        var entries = await runContext.GetAllAsync(preCreatedRun.Id, CancellationToken.None);
+        Assert.Contains(entries, static entry => entry.Key == "event.pull_number" && entry.Value == "42");
+        Assert.Contains(entries, static entry => entry.Key == "event.merge_sha" && entry.Value == "abc123");
+    }
+
+    [Fact]
+    public async Task ResumeAsync_WhenWaitingExternalAndCorrelationKeyDoesNotMatch_Throws()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContext = new InMemoryRunContextRepository();
+        var definition = CreateExternalWaitDefinition();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), runContext, NullLogger<WorkflowInstanceEngine>.Instance);
+        var preCreatedRun = await store.CreateRunAsync("ExternalFlow", "system", CancellationToken.None);
+        await runContext.SetAsync(preCreatedRun.Id, "branch_name", "feature/external-wait", RunContextKinds.Input, CancellationToken.None);
+
+        await engine.StartAsync(
+            new WorkflowEngineStartRequest("ExternalFlow", definition, "system", ExistingRunId: preCreatedRun.Id),
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.ResumeAsync(
+                new WorkflowEngineResumeRequest(
+                    preCreatedRun.Id,
+                    definition,
+                    ApprovedBy: null,
+                    ExternalCorrelationKey: "feature/other"),
+                CancellationToken.None));
     }
 
     [Fact]
@@ -349,6 +429,27 @@ public sealed class WorkflowInstanceEngineTests
                     null,
                     new AutofacApprovalMetadata("manual_review", "human_approval_required")),
                 new BpmnNodeDefinition("Finalize", "Finalize", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+    }
+
+    private static BpmnWorkflowDefinition CreateExternalWaitDefinition()
+    {
+        return new BpmnWorkflowDefinition(
+            ProcessId: "ExternalFlow",
+            ProcessName: "External Wait Workflow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition(
+                    "WaitForMerge",
+                    "Wait for Merge",
+                    "intermediateCatchEvent",
+                    null,
+                    TimerDuration: null,
+                    ExternalEventMetadata: new AutofacExternalEventMetadata(
+                        "github.pull_request.merged",
+                        "{{run_context.branch_name}}")),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
     }

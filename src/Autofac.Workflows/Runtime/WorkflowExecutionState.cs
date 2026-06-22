@@ -7,6 +7,8 @@ public sealed record WorkflowExecutionState(
     string? WaitingOnNodeId,
     string? CompletedAt,
     DateTimeOffset? TimerDueAt = null,
+    string? WaitingExternalCorrelationKey = null,
+    string? WaitingExternalMessageName = null,
     /// <summary>
     /// Name of the artifact the nearest preceding service task produced, when
     /// <see cref="WaitingOnNodeId"/> is a userTask approval gate. Lets the approval card
