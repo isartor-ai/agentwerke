@@ -514,6 +514,19 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 });
         }
 
+        if (IsDirectGitHubToolAction(metadata.Action))
+        {
+            return CreateToolRequest(
+                ToolName: metadata.Action,
+                Action: metadata.Action,
+                runId,
+                stepId,
+                metadata,
+                attempt,
+                permissions,
+                ExtractToolInput(metadata.RuntimeContract));
+        }
+
         if (_toolRegistry.Find(metadata.Action) is { Category: var category } &&
             string.Equals(category, AgentToolCategories.Mcp, StringComparison.OrdinalIgnoreCase))
         {
@@ -665,9 +678,15 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string.Equals(action, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.create_pr", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsDirectGitHubToolAction(string action) =>
+        string.Equals(action, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(action, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(action, "github.post_review", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsGitHubAction(string action) =>
         string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
-        IsGitHubPullRequestAction(action);
+        IsGitHubPullRequestAction(action) ||
+        IsDirectGitHubToolAction(action);
 
     private static string BuildBranchName(string runId, string branchPrefix)
     {

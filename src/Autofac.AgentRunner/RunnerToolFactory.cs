@@ -14,10 +14,14 @@ internal static class RunnerToolFactory
     public static IToolRegistry CreateRegistry(SandboxedAgentRunEnvelope envelope)
     {
         var tools = new List<IAgentTool>();
-        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase)) ||
-            envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase)))
+        if (envelope.ResolvedTools.Any(static tool => IsGitHubTool(tool.Name)))
         {
             var gitHubConnector = CreateGitHubConnector();
+            if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.read_issue", StringComparison.OrdinalIgnoreCase)))
+            {
+                tools.Add(new GitHubReadIssueTool(gitHubConnector));
+            }
+
             if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase)))
             {
                 tools.Add(new GitHubCreateBranchTool(gitHubConnector));
@@ -27,10 +31,27 @@ internal static class RunnerToolFactory
             {
                 tools.Add(new GitHubCreatePullRequestTool(gitHubConnector));
             }
+
+            if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.request_review", StringComparison.OrdinalIgnoreCase)))
+            {
+                tools.Add(new GitHubRequestReviewTool(gitHubConnector));
+            }
+
+            if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.post_review", StringComparison.OrdinalIgnoreCase)))
+            {
+                tools.Add(new GitHubPostReviewTool(gitHubConnector));
+            }
         }
 
         return new ToolRegistry(tools);
     }
+
+    private static bool IsGitHubTool(string toolName) =>
+        string.Equals(toolName, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(toolName, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(toolName, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(toolName, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(toolName, "github.post_review", StringComparison.OrdinalIgnoreCase);
 
     private static IGitHubConnector CreateGitHubConnector()
     {
