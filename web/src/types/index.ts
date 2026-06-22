@@ -113,6 +113,13 @@ export interface RunStepSandboxExecution {
   diagnostics: Record<string, string>;
 }
 
+export interface RunStepTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  modelId?: string;
+  elapsedMs?: number;
+}
+
 export interface RunStepRuntimeSnapshot {
   agentName?: string;
   action?: string;
@@ -131,6 +138,7 @@ export interface RunStepRuntimeSnapshot {
   permissionDecision?: RunStepPermissionDecision;
   stepArtifacts: RunStepArtifactRef[];
   sandboxExecution?: RunStepSandboxExecution;
+  tokenUsage?: RunStepTokenUsage;
 }
 
 export interface RunStep {

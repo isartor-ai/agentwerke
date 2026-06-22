@@ -26,3 +26,6 @@ Thumbs.db
 
 # Local environment overrides
 docker/.env.pilot.local
+
+# scripts/run-agent-sandboxed-e2e.sh artifacts bind-mount (see docker-compose.e2e.yml)
+docker/.agent-sandboxed-artifacts/

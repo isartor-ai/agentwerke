@@ -118,6 +118,8 @@ public sealed class RunsControllerTests
             PolicyDecisions: [],
             ToolCalls: [],
             ConnectorCalls: [],
+            SandboxExecutions: [],
+            ModelUsage: [],
             Artifacts: [],
             AuditLog: [],
             Logs: [],

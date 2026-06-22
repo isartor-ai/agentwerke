@@ -108,9 +108,13 @@ describe('RunDetail integration', () => {
         (link) => link.getAttribute('href') === '/api/runs/run-0421/artifacts/spec.md',
       ),
     ).toBe(true);
-    expect(screen.getByText('Sandbox diagnostics')).toBeInTheDocument();
+    expect(screen.getAllByText('Sandbox Diagnostics').length).toBeGreaterThan(0);
     expect(screen.getAllByText('opensandbox').length).toBeGreaterThan(0);
     expect(screen.getAllByText('sbx-42').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Model Usage').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('412').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('198').length).toBeGreaterThan(0);
     expect(
       screen.getAllByText((_, element) => (
         element?.tagName === 'PRE' &&

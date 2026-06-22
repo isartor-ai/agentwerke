@@ -71,6 +71,53 @@ public static class EvidencePackBuilder
                 DurationMs: tool.DurationMs)))
             .ToArray();
 
+        var sandboxExecutions = run.Steps
+            .Where(step => step.RuntimeSnapshot?.SandboxExecution is not null)
+            .OrderBy(step => step.StartedAt ?? step.CompletedAt ?? step.Id, StringComparer.Ordinal)
+            .Select(step =>
+            {
+                var sandbox = step.RuntimeSnapshot!.SandboxExecution!;
+                return new EvidenceSandboxExecution(
+                    StepId: step.Id,
+                    StepName: step.Name,
+                    AgentName: step.RuntimeSnapshot.AgentName ?? step.AgentName,
+                    Action: step.RuntimeSnapshot.Action,
+                    Provider: sandbox.Provider,
+                    SandboxId: sandbox.SandboxId,
+                    CommandState: sandbox.CommandState,
+                    ExitCode: sandbox.ExitCode,
+                    DurationMs: sandbox.DurationMs,
+                    Logs: sandbox.Logs
+                        .Select(log => new EvidenceSandboxLogEntry(
+                            log.Stream,
+                            RedactOptional(log.Message) ?? string.Empty,
+                            log.Timestamp))
+                        .ToArray(),
+                    Diagnostics: sandbox.Diagnostics.ToDictionary(
+                        entry => entry.Key,
+                        entry => RedactOptional(entry.Value) ?? string.Empty,
+                        StringComparer.OrdinalIgnoreCase));
+            })
+            .ToArray();
+
+        var modelUsage = run.Steps
+            .Where(step => step.RuntimeSnapshot?.TokenUsage is not null)
+            .OrderBy(step => step.StartedAt ?? step.CompletedAt ?? step.Id, StringComparer.Ordinal)
+            .Select(step =>
+            {
+                var usage = step.RuntimeSnapshot!.TokenUsage!;
+                return new EvidenceModelUsage(
+                    StepId: step.Id,
+                    StepName: step.Name,
+                    AgentName: step.RuntimeSnapshot.AgentName ?? step.AgentName,
+                    Action: step.RuntimeSnapshot.Action,
+                    ModelId: usage.ModelId,
+                    InputTokens: usage.InputTokens,
+                    OutputTokens: usage.OutputTokens,
+                    ElapsedMs: usage.ElapsedMs);
+            })
+            .ToArray();
+
         var connectorCalls = auditRecords
             .Where(IsConnectorAudit)
             .OrderBy(record => record.Timestamp, StringComparer.Ordinal)
@@ -169,6 +216,8 @@ public static class EvidencePackBuilder
             PolicyDecisions: policyDecisions,
             ToolCalls: toolCalls,
             ConnectorCalls: connectorCalls,
+            SandboxExecutions: sandboxExecutions,
+            ModelUsage: modelUsage,
             Artifacts: storageEvidence.Concat(snapshotEvidence).ToArray(),
             AuditLog: auditLog,
             Logs: logs,

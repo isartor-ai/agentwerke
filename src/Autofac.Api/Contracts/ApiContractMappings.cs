@@ -342,6 +342,11 @@ internal static class ApiContractMappings
                 snapshot.SandboxExecution.Logs
                     .Select(static log => new RunStepSandboxLogEntry(log.Stream, log.Message, log.Timestamp))
                     .ToArray(),
-                new Dictionary<string, string>(snapshot.SandboxExecution.Diagnostics, StringComparer.OrdinalIgnoreCase)));
+                new Dictionary<string, string>(snapshot.SandboxExecution.Diagnostics, StringComparer.OrdinalIgnoreCase)),
+            TokenUsage: snapshot.TokenUsage is null ? null : new RunStepTokenUsage(
+                snapshot.TokenUsage.InputTokens,
+                snapshot.TokenUsage.OutputTokens,
+                snapshot.TokenUsage.ModelId,
+                snapshot.TokenUsage.ElapsedMs));
     }
 }

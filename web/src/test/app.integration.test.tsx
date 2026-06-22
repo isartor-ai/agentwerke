@@ -12,6 +12,9 @@ vi.mock('../api/client', () => ({
     getRun: vi.fn(),
     getWorkflows: vi.fn(),
     getWorkflow: vi.fn(),
+    getAgents: vi.fn(),
+    getRuntimeMode: vi.fn(),
+    getTemplates: vi.fn(),
     getApprovals: vi.fn(),
     decideApproval: vi.fn(),
   },
@@ -29,6 +32,9 @@ describe('App integration', () => {
     }));
     vi.mocked(apiClient.getApprovals).mockResolvedValue(approvalsFixture);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
+    vi.mocked(apiClient.getAgents).mockResolvedValue([]);
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
+    vi.mocked(apiClient.getTemplates).mockResolvedValue([]);
     window.history.pushState({}, '', '/runs');
   });
 
@@ -43,7 +49,7 @@ describe('App integration', () => {
 
     fireEvent.click(screen.getByRole('link', { name: 'Workflows' }));
     await waitFor(() => {
-      expect(screen.getByText('Workflow Designer')).toBeInTheDocument();
+      expect(screen.getByText('SDLC Factory')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('link', { name: 'Approvals' }));

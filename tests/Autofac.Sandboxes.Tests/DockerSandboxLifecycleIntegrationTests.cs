@@ -58,6 +58,86 @@ public sealed class DockerSandboxLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WithRestrictedNetworkPolicy_GrantsNetworkAccess()
+    {
+        if (!IsEnabled) return;
+
+        using var docker = CreateDockerClient();
+        var artifactsRoot = CreateTempArtifactsRoot();
+        try
+        {
+            var executor = CreateExecutor(docker, artifactsRoot);
+            var request = new SandboxExecutionRequest(
+                RunId: "e2e-run",
+                StepId: $"lifecycle-network-{Guid.NewGuid():N}",
+                AgentName: "agent-sandboxed-test",
+                Action: "run-agent",
+                Environment: "ci",
+                PurposeType: "verification",
+                PolicyTag: "agent-sandboxed-e2e",
+                Attempt: 1,
+                Image: "alpine:3.19",
+                Profile: new SandboxExecutionProfile(
+                    NetworkPolicy: new SandboxNetworkPolicy(SandboxNetworkAccessMode.Restricted, ["wiremock"])),
+                // /sys/class/net needs no extra tooling: it always lists "lo" (loopback) plus
+                // one non-loopback interface per network the container is attached to.
+                Command: new SandboxCommandSpec(
+                    ["sh", "-c", "mkdir -p /output && ls /sys/class/net | tee /output/interfaces.txt"]));
+
+            var result = await executor.ExecuteAsync(request, CancellationToken.None);
+
+            Assert.True(result.Succeeded, result.FailureReason);
+            var interfaces = result.Artifacts["interfaces.txt"];
+            Assert.Contains("lo", interfaces.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+            Assert.True(
+                interfaces.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Length > 1,
+                $"Expected a non-loopback network interface for a Restricted network policy. Interfaces: {interfaces}");
+        }
+        finally
+        {
+            CleanupArtifactsRoot(artifactsRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithNoneNetworkPolicy_HasNoNetworkInterface()
+    {
+        if (!IsEnabled) return;
+
+        using var docker = CreateDockerClient();
+        var artifactsRoot = CreateTempArtifactsRoot();
+        try
+        {
+            var executor = CreateExecutor(docker, artifactsRoot);
+            var request = new SandboxExecutionRequest(
+                RunId: "e2e-run",
+                StepId: $"lifecycle-no-network-{Guid.NewGuid():N}",
+                AgentName: "agent-sandboxed-test",
+                Action: "run-agent",
+                Environment: "ci",
+                PurposeType: "verification",
+                PolicyTag: "agent-sandboxed-e2e",
+                Attempt: 1,
+                Image: "alpine:3.19",
+                Profile: new SandboxExecutionProfile(
+                    NetworkPolicy: new SandboxNetworkPolicy(SandboxNetworkAccessMode.None)),
+                Command: new SandboxCommandSpec(
+                    ["sh", "-c", "mkdir -p /output && ls /sys/class/net | tee /output/interfaces.txt"]));
+
+            var result = await executor.ExecuteAsync(request, CancellationToken.None);
+
+            Assert.True(result.Succeeded, result.FailureReason);
+            var interfaces = result.Artifacts["interfaces.txt"]
+                .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(["lo"], interfaces);
+        }
+        finally
+        {
+            CleanupArtifactsRoot(artifactsRoot);
+        }
+    }
+
+    [Fact]
     public async Task ExecuteAsync_NonZeroExit_ReturnsFailureWithExitCodeAndKeepsArtifacts()
     {
         if (!IsEnabled) return;

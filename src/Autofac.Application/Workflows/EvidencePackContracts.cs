@@ -20,6 +20,8 @@ public sealed record EvidencePack(
     IReadOnlyList<EvidencePolicyDecision> PolicyDecisions,
     IReadOnlyList<EvidenceToolCall> ToolCalls,
     IReadOnlyList<EvidenceConnectorCall> ConnectorCalls,
+    IReadOnlyList<EvidenceSandboxExecution> SandboxExecutions,
+    IReadOnlyList<EvidenceModelUsage> ModelUsage,
     IReadOnlyList<EvidenceArtifact> Artifacts,
     IReadOnlyList<EvidenceAuditEntry> AuditLog,
     IReadOnlyList<EvidenceLogEntry> Logs,
@@ -103,6 +105,34 @@ public sealed record EvidenceToolCall(
     string? ErrorMessage,
     IReadOnlyList<string> ArtifactNames,
     int? DurationMs);
+
+public sealed record EvidenceSandboxExecution(
+    string StepId,
+    string StepName,
+    string? AgentName,
+    string? Action,
+    string Provider,
+    string? SandboxId,
+    string CommandState,
+    int? ExitCode,
+    int? DurationMs,
+    IReadOnlyList<EvidenceSandboxLogEntry> Logs,
+    IReadOnlyDictionary<string, string> Diagnostics);
+
+public sealed record EvidenceSandboxLogEntry(
+    string Stream,
+    string Message,
+    string Timestamp);
+
+public sealed record EvidenceModelUsage(
+    string StepId,
+    string StepName,
+    string? AgentName,
+    string? Action,
+    string? ModelId,
+    int InputTokens,
+    int OutputTokens,
+    double? ElapsedMs);
 
 public sealed record EvidenceConnectorCall(
     string AuditId,

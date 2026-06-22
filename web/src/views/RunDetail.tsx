@@ -10,6 +10,7 @@ import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { RunDiffModal } from '../components/RunDiffModal';
+import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
 import type { RunStatus, WorkflowRun } from '../types';
@@ -330,40 +331,12 @@ export function RunDetail() {
                 </ul>
               </section>
             ) : null}
-            {selectedStep.runtimeSnapshot?.sandboxExecution ? (
-              <section className="policy-box">
-                <h3>Sandbox diagnostics</h3>
-                <dl className="definition-list">
-                  <div><dt>Provider</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.provider}</dd></div>
-                  <div><dt>Sandbox ID</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.sandboxId ?? '-'}</dd></div>
-                  <div><dt>State</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.commandState}</dd></div>
-                  <div><dt>Exit code</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.exitCode ?? '-'}</dd></div>
-                  <div><dt>Duration</dt><dd>{selectedStep.runtimeSnapshot.sandboxExecution.durationMs?.toLocaleString() ?? '-'} ms</dd></div>
-                </dl>
-                {selectedStep.runtimeSnapshot.sandboxExecution.logs.length > 0 ? (
-                  <>
-                    <h3>Sandbox logs</h3>
-                    <pre className="adp-pre">
-                      {selectedStep.runtimeSnapshot.sandboxExecution.logs.map((entry) => (
-                        `[${entry.stream}] ${entry.message}`
-                      )).join('\n')}
-                    </pre>
-                  </>
-                ) : null}
-                {Object.keys(selectedStep.runtimeSnapshot.sandboxExecution.diagnostics).length > 0 ? (
-                  <>
-                    <h3>Sandbox metadata</h3>
-                    <dl className="definition-list">
-                      {Object.entries(selectedStep.runtimeSnapshot.sandboxExecution.diagnostics)
-                        .sort(([left], [right]) => left.localeCompare(right))
-                        .map(([key, value]) => (
-                          <div key={key}><dt>{key}</dt><dd>{value || '-'}</dd></div>
-                        ))}
-                    </dl>
-                  </>
-                ) : null}
-              </section>
-            ) : null}
+            <SandboxExecutionDetails
+              sandboxExecution={selectedStep.runtimeSnapshot?.sandboxExecution}
+              tokenUsage={selectedStep.runtimeSnapshot?.tokenUsage}
+              sectionClassName="policy-box"
+              headingClassName=""
+            />
           </>
         ) : (
           <p>Select a step in the timeline to inspect its inputs and outputs.</p>

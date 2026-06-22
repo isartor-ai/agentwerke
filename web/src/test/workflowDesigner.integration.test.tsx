@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { WorkflowDesigner } from '../views/WorkflowDesigner';
-import { workflowsFixture } from './fixtures';
+import { templateDetailFixture, templatesFixture, workflowsFixture } from './fixtures';
 
 // The real <BpmnModeler /> wraps bpmn-js, which needs SVG layout and cannot
 // render in jsdom. Substitute the stub that mirrors the imperative handle.
@@ -12,8 +12,11 @@ vi.mock('../api/client', () => ({
   apiClient: {
     getWorkflows: vi.fn(),
     getWorkflow: vi.fn(),
+    getAgents: vi.fn(),
+    getRuntimeMode: vi.fn(),
+    getTemplates: vi.fn(),
+    getTemplate: vi.fn(),
     importWorkflowDefinition: vi.fn(),
-    uploadBpmnWorkflow: vi.fn(),
     validateBpmnWorkflow: vi.fn(),
     publishWorkflowDefinition: vi.fn(),
     getRuns: vi.fn(),
@@ -44,6 +47,21 @@ describe('WorkflowDesigner integration', () => {
   let createObjectUrlSpy: { mockRestore: () => void };
   let revokeObjectUrlSpy: { mockRestore: () => void };
 
+  function renderDesigner() {
+    return render(
+      <MemoryRouter>
+        <WorkflowDesigner />
+      </MemoryRouter>,
+    );
+  }
+
+  async function switchToAdvancedTab() {
+    fireEvent.click(await screen.findByRole('tab', { name: 'Advanced BPMN' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('PersistedFlow');
+    });
+  }
+
   beforeEach(() => {
     vi.mocked(apiClient.getWorkflows).mockResolvedValue(workflowsFixture);
     vi.mocked(apiClient.getWorkflow).mockImplementation(async (id: string) => ({
@@ -51,6 +69,12 @@ describe('WorkflowDesigner integration', () => {
       id,
       bpmnXml: PERSISTED_XML,
     }));
+    vi.mocked(apiClient.getAgents).mockResolvedValue([]);
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
+    vi.mocked(apiClient.getTemplates).mockResolvedValue(templatesFixture);
+    vi.mocked(apiClient.getTemplate).mockImplementation(async (id: string) =>
+      id === templateDetailFixture.id ? templateDetailFixture : undefined,
+    );
     vi.mocked(apiClient.importWorkflowDefinition).mockResolvedValue({
       workflowId: 'wf-import-1',
       validation: { isValid: true, processId: 'DeployWorkflow', processName: 'Deploy Workflow', warnings: [], errors: [] },
@@ -80,18 +104,10 @@ describe('WorkflowDesigner integration', () => {
     vi.clearAllMocks();
   });
 
-  function renderDesigner() {
-    return render(
-      <MemoryRouter>
-        <WorkflowDesigner />
-      </MemoryRouter>,
-    );
-  }
-
   it('renders workflows and filters by search query', async () => {
     renderDesigner();
 
-    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
     expect(screen.getAllByText('GitHub PR Review').length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByPlaceholderText('Search workflows'), {
@@ -104,24 +120,19 @@ describe('WorkflowDesigner integration', () => {
     });
   });
 
-  it('loads persisted BPMN xml for the selected workflow into the canvas', async () => {
+  it('loads the persisted BPMN for the auto-selected workflow into the Advanced BPMN canvas', async () => {
     renderDesigner();
-
-    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(vi.mocked(apiClient.getWorkflow)).toHaveBeenCalledWith('wf-001');
-      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('PersistedFlow');
     });
+
+    await switchToAdvancedTab();
   });
 
   it('validates the current canvas and shows actionable errors', async () => {
     renderDesigner();
-
-    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('PersistedFlow');
-    });
+    await switchToAdvancedTab();
 
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
 
@@ -153,40 +164,57 @@ describe('WorkflowDesigner integration', () => {
     });
 
     renderDesigner();
-
-    expect(await screen.findByText('Templates')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
+    await switchToAdvancedTab();
 
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
 
     await waitFor(() => {
       expect(screen.getByText('Valid')).toBeInTheDocument();
-      expect(screen.getByText('Warnings:')).toBeInTheDocument();
+      expect(screen.getByText('Compatibility Warnings')).toBeInTheDocument();
       expect(screen.getByText(/human-readable 'name' attribute/i)).toBeInTheDocument();
     });
   });
 
-  it('loads a template onto the canvas', async () => {
+  it('configures a template and creates a draft workflow', async () => {
     renderDesigner();
 
-    expect(await screen.findByText('Templates')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure Production Deploy' }));
+
+    expect(await screen.findByDisplayValue('Production Deploy')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Draft' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('ProductionDeploy');
+      expect(vi.mocked(apiClient.importWorkflowDefinition)).toHaveBeenCalledWith(
+        expect.objectContaining({ fileName: 'production-deploy.bpmn' }),
+      );
+      expect(screen.getByText('Draft created from Production Deploy.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Edit in BPMN editor' })).toBeInTheDocument();
+    });
+  });
+
+  it('opens a configured template in the Advanced BPMN editor', async () => {
+    renderDesigner();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure Production Deploy' }));
+    await screen.findByDisplayValue('Production Deploy');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Advanced BPMN' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Advanced BPMN' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('ProductionDeployFlow');
     });
   });
 
   it('exports BPMN as a downloadable file', async () => {
     renderDesigner();
-
-    expect(await screen.findByText('Templates')).toBeInTheDocument();
+    await switchToAdvancedTab();
 
     const appendSpy = vi.spyOn(document.body, 'appendChild');
     const removeSpy = vi.spyOn(document.body, 'removeChild');
 
     try {
-      fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
       fireEvent.click(screen.getByRole('button', { name: 'Export BPMN' }));
 
       await waitFor(() => {
@@ -201,20 +229,19 @@ describe('WorkflowDesigner integration', () => {
     }
   });
 
-  it('publishes a template draft via import then publish', async () => {
+  it('publishes the selected workflow and offers to start a run', async () => {
     renderDesigner();
-
-    expect(await screen.findByText('Templates')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Use Template' })[0]);
+    await switchToAdvancedTab();
 
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
 
     await waitFor(() => {
-      expect(vi.mocked(apiClient.importWorkflowDefinition)).toHaveBeenCalled();
+      expect(vi.mocked(apiClient.importWorkflowDefinition)).not.toHaveBeenCalled();
       expect(vi.mocked(apiClient.publishWorkflowDefinition)).toHaveBeenCalledWith(
-        expect.objectContaining({ workflowId: 'wf-import-1' }),
+        expect.objectContaining({ workflowId: 'wf-001' }),
       );
       expect(screen.getByText(/Published as v2.3.2/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start Run' })).toBeInTheDocument();
     });
   });
 
@@ -225,9 +252,8 @@ describe('WorkflowDesigner integration', () => {
     );
 
     renderDesigner();
-    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
 
-    // Switch to Monitor tab
     fireEvent.click(screen.getByRole('tab', { name: 'Monitor' }));
 
     await waitFor(() => {
@@ -247,10 +273,9 @@ describe('WorkflowDesigner integration', () => {
     });
 
     renderDesigner();
-    expect(await screen.findByText('Workflow Designer')).toBeInTheDocument();
     // Let the initial workflow detail load settle before importing.
     await waitFor(() => {
-      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('PersistedFlow');
+      expect(vi.mocked(apiClient.getWorkflow)).toHaveBeenCalledWith('wf-001');
     });
 
     const file = new File(
