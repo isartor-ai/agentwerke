@@ -15,10 +15,13 @@ const string ResultFileName = "agent-run-result.json";
 var result = await RunAsync();
 Directory.CreateDirectory(OutputDirectory);
 var resultPath = Path.Combine(OutputDirectory, ResultFileName);
+// Encoding.UTF8 (unlike the parameterless WriteAllTextAsync overload) writes a
+// byte-order mark, which OpenSandboxedAgentRunner's JsonSerializer.Deserialize
+// of this same file rejects as invalid JSON — use the BOM-less encoding instead.
 await File.WriteAllTextAsync(
     resultPath,
     JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }),
-    Encoding.UTF8);
+    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
 if (!string.IsNullOrWhiteSpace(result.Output))
 {
