@@ -12,13 +12,16 @@ public sealed class SandboxedAgentRuntimeExecutor
 
     private readonly ILanguageModelClient _modelClient;
     private readonly IMcpToolSessionFactory _mcpToolSessionFactory;
+    private readonly IToolRegistry _toolRegistry;
 
     public SandboxedAgentRuntimeExecutor(
         ILanguageModelClient modelClient,
-        IMcpToolSessionFactory mcpToolSessionFactory)
+        IMcpToolSessionFactory mcpToolSessionFactory,
+        IToolRegistry toolRegistry)
     {
         _modelClient = modelClient;
         _mcpToolSessionFactory = mcpToolSessionFactory;
+        _toolRegistry = toolRegistry;
     }
 
     public Task<SandboxedAgentRunResult> ExecuteAsync(
@@ -46,6 +49,7 @@ public sealed class SandboxedAgentRuntimeExecutor
 
         var descriptors = BuildToolDescriptors(
             contract,
+            _toolRegistry.All(),
             mcpSession.Session?.Tools ?? [],
             envelope.SubAgents,
             envelope.RemainingSubAgentDepth);
@@ -93,7 +97,7 @@ public sealed class SandboxedAgentRuntimeExecutor
                 ToolName: call.Name,
                 Category: AgentToolCategories.Read,
                 Status: "missing",
-                call.Input,
+                Input: call.Input,
                 OutputSummary: null,
                 ErrorMessage: $"Tool '{call.Name}' is not registered in the sandboxed runtime.",
                 DurationMs: 0,
@@ -102,15 +106,16 @@ public sealed class SandboxedAgentRuntimeExecutor
             return new LanguageModelToolResult(call.Id, missingInvocation.ErrorMessage!, IsError: true);
         }
 
+        var enrichedInput = EnrichToolInput(call.Input, envelope);
         var started = Stopwatch.StartNew();
         try
         {
-            descriptor.Validate(call.Input);
+            descriptor.Validate(enrichedInput);
 
             return descriptor.Kind switch
             {
-                SandboxedToolKind.Mcp => await ExecuteMcpToolAsync(descriptor, call, envelope, invocations, artifacts, started, cancellationToken),
-                SandboxedToolKind.SubAgent => await ExecuteSubAgentToolAsync(descriptor, call, envelope, invocations, artifacts, started, cancellationToken),
+                SandboxedToolKind.Direct => await ExecuteDirectToolAsync(descriptor, call, enrichedInput, envelope, invocations, artifacts, started, cancellationToken),
+                SandboxedToolKind.SubAgent => await ExecuteSubAgentToolAsync(descriptor, call, enrichedInput, envelope, invocations, artifacts, started, cancellationToken),
                 _ => throw new InvalidOperationException($"Unsupported sandboxed tool kind '{descriptor.Kind}'.")
             };
         }
@@ -121,7 +126,7 @@ public sealed class SandboxedAgentRuntimeExecutor
                 ToolName: descriptor.Name,
                 Category: descriptor.Category,
                 Status: "invalid_input",
-                call.Input,
+                Input: enrichedInput,
                 OutputSummary: null,
                 ErrorMessage: ex.Message,
                 DurationMs: (int)started.ElapsedMilliseconds,
@@ -131,9 +136,24 @@ public sealed class SandboxedAgentRuntimeExecutor
         }
     }
 
-    private async Task<LanguageModelToolResult> ExecuteMcpToolAsync(
+    private static IReadOnlyDictionary<string, string> EnrichToolInput(
+        IReadOnlyDictionary<string, string> input,
+        SandboxedAgentRunEnvelope envelope)
+    {
+        var enriched = new Dictionary<string, string>(input, StringComparer.OrdinalIgnoreCase)
+        {
+            ["run_id"] = envelope.RunId,
+            ["step_id"] = envelope.StepId,
+            ["attempt"] = envelope.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        return enriched;
+    }
+
+    private async Task<LanguageModelToolResult> ExecuteDirectToolAsync(
         SandboxedToolDescriptor descriptor,
         LanguageModelToolCall call,
+        IReadOnlyDictionary<string, string> input,
         SandboxedAgentRunEnvelope envelope,
         List<AgentToolInvocationRecord> invocations,
         Dictionary<string, string> artifacts,
@@ -150,7 +170,7 @@ public sealed class SandboxedAgentRuntimeExecutor
                 PurposeType: envelope.PurposeType,
                 PolicyTag: envelope.PolicyTag,
                 Attempt: envelope.Attempt),
-            call.Input,
+            input,
             cancellationToken);
         started.Stop();
 
@@ -159,7 +179,7 @@ public sealed class SandboxedAgentRuntimeExecutor
             ToolName: descriptor.Name,
             Category: descriptor.Category,
             Status: result.Succeeded ? "completed" : "failed",
-            call.Input,
+            Input: input,
             OutputSummary: result.Output,
             ErrorMessage: result.FailureReason,
             DurationMs: (int)started.ElapsedMilliseconds,
@@ -175,6 +195,7 @@ public sealed class SandboxedAgentRuntimeExecutor
     private async Task<LanguageModelToolResult> ExecuteSubAgentToolAsync(
         SandboxedToolDescriptor descriptor,
         LanguageModelToolCall call,
+        IReadOnlyDictionary<string, string> input,
         SandboxedAgentRunEnvelope envelope,
         List<AgentToolInvocationRecord> invocations,
         Dictionary<string, string> artifacts,
@@ -188,7 +209,7 @@ public sealed class SandboxedAgentRuntimeExecutor
                 ToolName: descriptor.Name,
                 Category: descriptor.Category,
                 Status: "failed",
-                call.Input,
+                Input: input,
                 OutputSummary: null,
                 ErrorMessage: "Sub-agent delegation depth has been exhausted.",
                 DurationMs: (int)started.ElapsedMilliseconds,
@@ -197,7 +218,7 @@ public sealed class SandboxedAgentRuntimeExecutor
             return new LanguageModelToolResult(call.Id, depthInvocation.ErrorMessage!, IsError: true);
         }
 
-        var delegatedPrompt = BuildSubAgentPrompt(call.Input);
+        var delegatedPrompt = BuildSubAgentPrompt(input);
         var delegatedEnvelope = new SandboxedAgentRunEnvelope(
             envelope.RunId,
             envelope.StepId,
@@ -221,6 +242,7 @@ public sealed class SandboxedAgentRuntimeExecutor
                         MaxDepth = Math.Max(0, envelope.RemainingSubAgentDepth - 1)
                     }
             },
+            envelope.ResolvedTools,
             envelope.SubAgents,
             Math.Max(0, envelope.RemainingSubAgentDepth - 1));
 
@@ -232,7 +254,7 @@ public sealed class SandboxedAgentRuntimeExecutor
             ToolName: descriptor.Name,
             Category: descriptor.Category,
             Status: subResult.Succeeded ? "completed" : "failed",
-            call.Input,
+            Input: input,
             OutputSummary: subResult.Output,
             ErrorMessage: subResult.FailureReason,
             DurationMs: (int)started.ElapsedMilliseconds,
@@ -252,18 +274,29 @@ public sealed class SandboxedAgentRuntimeExecutor
 
     private static IReadOnlyDictionary<string, SandboxedToolDescriptor> BuildToolDescriptors(
         AgentRuntimeContract contract,
+        IReadOnlyList<IAgentTool> directTools,
         IReadOnlyList<IAgentTool> mcpTools,
         IReadOnlyList<SandboxedSubAgentProfile> subAgents,
         int remainingSubAgentDepth)
     {
         var descriptors = new Dictionary<string, SandboxedToolDescriptor>(StringComparer.OrdinalIgnoreCase);
 
+        foreach (var tool in directTools)
+        {
+            descriptors[tool.Name] = new SandboxedToolDescriptor(
+                tool.Name,
+                tool.Category,
+                SandboxedToolKind.Direct,
+                Tool: tool,
+                Parameters: (tool as IToolSchemaProvider)?.GetParameters() ?? []);
+        }
+
         foreach (var tool in mcpTools)
         {
             descriptors[tool.Name] = new SandboxedToolDescriptor(
                 tool.Name,
                 tool.Category,
-                SandboxedToolKind.Mcp,
+                SandboxedToolKind.Direct,
                 Tool: tool,
                 Parameters: (tool as IToolSchemaProvider)?.GetParameters() ?? []);
         }
@@ -399,7 +432,7 @@ public sealed class SandboxedAgentRuntimeExecutor
         {
             switch (Kind)
             {
-                case SandboxedToolKind.Mcp:
+                case SandboxedToolKind.Direct:
                     Tool!.Validate(input);
                     return;
                 case SandboxedToolKind.SubAgent:
@@ -415,7 +448,7 @@ public sealed class SandboxedAgentRuntimeExecutor
 
     private enum SandboxedToolKind
     {
-        Mcp,
+        Direct,
         SubAgent
     }
 

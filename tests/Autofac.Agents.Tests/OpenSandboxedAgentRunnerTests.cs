@@ -1,18 +1,19 @@
+using System.Text;
+using System.Text.Json;
 using Autofac.Agents;
 using Autofac.Agents.Models;
 using Autofac.Application.Secrets;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Microsoft.Extensions.Options;
-using System.Text;
-using System.Text.Json;
 
 namespace Autofac.Agents.Tests;
 
 public sealed class OpenSandboxedAgentRunnerTests
 {
     [Fact]
-    public async Task RunAsync_WhenProfileUsesTools_ReturnsClearUnsupportedFailure()
+    public async Task RunAsync_WhenProfileUsesUnsupportedTool_ReturnsClearUnsupportedFailure()
     {
         var runner = CreateRunner(new RecordingSandboxExecutor());
 
@@ -28,7 +29,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             CancellationToken.None);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("does not support in-sandbox tool execution yet", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not support tool(s)", result.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -62,12 +63,57 @@ public sealed class OpenSandboxedAgentRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_WhenProfileUsesSupportedGitHubTool_EmbedsResolvedToolAndGitHubConfig()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(
+            sandbox,
+            integrationOptions: new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    Enabled = true,
+                    ApiBaseUrl = "https://api.github.com/",
+                    RepositoryOwner = "isartor-ai",
+                    RepositoryName = "autofac",
+                    PersonalAccessToken = "gh-test",
+                    DefaultBaseBranch = "main",
+                    BranchPrefix = "autofac/run-",
+                    CreateDraftPullRequests = true
+                }
+            });
+
+        await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "github-agent",
+                Runner = "claude-code",
+                Tools = ["github.create_branch"]
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
+            Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(envelope);
+        var tool = Assert.Single(envelope!.ResolvedTools);
+        Assert.Equal("github.create_branch", tool.Name);
+        Assert.Equal(AgentToolCategories.Integration, tool.Category);
+        Assert.Equal("isartor-ai", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryOwner"]);
+        Assert.Equal("autofac", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+    }
+
+    [Fact]
     public async Task RunAsync_WhenSubAgentsConfigured_EmbedsResolvedProfilesInEnvelope()
     {
         var sandbox = new RecordingSandboxExecutor();
         var runner = CreateRunner(
             sandbox,
-            new FileAgentRegistry(
+            registry: new FileAgentRegistry(
             [
                 new AgentProfile
                 {
@@ -118,7 +164,7 @@ public sealed class OpenSandboxedAgentRunnerTests
     public async Task RunAsync_WhenAllowedSubAgentIsMissing_ReturnsClearFailure()
     {
         var sandbox = new RecordingSandboxExecutor();
-        var runner = CreateRunner(sandbox, new FileAgentRegistry([]));
+        var runner = CreateRunner(sandbox, registry: new FileAgentRegistry([]));
 
         var result = await runner.RunAsync(
             MakeRequest() with
@@ -147,11 +193,13 @@ public sealed class OpenSandboxedAgentRunnerTests
 
     private static OpenSandboxedAgentRunner CreateRunner(
         RecordingSandboxExecutor sandbox,
-        IAgentRegistry? registry = null) =>
+        IAgentRegistry? registry = null,
+        IntegrationOptions? integrationOptions = null) =>
         new(
             sandbox,
             new StubSecretStore(),
             registry ?? new FileAgentRegistry([]),
+            Options.Create(integrationOptions ?? new IntegrationOptions()),
             Options.Create(new LanguageModelOptions
             {
                 ApiKey = "test-key",
@@ -219,7 +267,7 @@ public sealed class OpenSandboxedAgentRunnerTests
                 FailureReason: null,
                 Artifacts: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["agent-run-result.json"] = System.Text.Json.JsonSerializer.Serialize(payload)
+                    ["agent-run-result.json"] = JsonSerializer.Serialize(payload)
                 },
                 ExitCode: 0,
                 Duration: TimeSpan.FromSeconds(1),

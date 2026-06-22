@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
+using Autofac.AgentRunner;
 using Autofac.Agents.Mcp;
 using Autofac.Agents.Models;
-using Autofac.Domain.AgentRuntime;
 using Microsoft.Extensions.Options;
 
 const string EnvelopeEnvironmentVariable = "AUTOFAC_AGENT_RUN_ENVELOPE_B64";
@@ -62,6 +62,9 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         MaxTokens = envelope.MaxTokens
     }));
 
-    var executor = new SandboxedAgentRuntimeExecutor(client, new McpToolSessionFactory(new McpClientFactory()));
+    var executor = new SandboxedAgentRuntimeExecutor(
+        client,
+        new McpToolSessionFactory(new McpClientFactory()),
+        RunnerToolFactory.CreateRegistry(envelope));
     return await executor.ExecuteAsync(envelope, CancellationToken.None);
 }

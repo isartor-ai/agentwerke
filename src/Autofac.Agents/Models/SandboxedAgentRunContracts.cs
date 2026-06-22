@@ -16,8 +16,13 @@ public sealed record SandboxedAgentRunEnvelope(
     string Model,
     int MaxTokens,
     AgentRuntimeContract Contract,
+    IReadOnlyList<SandboxedToolContract> ResolvedTools,
     IReadOnlyList<SandboxedSubAgentProfile> SubAgents,
     int RemainingSubAgentDepth);
+
+public sealed record SandboxedToolContract(
+    string Name,
+    string Category);
 
 public sealed record SandboxedSubAgentProfile(
     string AgentId,

@@ -8,6 +8,46 @@ namespace Autofac.Agents.Tests;
 public sealed class SandboxedAgentRuntimeExecutorTests
 {
     [Fact]
+    public async Task ExecuteAsync_WhenIntegrationToolIsUsed_InjectsRunContextAndReturnsInvocation()
+    {
+        var tool = new StubDirectTool("github.create_pull_request", AgentToolCategories.Integration);
+        var executor = new SandboxedAgentRuntimeExecutor(
+            new StubLanguageModelClient(request =>
+                request.Tools.Any(static t => string.Equals(t.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase))
+                    ? new ToolCallingPlan(
+                        "github.create_pull_request",
+                        new Dictionary<string, string>
+                        {
+                            ["head_branch"] = "autofac/run-1",
+                            ["title"] = "Autofac PR",
+                            ["body"] = "Body",
+                            ["commit_message"] = "Commit"
+                        },
+                        "PR ready.")
+                    : new ToolCallingPlan(null, null, "No tools.")),
+            new StubMcpToolSessionFactory(new StubMcpToolSession([])),
+            new ToolRegistry([tool]));
+
+        var result = await executor.ExecuteAsync(
+            MakeEnvelope(
+                resolvedTools:
+                [
+                    new SandboxedToolContract("github.create_pull_request", AgentToolCategories.Integration)
+                ]),
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        var invocation = Assert.Single(result.ToolInvocations!);
+        Assert.Equal("github.create_pull_request", invocation.ToolName);
+        Assert.Equal(AgentToolCategories.Integration, invocation.Category);
+        Assert.Equal("completed", invocation.Status);
+        Assert.NotNull(tool.LastInput);
+        Assert.Equal("run-1", tool.LastInput!["run_id"]);
+        Assert.Equal("step-1", tool.LastInput["step_id"]);
+        Assert.Equal("1", tool.LastInput["attempt"]);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenMcpToolIsUsed_ReturnsInvocation()
     {
         var executor = new SandboxedAgentRuntimeExecutor(
@@ -15,31 +55,17 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                 request.Tools.Any(static tool => string.Equals(tool.Name, "mcp.weather.lookup", StringComparison.OrdinalIgnoreCase))
                     ? new ToolCallingPlan("mcp.weather.lookup", new Dictionary<string, string> { ["location"] = "Berlin" }, "Forecast ready.")
                     : new ToolCallingPlan(null, null, "No tools.")),
-            new StubMcpToolSessionFactory(new StubMcpToolSession([new StubMcpTool("mcp.weather.lookup")])));
+            new StubMcpToolSessionFactory(new StubMcpToolSession([new StubMcpTool("mcp.weather.lookup")])),
+            new ToolRegistry([]));
 
         var result = await executor.ExecuteAsync(
-            new SandboxedAgentRunEnvelope(
-                RunId: "run-1",
-                StepId: "step-1",
-                AgentName: "weather-agent",
-                Action: "weather.plan",
-                Environment: "ci",
-                PurposeType: "analysis",
-                PolicyTag: "doc-generation",
-                Attempt: 1,
-                SystemPrompt: "You are a weather agent.",
-                UserPrompt: "Check the forecast.",
-                Model: "claude-sonnet-4-6",
-                MaxTokens: 1024,
-                Contract: new AgentRuntimeContract
-                {
-                    McpServers =
-                    [
-                        new AgentMcpServerContract { Name = "weather", Transport = "http", Url = "https://example.test/mcp" }
-                    ]
-                },
-                SubAgents: [],
-                RemainingSubAgentDepth: 0),
+            MakeEnvelope(contract: new AgentRuntimeContract
+            {
+                McpServers =
+                [
+                    new AgentMcpServerContract { Name = "weather", Transport = "http", Url = "https://example.test/mcp" }
+                ]
+            }),
             CancellationToken.None);
 
         Assert.True(result.Succeeded);
@@ -73,23 +99,15 @@ public sealed class SandboxedAgentRuntimeExecutorTests
 
                 return new ToolCallingPlan(null, null, "No tools.");
             }),
-            new StubMcpToolSessionFactory(new StubMcpToolSession([new StubMcpTool("mcp.weather.lookup")])));
+            new StubMcpToolSessionFactory(new StubMcpToolSession([new StubMcpTool("mcp.weather.lookup")])),
+            new ToolRegistry([]));
 
         var result = await executor.ExecuteAsync(
-            new SandboxedAgentRunEnvelope(
-                RunId: "run-1",
-                StepId: "step-1",
-                AgentName: "coordinator",
-                Action: "weather.coordinate",
-                Environment: "ci",
-                PurposeType: "analysis",
-                PolicyTag: "doc-generation",
-                Attempt: 1,
-                SystemPrompt: "You are a coordinator.",
-                UserPrompt: "Delegate the weather lookup.",
-                Model: "claude-sonnet-4-6",
-                MaxTokens: 1024,
-                Contract: new AgentRuntimeContract
+            MakeEnvelope(
+                agentName: "coordinator",
+                action: "weather.coordinate",
+                purposeType: "analysis",
+                contract: new AgentRuntimeContract
                 {
                     McpServers =
                     [
@@ -102,7 +120,7 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                         AllowedAgents = ["weather-agent"]
                     }
                 },
-                SubAgents:
+                subAgents:
                 [
                     new SandboxedSubAgentProfile(
                         "weather-agent",
@@ -111,7 +129,7 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                         "You are a weather specialist.",
                         null)
                 ],
-                RemainingSubAgentDepth: 1),
+                remainingSubAgentDepth: 1),
             CancellationToken.None);
 
         Assert.True(result.Succeeded);
@@ -123,6 +141,32 @@ public sealed class SandboxedAgentRuntimeExecutorTests
         Assert.Equal(AgentToolCategories.Mcp, result.ToolInvocations[1].Category);
         Assert.Equal("completed", result.ToolInvocations[1].Status);
     }
+
+    private static SandboxedAgentRunEnvelope MakeEnvelope(
+        string agentName = "weather-agent",
+        string action = "weather.plan",
+        string purposeType = "analysis",
+        AgentRuntimeContract? contract = null,
+        IReadOnlyList<SandboxedToolContract>? resolvedTools = null,
+        IReadOnlyList<SandboxedSubAgentProfile>? subAgents = null,
+        int remainingSubAgentDepth = 0) =>
+        new(
+            RunId: "run-1",
+            StepId: "step-1",
+            AgentName: agentName,
+            Action: action,
+            Environment: "ci",
+            PurposeType: purposeType,
+            PolicyTag: "doc-generation",
+            Attempt: 1,
+            SystemPrompt: "You are a weather agent.",
+            UserPrompt: "Check the forecast.",
+            Model: "claude-sonnet-4-6",
+            MaxTokens: 1024,
+            Contract: contract ?? new AgentRuntimeContract(),
+            ResolvedTools: resolvedTools ?? [],
+            SubAgents: subAgents ?? [],
+            RemainingSubAgentDepth: remainingSubAgentDepth);
 
     private sealed class StubLanguageModelClient : ILanguageModelClient
     {
@@ -220,5 +264,54 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                 Succeeded: true,
                 Output: $"Forecast for {input["location"]}",
                 FailureReason: null));
+    }
+
+    private sealed class StubDirectTool : IAgentTool, IToolSchemaProvider
+    {
+        public StubDirectTool(string name, string category)
+        {
+            Name = name;
+            Category = category;
+        }
+
+        public string Name { get; }
+
+        public string Category { get; }
+
+        public IReadOnlyDictionary<string, string>? LastInput { get; private set; }
+
+        public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+        [
+            new("head_branch", "string", "The source branch to merge from.", Required: true),
+            new("title", "string", "The pull request title.", Required: true),
+            new("body", "string", "The pull request description body.", Required: true),
+            new("commit_message", "string", "Commit message for evidence commits.", Required: true),
+            new("run_id", "string", "The workflow run ID (injected automatically).", Required: false),
+            new("step_id", "string", "The workflow step ID (injected automatically).", Required: false),
+            new("attempt", "string", "The execution attempt number (injected automatically).", Required: false)
+        ];
+
+        public void Validate(IReadOnlyDictionary<string, string> input)
+        {
+            foreach (var key in new[] { "head_branch", "title", "body", "commit_message", "run_id", "step_id", "attempt" })
+            {
+                if (!input.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+                {
+                    throw new InvalidOperationException($"{key} is required");
+                }
+            }
+        }
+
+        public Task<AgentToolExecutionResult> ExecuteAsync(
+            AgentToolExecutionContext context,
+            IReadOnlyDictionary<string, string> input,
+            CancellationToken cancellationToken)
+        {
+            LastInput = new Dictionary<string, string>(input, StringComparer.OrdinalIgnoreCase);
+            return Task.FromResult(new AgentToolExecutionResult(
+                Succeeded: true,
+                Output: "Created pull request.",
+                FailureReason: null));
+        }
     }
 }
