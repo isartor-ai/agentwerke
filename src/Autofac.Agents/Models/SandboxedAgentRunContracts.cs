@@ -14,14 +14,30 @@ public sealed record SandboxedAgentRunEnvelope(
     string SystemPrompt,
     string UserPrompt,
     string Model,
-    int MaxTokens);
+    int MaxTokens,
+    AgentRuntimeContract Contract,
+    IReadOnlyList<SandboxedToolContract> ResolvedTools,
+    IReadOnlyList<SandboxedSubAgentProfile> SubAgents,
+    int RemainingSubAgentDepth);
+
+public sealed record SandboxedToolContract(
+    string Name,
+    string Category);
+
+public sealed record SandboxedSubAgentProfile(
+    string AgentId,
+    string Name,
+    string Description,
+    string? SystemPrompt,
+    string? Model);
 
 public sealed record SandboxedAgentRunResult(
     bool Succeeded,
     string? Output,
     string? FailureReason,
     AgentModelTokenUsage? TokenUsage,
-    IReadOnlyDictionary<string, string>? Artifacts = null);
+    IReadOnlyDictionary<string, string>? Artifacts = null,
+    IReadOnlyList<AgentToolInvocationRecord>? ToolInvocations = null);
 
 public interface ISandboxedAgentRunner
 {

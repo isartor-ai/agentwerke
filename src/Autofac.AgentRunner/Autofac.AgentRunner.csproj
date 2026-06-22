@@ -8,8 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Autofac.AgentSecOps\Autofac.AgentSecOps.csproj" />
     <ProjectReference Include="..\Autofac.Agents\Autofac.Agents.csproj" />
+    <ProjectReference Include="..\Autofac.Application\Autofac.Application.csproj" />
     <ProjectReference Include="..\Autofac.Domain\Autofac.Domain.csproj" />
+    <ProjectReference Include="..\Autofac.Integrations\Autofac.Integrations.csproj" />
+    <ProjectReference Include="..\Autofac.Sandboxes\Autofac.Sandboxes.csproj" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
   </ItemGroup>
 

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Autofac.Application.Secrets;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Microsoft.Extensions.Options;
 
@@ -15,17 +16,20 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
+    private readonly IntegrationOptions _integrationOptions;
     private readonly LanguageModelOptions _languageModelOptions;
     private readonly SandboxOptions _sandboxOptions;
 
     public OpenSandboxedAgentRunner(
         ISandboxExecutor sandboxExecutor,
         ISecretStore secretStore,
+        IOptions<IntegrationOptions> integrationOptions,
         IOptions<LanguageModelOptions> languageModelOptions,
         IOptions<SandboxOptions> sandboxOptions)
     {
         _sandboxExecutor = sandboxExecutor;
         _secretStore = secretStore;
+        _integrationOptions = integrationOptions.Value;
         _languageModelOptions = languageModelOptions.Value;
         _sandboxOptions = sandboxOptions.Value;
     }
@@ -36,20 +40,20 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         string sandboxProfileName,
         CancellationToken cancellationToken)
     {
-        var unsupportedReason = GetUnsupportedReason(request, profile);
-        if (unsupportedReason is not null)
+        var toolResolution = ResolveTools(request, profile);
+        if (toolResolution.FailureReason is not null)
         {
             return new ModelRunResult(
                 Succeeded: false,
                 Output: null,
-                FailureReason: unsupportedReason,
+                FailureReason: toolResolution.FailureReason,
                 ToolInvocations: [],
                 Artifacts: null,
                 TokenUsage: null);
         }
 
         var effectiveProfile = BuildEffectiveSandboxProfile(sandboxProfileName, request.RunId);
-        var environmentVariables = await BuildEnvironmentVariablesAsync(profile, cancellationToken);
+        var environmentVariables = await BuildEnvironmentVariablesAsync(profile, toolResolution.Tools, cancellationToken);
         var envelope = new SandboxedAgentRunEnvelope(
             request.RunId,
             request.StepId,
@@ -62,7 +66,11 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             ModelRunPromptFactory.BuildSystemPrompt(request),
             request.PromptSnapshot.FinalPrompt,
             profile?.Model ?? _languageModelOptions.Model,
-            _languageModelOptions.MaxTokens);
+            _languageModelOptions.MaxTokens,
+            request.Contract,
+            toolResolution.Tools,
+            [],
+            0);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;
@@ -150,7 +158,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             Succeeded: sandboxResult.Succeeded && runResult.Succeeded,
             Output: runResult.Output,
             FailureReason: runResult.FailureReason ?? sandboxResult.FailureReason,
-            ToolInvocations: [],
+            ToolInvocations: runResult.ToolInvocations ?? [],
             Artifacts: artifacts.Count == 0 ? null : artifacts,
             TokenUsage: runResult.TokenUsage,
             ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
@@ -159,6 +167,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private async Task<Dictionary<string, string>> BuildEnvironmentVariablesAsync(
         AgentProfile? profile,
+        IReadOnlyList<SandboxedToolContract> resolvedTools,
         CancellationToken cancellationToken)
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -177,27 +186,93 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             }
         }
 
+        if (resolvedTools.Any(static tool =>
+                string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tool.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase)))
+        {
+            environment["Integrations__GitHub__Enabled"] = _integrationOptions.GitHub.Enabled ? "true" : "false";
+            environment["Integrations__GitHub__ApiBaseUrl"] = _integrationOptions.GitHub.ApiBaseUrl;
+            environment["Integrations__GitHub__RepositoryOwner"] = _integrationOptions.GitHub.RepositoryOwner;
+            environment["Integrations__GitHub__RepositoryName"] = _integrationOptions.GitHub.RepositoryName;
+            environment["Integrations__GitHub__DefaultBaseBranch"] = _integrationOptions.GitHub.DefaultBaseBranch;
+            environment["Integrations__GitHub__BranchPrefix"] = _integrationOptions.GitHub.BranchPrefix;
+            environment["Integrations__GitHub__CreateDraftPullRequests"] = _integrationOptions.GitHub.CreateDraftPullRequests ? "true" : "false";
+
+            var pat = await _secretStore.GetSecretAsync("Integrations:GitHub:PersonalAccessToken", cancellationToken)
+                ?? _integrationOptions.GitHub.PersonalAccessToken;
+            if (!string.IsNullOrWhiteSpace(pat))
+            {
+                environment["Integrations__GitHub__PersonalAccessToken"] = pat;
+            }
+        }
+
         return environment;
     }
 
-    private static string? GetUnsupportedReason(ModelRunRequest request, AgentProfile? profile)
+    private static ToolResolution ResolveTools(ModelRunRequest request, AgentProfile? profile)
     {
-        if ((profile?.Tools.Count ?? 0) > 0 || request.Contract.Tools.Count > 0)
-        {
-            return "Sandboxed agent runtime does not support in-sandbox tool execution yet. Use local/tool_sandboxed execution for tool-enabled agents.";
-        }
-
         if (request.Contract.McpServers.Count > 0)
         {
-            return "Sandboxed agent runtime does not support MCP servers yet.";
+            return new ToolResolution([], "Sandboxed agent runtime does not support MCP servers yet.");
         }
 
         if (request.Contract.SubAgents?.Enabled == true)
         {
-            return "Sandboxed agent runtime does not support sub-agents yet.";
+            return new ToolResolution([], "Sandboxed agent runtime does not support sub-agents yet.");
         }
 
-        return null;
+        var requestedToolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tool in profile?.Tools ?? [])
+        {
+            requestedToolNames.Add(CanonicalizeToolName(tool));
+        }
+
+        foreach (var tool in request.Contract.Tools)
+        {
+            requestedToolNames.Add(CanonicalizeToolName(tool.Name));
+        }
+
+        foreach (var tool in request.Contract.Permissions.AllowedTools)
+        {
+            requestedToolNames.Add(CanonicalizeToolName(tool));
+        }
+
+        var deniedToolNames = new HashSet<string>(request.Contract.Permissions.DeniedTools, StringComparer.OrdinalIgnoreCase);
+        foreach (var tool in profile?.DeniedTools ?? [])
+        {
+            deniedToolNames.Add(CanonicalizeToolName(tool));
+        }
+
+        var resolvedTools = new List<SandboxedToolContract>();
+        var unsupported = new List<string>();
+        foreach (var toolName in requestedToolNames)
+        {
+            if (deniedToolNames.Contains(toolName))
+            {
+                continue;
+            }
+
+            if (!TryResolveSupportedTool(toolName, out var tool))
+            {
+                unsupported.Add(toolName);
+                continue;
+            }
+
+            resolvedTools.Add(tool!);
+        }
+
+        if (unsupported.Count > 0)
+        {
+            return new ToolResolution(
+                [],
+                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.create_branch, github.create_pull_request.");
+        }
+
+        return new ToolResolution(
+            resolvedTools
+                .OrderBy(static tool => tool.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            null);
     }
 
     private static SandboxExecutionProfile BuildEffectiveSandboxProfile(string sandboxProfileName, string runId)
@@ -248,4 +323,25 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 .ToArray(),
             Diagnostics = result.ProviderDiagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
+
+    private static string CanonicalizeToolName(string toolName) =>
+        string.Equals(toolName, "github.create_pr", StringComparison.OrdinalIgnoreCase)
+            ? "github.create_pull_request"
+            : toolName;
+
+    private static bool TryResolveSupportedTool(string toolName, out SandboxedToolContract? tool)
+    {
+        tool = toolName switch
+        {
+            "github.create_branch" => new SandboxedToolContract("github.create_branch", AgentToolCategories.Integration),
+            "github.create_pull_request" => new SandboxedToolContract("github.create_pull_request", AgentToolCategories.Integration),
+            _ => null
+        };
+
+        return tool is not null;
+    }
+
+    private sealed record ToolResolution(
+        IReadOnlyList<SandboxedToolContract> Tools,
+        string? FailureReason);
 }

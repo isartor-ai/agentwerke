@@ -1,15 +1,18 @@
 using Autofac.Agents.Models;
 using Autofac.Application.Secrets;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Microsoft.Extensions.Options;
+using System.Text;
+using System.Text.Json;
 
 namespace Autofac.Agents.Tests;
 
 public sealed class OpenSandboxedAgentRunnerTests
 {
     [Fact]
-    public async Task RunAsync_WhenProfileUsesTools_ReturnsClearUnsupportedFailure()
+    public async Task RunAsync_WhenProfileUsesUnsupportedTool_ReturnsClearUnsupportedFailure()
     {
         var runner = CreateRunner(new RecordingSandboxExecutor());
 
@@ -25,7 +28,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             CancellationToken.None);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("does not support in-sandbox tool execution yet", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not support tool(s)", result.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -54,12 +57,62 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.Equal("dotnet", sandbox.LastRequest.Command!.Arguments[0]);
         Assert.NotNull(result.SandboxExecution);
         Assert.Equal("opensandbox", result.SandboxExecution!.Provider);
+        Assert.Single(result.ToolInvocations);
+        Assert.Equal("github.create_branch", result.ToolInvocations[0].ToolName);
     }
 
-    private static OpenSandboxedAgentRunner CreateRunner(RecordingSandboxExecutor sandbox) =>
+    [Fact]
+    public async Task RunAsync_WhenProfileUsesSupportedGitHubTool_EmbedsResolvedToolAndGitHubConfig()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(
+            sandbox,
+            integrationOptions: new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    Enabled = true,
+                    ApiBaseUrl = "https://api.github.com/",
+                    RepositoryOwner = "isartor-ai",
+                    RepositoryName = "autofac",
+                    PersonalAccessToken = "gh-test",
+                    DefaultBaseBranch = "main",
+                    BranchPrefix = "autofac/run-",
+                    CreateDraftPullRequests = true
+                }
+            });
+
+        await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "github-agent",
+                Runner = "claude-code",
+                Tools = ["github.create_branch"]
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
+            Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(envelope);
+        var tool = Assert.Single(envelope!.ResolvedTools);
+        Assert.Equal("github.create_branch", tool.Name);
+        Assert.Equal(AgentToolCategories.Integration, tool.Category);
+        Assert.Equal("isartor-ai", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryOwner"]);
+        Assert.Equal("autofac", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+    }
+
+    private static OpenSandboxedAgentRunner CreateRunner(
+        RecordingSandboxExecutor sandbox,
+        IntegrationOptions? integrationOptions = null) =>
         new(
             sandbox,
             new StubSecretStore(),
+            Options.Create(integrationOptions ?? new IntegrationOptions()),
             Options.Create(new LanguageModelOptions
             {
                 ApiKey = "test-key",
@@ -110,7 +163,16 @@ public sealed class OpenSandboxedAgentRunnerTests
                 Succeeded: true,
                 Output: "sandboxed spec",
                 FailureReason: null,
-                TokenUsage: new AgentModelTokenUsage(11, 29, "claude-sonnet-4-6"));
+                TokenUsage: new AgentModelTokenUsage(11, 29, "claude-sonnet-4-6"),
+                ToolInvocations:
+                [
+                    new AgentToolInvocationRecord
+                    {
+                        ToolName = "github.create_branch",
+                        Category = AgentToolCategories.Integration,
+                        Status = "completed"
+                    }
+                ]);
 
             return Task.FromResult(new SandboxExecutionResult(
                 Succeeded: true,

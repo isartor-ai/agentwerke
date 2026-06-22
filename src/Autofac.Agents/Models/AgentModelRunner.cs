@@ -94,6 +94,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
     {
         var contract = request.Contract;
         var permissions = contract.Permissions;
+        var enrichedInput = EnrichToolInput(call.Input, request);
 
         var gatewayRequest = new ToolGatewayRequest(
             ToolName: call.Name,
@@ -109,7 +110,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
             PermissionLevel: permissions.Level,
             AllowedTools: permissions.AllowedTools,
             DeniedTools: permissions.DeniedTools,
-            Input: call.Input);
+            Input: enrichedInput);
 
         var result = await _toolGateway.ExecuteAsync(gatewayRequest, cancellationToken);
 
@@ -133,6 +134,20 @@ public sealed class AgentModelRunner : IAgentModelRunner
             ToolCallId: call.Id,
             Content: result.Output ?? result.FailureReason ?? $"Tool '{call.Name}' completed.",
             IsError: !result.Succeeded);
+    }
+
+    private static IReadOnlyDictionary<string, string> EnrichToolInput(
+        IReadOnlyDictionary<string, string> input,
+        ModelRunRequest request)
+    {
+        var enriched = new Dictionary<string, string>(input, StringComparer.OrdinalIgnoreCase)
+        {
+            ["run_id"] = request.RunId,
+            ["step_id"] = request.StepId,
+            ["attempt"] = request.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        return enriched;
     }
 
     private IReadOnlyList<LanguageModelToolDefinition> BuildToolDefinitions(AgentRuntimeContract contract)

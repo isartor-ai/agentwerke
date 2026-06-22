@@ -1,6 +1,10 @@
 using System.Text;
 using System.Text.Json;
+using Autofac.AgentRunner;
+using Autofac.AgentSecOps;
+using Autofac.Agents.Tools;
 using Autofac.Agents.Models;
+using Autofac.Sandboxes;
 using Autofac.Domain.AgentRuntime;
 using Microsoft.Extensions.Options;
 
@@ -61,41 +65,34 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         MaxTokens = envelope.MaxTokens
     }));
 
-    var response = await client.RunAsync(
-        new LanguageModelRequest(
-            SystemPrompt: envelope.SystemPrompt,
-            UserPrompt: envelope.UserPrompt,
-            Tools: [],
-            MaxTokens: envelope.MaxTokens),
-        static (_, _) => Task.FromResult(new LanguageModelToolResult("unsupported", "Tool execution is not supported in the sandboxed runner yet.", true)),
-        CancellationToken.None);
+    var toolRegistry = RunnerToolFactory.CreateRegistry(envelope);
+    var toolGateway = new ToolGateway(toolRegistry, new PolicyEvaluationService(), new SandboxProfileSelector());
+    var modelRunner = new AgentModelRunner(
+        client,
+        toolGateway,
+        toolRegistry,
+        new RunnerWorkflowMetrics(),
+        Options.Create(new LanguageModelOptions
+        {
+            ApiKey = apiKey,
+            Model = envelope.Model,
+            MaxTokens = envelope.MaxTokens
+        }));
 
-    if (!response.Succeeded)
-    {
-        return new SandboxedAgentRunResult(
-            false,
-            null,
-            response.FailureReason,
-            ToTokenUsage(response));
-    }
-
-    return new SandboxedAgentRunResult(
-        true,
-        response.Output,
-        null,
-        ToTokenUsage(response));
+    var executor = new SandboxedAgentRuntimeExecutor(modelRunner);
+    return await executor.ExecuteAsync(envelope, CancellationToken.None);
 }
 
-static AgentModelTokenUsage? ToTokenUsage(LanguageModelResponse response)
+file sealed class RunnerWorkflowMetrics : Autofac.Application.Observability.IWorkflowMetrics
 {
-    if (response.Usage.InputTokens == 0 && response.Usage.OutputTokens == 0)
-    {
-        return null;
-    }
-
-    return new AgentModelTokenUsage(
-        response.Usage.InputTokens,
-        response.Usage.OutputTokens,
-        response.ModelId,
-        null);
+    public void RunStarted(string workflowId, string workflowName) { }
+    public void RunCompleted(string workflowId, string workflowName, double durationMs) { }
+    public void RunFailed(string workflowId, string workflowName, string reason) { }
+    public void StepCompleted(string stepType, string agentName, double durationMs, bool succeeded) { }
+    public void ApprovalCreated(string riskLevel) { }
+    public void ApprovalDecided(string decision, string riskLevel) { }
+    public void WebhookReceived(string source, bool triggered) { }
+    public void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded) { }
+    public void ModelInvoked(string agentName, string modelId, int inputTokens, int outputTokens, double latencyMs, double costUsd, bool succeeded) { }
+    public void ToolPolicyDenied(string agentName, string policyTag, string kind) { }
 }

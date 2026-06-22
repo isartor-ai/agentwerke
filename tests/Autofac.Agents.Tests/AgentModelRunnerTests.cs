@@ -58,13 +58,17 @@ public sealed class AgentModelRunnerTests
     private sealed class StubToolGateway : IToolGateway
     {
         private readonly ToolGatewayResult _result;
+        public ToolGatewayRequest? LastRequest { get; private set; }
 
         public StubToolGateway(ToolGatewayResult result) => _result = result;
 
         public Task<ToolGatewayResult> ExecuteAsync(
             ToolGatewayRequest request,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(_result);
+            CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(_result);
+        }
     }
 
     private sealed class StubToolRegistry : IToolRegistry
@@ -212,6 +216,34 @@ public sealed class AgentModelRunnerTests
         Assert.Equal("reject", denial.Kind);
 
         // Tool invocation appears in the result
+    }
+
+    [Fact]
+    public async Task RunAsync_ToolCallInjectsRunContextIntoGatewayInput()
+    {
+        var metrics = new CapturingMetrics();
+        var gateway = new StubToolGateway(new ToolGatewayResult(
+            Succeeded: true,
+            Output: "created",
+            FailureReason: null,
+            PolicyDecision: null,
+            Invocation: new AgentToolInvocationRecord
+            {
+                ToolName = "github.create_pull_request",
+                Status = "completed"
+            }));
+
+        var runner = BuildRunner(
+            new StubToolCallingClient("github.create_pull_request", SuccessResponse()),
+            gateway,
+            metrics);
+
+        await runner.RunAsync(MakeRequest(), CancellationToken.None);
+
+        Assert.NotNull(gateway.LastRequest);
+        Assert.Equal("run-1", gateway.LastRequest!.Input["run_id"]);
+        Assert.Equal("step-1", gateway.LastRequest.Input["step_id"]);
+        Assert.Equal("1", gateway.LastRequest.Input["attempt"]);
     }
 
     // -----------------------------------------------------------------------
