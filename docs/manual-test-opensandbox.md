@@ -169,7 +169,17 @@ The combination of the last two bugs is why `agent_sandboxed` looked broken agai
 
 #### Validating against the pilot OpenSandbox stack
 
-The pilot stack (`docker/docker-compose.pilot-opensandbox.yml`, see Part A above) bootstraps a second workflow, "OpenSandbox Agent Execution (agent_sandboxed)", alongside the existing `sandbox.execute` one, using `Sandboxes:Provider=opensandbox` (the real server, not the local Docker fallback). Starting a run on it (from the UI or via `POST /api/runs`) now correctly exercises the full path through a real OpenSandbox server. The pilot stack's `Anthropic__ApiKey` is a placeholder, so a run against it fails with a clean, specific error — `"LLM call failed: Anthropic rejected your authorization... invalid x-api-key"` — surfaced directly from `agent-run-result.json`, with `runtimeSnapshot.tokenUsage` populated from the (rejected) call's usage. Set `Anthropic__ApiKey` to a real key in `docker-compose.pilot-opensandbox.yml` to see it succeed end to end.
+The pilot stack (`docker/docker-compose.pilot-opensandbox.yml`, see Part A above) bootstraps a second workflow, "OpenSandbox Agent Execution (agent_sandboxed)", alongside the existing `sandbox.execute` one, using `Sandboxes:Provider=opensandbox` (the real server, not the local Docker fallback). Starting a run on it (from the UI or via `POST /api/runs`) now correctly exercises the full path through a real OpenSandbox server.
+
+Without a real Anthropic API key, a run fails with a clean, specific error — `"LLM call failed: Anthropic rejected your authorization... invalid x-api-key"` — surfaced directly from `agent-run-result.json`, with `runtimeSnapshot.tokenUsage` populated from the (rejected) call's usage. To see it succeed end to end, set `ANTHROPIC__APIKEY` in `docker/.env.pilot.local` (same file and variable name `docker-compose.pilot.yml`'s Scenario D uses) and pass `--env-file` when starting the stack:
+
+```bash
+docker compose -f docker/docker-compose.pilot-opensandbox.yml \
+  --env-file docker/.env.pilot.local \
+  up --build
+```
+
+This only takes effect on a freshly created `api` container — if it's already running from a prior `up` without `--env-file`, recreate it (`docker compose -f docker/docker-compose.pilot-opensandbox.yml --env-file docker/.env.pilot.local up -d --force-recreate api`) rather than expecting the existing container to pick up the new value.
 
 ## Part B — Production: OpenSandbox in Kubernetes mode with a secure runtime
 
