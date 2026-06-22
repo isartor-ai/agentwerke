@@ -2,6 +2,8 @@ using Autofac.Integrations;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Sandboxes;
 using Autofac.Workflows.Runtime;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Autofac.Agents.Tools;
 
@@ -178,6 +180,218 @@ public sealed class GitHubCreatePullRequestTool : IAgentTool, IToolSchemaProvide
 
     private static string? ReadOptional(IReadOnlyDictionary<string, string> input, string key) =>
         input.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+}
+
+public sealed class GitHubReadIssueTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IGitHubConnector _connector;
+
+    public GitHubReadIssueTool(IGitHubConnector connector)
+    {
+        _connector = connector;
+    }
+
+    public string Name => "github.read_issue";
+
+    public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("issue_number", "string", "The GitHub issue number to load.", Required: true)
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input)
+    {
+        GitHubToolInput.Require(input, "issue_number");
+    }
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var issue = await _connector.GetIssueAsync(GitHubToolInput.ParseInt(input, "issue_number"), cancellationToken);
+        return new AgentToolExecutionResult(
+            Succeeded: true,
+            Output: JsonSerializer.Serialize(new
+            {
+                provider = "github",
+                action = "read_issue",
+                status = "completed",
+                issue_number = issue.Number,
+                title = issue.Title,
+                body = issue.Body,
+                labels = issue.Labels,
+                state = issue.State,
+                url = issue.IssueUrl,
+                comments = issue.Comments
+            }),
+            FailureReason: null,
+            ExternalActions:
+            [
+                new ExternalActionRecord(
+                    Provider: "github",
+                    Action: "read_issue",
+                    Status: "completed",
+                    ResourceId: issue.Number.ToString(CultureInfo.InvariantCulture),
+                    ResourceUrl: issue.IssueUrl,
+                    Summary: $"GitHub issue #{issue.Number}")
+            ]);
+    }
+}
+
+public sealed class GitHubRequestReviewTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IGitHubConnector _connector;
+
+    public GitHubRequestReviewTool(IGitHubConnector connector)
+    {
+        _connector = connector;
+    }
+
+    public string Name => "github.request_review";
+
+    public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("pull_number", "string", "The GitHub pull request number.", Required: true),
+        new("reviewers", "string", "Comma-separated GitHub usernames to request review from.", Required: true)
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input)
+    {
+        GitHubToolInput.Require(input, "pull_number");
+        GitHubToolInput.Require(input, "reviewers");
+    }
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var result = await _connector.RequestReviewersAsync(
+            new RequestGitHubReviewersCommand(
+                GitHubToolInput.ParseInt(input, "pull_number"),
+                GitHubToolInput.SplitCsv(input["reviewers"])),
+            cancellationToken);
+
+        return new AgentToolExecutionResult(
+            Succeeded: true,
+            Output: JsonSerializer.Serialize(new
+            {
+                provider = "github",
+                action = "request_review",
+                status = "completed",
+                pull_number = result.PullNumber,
+                reviewers = result.RequestedReviewers,
+                url = result.PullRequestUrl
+            }),
+            FailureReason: null,
+            ExternalActions:
+            [
+                new ExternalActionRecord(
+                    Provider: "github",
+                    Action: "request_review",
+                    Status: "completed",
+                    ResourceId: result.PullNumber.ToString(CultureInfo.InvariantCulture),
+                    ResourceUrl: result.PullRequestUrl,
+                    Summary: $"Requested GitHub reviewer(s) for pull request #{result.PullNumber}")
+            ]);
+    }
+}
+
+public sealed class GitHubPostReviewTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IGitHubConnector _connector;
+
+    public GitHubPostReviewTool(IGitHubConnector connector)
+    {
+        _connector = connector;
+    }
+
+    public string Name => "github.post_review";
+
+    public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("pull_number", "string", "The GitHub pull request number.", Required: true),
+        new("body", "string", "The review body to post.", Required: true),
+        new("event", "string", "The GitHub review event. Defaults to COMMENT.", Required: false)
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input)
+    {
+        GitHubToolInput.Require(input, "pull_number");
+        GitHubToolInput.Require(input, "body");
+    }
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var result = await _connector.PostReviewAsync(
+            new PostGitHubReviewCommand(
+                GitHubToolInput.ParseInt(input, "pull_number"),
+                input["body"],
+                GitHubToolInput.ReadOptional(input, "event") ?? "COMMENT"),
+            cancellationToken);
+
+        return new AgentToolExecutionResult(
+            Succeeded: true,
+            Output: JsonSerializer.Serialize(new
+            {
+                provider = "github",
+                action = "post_review",
+                status = "completed",
+                pull_number = result.PullNumber,
+                review_id = result.ReviewId,
+                @event = result.Event,
+                state = result.State,
+                url = result.ReviewUrl
+            }),
+            FailureReason: null,
+            ExternalActions:
+            [
+                new ExternalActionRecord(
+                    Provider: "github",
+                    Action: "post_review",
+                    Status: "completed",
+                    ResourceId: result.ReviewId.ToString(CultureInfo.InvariantCulture),
+                    ResourceUrl: result.ReviewUrl,
+                    Summary: $"Posted GitHub review on pull request #{result.PullNumber}")
+            ]);
+    }
+}
+
+internal static class GitHubToolInput
+{
+    public static void Require(IReadOnlyDictionary<string, string> input, string key)
+    {
+        if (!input.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException($"Tool input is missing required field '{key}'.");
+        }
+    }
+
+    public static string? ReadOptional(IReadOnlyDictionary<string, string> input, string key) =>
+        input.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    public static int ParseInt(IReadOnlyDictionary<string, string> input, string key)
+    {
+        Require(input, key);
+        return int.TryParse(input[key], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw new InvalidOperationException($"Tool input field '{key}' must be an integer.");
+    }
+
+    public static IReadOnlyList<string> SplitCsv(string value) =>
+        value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 }
 
 public sealed class SandboxExecutionTool : IAgentTool
