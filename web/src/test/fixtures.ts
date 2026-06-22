@@ -215,6 +215,25 @@ export const approvalsFixture: ApprovalRequest[] = [
   },
 ];
 
+export const artifactApprovalFixture: ApprovalRequest = {
+  id: 'apr-2001',
+  runId: 'run-0430',
+  workflowName: 'Requirement Design',
+  actionRequested: 'requirement-design',
+  requester: 'bob@example.com',
+  agentName: 'business-analyst',
+  policyRationale: 'Doc-generation gate.',
+  riskScore: 18,
+  riskLevel: 'low',
+  riskFactors: [],
+  affectedSystems: [],
+  slaDeadline: new Date(Date.now() + 120 * 60_000).toISOString(),
+  createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+  status: 'pending',
+  priority: 'normal',
+  artifactName: 'requirements.md',
+};
+
 export const templatesFixture: TemplateSummary[] = [
   {
     id: 'tmpl-prod-deploy',

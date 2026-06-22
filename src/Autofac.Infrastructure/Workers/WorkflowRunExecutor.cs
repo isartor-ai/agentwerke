@@ -195,6 +195,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
             RiskScore = info.RiskScore,
             RiskFactors = info.RiskFactors?.ToList() ?? [],
             AffectedSystems = info.AffectedSystems?.ToList() ?? [],
+            ArtifactName = info.ArtifactName,
             Status = "pending",
             CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
         };

@@ -271,6 +271,7 @@ export interface ApprovalRequest {
   decisionComment?: string;
   decidedBy?: string;
   decidedAt?: string;
+  artifactName?: string;
 }
 
 export interface AgentSummary {

@@ -131,6 +131,7 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Requester).HasMaxLength(128).IsRequired();
             entity.Property(e => e.AgentName).HasMaxLength(128);
             entity.Property(e => e.PolicyRationale).HasMaxLength(2048);
+            entity.Property(e => e.ArtifactName).HasMaxLength(512);
             entity.Property(e => e.RiskLevel).HasMaxLength(64);
             entity.Property(e => e.RiskFactors)
                 .HasConversion(

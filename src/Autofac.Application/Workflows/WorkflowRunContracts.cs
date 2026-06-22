@@ -46,7 +46,9 @@ public sealed record WaitingApprovalInfo(
     string RiskLevel = "low",
     int RiskScore = 0,
     IReadOnlyList<string>? RiskFactors = null,
-    IReadOnlyList<string>? AffectedSystems = null);
+    IReadOnlyList<string>? AffectedSystems = null,
+    /// <summary>Artifact the preceding service task produced, for the approval card to render (#134).</summary>
+    string? ArtifactName = null);
 
 // ── Primary service interface ─────────────────────────────────────────────────
 

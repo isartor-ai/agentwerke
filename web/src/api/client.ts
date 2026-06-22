@@ -64,6 +64,20 @@ export const apiClient = {
     return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactName)}`;
   },
 
+  async getRunArtifactContent(runId: string, artifactName: string): Promise<string> {
+    const response = await fetch(this.getRunArtifactDownloadUrl(runId, artifactName), {
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const errorMessage = extractErrorMessage(errorText) ?? `Artifact fetch failed: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    return response.text();
+  },
+
   getRunEvidencePackDownloadUrl(runId: string): string {
     return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/evidence-pack/download`;
   },

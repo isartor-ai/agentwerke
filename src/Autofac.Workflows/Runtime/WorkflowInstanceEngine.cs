@@ -159,10 +159,13 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
         if (string.Equals(checkpoint.Status, WaitingUserStatus, StringComparison.Ordinal))
         {
+            var artifactName = checkpoint.WaitingOnNodeId is null
+                ? null
+                : await FindWaitingApprovalArtifactNameAsync(request.RunId, request.Definition, checkpoint.WaitingOnNodeId, cancellationToken);
             return new WorkflowExecutionState(
                 RunId: request.RunId, Status: WaitingUserStatus,
                 NextNodeId: checkpoint.NextNodeId, WaitingOnNodeId: checkpoint.WaitingOnNodeId,
-                CompletedAt: null);
+                CompletedAt: null, WaitingApprovalArtifactName: artifactName);
         }
 
         if (string.Equals(checkpoint.Status, WaitingTimerStatus, StringComparison.Ordinal))
@@ -237,7 +240,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         }), cancellationToken);
                     await _store.UpdateRunStatusAsync(runId, WaitingUserStatus, completedAt: null, cancellationToken);
                     await SaveCheckpointAsync(runId, WaitingUserStatus, nextAfterUser, node.Id, null, cancellationToken);
-                    return new WorkflowExecutionState(runId, WaitingUserStatus, nextAfterUser, node.Id, null);
+                    var artifactName = await FindWaitingApprovalArtifactNameAsync(runId, definition, node.Id, cancellationToken);
+                    return new WorkflowExecutionState(runId, WaitingUserStatus, nextAfterUser, node.Id, null, WaitingApprovalArtifactName: artifactName);
 
                 case "exclusiveGateway":
                     await _store.AppendEventAsync(runId, "gateway_evaluated",
@@ -665,6 +669,27 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         await _store.AppendEventAsync(runId, "node_completed",
             Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName }),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds the artifact the nearest preceding service task produced, so a userTask
+    /// approval gate can carry it forward for the approval card to render (#134).
+    /// </summary>
+    private async Task<string?> FindWaitingApprovalArtifactNameAsync(
+        string runId,
+        BpmnWorkflowDefinition definition,
+        string waitingOnNodeId,
+        CancellationToken cancellationToken)
+    {
+        var precedingNode = definition.FindPrecedingServiceTaskNode(waitingOnNodeId);
+        if (precedingNode is null)
+        {
+            return null;
+        }
+
+        var run = await _store.GetRunAsync(runId, cancellationToken);
+        var precedingStep = run?.Steps.FirstOrDefault(s => s.RuntimeSnapshot?.NodeId == precedingNode.Id);
+        return precedingStep?.RuntimeSnapshot?.Artifacts.FirstOrDefault()?.Name;
     }
 
     // ── Static helpers ────────────────────────────────────────────────────────

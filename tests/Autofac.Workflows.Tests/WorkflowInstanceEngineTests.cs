@@ -23,6 +23,7 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal("waiting_user", state.Status);
         Assert.Equal("HumanApproval", state.WaitingOnNodeId);
         Assert.Equal("Finalize", state.NextNodeId);
+        Assert.Null(state.WaitingApprovalArtifactName);
 
         var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
         Assert.Contains(events, static e => e.Type == "checkpoint_saved" && e.Message.Contains("\"status\":\"running\"", StringComparison.Ordinal));
@@ -83,6 +84,35 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal("waiting_user", recovered.Status);
         Assert.Equal("HumanApproval", recovered.WaitingOnNodeId);
         Assert.Equal("Finalize", recovered.NextNodeId);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenPrecedingServiceTaskProducedArtifact_CarriesArtifactNameToWaitingUserState()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new ArtifactProducingServiceTaskExecutor("requirements.md"), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), CreateReferenceDefinition(), "system", CancellationToken.None);
+
+        Assert.Equal("waiting_user", state.Status);
+        Assert.Equal("HumanApproval", state.WaitingOnNodeId);
+        Assert.Equal("requirements.md", state.WaitingApprovalArtifactName);
+    }
+
+    [Fact]
+    public async Task RecoverAsync_WhenRestartOccursAtUserTask_AlsoRestoresArtifactName()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var definition = CreateReferenceDefinition();
+
+        var engine1 = new WorkflowInstanceEngine(store, new ArtifactProducingServiceTaskExecutor("architecture.md"), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var started = await engine1.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        var engine2 = new WorkflowInstanceEngine(store, new ArtifactProducingServiceTaskExecutor("architecture.md"), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
+        var recovered = await engine2.RecoverAsync(started.RunId, definition, CancellationToken.None);
+
+        Assert.Equal("waiting_user", recovered.Status);
+        Assert.Equal("architecture.md", recovered.WaitingApprovalArtifactName);
     }
 
     [Fact]
@@ -465,6 +495,28 @@ public sealed class WorkflowInstanceEngineTests
                 Succeeded: false,
                 Output: null,
                 FailureReason: "This executor always fails."));
+        }
+    }
+
+    private sealed class ArtifactProducingServiceTaskExecutor(string artifactName) : IServiceTaskExecutor
+    {
+        public Task<AgentTaskOutcome> ExecuteAsync(
+            string runId, string stepId, BpmnNodeDefinition node,
+            int attempt, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: true,
+                Output: "artifact-producing executor",
+                FailureReason: null,
+                RuntimeSnapshot: new AgentRuntimeSnapshot
+                {
+                    RunId = runId,
+                    StepId = stepId,
+                    NodeId = node.Id,
+                    AgentName = node.Metadata?.Agent,
+                    Action = node.Metadata?.Action,
+                    Artifacts = [new AgentArtifactRecord { Name = artifactName }]
+                }));
         }
     }
 
