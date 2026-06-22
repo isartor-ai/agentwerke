@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Autofac.Agents.Mcp;
 using Autofac.Agents.Models;
 using Autofac.Domain.AgentRuntime;
 using Microsoft.Extensions.Options;
@@ -61,41 +62,6 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         MaxTokens = envelope.MaxTokens
     }));
 
-    var response = await client.RunAsync(
-        new LanguageModelRequest(
-            SystemPrompt: envelope.SystemPrompt,
-            UserPrompt: envelope.UserPrompt,
-            Tools: [],
-            MaxTokens: envelope.MaxTokens),
-        static (_, _) => Task.FromResult(new LanguageModelToolResult("unsupported", "Tool execution is not supported in the sandboxed runner yet.", true)),
-        CancellationToken.None);
-
-    if (!response.Succeeded)
-    {
-        return new SandboxedAgentRunResult(
-            false,
-            null,
-            response.FailureReason,
-            ToTokenUsage(response));
-    }
-
-    return new SandboxedAgentRunResult(
-        true,
-        response.Output,
-        null,
-        ToTokenUsage(response));
-}
-
-static AgentModelTokenUsage? ToTokenUsage(LanguageModelResponse response)
-{
-    if (response.Usage.InputTokens == 0 && response.Usage.OutputTokens == 0)
-    {
-        return null;
-    }
-
-    return new AgentModelTokenUsage(
-        response.Usage.InputTokens,
-        response.Usage.OutputTokens,
-        response.ModelId,
-        null);
+    var executor = new SandboxedAgentRuntimeExecutor(client, new McpToolSessionFactory(new McpClientFactory()));
+    return await executor.ExecuteAsync(envelope, CancellationToken.None);
 }
