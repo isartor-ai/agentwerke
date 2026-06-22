@@ -31,6 +31,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<RunContextEntry> RunContextEntries => Set<RunContextEntry>();
 
+    public DbSet<ExternalWorkflowEvent> ExternalWorkflowEvents => Set<ExternalWorkflowEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("autofac");
@@ -174,6 +176,18 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.HasIndex(e => new { e.RunId, e.Key })
                 .IsUnique()
                 .HasDatabaseName("ix_workflow_run_context_run_key");
+        });
+
+        modelBuilder.Entity<ExternalWorkflowEvent>(entity =>
+        {
+            entity.ToTable("external_workflow_events");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Kind).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.CorrelationHint).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Payload).HasColumnType("text").IsRequired();
+            entity.Property(e => e.ReceivedAt).HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => e.CorrelationHint)
+                .HasDatabaseName("ix_external_workflow_events_correlation_hint");
         });
 
         modelBuilder.Entity<AuditRecord>(entity =>

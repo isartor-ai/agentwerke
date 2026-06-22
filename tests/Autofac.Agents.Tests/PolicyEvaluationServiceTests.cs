@@ -1281,6 +1281,12 @@ public sealed class PolicyEvaluationServiceTests
             CreatePullRequestCalls++;
             return Task.FromResult(new GitHubPullRequestResult(42, "https://example.test/pr/42", command.HeadBranch, "main", "sha", ".autofac/test.md", false));
         }
+
+        public Task<GitHubPullRequestStatusResult> GetPullRequestAsync(int pullNumber, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<GitHubCheckStatusResult> GetCheckStatusAsync(string @ref, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubSandboxExecutor : ISandboxExecutor

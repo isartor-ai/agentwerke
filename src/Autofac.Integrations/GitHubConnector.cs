@@ -19,6 +19,16 @@ public interface IGitHubConnector
     Task<GitHubPullRequestResult> CreatePullRequestAsync(
         CreateGitHubPullRequestCommand command,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Reads a pull request's current state — used to detect merge for the SDLC "wait for PR merge" gate (#136).</summary>
+    Task<GitHubPullRequestStatusResult> GetPullRequestAsync(
+        int pullNumber,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads aggregated check-run status for a ref/sha — used for the SDLC "wait for CI green" gate (#136).</summary>
+    Task<GitHubCheckStatusResult> GetCheckStatusAsync(
+        string @ref,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record CreateGitHubBranchCommand(
@@ -50,6 +60,33 @@ public sealed record GitHubPullRequestResult(
     string CommitSha,
     string MarkerPath,
     bool AlreadyExisted);
+
+public sealed record GitHubPullRequestStatusResult(
+    int Number,
+    string State,
+    bool Merged,
+    string? MergeCommitSha,
+    string HeadBranch,
+    string HeadSha,
+    string BaseBranch);
+
+public sealed record GitHubCheckStatusResult(
+    string Ref,
+    int TotalCount,
+    /// <summary>"queued" | "in_progress" | "completed" — "completed" only once every check run is.</summary>
+    string Status,
+    /// <summary>Null until <see cref="Status"/> is "completed"; "failure" if any run failed, else "success".</summary>
+    string? Conclusion,
+    IReadOnlyList<GitHubCheckRunSummary> CheckRuns);
+
+public sealed record GitHubCheckRunSummary(
+    string Name,
+    string Status,
+    string? Conclusion);
+
+public sealed record GetGitHubPullRequestCommand(int PullNumber);
+
+public sealed record GetGitHubCheckStatusCommand(string Ref);
 
 public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
 {
@@ -91,7 +128,8 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
 
     public override bool Enabled => _options.Enabled;
 
-    public override IReadOnlyList<string> SupportedOperations => ["create_branch", "create_pull_request"];
+    public override IReadOnlyList<string> SupportedOperations =>
+        ["create_branch", "create_pull_request", "get_pull_request", "get_check_status"];
 
     public async Task<GitHubBranchResult> CreateBranchAsync(
         CreateGitHubBranchCommand command,
@@ -182,12 +220,83 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             AlreadyExisted: false);
     }
 
+    public async Task<GitHubPullRequestStatusResult> GetPullRequestAsync(
+        int pullNumber,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureConfigured();
+
+        using var request = await CreateRequestAsync(HttpMethod.Get, $"pulls/{pullNumber}", cancellationToken: cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var pullRequest = await DeserializeAsync<PullRequestStatusResponse>(response, cancellationToken)
+            ?? throw new InvalidOperationException($"GitHub did not return pull request #{pullNumber}.");
+
+        return new GitHubPullRequestStatusResult(
+            Number: pullRequest.Number,
+            State: pullRequest.State,
+            Merged: pullRequest.Merged,
+            MergeCommitSha: pullRequest.MergeCommitSha,
+            HeadBranch: pullRequest.Head.Ref,
+            HeadSha: pullRequest.Head.Sha,
+            BaseBranch: pullRequest.Base.Ref);
+    }
+
+    public async Task<GitHubCheckStatusResult> GetCheckStatusAsync(
+        string @ref,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(@ref);
+        EnsureConfigured();
+
+        using var request = await CreateRequestAsync(
+            HttpMethod.Get,
+            $"commits/{Uri.EscapeDataString(@ref)}/check-runs",
+            cancellationToken: cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var checkRunsResponse = await DeserializeAsync<CheckRunsResponse>(response, cancellationToken)
+            ?? new CheckRunsResponse(0, []);
+
+        return AggregateCheckStatus(@ref, checkRunsResponse);
+    }
+
+    private static GitHubCheckStatusResult AggregateCheckStatus(string @ref, CheckRunsResponse response)
+    {
+        var checkRuns = (response.CheckRuns ?? [])
+            .Select(static run => new GitHubCheckRunSummary(run.Name, run.Status, run.Conclusion))
+            .ToArray();
+
+        if (checkRuns.Length == 0)
+        {
+            return new GitHubCheckStatusResult(@ref, 0, "queued", null, checkRuns);
+        }
+
+        var allCompleted = checkRuns.All(static run => string.Equals(run.Status, "completed", StringComparison.OrdinalIgnoreCase));
+        if (!allCompleted)
+        {
+            var status = checkRuns.Any(static run => string.Equals(run.Status, "in_progress", StringComparison.OrdinalIgnoreCase))
+                ? "in_progress"
+                : "queued";
+            return new GitHubCheckStatusResult(@ref, checkRuns.Length, status, null, checkRuns);
+        }
+
+        var conclusion = checkRuns.Any(static run => !string.Equals(run.Conclusion, "success", StringComparison.OrdinalIgnoreCase))
+            ? "failure"
+            : "success";
+        return new GitHubCheckStatusResult(@ref, checkRuns.Length, "completed", conclusion, checkRuns);
+    }
+
     protected override async Task<ConnectorExecutionResult> ExecuteAllowedAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
     {
         return request.Operation switch
         {
             "create_branch" => await ExecuteCreateBranchAsync(request, cancellationToken),
             "create_pull_request" => await ExecuteCreatePullRequestAsync(request, cancellationToken),
+            "get_pull_request" => await ExecuteGetPullRequestAsync(request, cancellationToken),
+            "get_check_status" => await ExecuteGetCheckStatusAsync(request, cancellationToken),
             _ => throw new InvalidOperationException($"Unsupported GitHub operation '{request.Operation}'.")
         };
     }
@@ -218,6 +327,32 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             Summary: $"GitHub pull request #{result.Number} prepared.",
             ExternalId: result.Number.ToString(),
             ExternalUrl: result.PullRequestUrl);
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteGetPullRequestAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<GetGitHubPullRequestCommand>(SerializerOptions)
+            ?? throw new InvalidOperationException("GitHub get-pull-request payload was empty.");
+
+        var result = await GetPullRequestAsync(command.PullNumber, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: result.Merged ? "merged" : result.State,
+            Summary: $"GitHub pull request #{result.Number} is {(result.Merged ? "merged" : result.State)}.",
+            ExternalId: result.Number.ToString());
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteGetCheckStatusAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<GetGitHubCheckStatusCommand>(SerializerOptions)
+            ?? throw new InvalidOperationException("GitHub get-check-status payload was empty.");
+
+        var result = await GetCheckStatusAsync(command.Ref, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: result.Conclusion ?? result.Status,
+            Summary: $"GitHub checks for {result.Ref}: {result.Status}/{result.Conclusion ?? "pending"} ({result.TotalCount} run(s)).",
+            ExternalId: result.Ref);
     }
 
     private async Task<string> CommitMarkerFileAsync(
@@ -368,6 +503,22 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
     private sealed record PullRequestResponse(
         int Number,
         [property: JsonPropertyName("html_url")] string HtmlUrl);
+
+    private sealed record PullRequestStatusResponse(
+        int Number,
+        string State,
+        bool Merged,
+        [property: JsonPropertyName("merge_commit_sha")] string? MergeCommitSha,
+        PullRequestRefResponse Head,
+        PullRequestRefResponse Base);
+
+    private sealed record PullRequestRefResponse(string Ref, string Sha);
+
+    private sealed record CheckRunsResponse(
+        [property: JsonPropertyName("total_count")] int TotalCount,
+        [property: JsonPropertyName("check_runs")] List<CheckRunResponse>? CheckRuns);
+
+    private sealed record CheckRunResponse(string Name, string Status, string? Conclusion);
 
     private sealed record GitHubErrorResponse(string? Message);
 }

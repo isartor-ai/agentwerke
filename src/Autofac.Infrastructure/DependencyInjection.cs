@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowRuntimeStore, WorkflowRuntimeStore>();
         services.AddScoped<IWorkflowRunRepository, WorkflowRunRepository>();
         services.AddScoped<IRunContextRepository, RunContextRepository>();
+        services.AddScoped<IExternalWorkflowEventRepository, ExternalWorkflowEventRepository>();
         services.AddScoped<IApprovalRepository, ApprovalRepository>();
         services.AddScoped<IWorkflowRunner, WorkflowRunnerAdapter>();
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
