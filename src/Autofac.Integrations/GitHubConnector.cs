@@ -41,6 +41,11 @@ public interface IGitHubConnector
     Task<GitHubReviewResult> PostReviewAsync(
         PostGitHubReviewCommand command,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Triggers a workflow_dispatch run for a configured Actions workflow — the SDLC "deploy to test" gate (#139).</summary>
+    Task<GitHubWorkflowDispatchResult> TriggerWorkflowDispatchAsync(
+        TriggerGitHubWorkflowDispatchCommand command,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record GitHubIssueCommentResult(
@@ -135,6 +140,27 @@ public sealed record GitHubReviewResult(
     string State,
     string Event);
 
+/// <summary>
+/// Triggers a workflow_dispatch run. <see cref="WorkflowFileName"/> defaults to
+/// <see cref="GitHubOptions.DeployWorkflowFileName"/> when not supplied; <see cref="Ref"/> defaults
+/// to <see cref="GitHubOptions.DefaultBaseBranch"/>. <see cref="Inputs"/> typically carries the
+/// commit sha to deploy, e.g. {"sha": "abc123"}, so the workflow can check out that exact commit.
+/// </summary>
+public sealed record TriggerGitHubWorkflowDispatchCommand(
+    string? WorkflowFileName = null,
+    string? Ref = null,
+    IReadOnlyDictionary<string, string>? Inputs = null);
+
+/// <summary>
+/// GitHub's workflow_dispatch API returns no body (202 Accepted with empty content) and no run id —
+/// the actual run is only observable later via the workflow_run/check_suite webhook, correlated by
+/// the dispatched ref/sha (#138).
+/// </summary>
+public sealed record GitHubWorkflowDispatchResult(
+    string WorkflowFileName,
+    string Ref,
+    string TriggeredAt);
+
 public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -183,7 +209,8 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             "get_pull_request",
             "get_check_status",
             "request_review",
-            "post_review"
+            "post_review",
+            "trigger_workflow_dispatch"
         ];
 
     public async Task<GitHubIssueResult> GetIssueAsync(
@@ -448,6 +475,38 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             Event: reviewEvent);
     }
 
+    public async Task<GitHubWorkflowDispatchResult> TriggerWorkflowDispatchAsync(
+        TriggerGitHubWorkflowDispatchCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureConfigured();
+
+        var workflowFileName = string.IsNullOrWhiteSpace(command.WorkflowFileName)
+            ? _options.DeployWorkflowFileName
+            : command.WorkflowFileName.Trim();
+        var @ref = ResolveBaseBranch(command.Ref);
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            @ref,
+            inputs = command.Inputs ?? new Dictionary<string, string>()
+        });
+
+        using var request = await CreateRequestAsync(
+            HttpMethod.Post,
+            $"actions/workflows/{Uri.EscapeDataString(workflowFileName)}/dispatches",
+            payload,
+            cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        return new GitHubWorkflowDispatchResult(
+            WorkflowFileName: workflowFileName,
+            Ref: @ref,
+            TriggeredAt: DateTimeOffset.UtcNow.ToString("o"));
+    }
+
     protected override async Task<ConnectorExecutionResult> ExecuteAllowedAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
     {
         return request.Operation switch
@@ -459,6 +518,7 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             "get_check_status" => await ExecuteGetCheckStatusAsync(request, cancellationToken),
             "request_review" => await ExecuteRequestReviewersAsync(request, cancellationToken),
             "post_review" => await ExecutePostReviewAsync(request, cancellationToken),
+            "trigger_workflow_dispatch" => await ExecuteTriggerWorkflowDispatchAsync(request, cancellationToken),
             _ => throw new InvalidOperationException($"Unsupported GitHub operation '{request.Operation}'.")
         };
     }
@@ -557,6 +617,19 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             Summary: $"Posted GitHub review on pull request #{result.PullNumber}.",
             ExternalId: result.ReviewId.ToString(),
             ExternalUrl: result.ReviewUrl);
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteTriggerWorkflowDispatchAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<TriggerGitHubWorkflowDispatchCommand>(SerializerOptions)
+            ?? new TriggerGitHubWorkflowDispatchCommand();
+
+        var result = await TriggerWorkflowDispatchAsync(command, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: "dispatched",
+            Summary: $"Dispatched GitHub workflow '{result.WorkflowFileName}' on ref '{result.Ref}'.",
+            ExternalId: result.WorkflowFileName);
     }
 
     private async Task<string> CommitMarkerFileAsync(

@@ -83,6 +83,12 @@ public sealed class GitHubOptions
     /// Defaults to "opened".
     /// </summary>
     public List<string> TriggerActions { get; set; } = ["opened"];
+
+    /// <summary>
+    /// Workflow file name (or numeric workflow id) dispatched by the SDLC "deploy to test" gate
+    /// (#139) when a tool call doesn't specify one explicitly.
+    /// </summary>
+    public string DeployWorkflowFileName { get; set; } = "deploy-to-test.yml";
 }
 
 public sealed class SlackOptions

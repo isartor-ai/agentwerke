@@ -209,13 +209,13 @@ public sealed class WebhooksController : ControllerBase
         var kind = payload.PullRequest.Merged
             ? "github.pull_request.merged"
             : $"github.pull_request.{payload.Action}";
-        var correlationHint = payload.PullRequest.Head?.Ref ?? payload.PullRequest.Head?.Sha ?? string.Empty;
+        var correlationCandidates = BuildCorrelationCandidates(payload.PullRequest.Head?.Ref, payload.PullRequest.Head?.Sha);
 
         var @event = new ExternalWorkflowEvent
         {
             Id = $"ext_{Guid.NewGuid():N}",
             Kind = kind,
-            CorrelationHint = correlationHint,
+            CorrelationHint = correlationCandidates.Count > 0 ? correlationCandidates[0] : string.Empty,
             Payload = JsonSerializer.Serialize(new
             {
                 action = payload.Action,
@@ -241,7 +241,7 @@ public sealed class WebhooksController : ControllerBase
         if (payload.PullRequest.Base?.Ref is { Length: > 0 } baseRef)
             resumePayload["base_ref"] = baseRef;
 
-        return await RecordExternalEventAsync(@event, resumePayload, cancellationToken);
+        return await RecordExternalEventAsync(@event, correlationCandidates, resumePayload, cancellationToken);
     }
 
     private async Task<IActionResult> HandleWorkflowRunEventAsync(byte[] body, CancellationToken cancellationToken)
@@ -292,13 +292,13 @@ public sealed class WebhooksController : ControllerBase
         GitHubRunStatus status,
         CancellationToken cancellationToken)
     {
-        var correlationHint = status.HeadBranch ?? status.HeadSha ?? string.Empty;
+        var correlationCandidates = BuildCorrelationCandidates(status.HeadBranch, status.HeadSha);
 
         var @event = new ExternalWorkflowEvent
         {
             Id = $"ext_{Guid.NewGuid():N}",
             Kind = $"{resourcePrefix}.{action}",
-            CorrelationHint = correlationHint,
+            CorrelationHint = correlationCandidates.Count > 0 ? correlationCandidates[0] : string.Empty,
             Payload = JsonSerializer.Serialize(new
             {
                 action,
@@ -319,35 +319,59 @@ public sealed class WebhooksController : ControllerBase
         if (status.HeadSha is { Length: > 0 } headSha)
             resumePayload["head_sha"] = headSha;
 
-        return await RecordExternalEventAsync(@event, resumePayload, cancellationToken);
+        return await RecordExternalEventAsync(@event, correlationCandidates, resumePayload, cancellationToken);
+    }
+
+    /// <summary>
+    /// A run may be waiting on either a branch name or a commit sha as its correlation key —
+    /// e.g. "wait for PR merge" is naturally branch-keyed, while "wait for CI green" after a
+    /// deploy dispatch (#139) is naturally sha-keyed, since a branch can have multiple runs.
+    /// Branch is tried first (the common case), sha second. Empty/duplicate values are dropped.
+    /// </summary>
+    private static IReadOnlyList<string> BuildCorrelationCandidates(string? branch, string? sha)
+    {
+        var candidates = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(branch))
+            candidates.Add(branch);
+        if (!string.IsNullOrWhiteSpace(sha) && !string.Equals(sha, branch, StringComparison.Ordinal))
+            candidates.Add(sha);
+
+        return candidates;
     }
 
     private async Task<IActionResult> RecordExternalEventAsync(
         ExternalWorkflowEvent @event,
+        IReadOnlyList<string> correlationCandidates,
         IReadOnlyDictionary<string, string> resumePayload,
         CancellationToken cancellationToken)
     {
         await _externalEventRepository.AddAsync(@event, cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(@event.CorrelationHint))
+        string? waitingRunId = null;
+        string? matchedCorrelationKey = null;
+        foreach (var candidate in correlationCandidates)
         {
-            return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = false });
+            waitingRunId = await _waitingExternalCorrelationRepository.FindWaitingRunIdAsync(
+                @event.Kind, candidate, cancellationToken);
+            if (waitingRunId is not null)
+            {
+                matchedCorrelationKey = candidate;
+                break;
+            }
         }
 
-        var waitingRunId = await _waitingExternalCorrelationRepository.FindWaitingRunIdAsync(
-            @event.Kind, @event.CorrelationHint, cancellationToken);
-
-        if (waitingRunId is null)
+        if (waitingRunId is null || matchedCorrelationKey is null)
         {
             _logger.LogDebug(
-                "No run is waiting on external event {Kind}/{CorrelationHint}.", @event.Kind, @event.CorrelationHint);
+                "No run is waiting on external event {Kind} for any of [{Candidates}].",
+                @event.Kind, string.Join(", ", correlationCandidates));
             return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = false });
         }
 
         try
         {
             await _orchestrationService.ResumeExternalRunAsync(
-                new ResumeExternalRunCommand(waitingRunId, @event.CorrelationHint, resumePayload, ResumedBy: "github-webhook"),
+                new ResumeExternalRunCommand(waitingRunId, matchedCorrelationKey, resumePayload, ResumedBy: "github-webhook"),
                 cancellationToken);
         }
         catch (WorkflowRunNotFoundException)
@@ -358,8 +382,8 @@ public sealed class WebhooksController : ControllerBase
         }
 
         _logger.LogInformation(
-            "Auto-resumed run {RunId} for external event {Kind}/{CorrelationHint}.",
-            waitingRunId, @event.Kind, @event.CorrelationHint);
+            "Auto-resumed run {RunId} for external event {Kind}/{CorrelationKey}.",
+            waitingRunId, @event.Kind, matchedCorrelationKey);
 
         return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = true, runId = waitingRunId });
     }
