@@ -43,6 +43,39 @@ internal static class RunnerToolFactory
             }
         }
 
+        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "sandbox.file_read", StringComparison.OrdinalIgnoreCase)))
+        {
+            tools.Add(new SandboxFileReadTool());
+        }
+
+        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "sandbox.file_write", StringComparison.OrdinalIgnoreCase)))
+        {
+            tools.Add(new SandboxFileWriteTool());
+        }
+
+        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "sandbox.file_edit", StringComparison.OrdinalIgnoreCase)))
+        {
+            tools.Add(new SandboxFileEditTool());
+        }
+
+        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "sandbox.git", StringComparison.OrdinalIgnoreCase)))
+        {
+            tools.Add(new SandboxGitTool(
+                Environment.GetEnvironmentVariable("Integrations__GitHub__RepositoryOwner"),
+                Environment.GetEnvironmentVariable("Integrations__GitHub__RepositoryName"),
+                Environment.GetEnvironmentVariable("Integrations__GitHub__PersonalAccessToken")));
+        }
+
+        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "sandbox.shell", StringComparison.OrdinalIgnoreCase)))
+        {
+            tools.Add(new SandboxShellTool());
+        }
+
+        if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "sandbox.run_tests", StringComparison.OrdinalIgnoreCase)))
+        {
+            tools.Add(new SandboxRunTestsTool());
+        }
+
         return new ToolRegistry(tools);
     }
 

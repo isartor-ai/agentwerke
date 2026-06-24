@@ -9,7 +9,7 @@ namespace Autofac.Sandboxes;
 /// Runs one agent task inside an ephemeral Docker container, captures logs and
 /// artifacts from /output, then removes the container.
 /// </summary>
-public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisposable
+public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
 {
     private readonly IDockerClient _docker;
     private readonly SandboxOptions _options;
@@ -349,11 +349,5 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor, IAsyncDisp
         }
 
         return cleanupPolicy?.DeleteSandboxOnCompletion ?? true;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _docker.Dispose();
-        await ValueTask.CompletedTask;
     }
 }

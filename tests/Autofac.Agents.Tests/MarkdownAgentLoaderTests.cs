@@ -179,4 +179,38 @@ public sealed class MarkdownAgentLoaderTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData("implementation-engineer", "sandbox.file_edit", "sandbox.git", "github.create_pull_request")]
+    [InlineData("senior-code-reviewer", "sandbox.git", "github.post_review")]
+    [InlineData("tester", "sandbox.git", "sandbox.run_tests")]
+    public void LoadFromDirectory_ParsesSdlcCodeAgentProfiles(string agentId, params string[] expectedTools)
+    {
+        var profiles = MarkdownAgentLoader.LoadFromDirectory(FindRepositoryAgentsDirectory());
+
+        var profile = Assert.Single(profiles, p => p.AgentId == agentId);
+        Assert.Equal("claude-code", profile.Runner);
+        Assert.NotEmpty(profile.SandboxProfiles);
+        foreach (var expectedTool in expectedTools)
+        {
+            Assert.Contains(expectedTool, profile.Tools);
+        }
+        Assert.False(string.IsNullOrWhiteSpace(profile.SystemPrompt));
+    }
+
+    private static string FindRepositoryAgentsDirectory()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Autofac.sln")))
+        {
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+        {
+            throw new InvalidOperationException("Could not locate the repository root (Autofac.sln) from the test output directory.");
+        }
+
+        return Path.Combine(directory.FullName, "agents");
+    }
 }

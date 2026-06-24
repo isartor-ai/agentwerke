@@ -118,6 +118,71 @@ public sealed class OpenSandboxedAgentRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_WhenProfileUsesSandboxCodeTools_ResolvesThemAllWithoutFailing()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(sandbox);
+
+        var result = await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "implementation-engineer",
+                Runner = "claude-code",
+                Tools = ["sandbox.file_read", "sandbox.file_write", "sandbox.file_edit", "sandbox.shell", "sandbox.run_tests"]
+            },
+            SandboxProfileNames.RepoWrite,
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
+            Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(envelope);
+        Assert.Equal(5, envelope!.ResolvedTools.Count);
+        Assert.Contains(envelope.ResolvedTools, t => t.Name == "sandbox.file_edit");
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenProfileUsesSandboxGitTool_EmbedsGitHubConfigJustLikeGitHubTools()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(
+            sandbox,
+            secretStore: new StubSecretStore(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Integrations:GitHub:PersonalAccessToken"] = "ghp_secret_token_abcdefghijklmnopqrstuvwxyz123456"
+            }),
+            integrationOptions: new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    Enabled = true,
+                    RepositoryOwner = "isartor-ai",
+                    RepositoryName = "autofac"
+                }
+            });
+
+        await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "implementation-engineer",
+                Runner = "claude-code",
+                Tools = ["sandbox.git"]
+            },
+            SandboxProfileNames.RepoWrite,
+            CancellationToken.None);
+
+        Assert.Equal("isartor-ai", sandbox.LastRequest!.EnvironmentVariables!["Integrations__GitHub__RepositoryOwner"]);
+        Assert.Equal("autofac", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+        Assert.Equal("ghp_secret_token_abcdefghijklmnopqrstuvwxyz123456", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__PersonalAccessToken"]);
+    }
+
+    [Fact]
     public async Task RunAsync_WhenCustomModelEndpointConfigured_AllowlistsHostAndRedactsDiagnostics()
     {
         var sandbox = new RecordingSandboxExecutor(

@@ -19,6 +19,10 @@ RUN dotnet publish src/Autofac.AgentRunner/Autofac.AgentRunner.csproj -c Release
 
 FROM mcr.microsoft.com/dotnet/runtime:9.0 AS runtime
 WORKDIR /app
+# git is required by the sandbox.git tool (#140) — clone/checkout/commit/push for
+# implementation/review/test agents. Workflow authors needing other language toolchains
+# (npm, python, etc.) should override AgentProfile.DockerImage with a custom image.
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 RUN mkdir -p /output
 ENTRYPOINT ["dotnet", "Autofac.AgentRunner.dll"]
