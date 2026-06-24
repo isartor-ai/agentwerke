@@ -6,6 +6,7 @@ using Autofac.Integrations;
 using Autofac.Integrations.Webhooks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Autofac.Api.Tests;
@@ -39,12 +40,116 @@ public sealed class WebhooksControllerTests
 
         Assert.IsType<OkObjectResult>(result);
         Assert.Null(orchestration.StartCommand);
+        Assert.Null(orchestration.ResumeExternalCommand);
 
         var recorded = Assert.Single(eventRepository.Added);
         Assert.Equal("github.pull_request.merged", recorded.Kind);
         Assert.Equal("autofac/run-123", recorded.CorrelationHint);
         Assert.Contains("\"merged\":true", recorded.Payload, StringComparison.Ordinal);
         Assert.Contains("\"mergeCommitSha\":\"feedface1234\"", recorded.Payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GitHub_PullRequestMergedEvent_WhenAWaitingRunMatchesTheBranch_AutoResumesIt()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_waiting_123");
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "pull_request",
+            waitingExternalCorrelationRepository: waitingRepository);
+
+        var body = """
+            {
+              "action": "closed",
+              "pull_request": {
+                "number": 42,
+                "merged": true,
+                "merge_commit_sha": "feedface1234",
+                "head": { "ref": "autofac/run-waiting-123", "sha": "abc123" },
+                "base": { "ref": "main", "sha": "def456" }
+              }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_waiting_123", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("autofac/run-waiting-123", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("github-webhook", orchestration.ResumeExternalCommand.ResumedBy);
+        Assert.Equal("42", orchestration.ResumeExternalCommand.Payload["pr_number"]);
+        Assert.Equal("feedface1234", orchestration.ResumeExternalCommand.Payload["merge_commit_sha"]);
+    }
+
+    [Fact]
+    public async Task GitHub_WorkflowRunCompletedEvent_WhenAWaitingRunMatchesTheBranch_AutoResumesIt()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_waiting_456");
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "workflow_run",
+            waitingExternalCorrelationRepository: waitingRepository);
+
+        var body = """
+            {
+              "action": "completed",
+              "workflow_run": {
+                "status": "completed",
+                "conclusion": "success",
+                "head_sha": "abc123",
+                "head_branch": "autofac/run-waiting-456"
+              }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_waiting_456", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("autofac/run-waiting-456", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("success", orchestration.ResumeExternalCommand.Payload["conclusion"]);
+    }
+
+    [Fact]
+    public async Task GitHub_PullRequestMergedEvent_ForAnUnrelatedBranch_DoesNotResumeAnyRun()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: null);
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "pull_request",
+            waitingExternalCorrelationRepository: waitingRepository);
+
+        var body = """
+            {
+              "action": "closed",
+              "pull_request": {
+                "number": 99,
+                "merged": true,
+                "head": { "ref": "some-other-branch", "sha": "zzz999" },
+                "base": { "ref": "main", "sha": "def456" }
+              }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+        Assert.Single(eventRepository.Added);
     }
 
     [Fact]
@@ -177,7 +282,8 @@ public sealed class WebhooksControllerTests
         IWorkflowRunOrchestrationService orchestration,
         IExternalWorkflowEventRepository eventRepository,
         string eventHeader,
-        ITriggerRouter? triggerRouter = null)
+        ITriggerRouter? triggerRouter = null,
+        IWaitingExternalCorrelationRepository? waitingExternalCorrelationRepository = null)
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-GitHub-Event"] = eventHeader;
@@ -186,6 +292,7 @@ public sealed class WebhooksControllerTests
             orchestration,
             triggerRouter ?? new StubTriggerRouter(null),
             eventRepository,
+            waitingExternalCorrelationRepository ?? new StubWaitingExternalCorrelationRepository(runId: null),
             Options.Create(new IntegrationOptions
             {
                 GitHub = new GitHubOptions
@@ -194,7 +301,8 @@ public sealed class WebhooksControllerTests
                     WebhookSecret = string.Empty,
                     TriggerActions = ["opened"],
                 },
-            }))
+            }),
+            NullLogger<WebhooksController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext },
         };
@@ -211,6 +319,8 @@ public sealed class WebhooksControllerTests
     {
         public StartRunCommand? StartCommand { get; private set; }
 
+        public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
+
         public Task<StartRunResult> StartRunAsync(StartRunCommand command, CancellationToken cancellationToken = default)
         {
             StartCommand = command;
@@ -220,8 +330,11 @@ public sealed class WebhooksControllerTests
         public Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default)
+        {
+            ResumeExternalCommand = command;
+            return Task.FromResult(new ResumeExternalRunResult(command.RunId, "pending"));
+        }
 
         public Task<RecoverRunResult> RecoverRunAsync(string runId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -236,6 +349,18 @@ public sealed class WebhooksControllerTests
             Added.Add(@event);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class StubWaitingExternalCorrelationRepository(string? runId) : IWaitingExternalCorrelationRepository
+    {
+        public Task UpsertAsync(WaitingExternalCorrelation correlation, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task RemoveAsync(string runId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<string?> FindWaitingRunIdAsync(string messageName, string correlationKey, CancellationToken cancellationToken) =>
+            Task.FromResult(runId);
     }
 
     private sealed class StubTriggerRouter(string? workflowId) : ITriggerRouter

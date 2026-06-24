@@ -85,6 +85,35 @@ public sealed class WorkflowRunnerAdapterTests
         Assert.Equal("requirements.md", result.WaitingApproval.ArtifactName);
     }
 
+    [Fact]
+    public async Task StartAsync_WhenEngineReturnsWaitingExternalState_ForwardsCorrelationKeyAndMessageName()
+    {
+        var engine = new RecordingWorkflowEngineAdapter
+        {
+            NextResult = new WorkflowExecutionState(
+                "run-789", "waiting_external", "End", "WaitForMerge", null,
+                WaitingExternalCorrelationKey: "autofac/run-789",
+                WaitingExternalMessageName: "github.pull_request.merged"),
+        };
+        var runner = new WorkflowRunnerAdapter(new PassThroughValidator(), engine);
+
+        var result = await runner.StartAsync(
+            workflowDefinitionId: "wf-789",
+            bpmnXml: """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="Process_1" name="Adapter Flow">
+                    <bpmn:startEvent id="Start" />
+                  </bpmn:process>
+                </bpmn:definitions>
+                """,
+            initiator: "api-user",
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal("waiting_external", result.Status);
+        Assert.Equal("autofac/run-789", result.WaitingExternalCorrelationKey);
+        Assert.Equal("github.pull_request.merged", result.WaitingExternalMessageName);
+    }
+
     private sealed class RecordingWorkflowEngineAdapter : IWorkflowEngineAdapter
     {
         public string EngineId => "recording";

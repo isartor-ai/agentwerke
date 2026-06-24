@@ -33,6 +33,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<ExternalWorkflowEvent> ExternalWorkflowEvents => Set<ExternalWorkflowEvent>();
 
+    public DbSet<WaitingExternalCorrelation> WaitingExternalCorrelations => Set<WaitingExternalCorrelation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("autofac");
@@ -189,6 +191,18 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.ReceivedAt).HasMaxLength(64).IsRequired();
             entity.HasIndex(e => e.CorrelationHint)
                 .HasDatabaseName("ix_external_workflow_events_correlation_hint");
+        });
+
+        modelBuilder.Entity<WaitingExternalCorrelation>(entity =>
+        {
+            entity.ToTable("waiting_external_correlations");
+            entity.HasKey(e => e.RunId);
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.CorrelationKey).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.MessageName).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.CreatedAt).HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => new { e.MessageName, e.CorrelationKey })
+                .HasDatabaseName("ix_waiting_external_correlations_lookup");
         });
 
         modelBuilder.Entity<AuditRecord>(entity =>

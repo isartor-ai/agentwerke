@@ -6,6 +6,7 @@ using Autofac.Integrations;
 using Autofac.Integrations.Webhooks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Autofac.Api.Controllers;
@@ -22,18 +23,24 @@ public sealed class WebhooksController : ControllerBase
     private readonly IWorkflowRunOrchestrationService _orchestrationService;
     private readonly ITriggerRouter _triggerRouter;
     private readonly IExternalWorkflowEventRepository _externalEventRepository;
+    private readonly IWaitingExternalCorrelationRepository _waitingExternalCorrelationRepository;
     private readonly IntegrationOptions _options;
+    private readonly ILogger<WebhooksController> _logger;
 
     public WebhooksController(
         IWorkflowRunOrchestrationService orchestrationService,
         ITriggerRouter triggerRouter,
         IExternalWorkflowEventRepository externalEventRepository,
-        IOptions<IntegrationOptions> options)
+        IWaitingExternalCorrelationRepository waitingExternalCorrelationRepository,
+        IOptions<IntegrationOptions> options,
+        ILogger<WebhooksController> logger)
     {
         _orchestrationService = orchestrationService;
         _triggerRouter = triggerRouter;
         _externalEventRepository = externalEventRepository;
+        _waitingExternalCorrelationRepository = waitingExternalCorrelationRepository;
         _options = options.Value;
+        _logger = logger;
     }
 
     /// <summary>
@@ -103,8 +110,9 @@ public sealed class WebhooksController : ControllerBase
     /// <summary>
     /// Accepts GitHub webhooks. "issues" triggers the configured workflow (workflows must
     /// carry the tag "github-trigger"). "pull_request", "workflow_run", and "check_suite"
-    /// are normalized and recorded for the SDLC external-wait gates (#136) — they do not
-    /// trigger a run; a future run-resume mechanism (#138) will consume them.
+    /// are normalized and recorded for the SDLC external-wait gates (#136), then matched
+    /// against the waiting-external correlation store and auto-resumed if a run is waiting
+    /// on that exact event kind + correlation key (#138).
     /// </summary>
     [HttpPost("github")]
     public async Task<IActionResult> GitHub(CancellationToken cancellationToken)
@@ -221,7 +229,19 @@ public sealed class WebhooksController : ControllerBase
             ReceivedAt = DateTimeOffset.UtcNow.ToString("o"),
         };
 
-        return await RecordExternalEventAsync(@event, cancellationToken);
+        var resumePayload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["pr_number"] = payload.PullRequest.Number.ToString(),
+            ["merged"] = payload.PullRequest.Merged ? "true" : "false",
+        };
+        if (payload.PullRequest.MergeCommitSha is { Length: > 0 } mergeCommitSha)
+            resumePayload["merge_commit_sha"] = mergeCommitSha;
+        if (payload.PullRequest.Head?.Sha is { Length: > 0 } headSha)
+            resumePayload["head_sha"] = headSha;
+        if (payload.PullRequest.Base?.Ref is { Length: > 0 } baseRef)
+            resumePayload["base_ref"] = baseRef;
+
+        return await RecordExternalEventAsync(@event, resumePayload, cancellationToken);
     }
 
     private async Task<IActionResult> HandleWorkflowRunEventAsync(byte[] body, CancellationToken cancellationToken)
@@ -290,14 +310,58 @@ public sealed class WebhooksController : ControllerBase
             ReceivedAt = DateTimeOffset.UtcNow.ToString("o"),
         };
 
-        return await RecordExternalEventAsync(@event, cancellationToken);
+        var resumePayload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["status"] = status.Status,
+        };
+        if (status.Conclusion is { Length: > 0 } conclusion)
+            resumePayload["conclusion"] = conclusion;
+        if (status.HeadSha is { Length: > 0 } headSha)
+            resumePayload["head_sha"] = headSha;
+
+        return await RecordExternalEventAsync(@event, resumePayload, cancellationToken);
     }
 
-    private async Task<IActionResult> RecordExternalEventAsync(ExternalWorkflowEvent @event, CancellationToken cancellationToken)
+    private async Task<IActionResult> RecordExternalEventAsync(
+        ExternalWorkflowEvent @event,
+        IReadOnlyDictionary<string, string> resumePayload,
+        CancellationToken cancellationToken)
     {
         await _externalEventRepository.AddAsync(@event, cancellationToken);
 
-        return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint });
+        if (string.IsNullOrWhiteSpace(@event.CorrelationHint))
+        {
+            return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = false });
+        }
+
+        var waitingRunId = await _waitingExternalCorrelationRepository.FindWaitingRunIdAsync(
+            @event.Kind, @event.CorrelationHint, cancellationToken);
+
+        if (waitingRunId is null)
+        {
+            _logger.LogDebug(
+                "No run is waiting on external event {Kind}/{CorrelationHint}.", @event.Kind, @event.CorrelationHint);
+            return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = false });
+        }
+
+        try
+        {
+            await _orchestrationService.ResumeExternalRunAsync(
+                new ResumeExternalRunCommand(waitingRunId, @event.CorrelationHint, resumePayload, ResumedBy: "github-webhook"),
+                cancellationToken);
+        }
+        catch (WorkflowRunNotFoundException)
+        {
+            _logger.LogWarning(
+                "Waiting-external correlation pointed at run {RunId}, which no longer exists. Skipping auto-resume.", waitingRunId);
+            return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = false });
+        }
+
+        _logger.LogInformation(
+            "Auto-resumed run {RunId} for external event {Kind}/{CorrelationHint}.",
+            waitingRunId, @event.Kind, @event.CorrelationHint);
+
+        return Ok(new { recorded = true, kind = @event.Kind, correlationHint = @event.CorrelationHint, resumed = true, runId = waitingRunId });
     }
 
     private async Task<IActionResult> StartRunAsync(

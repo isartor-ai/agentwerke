@@ -11,6 +11,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
     private readonly IWorkflowDefinitionRepository _definitionRepository;
     private readonly IWorkflowRunRepository _runRepository;
     private readonly IApprovalRepository _approvalRepository;
+    private readonly IWaitingExternalCorrelationRepository _waitingExternalCorrelationRepository;
     private readonly IRunOutbox _outbox;
     private readonly IWorkflowTracer _tracer;
     private readonly ILogger<WorkflowRunExecutor> _logger;
@@ -20,6 +21,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         IWorkflowDefinitionRepository definitionRepository,
         IWorkflowRunRepository runRepository,
         IApprovalRepository approvalRepository,
+        IWaitingExternalCorrelationRepository waitingExternalCorrelationRepository,
         IRunOutbox outbox,
         IWorkflowTracer tracer,
         ILogger<WorkflowRunExecutor> logger)
@@ -28,6 +30,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         _definitionRepository = definitionRepository;
         _runRepository = runRepository;
         _approvalRepository = approvalRepository;
+        _waitingExternalCorrelationRepository = waitingExternalCorrelationRepository;
         _outbox = outbox;
         _tracer = tracer;
         _logger = logger;
@@ -178,6 +181,35 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
                 _logger.LogWarning(
                     "Unexpected execution result status '{Status}' for run {RunId}", result.Status, runId);
                 break;
+        }
+
+        await SyncWaitingExternalCorrelationAsync(runId, result, ct);
+    }
+
+    /// <summary>
+    /// Keeps the waiting-external correlation store (#138) in sync with the run's status, so an
+    /// inbound webhook can find which run to auto-resume. A run has at most one active wait, so
+    /// any non-"waiting_external" result clears whatever was recorded for it.
+    /// </summary>
+    private async Task SyncWaitingExternalCorrelationAsync(string runId, WorkflowRunnerResult result, CancellationToken ct)
+    {
+        if (string.Equals(result.Status, "waiting_external", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(result.WaitingExternalCorrelationKey) &&
+            !string.IsNullOrWhiteSpace(result.WaitingExternalMessageName))
+        {
+            await _waitingExternalCorrelationRepository.UpsertAsync(
+                new WaitingExternalCorrelation
+                {
+                    RunId = runId,
+                    CorrelationKey = result.WaitingExternalCorrelationKey,
+                    MessageName = result.WaitingExternalMessageName,
+                    CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+                },
+                ct);
+        }
+        else
+        {
+            await _waitingExternalCorrelationRepository.RemoveAsync(runId, ct);
         }
     }
 

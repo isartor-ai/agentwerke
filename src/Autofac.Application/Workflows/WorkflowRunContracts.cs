@@ -106,7 +106,10 @@ public sealed record WorkflowRunnerResult(
     string RunId,
     string Status,
     WaitingApprovalInfo? WaitingApproval,
-    DateTimeOffset? TimerDueAt = null);
+    DateTimeOffset? TimerDueAt = null,
+    /// <summary>Set when <see cref="Status"/> is "waiting_external" (#137/#138).</summary>
+    string? WaitingExternalCorrelationKey = null,
+    string? WaitingExternalMessageName = null);
 
 public interface IWorkflowRunRepository
 {
