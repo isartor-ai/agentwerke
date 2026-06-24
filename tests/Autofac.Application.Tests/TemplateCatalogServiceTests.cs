@@ -9,19 +9,20 @@ public sealed class TemplateCatalogServiceTests
         true, "proc", "Proc", [], []);
 
     [Fact]
-    public void ListTemplates_ReturnsAllSixSeededTemplates()
+    public void ListTemplates_ReturnsAllSevenSeededTemplates()
     {
         var service = BuildService();
 
         var templates = service.ListTemplates();
 
-        Assert.Equal(6, templates.Count);
+        Assert.Equal(7, templates.Count);
         Assert.Contains(templates, static t => t.Id == "issue-to-pr");
         Assert.Contains(templates, static t => t.Id == "bugfix");
         Assert.Contains(templates, static t => t.Id == "hotfix");
         Assert.Contains(templates, static t => t.Id == "deployment-approval");
         Assert.Contains(templates, static t => t.Id == "security-review");
         Assert.Contains(templates, static t => t.Id == "release-approval");
+        Assert.Contains(templates, static t => t.Id == "autonomous-sdlc");
     }
 
     [Fact]
@@ -103,6 +104,7 @@ public sealed class TemplateCatalogServiceTests
     [InlineData("deployment-approval")]
     [InlineData("security-review")]
     [InlineData("release-approval")]
+    [InlineData("autonomous-sdlc")]
     public void AllTemplates_HaveNonEmptyRequiredMetadata(string id)
     {
         var template = SdlcTemplateSeeds.All.Single(t => t.Id == id);
@@ -122,6 +124,7 @@ public sealed class TemplateCatalogServiceTests
     [InlineData("release-approval", "critical")]
     [InlineData("deployment-approval", "elevated")]
     [InlineData("security-review", "elevated")]
+    [InlineData("autonomous-sdlc", "elevated")]
     [InlineData("issue-to-pr", "standard")]
     [InlineData("bugfix", "standard")]
     public void Templates_HaveExpectedPolicyLevel(string id, string expectedLevel)
