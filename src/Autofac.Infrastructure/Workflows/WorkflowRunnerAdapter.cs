@@ -104,7 +104,13 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
                 ArtifactName: state.WaitingApprovalArtifactName);
         }
 
-        return new WorkflowRunnerResult(state.RunId, state.Status, waitingApproval, state.TimerDueAt);
+        return new WorkflowRunnerResult(
+            state.RunId,
+            state.Status,
+            waitingApproval,
+            state.TimerDueAt,
+            state.WaitingExternalCorrelationKey,
+            state.WaitingExternalMessageName);
     }
 
     private static string InferRiskLevel(string? policyTag)
