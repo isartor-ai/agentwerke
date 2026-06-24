@@ -395,6 +395,173 @@ public static class SdlcTemplateSeeds
             """,
     };
 
+    /// <summary>
+    /// The full autonomous SDLC scenario from issue #89: every phase B–E3 sub-issue (#134–#140)
+    /// wired into one workflow, end to end — two human approval gates, two real GitHub webhook
+    /// waits (PR merge, CI green), and three agent_sandboxed code-writing stages. See
+    /// docs/manual-test-sdlc-e2e.md for how to walk a run through this template by hand.
+    /// </summary>
+    public static readonly SdlcTemplate AutonomousSdlc = new()
+    {
+        Id = "autonomous-sdlc",
+        Name = "Autonomous SDLC: Issue to Deployed and Tested",
+        Description = "Requirement design and architecture design (each with a human approval gate), technical analysis, sandboxed implementation and senior review, a wait for the resulting PR to merge, a CI/CD deploy trigger with a wait for CI to go green, and a final test run — the complete BA-to-Tester pipeline from issue #89.",
+        Trigger = "manual",
+        RequiredInputs = ["issue_url", "repository", "branch_name"],
+        AgentRoles =
+        [
+            "business-analyst",
+            "solution-architect",
+            "technical-analyst",
+            "implementation-engineer",
+            "senior-code-reviewer",
+            "deploy-agent",
+            "tester"
+        ],
+        ApprovalRoles = ["product-owner", "tech-lead"],
+        EvidenceExpectations =
+        [
+            "requirements_spec",
+            "architecture_spec",
+            "implementation_plan",
+            "pull_request_opened",
+            "code_review_approved",
+            "pr_merged",
+            "ci_green",
+            "tests_passed"
+        ],
+        PolicyLevel = "elevated",
+        Tags = ["sdlc", "autonomous", "end-to-end", "github"],
+        BpmnXml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+              <bpmn:process id="AutonomousSdlc" name="Autonomous SDLC">
+                <bpmn:startEvent id="Start" name="Issue Filed" />
+                <bpmn:serviceTask id="RequirementDesign" name="Design Requirements">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="business-analyst"
+                      action="requirement-design"
+                      environment="sdlc"
+                      purposeType="requirement_design"
+                      policyTag="requirement-design" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:userTask id="RequirementApproval" name="Requirements Approval">
+                  <bpmn:extensionElements>
+                    <autofac:approvalTask
+                      purposeType="requirement_design"
+                      policyTag="human-requirement-approval" />
+                  </bpmn:extensionElements>
+                </bpmn:userTask>
+                <bpmn:serviceTask id="ArchitectureDesign" name="Design Architecture">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="solution-architect"
+                      action="architecture-design"
+                      environment="sdlc"
+                      purposeType="architecture_design"
+                      policyTag="architecture-design" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:userTask id="ArchitectureApproval" name="Architecture Approval">
+                  <bpmn:extensionElements>
+                    <autofac:approvalTask
+                      purposeType="architecture_design"
+                      policyTag="human-architecture-approval" />
+                  </bpmn:extensionElements>
+                </bpmn:userTask>
+                <bpmn:serviceTask id="TechnicalAnalysis" name="Technical Analysis">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="technical-analyst"
+                      action="technical-analysis"
+                      environment="sdlc"
+                      purposeType="technical_analysis"
+                      policyTag="implementation-plan" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:serviceTask id="Implementation" name="Implement">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="implementation-engineer"
+                      action="implement"
+                      environment="sandbox"
+                      purposeType="implementation"
+                      policyTag="implementation"
+                      executionMode="agent_sandboxed"
+                      sandboxProfile="repo-write" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:serviceTask id="SeniorReview" name="Senior Code Review">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="senior-code-reviewer"
+                      action="review-code"
+                      environment="sandbox"
+                      purposeType="code_review"
+                      policyTag="code-review"
+                      executionMode="agent_sandboxed"
+                      sandboxProfile="repo-read" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:intermediateCatchEvent id="WaitForMerge" name="Wait for PR Merge">
+                  <bpmn:extensionElements>
+                    <autofac:externalEvent
+                      messageName="github.pull_request.merged"
+                      correlationKeyTemplate="{{input.branch_name}}" />
+                  </bpmn:extensionElements>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+                <bpmn:serviceTask id="TriggerDeploy" name="Trigger Deploy">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="deploy-agent"
+                      action="cicd.trigger_deploy"
+                      environment="ci"
+                      purposeType="cicd_deployment"
+                      policyTag="deploy-staging" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:intermediateCatchEvent id="WaitForCiGreen" name="Wait for CI Green">
+                  <bpmn:extensionElements>
+                    <autofac:externalEvent
+                      messageName="github.workflow_run.completed"
+                      correlationKeyTemplate="{{input.branch_name}}" />
+                  </bpmn:extensionElements>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+                <bpmn:serviceTask id="Test" name="Run Tests">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask
+                      agent="tester"
+                      action="run-tests"
+                      environment="sandbox"
+                      purposeType="test_execution"
+                      policyTag="test-gate"
+                      executionMode="agent_sandboxed"
+                      sandboxProfile="repo-read" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:endEvent id="End" name="Done" />
+                <bpmn:sequenceFlow id="sf1" sourceRef="Start" targetRef="RequirementDesign" />
+                <bpmn:sequenceFlow id="sf2" sourceRef="RequirementDesign" targetRef="RequirementApproval" />
+                <bpmn:sequenceFlow id="sf3" sourceRef="RequirementApproval" targetRef="ArchitectureDesign" />
+                <bpmn:sequenceFlow id="sf4" sourceRef="ArchitectureDesign" targetRef="ArchitectureApproval" />
+                <bpmn:sequenceFlow id="sf5" sourceRef="ArchitectureApproval" targetRef="TechnicalAnalysis" />
+                <bpmn:sequenceFlow id="sf6" sourceRef="TechnicalAnalysis" targetRef="Implementation" />
+                <bpmn:sequenceFlow id="sf7" sourceRef="Implementation" targetRef="SeniorReview" />
+                <bpmn:sequenceFlow id="sf8" sourceRef="SeniorReview" targetRef="WaitForMerge" />
+                <bpmn:sequenceFlow id="sf9" sourceRef="WaitForMerge" targetRef="TriggerDeploy" />
+                <bpmn:sequenceFlow id="sf10" sourceRef="TriggerDeploy" targetRef="WaitForCiGreen" />
+                <bpmn:sequenceFlow id="sf11" sourceRef="WaitForCiGreen" targetRef="Test" />
+                <bpmn:sequenceFlow id="sf12" sourceRef="Test" targetRef="End" />
+              </bpmn:process>
+            </bpmn:definitions>
+            """,
+    };
+
     public static IReadOnlyList<SdlcTemplate> All { get; } =
     [
         IssueToPr,
@@ -403,5 +570,6 @@ public static class SdlcTemplateSeeds
         DeploymentApproval,
         SecurityReview,
         ReleaseApproval,
+        AutonomousSdlc,
     ];
 }
