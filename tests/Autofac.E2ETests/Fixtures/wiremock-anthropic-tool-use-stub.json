@@ -1,0 +1,73 @@
+{
+  "mappings": [
+    {
+      "name": "Anthropic Messages API stub - turn 1 (tool_use)",
+      "priority": 0,
+      "scenarioName": "agent-sandboxed-tool-use",
+      "requiredScenarioState": "Started",
+      "newScenarioState": "ToolCalled",
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/messages",
+        "bodyPatterns": [{ "contains": "sandbox_file_write" }]
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": "msg_e2e_tool_use_stub_1",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-6",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_e2e_stub_1",
+              "name": "sandbox_file_write",
+              "input": { "path": "hello.txt", "content": "hello from the sandbox" }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 55,
+            "output_tokens": 24
+          }
+        }
+      }
+    },
+    {
+      "name": "Anthropic Messages API stub - turn 2 (final text)",
+      "priority": 0,
+      "scenarioName": "agent-sandboxed-tool-use",
+      "requiredScenarioState": "ToolCalled",
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/messages",
+        "bodyPatterns": [{ "contains": "sandbox_file_write" }]
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": "msg_e2e_tool_use_stub_2",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-6",
+          "content": [
+            {
+              "type": "text",
+              "text": "File written successfully inside the sandbox."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12
+          }
+        }
+      }
+    }
+  ]
+}

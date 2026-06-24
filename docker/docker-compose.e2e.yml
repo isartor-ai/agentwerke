@@ -66,6 +66,7 @@ services:
     volumes:
       - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github.json:ro
       - ../tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json:/home/wiremock/mappings/anthropic.json:ro
+      - ../tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-tool-use-stub.json:/home/wiremock/mappings/anthropic-tool-use.json:ro
     healthcheck:
       # WireMock 3.10+ admin endpoint returns {"status":"healthy"}
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]

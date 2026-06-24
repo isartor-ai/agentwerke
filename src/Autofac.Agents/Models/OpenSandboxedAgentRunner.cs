@@ -256,7 +256,9 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tool.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tool.Name, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(tool.Name, "github.post_review", StringComparison.OrdinalIgnoreCase)))
+                string.Equals(tool.Name, "github.post_review", StringComparison.OrdinalIgnoreCase) ||
+                // sandbox.git clones/pushes against the same repository using the same PAT (#140).
+                string.Equals(tool.Name, "sandbox.git", StringComparison.OrdinalIgnoreCase)))
         {
             environment["Integrations__GitHub__Enabled"] = _integrationOptions.GitHub.Enabled ? "true" : "false";
             environment["Integrations__GitHub__ApiBaseUrl"] = _integrationOptions.GitHub.ApiBaseUrl;
@@ -336,7 +338,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         {
             return new ToolResolution(
                 [],
-                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.read_issue, github.create_branch, github.create_pull_request, github.request_review, github.post_review.");
+                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.read_issue, github.create_branch, github.create_pull_request, github.request_review, github.post_review, sandbox.file_read, sandbox.file_write, sandbox.file_edit, sandbox.git, sandbox.shell, sandbox.run_tests.");
         }
 
         return new ToolResolution(
@@ -506,6 +508,14 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             "github.create_pull_request" => new SandboxedToolContract("github.create_pull_request", AgentToolCategories.Integration),
             "github.request_review" => new SandboxedToolContract("github.request_review", AgentToolCategories.Integration),
             "github.post_review" => new SandboxedToolContract("github.post_review", AgentToolCategories.Integration),
+            // Code-writing tools for implementation/review/test agents (#130, #140) — operate on
+            // the sandbox's mounted /workspace, not on the host.
+            "sandbox.file_read" => new SandboxedToolContract("sandbox.file_read", AgentToolCategories.Read),
+            "sandbox.file_write" => new SandboxedToolContract("sandbox.file_write", AgentToolCategories.Write),
+            "sandbox.file_edit" => new SandboxedToolContract("sandbox.file_edit", AgentToolCategories.Write),
+            "sandbox.git" => new SandboxedToolContract("sandbox.git", AgentToolCategories.Shell),
+            "sandbox.shell" => new SandboxedToolContract("sandbox.shell", AgentToolCategories.Shell),
+            "sandbox.run_tests" => new SandboxedToolContract("sandbox.run_tests", AgentToolCategories.Shell),
             _ => null
         };
 
