@@ -514,7 +514,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 });
         }
 
-        if (IsDirectGitHubToolAction(metadata.Action))
+        if (IsDirectGitHubToolAction(metadata.Action) || IsDirectCicdToolAction(metadata.Action))
         {
             return CreateToolRequest(
                 ToolName: metadata.Action,
@@ -682,6 +682,14 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string.Equals(action, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.post_review", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// CI/CD trigger tools (#139) are deterministic, no-LLM-needed calls just like the direct
+    /// GitHub tools above — a BPMN service task configured with this action dispatches straight
+    /// to <see cref="Autofac.Agents.Tools.CicdTriggerDeployTool"/> instead of running an agent.
+    /// </summary>
+    private static bool IsDirectCicdToolAction(string action) =>
+        string.Equals(action, "cicd.trigger_deploy", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsGitHubAction(string action) =>
         string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||

@@ -401,6 +401,63 @@ public sealed class GitHubConnectorTests
         Assert.Contains("\"event\":\"COMMENT\"", payload, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TriggerWorkflowDispatchAsync_PostsWorkflowDispatchPayloadWithExplicitInputs()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/actions/workflows/deploy-to-test.yml/dispatches")
+            {
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.TriggerWorkflowDispatchAsync(
+            new TriggerGitHubWorkflowDispatchCommand(
+                Ref: "abc123",
+                Inputs: new Dictionary<string, string> { ["sha"] = "abc123" }),
+            CancellationToken.None);
+
+        Assert.Equal("deploy-to-test.yml", result.WorkflowFileName);
+        Assert.Equal("abc123", result.Ref);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"ref\":\"abc123\"", payload, StringComparison.Ordinal);
+        Assert.Contains("\"sha\":\"abc123\"", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TriggerWorkflowDispatchAsync_WhenNoOverridesGiven_FallsBackToConfiguredDefaults()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.TriggerWorkflowDispatchAsync(
+            new TriggerGitHubWorkflowDispatchCommand(),
+            CancellationToken.None);
+
+        Assert.Equal("deploy-to-test.yml", result.WorkflowFileName);
+        Assert.Equal("main", result.Ref);
+        Assert.Equal("/repos/octo/autofac/actions/workflows/deploy-to-test.yml/dispatches", requests[0].RequestUri?.AbsolutePath);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"ref\":\"main\"", payload, StringComparison.Ordinal);
+    }
+
     private static GitHubConnector CreateConnector(HttpMessageHandler handler)
     {
         var client = new HttpClient(handler)

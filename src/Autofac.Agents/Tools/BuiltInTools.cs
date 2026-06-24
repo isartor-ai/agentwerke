@@ -366,6 +366,73 @@ public sealed class GitHubPostReviewTool : IAgentTool, IToolSchemaProvider
     }
 }
 
+/// <summary>
+/// Triggers a CI/CD deploy run (#139). Named under the provider-agnostic "cicd." namespace
+/// rather than "github." since a future connector swap (Phase E5, #87) shouldn't rename the
+/// tool agents call — only GitHub Actions is wired up today via <see cref="IGitHubConnector"/>.
+/// </summary>
+public sealed class CicdTriggerDeployTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IGitHubConnector _connector;
+
+    public CicdTriggerDeployTool(IGitHubConnector connector)
+    {
+        _connector = connector;
+    }
+
+    public string Name => "cicd.trigger_deploy";
+
+    public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("ref", "string", "The commit sha or branch to deploy. Defaults to the repository default branch.", Required: false),
+        new("workflow_file", "string", "The Actions workflow file name to dispatch. Defaults to the configured deploy workflow.", Required: false)
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input)
+    {
+        // Both fields are optional — the connector falls back to configured defaults.
+    }
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var @ref = GitHubToolInput.ReadOptional(input, "ref");
+        var result = await _connector.TriggerWorkflowDispatchAsync(
+            new TriggerGitHubWorkflowDispatchCommand(
+                WorkflowFileName: GitHubToolInput.ReadOptional(input, "workflow_file"),
+                Ref: @ref,
+                Inputs: @ref is null ? null : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["sha"] = @ref }),
+            cancellationToken);
+
+        return new AgentToolExecutionResult(
+            Succeeded: true,
+            Output: JsonSerializer.Serialize(new
+            {
+                provider = "github",
+                action = "trigger_workflow_dispatch",
+                status = "dispatched",
+                workflow_file = result.WorkflowFileName,
+                @ref = result.Ref,
+                triggered_at = result.TriggeredAt
+            }),
+            FailureReason: null,
+            ExternalActions:
+            [
+                new ExternalActionRecord(
+                    Provider: "github",
+                    Action: "trigger_workflow_dispatch",
+                    Status: "dispatched",
+                    ResourceId: result.WorkflowFileName,
+                    ResourceUrl: null,
+                    Summary: $"Dispatched GitHub workflow '{result.WorkflowFileName}' on ref '{result.Ref}'")
+            ]);
+    }
+}
+
 internal static class GitHubToolInput
 {
     public static void Require(IReadOnlyDictionary<string, string> input, string key)

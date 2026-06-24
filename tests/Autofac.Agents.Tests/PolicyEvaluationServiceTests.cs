@@ -55,6 +55,55 @@ public sealed class PolicyEvaluationServiceTests
     }
 
     [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_DispatchesWorkflowWithRequestedRefAndShaInput()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run-1",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["ref"] = "abc123" },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, gitHub.TriggerWorkflowDispatchCalls);
+        var action = Assert.Single(result.ExternalActions!);
+        Assert.Equal("trigger_workflow_dispatch", action.Action);
+        Assert.Equal("dispatched", action.Status);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_WhenNoInputGiven_StillDispatchesUsingConnectorDefaults()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run-1",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, gitHub.TriggerWorkflowDispatchCalls);
+    }
+
+    [Fact]
     public async Task AgentOrchestrator_WhenPolicyRejects_DoesNotInvokeGitHubConnector()
     {
         var skills = new SkillRepository(CreateKnownSkills());
@@ -74,6 +123,7 @@ public sealed class PolicyEvaluationServiceTests
                 new GitHubCreatePullRequestTool(gitHub),
                 new GitHubRequestReviewTool(gitHub),
                 new GitHubPostReviewTool(gitHub),
+                new CicdTriggerDeployTool(gitHub),
                 new SandboxExecutionTool(sandbox)
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
@@ -134,6 +184,7 @@ public sealed class PolicyEvaluationServiceTests
                 new GitHubCreatePullRequestTool(gitHub),
                 new GitHubRequestReviewTool(gitHub),
                 new GitHubPostReviewTool(gitHub),
+                new CicdTriggerDeployTool(gitHub),
                 new SandboxExecutionTool(sandbox)
             ]),
             CreateToolGateway(gitHub, sandbox, policyService),
@@ -344,6 +395,7 @@ public sealed class PolicyEvaluationServiceTests
     [InlineData("github.read_issue")]
     [InlineData("github.request_review")]
     [InlineData("github.post_review")]
+    [InlineData("cicd.trigger_deploy")]
     public async Task AgentOrchestrator_WhenNewGitHubToolIsDenied_BlocksExecutionBeforeConnectorCall(string action)
     {
         var gitHub = new RecordingGitHubConnector();
@@ -380,6 +432,7 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal(0, gitHub.GetIssueCalls);
         Assert.Equal(0, gitHub.RequestReviewersCalls);
         Assert.Equal(0, gitHub.PostReviewCalls);
+        Assert.Equal(0, gitHub.TriggerWorkflowDispatchCalls);
         Assert.NotNull(outcome.RuntimeSnapshot);
         var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
         Assert.Equal(action, invocation.ToolName);
@@ -1174,6 +1227,7 @@ public sealed class PolicyEvaluationServiceTests
             new GitHubCreatePullRequestTool(gitHub),
             new GitHubRequestReviewTool(gitHub),
             new GitHubPostReviewTool(gitHub),
+                new CicdTriggerDeployTool(gitHub),
             new SandboxExecutionTool(sandbox)
         ]);
 
@@ -1222,6 +1276,7 @@ public sealed class PolicyEvaluationServiceTests
             new GitHubCreatePullRequestTool(gitHub),
             new GitHubRequestReviewTool(gitHub),
             new GitHubPostReviewTool(gitHub),
+                new CicdTriggerDeployTool(gitHub),
             new SandboxExecutionTool(sandbox)
         ]);
 
@@ -1304,6 +1359,10 @@ public sealed class PolicyEvaluationServiceTests
                 ["tool.input.pull_number"] = "42",
                 ["tool.input.body"] = "Looks good.",
                 ["tool.input.event"] = "COMMENT"
+            },
+            "cicd.trigger_deploy" => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tool.input.ref"] = "abc123"
             },
             _ => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         };
@@ -1393,6 +1452,17 @@ public sealed class PolicyEvaluationServiceTests
         {
             PostReviewCalls++;
             return Task.FromResult(new GitHubReviewResult(7, command.PullNumber, $"https://example.test/pr/{command.PullNumber}#review-7", "COMMENTED", command.Event));
+        }
+
+        public int TriggerWorkflowDispatchCalls { get; private set; }
+
+        public Task<GitHubWorkflowDispatchResult> TriggerWorkflowDispatchAsync(TriggerGitHubWorkflowDispatchCommand command, CancellationToken cancellationToken = default)
+        {
+            TriggerWorkflowDispatchCalls++;
+            return Task.FromResult(new GitHubWorkflowDispatchResult(
+                command.WorkflowFileName ?? "deploy-to-test.yml",
+                command.Ref ?? "main",
+                DateTimeOffset.UtcNow.ToString("o")));
         }
     }
 

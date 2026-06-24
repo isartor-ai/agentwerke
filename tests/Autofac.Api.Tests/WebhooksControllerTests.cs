@@ -278,6 +278,41 @@ public sealed class WebhooksControllerTests
         Assert.Empty(eventRepository.Added);
     }
 
+    [Fact]
+    public async Task GitHub_WorkflowRunCompletedEvent_WhenOnlyTheCommitShaMatchesAWaitingRun_StillAutoResumesIt()
+    {
+        // Simulates the #139 "wait for CI green after a deploy dispatch" gate: the message-catch
+        // node was keyed on the commit sha (not the branch), since a branch can have many runs.
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_sha_match", onlyMatchKey: "sha789");
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "workflow_run",
+            waitingExternalCorrelationRepository: waitingRepository);
+
+        var body = """
+            {
+              "action": "completed",
+              "workflow_run": {
+                "status": "completed",
+                "conclusion": "success",
+                "head_sha": "sha789",
+                "head_branch": "main"
+              }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_sha_match", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("sha789", orchestration.ResumeExternalCommand.CorrelationKey);
+    }
+
     private static WebhooksController CreateController(
         IWorkflowRunOrchestrationService orchestration,
         IExternalWorkflowEventRepository eventRepository,
@@ -351,7 +386,12 @@ public sealed class WebhooksControllerTests
         }
     }
 
-    private sealed class StubWaitingExternalCorrelationRepository(string? runId) : IWaitingExternalCorrelationRepository
+    /// <summary>
+    /// Matches any (messageName, correlationKey) lookup when constructed with a flat run id.
+    /// Construct with <paramref name="onlyMatchKey"/> to simulate a run waiting on one *specific*
+    /// correlation key (e.g. a commit sha) so multi-candidate lookups (#139) can be exercised.
+    /// </summary>
+    private sealed class StubWaitingExternalCorrelationRepository(string? runId, string? onlyMatchKey = null) : IWaitingExternalCorrelationRepository
     {
         public Task UpsertAsync(WaitingExternalCorrelation correlation, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -360,7 +400,7 @@ public sealed class WebhooksControllerTests
             throw new NotSupportedException();
 
         public Task<string?> FindWaitingRunIdAsync(string messageName, string correlationKey, CancellationToken cancellationToken) =>
-            Task.FromResult(runId);
+            Task.FromResult(onlyMatchKey is null || string.Equals(onlyMatchKey, correlationKey, StringComparison.Ordinal) ? runId : null);
     }
 
     private sealed class StubTriggerRouter(string? workflowId) : ITriggerRouter

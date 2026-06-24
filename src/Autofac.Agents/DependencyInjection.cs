@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();
         services.AddScoped<IAgentTool, GitHubRequestReviewTool>();
         services.AddScoped<IAgentTool, GitHubPostReviewTool>();
+        services.AddScoped<IAgentTool, CicdTriggerDeployTool>();
         services.AddScoped<IAgentTool, SandboxExecutionTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();
         services.AddScoped<IAgentHookHandler, TemplateHookHandler>();
