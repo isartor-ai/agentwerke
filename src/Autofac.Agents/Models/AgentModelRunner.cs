@@ -53,7 +53,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
         var elapsedMs = sw.Elapsed.TotalMilliseconds;
         var tokenUsage = ToTokenUsage(response, elapsedMs);
-        var costUsd = CalculateCost(response.Usage.InputTokens, response.Usage.OutputTokens);
+        var costUsd = CalculateCost(response.Usage);
         _metrics.ModelInvoked(
             request.AgentName,
             response.ModelId ?? _options.Model,
@@ -162,7 +162,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
                 Name: t.Name,
                 Description: BuildToolDescription(t),
                 Parameters: (t as IToolSchemaProvider)?.GetParameters()
-                    .Select(p => new LanguageModelToolParameter(p.Name, p.Type, p.Description, p.Required))
+                    .Select(p => new LanguageModelToolParameter(
+                        p.Name, p.Type, p.Description, p.Required, p.EnumValues, p.ItemType))
                     .ToArray() ?? []))
             .ToArray();
     }
@@ -182,7 +183,11 @@ public sealed class AgentModelRunner : IAgentModelRunner
             elapsedMs);
     }
 
-    private double CalculateCost(int inputTokens, int outputTokens) =>
-        (double)((inputTokens * _options.InputCostPerMillionTokens +
-                  outputTokens * _options.OutputCostPerMillionTokens) / 1_000_000m);
+    // Prices uncached input, output, and the two prompt-cache token classes separately so the
+    // agent.model.cost_usd metric reflects the savings (and write premium) from prompt caching.
+    private double CalculateCost(LanguageModelTokenUsage usage) =>
+        (double)((usage.InputTokens * _options.InputCostPerMillionTokens +
+                  usage.OutputTokens * _options.OutputCostPerMillionTokens +
+                  usage.CacheReadInputTokens * _options.CacheReadCostPerMillionTokens +
+                  usage.CacheCreationInputTokens * _options.CacheWriteCostPerMillionTokens) / 1_000_000m);
 }

@@ -31,7 +31,11 @@ public sealed record LanguageModelToolParameter(
     string Name,
     string Type,
     string Description,
-    bool Required = false);
+    bool Required = false,
+    /// <summary>Allowed values for an enum-constrained parameter, or null/empty for none.</summary>
+    IReadOnlyList<string>? EnumValues = null,
+    /// <summary>For <c>Type == "array"</c>, the JSON schema type of each item (e.g. "string").</summary>
+    string? ItemType = null);
 
 public sealed record LanguageModelToolCall(
     string Id,
@@ -43,4 +47,8 @@ public sealed record LanguageModelToolResult(
     string Content,
     bool IsError = false);
 
-public sealed record LanguageModelTokenUsage(int InputTokens, int OutputTokens);
+public sealed record LanguageModelTokenUsage(
+    int InputTokens,
+    int OutputTokens,
+    int CacheCreationInputTokens = 0,
+    int CacheReadInputTokens = 0);

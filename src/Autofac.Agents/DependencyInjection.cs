@@ -8,6 +8,7 @@ using Autofac.Sandboxes;
 using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Autofac.Agents;
 
@@ -44,7 +45,18 @@ public static class DependencyInjection
         var apiKey = configuration[$"{LanguageModelOptions.Section}:ApiKey"];
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
-            services.AddScoped<ILanguageModelClient, AnthropicLanguageModelClient>();
+            // Resolve the Anthropic client through IHttpClientFactory so it gets a pooled,
+            // timeout-bounded HttpClient with transient-failure retries (429/529/5xx) — matching
+            // how the GitHub/Jira/Camunda connectors are wired.
+            services.AddTransient<AnthropicRetryHandler>();
+            services.AddHttpClient<AnthropicLanguageModelClient>((sp, client) =>
+                {
+                    var options = sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value;
+                    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+                })
+                .AddHttpMessageHandler<AnthropicRetryHandler>();
+            services.AddScoped<ILanguageModelClient>(sp =>
+                sp.GetRequiredService<AnthropicLanguageModelClient>());
         }
         else
         {

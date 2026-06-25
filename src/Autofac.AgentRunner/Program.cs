@@ -61,13 +61,21 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         return new SandboxedAgentRunResult(false, null, $"Missing {ModelApiKeyEnvironmentVariable}.", null);
     }
 
-    var client = new AnthropicLanguageModelClient(Options.Create(new LanguageModelOptions
+    var modelOptions = Options.Create(new LanguageModelOptions
     {
         ApiKey = apiKey,
         ApiBaseUrl = Environment.GetEnvironmentVariable(ModelApiBaseUrlEnvironmentVariable) ?? LanguageModelOptions.DefaultApiBaseUrl,
         Model = envelope.Model,
         MaxTokens = envelope.MaxTokens
-    }));
+    });
+
+    // No DI container in the sandboxed runner, so build the resilient HTTP pipeline by hand:
+    // retry handler (429/529/5xx) over the default handler, with the configured timeout.
+    var httpClient = new HttpClient(new AnthropicRetryHandler(modelOptions) { InnerHandler = new HttpClientHandler() })
+    {
+        Timeout = TimeSpan.FromSeconds(Math.Max(1, modelOptions.Value.TimeoutSeconds))
+    };
+    var client = new AnthropicLanguageModelClient(httpClient, modelOptions);
 
     var executor = new SandboxedAgentRuntimeExecutor(
         client,
