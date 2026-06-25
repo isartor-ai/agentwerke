@@ -301,4 +301,41 @@ public sealed class AgentModelRunnerTests
         var cost = metrics.ModelInvocations[0].CostUsd;
         Assert.Equal(0.0105, cost, precision: 6);
     }
+
+    [Fact]
+    public async Task RunAsync_PromptCacheTokens_ReflectedInCostMetric()
+    {
+        var metrics = new CapturingMetrics();
+        // 1000 uncached input + 500 output + 4000 cache-read + 2000 cache-write
+        // at $3 / $15 / $0.30 / $3.75 per MTok =>
+        // 0.003 + 0.0075 + 0.0012 + 0.0075 = 0.0192
+        var options = new LanguageModelOptions
+        {
+            InputCostPerMillionTokens = 3.00m,
+            OutputCostPerMillionTokens = 15.00m,
+            CacheReadCostPerMillionTokens = 0.30m,
+            CacheWriteCostPerMillionTokens = 3.75m
+        };
+        var response = new LanguageModelResponse(
+            Succeeded: true,
+            Output: "ok",
+            FailureReason: null,
+            AllToolCalls: [],
+            Usage: new LanguageModelTokenUsage(
+                InputTokens: 1000,
+                OutputTokens: 500,
+                CacheCreationInputTokens: 2000,
+                CacheReadInputTokens: 4000),
+            ModelId: "claude-sonnet-4-6");
+        var runner = BuildRunner(
+            new StubLanguageModelClient(response),
+            new StubToolGateway(new ToolGatewayResult(true, null, null, null, new AgentToolInvocationRecord { ToolName = "noop" })),
+            metrics,
+            options);
+
+        await runner.RunAsync(MakeRequest(), CancellationToken.None);
+
+        var cost = metrics.ModelInvocations[0].CostUsd;
+        Assert.Equal(0.0192, cost, precision: 6);
+    }
 }

@@ -8,10 +8,12 @@ namespace Autofac.Agents.Models;
 
 public sealed class AnthropicLanguageModelClient : ILanguageModelClient
 {
+    private readonly HttpClient _httpClient;
     private readonly LanguageModelOptions _options;
 
-    public AnthropicLanguageModelClient(IOptions<LanguageModelOptions> options)
+    public AnthropicLanguageModelClient(HttpClient httpClient, IOptions<LanguageModelOptions> options)
     {
+        _httpClient = httpClient;
         _options = options.Value;
     }
 
@@ -24,8 +26,10 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             ?? throw new InvalidOperationException(
                 "Anthropic API key is not configured. Set 'Anthropic:ApiKey' in configuration.");
 
-        using var httpClient = BuildHttpClient();
-        using var client = new AnthropicClient(new APIAuthentication(apiKey), httpClient, null);
+        // The HttpClient is injected from IHttpClientFactory and owns the retry/timeout pipeline;
+        // it must not be disposed here. AnthropicClient is likewise not wrapped in `using` so it
+        // cannot dispose the shared, pooled HttpClient between RunAsync calls on this instance.
+        var client = new AnthropicClient(new APIAuthentication(apiKey), _httpClient, null);
 
         // AnthropicClient builds request URLs from ApiUrlFormat (default
         // "https://api.anthropic.com/{0}/{1}") rather than HttpClient.BaseAddress, so
@@ -52,6 +56,8 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
         var allToolCalls = new List<LanguageModelToolCall>();
         int totalInputTokens = 0;
         int totalOutputTokens = 0;
+        int totalCacheCreationTokens = 0;
+        int totalCacheReadTokens = 0;
         string? modelId = null;
 
         for (int iteration = 0; iteration < _options.MaxToolIterations; iteration++)
@@ -62,7 +68,12 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                 MaxTokens = request.MaxTokens,
                 System = [new SystemMessage(request.SystemPrompt)],
                 Messages = messages,
-                Tools = tools.Count > 0 ? tools : null!
+                Tools = tools.Count > 0 ? tools : null!,
+                // Marks the system prompt and tool block as cacheable so they are billed at the
+                // reduced cache-read rate across tool-loop iterations and subsequent steps.
+                PromptCaching = _options.EnablePromptCaching
+                    ? PromptCacheType.AutomaticToolsAndSystem
+                    : PromptCacheType.None
             };
 
             MessageResponse response;
@@ -77,12 +88,18 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     Output: null,
                     FailureReason: $"LLM call failed: {ex.Message}",
                     AllToolCalls: allToolCalls,
-                    Usage: new LanguageModelTokenUsage(totalInputTokens, totalOutputTokens),
+                    Usage: new LanguageModelTokenUsage(
+                        totalInputTokens,
+                        totalOutputTokens,
+                        totalCacheCreationTokens,
+                        totalCacheReadTokens),
                     ModelId: modelId);
             }
 
             totalInputTokens += response.Usage.InputTokens;
             totalOutputTokens += response.Usage.OutputTokens;
+            totalCacheCreationTokens += response.Usage.CacheCreationInputTokens;
+            totalCacheReadTokens += response.Usage.CacheReadInputTokens;
             modelId ??= response.Model;
 
             var toolUses = response.Content.OfType<ToolUseContent>().ToArray();
@@ -95,7 +112,11 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     Output: text,
                     FailureReason: null,
                     AllToolCalls: allToolCalls,
-                    Usage: new LanguageModelTokenUsage(totalInputTokens, totalOutputTokens),
+                    Usage: new LanguageModelTokenUsage(
+                        totalInputTokens,
+                        totalOutputTokens,
+                        totalCacheCreationTokens,
+                        totalCacheReadTokens),
                     ModelId: modelId);
             }
 
@@ -141,19 +162,16 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             Output: null,
             FailureReason: $"Agent exceeded maximum tool iterations ({_options.MaxToolIterations}).",
             AllToolCalls: allToolCalls,
-            Usage: new LanguageModelTokenUsage(totalInputTokens, totalOutputTokens),
+            Usage: new LanguageModelTokenUsage(
+                totalInputTokens,
+                totalOutputTokens,
+                totalCacheCreationTokens,
+                totalCacheReadTokens),
             ModelId: modelId);
     }
 
     private static string SanitizeName(string name) =>
         name.Replace('.', '_').Replace(' ', '_');
-
-    // ApiUrlFormat (set in RunAsync), not HttpClient.BaseAddress, is what actually
-    // controls where AnthropicClient sends requests — see the comment at the call site.
-    private static HttpClient BuildHttpClient()
-    {
-        return new HttpClient();
-    }
 
     private static List<Anthropic.SDK.Common.Tool> BuildTools(
         IReadOnlyList<LanguageModelToolDefinition> tools)
@@ -171,11 +189,7 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
 
         foreach (var p in parameters)
         {
-            properties[p.Name] = new JsonObject
-            {
-                ["type"] = p.Type,
-                ["description"] = p.Description
-            };
+            properties[p.Name] = BuildParameterSchema(p);
 
             if (p.Required) required.Add(p.Name);
         }
@@ -186,6 +200,37 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             ["properties"] = properties,
             ["required"] = required
         };
+    }
+
+    private static JsonObject BuildParameterSchema(LanguageModelToolParameter p)
+    {
+        var schema = new JsonObject
+        {
+            ["type"] = p.Type,
+            ["description"] = p.Description
+        };
+
+        if (p.EnumValues is { Count: > 0 })
+        {
+            var values = new JsonArray();
+            foreach (var value in p.EnumValues)
+            {
+                values.Add(value);
+            }
+
+            schema["enum"] = values;
+        }
+
+        // JSON schema requires an "items" definition for array-typed parameters.
+        if (string.Equals(p.Type, "array", StringComparison.OrdinalIgnoreCase))
+        {
+            schema["items"] = new JsonObject
+            {
+                ["type"] = string.IsNullOrWhiteSpace(p.ItemType) ? "string" : p.ItemType
+            };
+        }
+
+        return schema;
     }
 
     private static IReadOnlyDictionary<string, string> ExtractInput(JsonNode? input)

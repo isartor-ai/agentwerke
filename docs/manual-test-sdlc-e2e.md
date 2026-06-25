@@ -52,6 +52,40 @@ two gates specifically.
   `workflow_dispatch` permission on a deploy-to-test Actions workflow, and a way to receive GitHub
   webhooks at the Autofac instance (a public URL, or `smee.io`/`ngrok` tunnel to a local instance).
 
+## Part 0 — Automated agent-layer proof (gated, no infrastructure)
+
+Before the manual full-workflow run below, the **real Claude agent path** can be proven automatically
+at the agent layer — no GitHub repo, webhook, or host required. This exercises the production
+`AnthropicLanguageModelClient` (through its `IHttpClientFactory` resilience pipeline) driving a real
+tool-use loop, which is the core of issue [#143](https://github.com/isartor-ai/autofac-private/issues/143).
+
+The test is gated on an API key so it is a no-op without credentials:
+
+```bash
+# Skipped (no-op) when the env var is absent:
+dotnet test tests/Autofac.Agents.Tests/Autofac.Agents.Tests.csproj \
+  --filter "FullyQualifiedName~RealClaudeIntegrationTests"
+
+# Runs against the real API when a key is present:
+AUTOFAC_E2E_ANTHROPIC_API_KEY=sk-ant-... \
+  dotnet test tests/Autofac.Agents.Tests/Autofac.Agents.Tests.csproj \
+  --filter "FullyQualifiedName~RealClaudeIntegrationTests"
+```
+
+It asserts the model invoked the declared tool (`record_decision`), returned a final text reply, and
+reported real token usage. Optionally override the model with `AUTOFAC_E2E_ANTHROPIC_MODEL`.
+
+> **Record your run here.** After running with a real key, note the date, model id, and observed
+> token usage / approximate cost (the `agent.model.cost_usd` metric, which now includes prompt-cache
+> read/write tokens) so this file carries a dated proof:
+>
+> | Date | Model | Input tok | Output tok | Cache read/write tok | Approx. cost |
+> | --- | --- | --- | --- | --- | --- |
+> | _pending first real run_ | | | | | |
+
+What this does **not** cover (still manual, see Parts A/B): the full BPMN template, approval-card UX,
+and the live webhook-resume path — those need infrastructure this repo does not own.
+
 ## Part A — Local validation (manual resume, no real GitHub required)
 
 ### Step 1: Clone the template
