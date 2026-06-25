@@ -12,7 +12,11 @@ public sealed record ToolSchemaParameter(
     string Name,
     string Type,
     string Description,
-    bool Required = false);
+    bool Required = false,
+    /// <summary>Allowed values for an enum-constrained parameter, or null/empty for none.</summary>
+    IReadOnlyList<string>? EnumValues = null,
+    /// <summary>For <c>Type == "array"</c>, the JSON schema type of each item (e.g. "string").</summary>
+    string? ItemType = null);
 
 public interface IAgentTool
 {

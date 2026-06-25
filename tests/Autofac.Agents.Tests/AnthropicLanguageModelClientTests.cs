@@ -18,7 +18,8 @@ public sealed class AnthropicLanguageModelClientTests
         // AnthropicLanguageModelClient actually overrides ApiUrlFormat.
         using var server = await FakeAnthropicServer.StartAsync();
 
-        var client = new AnthropicLanguageModelClient(Options.Create(new LanguageModelOptions
+        using var httpClient = new HttpClient();
+        var client = new AnthropicLanguageModelClient(httpClient, Options.Create(new LanguageModelOptions
         {
             ApiKey = "test-key",
             ApiBaseUrl = server.BaseUrl,
