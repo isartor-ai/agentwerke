@@ -1,3 +1,4 @@
+using System.Globalization;
 using Autofac.Application.Workflows;
 using Autofac.Domain.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -84,16 +85,27 @@ public sealed class OutboxRepository : IRunOutbox
         // "Stuck" = running status with no claimed outbox entry and no completed/failed entry in last 10 min
         var staleThreshold = DateTimeOffset.UtcNow.AddMinutes(-10);
 
-        var stuckIds = await _db.WorkflowRuns
+        // The server-side predicate (running + no active outbox entry) yields a small candidate
+        // set. StartedAt is stored as an ISO-8601 string, and string.Compare(...) is not
+        // translatable by Npgsql, so the time-threshold filter is applied client-side by parsing
+        // the timestamp — robust to timezone offset and cheap over the small candidate set.
+        var candidates = await _db.WorkflowRuns
             .Where(r => r.Status == "running"
                         && !_db.OutboxEntries.Any(e =>
                             e.RunId == r.Id &&
                             e.CompletedAt == null &&
                             e.FailedAt == null))
-            .Where(r => r.StartedAt != null && string.Compare(r.StartedAt, staleThreshold.ToString("o"), StringComparison.Ordinal) < 0)
-            .Select(r => r.Id)
+            .Select(r => new { r.Id, r.StartedAt })
             .ToListAsync(ct);
 
-        return stuckIds;
+        return candidates
+            .Where(r => DateTimeOffset.TryParse(
+                            r.StartedAt,
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.RoundtripKind,
+                            out var startedAt)
+                        && startedAt < staleThreshold)
+            .Select(r => r.Id)
+            .ToList();
     }
 }

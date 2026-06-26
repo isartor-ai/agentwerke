@@ -49,4 +49,28 @@ public sealed class AgentsDependencyInjectionTests
 
         Assert.IsType<NullLanguageModelClient>(client);
     }
+
+    [Fact]
+    public void ProviderMock_ResolvesMockClient_EvenWithoutApiKey()
+    {
+        using var provider = (ServiceProvider)Build(("Anthropic:Provider", "mock"));
+        using var scope = provider.CreateScope();
+
+        var client = scope.ServiceProvider.GetRequiredService<ILanguageModelClient>();
+
+        Assert.IsType<MockLanguageModelClient>(client);
+    }
+
+    [Fact]
+    public void ProviderAnthropicWithoutKey_StillSelectsAnthropic()
+    {
+        // Explicit provider=anthropic resolves the real client even without a key
+        // (it surfaces a clear "not configured" failure at call time, not a silent mock).
+        using var provider = (ServiceProvider)Build(("Anthropic:Provider", "anthropic"));
+        using var scope = provider.CreateScope();
+
+        var client = scope.ServiceProvider.GetRequiredService<ILanguageModelClient>();
+
+        Assert.IsType<AnthropicLanguageModelClient>(client);
+    }
 }

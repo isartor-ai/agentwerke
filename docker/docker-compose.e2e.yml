@@ -150,6 +150,13 @@ services:
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: ""
       Sandboxes__Docker__Enabled: "false"
+      # Agent steps run in-process (executionMode "local"), so the API itself calls the
+      # Anthropic Messages API — routed to the shared WireMock stub via the in-network service
+      # name (the API is on the compose network). ApiKey just needs to be non-empty so the real
+      # client (not the Null client) is wired. Without this, agent service tasks fail with
+      # "No language model client is configured" and WorkflowRunTests go red.
+      Anthropic__ApiKey: "test-key"
+      Anthropic__ApiBaseUrl: "http://wiremock:8080/"
       # Route GitHub API calls through WireMock — no real token needed
       Integrations__GitHub__ApiBaseUrl: "http://wiremock:8080/"
       Integrations__GitHub__PersonalAccessToken: "mock-token"

@@ -231,7 +231,11 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
             WorkflowName = run?.WorkflowName ?? runId,
             ActionRequested = info.PurposeType,
             Requester = run?.RequestedBy ?? "system",
-            AgentName = info.AgentName,
+            // AgentName is NOT NULL in the schema; an approval gate with no resolvable
+            // preceding agent (e.g. an approval-only workflow, or a workflow without
+            // sequence flows) yields a null here, which crashed the insert and left the
+            // run gated with no approval row (#163). Coalesce so the insert succeeds.
+            AgentName = info.AgentName ?? string.Empty,
             PolicyRationale = info.PolicyTag,
             RiskLevel = info.RiskLevel,
             RiskScore = info.RiskScore,
