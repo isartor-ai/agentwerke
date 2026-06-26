@@ -72,7 +72,19 @@ public sealed record AutofacTaskMetadata(
     /// defaults to the most restrictive "offline" profile. Validated against the agent's
     /// declared allow-list and policy risk level before the sandbox is created.
     /// </summary>
-    string? SandboxProfile = null);
+    string? SandboxProfile = null,
+    /// <summary>
+    /// For a github.create_pull_request task: when true, include prior agent step
+    /// output(s) from run context in the PR (committed file + body), so the PR contains
+    /// the agent's work, not just run metadata (#150).
+    /// </summary>
+    bool IncludeAgentOutput = false,
+    /// <summary>
+    /// Optional node id whose output (<c>output.&lt;id&gt;</c>) to include when
+    /// <see cref="IncludeAgentOutput"/> is set. When null, all <c>output.*</c> entries
+    /// are included.
+    /// </summary>
+    string? OutputFrom = null);
 
 public sealed record AutofacApprovalMetadata(
     string PurposeType,

@@ -327,6 +327,58 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenIncludeAgentOutputAttributesPresent_ParsesThem()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="W" name="W">
+                <bpmn:serviceTask id="OpenPR" name="Open PR">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask agent="github-agent" action="github.create_pull_request"
+                      purposeType="pull_request" policyTag="repo-write"
+                      includeAgentOutput="true" outputFrom="Implement" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "OpenPR");
+        Assert.True(node.Metadata!.IncludeAgentOutput);
+        Assert.Equal("Implement", node.Metadata.OutputFrom);
+    }
+
+    [Fact]
+    public void Validate_WhenIncludeAgentOutputAbsent_DefaultsFalse()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="W" name="W">
+                <bpmn:serviceTask id="OpenPR" name="Open PR">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask agent="github-agent" action="github.create_pull_request"
+                      purposeType="pull_request" policyTag="repo-write" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "OpenPR");
+        Assert.False(node.Metadata!.IncludeAgentOutput);
+        Assert.Null(node.Metadata.OutputFrom);
+    }
+
+    [Fact]
     public void Validate_WhenNoPromptOrPermissions_RuntimeContractIsNull()
     {
         var xml = """
