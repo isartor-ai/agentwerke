@@ -29,7 +29,13 @@ public sealed class RunDispatchWorker : BackgroundService
         {
             try
             {
-                await DispatchNextAsync(stoppingToken);
+                // Drain all ready entries this cycle rather than one-per-poll, so a backlog
+                // of queued runs is dispatched promptly instead of at ~PollInterval each
+                // (which made runs wait seconds to start under load and flaked the
+                // approval-gate E2E).
+                while (await DispatchNextAsync(stoppingToken))
+                {
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -71,14 +77,16 @@ public sealed class RunDispatchWorker : BackgroundService
         }
     }
 
-    private async Task DispatchNextAsync(CancellationToken ct)
+    /// <returns><c>true</c> if an entry was claimed and dispatched; <c>false</c> when the
+    /// outbox had nothing ready (so the caller can sleep until the next poll).</returns>
+    private async Task<bool> DispatchNextAsync(CancellationToken ct)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var outbox = scope.ServiceProvider.GetRequiredService<IRunOutbox>();
 
         var entry = await outbox.TryClaimNextAsync(_workerId, ct);
         if (entry is null)
-            return;
+            return false;
 
         _logger.LogInformation(
             "Dispatching outbox entry {EntryId} op={Operation} runId={RunId}",
@@ -130,5 +138,7 @@ public sealed class RunDispatchWorker : BackgroundService
                 entry.Id, entry.Operation, entry.RunId);
             await outbox.MarkFailedAsync(entry.Id, ex.Message, ct);
         }
+
+        return true;
     }
 }

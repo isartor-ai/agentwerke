@@ -284,7 +284,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                             purposeType = node.ApprovalMetadata?.PurposeType,
                             policyTag = node.ApprovalMetadata?.PolicyTag
                         }), cancellationToken);
-                    await _store.UpdateRunStatusAsync(runId, WaitingUserStatus, completedAt: null, cancellationToken);
+                    // Intentionally do NOT flip the run's Status to waiting_user here. The
+                    // executor (WorkflowRunExecutor.HandleResultAsync) creates the approval
+                    // row and THEN sets the status, so the run never appears as
+                    // awaiting_approval before its approval is queryable (#163). The
+                    // checkpoint still records waiting_user for crash recovery.
                     await SaveCheckpointAsync(runId, WaitingUserStatus, nextAfterUser, node.Id, null, cancellationToken);
                     var artifactName = await FindWaitingApprovalArtifactNameAsync(runId, definition, node.Id, cancellationToken);
                     return new WorkflowExecutionState(runId, WaitingUserStatus, nextAfterUser, node.Id, null, WaitingApprovalArtifactName: artifactName);

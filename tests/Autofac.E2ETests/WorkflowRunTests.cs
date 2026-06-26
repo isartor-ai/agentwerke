@@ -37,13 +37,26 @@ public sealed class WorkflowRunTests : E2ETestBase
             || string.Equals(status, "awaiting_approval", StringComparison.OrdinalIgnoreCase)
             || string.Equals(status, "pending", StringComparison.OrdinalIgnoreCase))
         {
-            // Approve the pending gate
-            var approvals = await Api.ListApprovalsAsync();
-            var pending = approvals
-                .OfType<JsonObject>()
-                .FirstOrDefault(a =>
-                    string.Equals(a["runId"]?.GetValue<string>(), runId, StringComparison.Ordinal)
-                    && string.Equals(a["status"]?.GetValue<string>(), "pending", StringComparison.Ordinal));
+            // Approve the pending gate. Poll for the approval to surface: the run flips to
+            // awaiting_approval and its approval row is committed within the same dispatch
+            // cycle, so a single-shot lookup can race the commit by milliseconds.
+            JsonObject? pending = null;
+            var approvalDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            while (DateTime.UtcNow < approvalDeadline)
+            {
+                var approvals = await Api.ListApprovalsAsync();
+                pending = approvals
+                    .OfType<JsonObject>()
+                    .FirstOrDefault(a =>
+                        string.Equals(a["runId"]?.GetValue<string>(), runId, StringComparison.Ordinal)
+                        && string.Equals(a["status"]?.GetValue<string>(), "pending", StringComparison.Ordinal));
+                if (pending is not null)
+                {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+            }
 
             if (pending is null)
             {
