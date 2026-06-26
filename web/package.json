@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@bpmn-io/properties-panel": "^3.44.1",
+    "bpmn-auto-layout": "^1.3.0",
     "bpmn-js": "^17.11.1",
     "bpmn-js-properties-panel": "^5.58.0",
     "htm": "^3.1.1",

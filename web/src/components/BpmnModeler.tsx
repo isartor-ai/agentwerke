@@ -9,6 +9,7 @@ import {
   BpmnPropertiesPanelModule,
   BpmnPropertiesProviderModule,
 } from 'bpmn-js-properties-panel';
+import { ensureDiagramInterchange } from '../bpmn/layout';
 import type { BpmnValidationError } from '../types';
 import { autofacModdleDescriptor } from '../bpmn/autofacModdle';
 import { autofacModules } from '../bpmn/autofacModule';
@@ -66,6 +67,8 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const modelerRef = useRef<any>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const importRevisionRef = useRef(0);
+    const importQueueRef = useRef<Promise<void>>(Promise.resolve());
 
     // Keep the latest callbacks in refs so the modeler effect runs once.
     const onChangeRef = useRef(onChange);
@@ -76,6 +79,55 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
     onErrorRef.current = onError;
     onImportSuccessRef.current = onImportSuccess;
     onReadyRef.current = onReady;
+
+    const importIntoModeler = (xml: string): Promise<void> => {
+      const revision = importRevisionRef.current + 1;
+      importRevisionRef.current = revision;
+
+      const importTask = importQueueRef.current
+        .catch(() => {
+          // Keep the queue alive after a failed import; the failure is surfaced
+          // below through onError and the next import should still run.
+        })
+        .then(async () => {
+          const modeler = modelerRef.current;
+          if (!modeler || !xml.trim() || revision !== importRevisionRef.current) {
+            return;
+          }
+
+          try {
+            const xmlWithLayout = await ensureDiagramInterchange(xml);
+            if (revision !== importRevisionRef.current || modeler !== modelerRef.current) {
+              return;
+            }
+
+            modeler.clear();
+            await modeler.importXML(xmlWithLayout);
+            if (revision !== importRevisionRef.current || modeler !== modelerRef.current) {
+              return;
+            }
+
+            modeler.get('canvas').zoom('fit-viewport');
+            onImportSuccessRef.current?.();
+          } catch (error) {
+            if (revision !== importRevisionRef.current || modeler !== modelerRef.current) {
+              return;
+            }
+
+            try {
+              modeler.clear();
+            } catch {
+              // Best effort: a failed bpmn-js import may leave internals half-built.
+            }
+            onErrorRef.current?.(
+              error instanceof Error ? error.message : 'Failed to render BPMN diagram.',
+            );
+          }
+        });
+
+      importQueueRef.current = importTask.catch(() => {});
+      return importTask;
+    };
 
     useImperativeHandle(
       ref,
@@ -88,18 +140,7 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
           return xml ?? '';
         },
         async importXML(xml: string) {
-          if (!modelerRef.current || !xml.trim()) {
-            return;
-          }
-          try {
-            await modelerRef.current.importXML(xml);
-            modelerRef.current.get('canvas').zoom('fit-viewport');
-            onImportSuccessRef.current?.();
-          } catch (error) {
-            onErrorRef.current?.(
-              error instanceof Error ? error.message : 'Failed to render BPMN diagram.',
-            );
-          }
+          await importIntoModeler(xml);
         },
       }),
       [],
@@ -119,7 +160,6 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
       // package is present. Currently a no-op; the hook is in place for the adapter.
       void camundaModeRef.current;
 
-      let disposed = false;
       const modeler = new Modeler({
         container: canvasRef.current,
         propertiesPanel: { parent: panelRef.current },
@@ -153,32 +193,16 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
 
       const seed = initialXml && initialXml.trim() ? initialXml : undefined;
       if (seed) {
-        modeler
-          .importXML(seed)
-          .then(() => {
-            if (disposed) {
-              return;
-            }
-            modeler.get('canvas').zoom('fit-viewport');
-            onImportSuccessRef.current?.();
-          })
-          .catch((error: unknown) => {
-            if (disposed) {
-              return;
-            }
-            onErrorRef.current?.(
-              error instanceof Error ? error.message : 'Failed to render BPMN diagram.',
-            );
-          });
+        void importIntoModeler(seed);
       }
 
       onReadyRef.current?.();
 
       return () => {
-        disposed = true;
         if (debounceRef.current) {
           clearTimeout(debounceRef.current);
         }
+        importRevisionRef.current += 1;
         modeler.destroy();
         modelerRef.current = null;
       };
