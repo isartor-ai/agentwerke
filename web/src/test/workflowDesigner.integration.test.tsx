@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { createEmptyDiagram } from '../bpmn/constants';
 import { WorkflowDesigner } from '../views/WorkflowDesigner';
 import { templateDetailFixture, templatesFixture, workflowsFixture } from './fixtures';
 
@@ -26,6 +27,8 @@ vi.mock('../api/client', () => ({
 
 const PERSISTED_XML =
   '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="PersistedFlow" name="Persisted Flow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>';
+const LAYOUT_LESS_XML =
+  '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="LayoutlessFlow" name="Layoutless Flow"><bpmn:startEvent id="Start" /><bpmn:endEvent id="End" /></bpmn:process></bpmn:definitions>';
 
 const INVALID_VALIDATION = {
   isValid: false,
@@ -128,6 +131,34 @@ describe('WorkflowDesigner integration', () => {
     });
 
     await switchToAdvancedTab();
+  });
+
+  it('renders the final valid workflow after switching valid to layout-less to valid BPMN', async () => {
+    const validXml = createEmptyDiagram('RecoveredValidFlow');
+    vi.mocked(apiClient.getWorkflow).mockImplementation(async (id: string) => ({
+      ...(workflowsFixture.find((workflow) => workflow.id === id) ?? workflowsFixture[0]),
+      id,
+      bpmnXml: id === 'wf-002' ? LAYOUT_LESS_XML : validXml,
+    }));
+
+    renderDesigner();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Advanced BPMN' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('RecoveredValidFlow');
+    });
+
+    expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('RecoveredValidFlow');
+
+    fireEvent.click(screen.getByRole('button', { name: /Dependency Patch/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('LayoutlessFlow');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /GitHub PR Review/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId('bpmn-modeler-mock')).toHaveTextContent('RecoveredValidFlow');
+      expect(screen.getByTestId('bpmn-modeler-mock')).not.toHaveTextContent('LayoutlessFlow');
+    });
   });
 
   it('validates the current canvas and shows actionable errors', async () => {

@@ -293,10 +293,14 @@ export const apiClient = {
         let buffer = '';
         let eventType = '';
         let dataLine = '';
+        let streamOpen = true;
 
-        while (true) {
+        while (streamOpen) {
           const { value, done } = await reader.read();
-          if (done) break;
+          if (done) {
+            streamOpen = false;
+            continue;
+          }
           buffer += decoder.decode(value, { stream: true });
           const parts = buffer.split('\n');
           buffer = parts.pop() ?? '';

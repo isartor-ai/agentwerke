@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import NavigatedViewer from 'bpmn-js/lib/NavigatedViewer';
+import { ensureDiagramInterchange } from '../bpmn/layout';
 import type { RunStatus } from '../types';
 
 import 'bpmn-js/dist/assets/diagram-js.css';
@@ -56,6 +57,7 @@ function applyMarkers(
 export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, className }: BpmnViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<NavigatedViewer | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const onSelectStepRef = useRef(onSelectStep);
   onSelectStepRef.current = onSelectStep;
   const selectedStepNameRef = useRef(selectedStepName);
@@ -91,14 +93,20 @@ export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, 
 
     let cancelled = false;
 
-    void viewer.importXML(xml)
+    setImportError(null);
+
+    void ensureDiagramInterchange(xml)
+      .then((xmlWithLayout) => viewer.importXML(xmlWithLayout))
       .then(() => {
         if (cancelled) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         viewer.get<any>('canvas').zoom('fit-viewport');
         applyMarkers(viewer, statusesRef.current ?? {}, selectedStepNameRef.current);
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setImportError(error instanceof Error ? error.message : 'Failed to render BPMN diagram.');
+      });
 
     return () => {
       cancelled = true;
@@ -115,9 +123,16 @@ export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, 
   }, [stepStatuses, selectedStepName]);
 
   return (
-    <div
-      ref={containerRef}
-      className={`bpmn-viewer${className ? ` ${className}` : ''}`}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className={`bpmn-viewer${className ? ` ${className}` : ''}`}
+      />
+      {importError ? (
+        <p className="validation-error" role="alert">
+          {importError}
+        </p>
+      ) : null}
+    </>
   );
 }

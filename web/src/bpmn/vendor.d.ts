@@ -43,6 +43,10 @@ declare module 'bpmn-js/lib/Modeler' {
   }
 }
 
+declare module 'bpmn-auto-layout' {
+  export function layoutProcess(xml: string): Promise<string>;
+}
+
 declare module 'bpmn-js-properties-panel' {
   export const BpmnPropertiesPanelModule: unknown;
   export const BpmnPropertiesProviderModule: unknown;
