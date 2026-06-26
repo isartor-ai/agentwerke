@@ -261,6 +261,97 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenPromptAttributeIsPresent_ParsesInlinePrompt()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="W" name="W">
+                <bpmn:serviceTask id="Analyze" name="Analyze">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask agent="analyst" action="analyze"
+                      purposeType="analysis" policyTag="standard"
+                      prompt="Summarize {{input.title}} in one sentence." />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "Analyze");
+        var contract = node.Metadata!.RuntimeContract;
+        Assert.NotNull(contract);
+        Assert.Equal("Summarize {{input.title}} in one sentence.", contract!.Prompt!.Inline);
+        Assert.Null(contract.Prompt.File);
+        // Prompt-only contract still gets the default permission level.
+        Assert.Equal("read-only", contract.Permissions.Level);
+    }
+
+    [Fact]
+    public void Validate_WhenPromptChildElementIsPresent_ParsesAndTrimsMultilinePrompt()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="W" name="W">
+                <bpmn:serviceTask id="Impl" name="Impl">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask agent="impl" action="implement"
+                      purposeType="implementation" policyTag="repo-change"
+                      permissionLevel="read-write">
+                      <autofac:prompt>
+                        Implement the change described in {{input.body}}.
+                        Keep it minimal.
+                      </autofac:prompt>
+                    </autofac:agentTask>
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "Impl");
+        var contract = node.Metadata!.RuntimeContract;
+        Assert.NotNull(contract);
+        Assert.StartsWith("Implement the change described in {{input.body}}.", contract!.Prompt!.Inline);
+        Assert.Contains("Keep it minimal.", contract.Prompt.Inline);
+        Assert.Equal("read-write", contract.Permissions.Level);
+    }
+
+    [Fact]
+    public void Validate_WhenNoPromptOrPermissions_RuntimeContractIsNull()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+              <bpmn:process id="W" name="W">
+                <bpmn:serviceTask id="Plain" name="Plain">
+                  <bpmn:extensionElements>
+                    <autofac:agentTask agent="a" action="act"
+                      purposeType="p" policyTag="t" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "Plain");
+        Assert.Null(node.Metadata!.RuntimeContract);
+    }
+
+    [Fact]
     public void Validate_WhenRuntimePermissionLevelIsUnknown_ReturnsActionableError()
     {
         var xml = """
