@@ -302,7 +302,9 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             TimeoutSeconds: timeoutSeconds,
             RuntimeContract: runtimeContract,
             ExecutionMode: executionMode,
-            SandboxProfile: agentTask.Attribute("sandboxProfile")?.Value);
+            SandboxProfile: agentTask.Attribute("sandboxProfile")?.Value,
+            IncludeAgentOutput: bool.TryParse(agentTask.Attribute("includeAgentOutput")?.Value, out var includeOutput) && includeOutput,
+            OutputFrom: agentTask.Attribute("outputFrom")?.Value is { Length: > 0 } outputFrom ? outputFrom : null);
     }
 
     private static AgentRuntimeContract? ParseRuntimeContract(
