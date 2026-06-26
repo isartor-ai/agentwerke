@@ -7,6 +7,14 @@ public sealed class LanguageModelOptions
 
     public string? ApiKey { get; set; }
 
+    /// <summary>
+    /// Selects the language-model backend: <c>anthropic</c>, <c>mock</c>, or empty/<c>auto</c>
+    /// (default). <c>auto</c> resolves to Anthropic when an <see cref="ApiKey"/> is configured,
+    /// otherwise a null client. Set to <c>mock</c> for tokenless, deterministic runs in demos
+    /// and CI.
+    /// </summary>
+    public string Provider { get; set; } = string.Empty;
+
     public string ApiBaseUrl { get; set; } = DefaultApiBaseUrl;
 
     public string Model { get; set; } = "claude-sonnet-4-6";

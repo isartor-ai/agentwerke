@@ -40,10 +40,22 @@ public static class DependencyInjection
         services.AddScoped<IToolGateway, ToolGateway>();
         services.AddAutofacSandboxes(configuration);
 
-        // Language model client — Anthropic if API key is present, null client otherwise
+        // Language model client selection (see LanguageModelOptions.Provider):
+        //   mock      → deterministic, zero-cost client for demos/CI (#151)
+        //   anthropic → real client (also the default when an API key is present)
+        //   else      → null client (agent steps report "no model configured")
         services.Configure<LanguageModelOptions>(configuration.GetSection(LanguageModelOptions.Section));
         var apiKey = configuration[$"{LanguageModelOptions.Section}:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(apiKey))
+        var provider = (configuration[$"{LanguageModelOptions.Section}:Provider"] ?? string.Empty)
+            .Trim().ToLowerInvariant();
+        var useAnthropic = provider == "anthropic"
+            || (provider is "" or "auto" && !string.IsNullOrWhiteSpace(apiKey));
+
+        if (provider == "mock")
+        {
+            services.AddScoped<ILanguageModelClient, MockLanguageModelClient>();
+        }
+        else if (useAnthropic)
         {
             // Resolve the Anthropic client through IHttpClientFactory so it gets a pooled,
             // timeout-bounded HttpClient with transient-failure retries (429/529/5xx) — matching
