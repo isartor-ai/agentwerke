@@ -286,7 +286,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 "autofac:agentTask sets simulateTimeout='true' without timeoutSeconds. Timeout simulation may be hard to reason about."));
         }
 
-        var runtimeContract = ParseRuntimeContract(agentTask, element, errors);
+        var runtimeContract = ParseRuntimeContract(agentTask, autofacNamespace, element, errors);
 
         return new AutofacTaskMetadata(
             Agent: agent!,
@@ -307,14 +307,19 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
 
     private static AgentRuntimeContract? ParseRuntimeContract(
         XElement agentTask,
+        XNamespace autofacNamespace,
         XElement element,
         ICollection<BpmnValidationError> errors)
     {
         var permissionLevel = agentTask.Attribute("permissionLevel")?.Value;
         var allowedTools = ParseCsvAttribute(agentTask, "allowedTools");
         var deniedTools = ParseCsvAttribute(agentTask, "deniedTools");
+        var prompt = ParsePromptContract(agentTask, autofacNamespace);
 
-        if (string.IsNullOrWhiteSpace(permissionLevel) && allowedTools.Count == 0 && deniedTools.Count == 0)
+        if (prompt is null
+            && string.IsNullOrWhiteSpace(permissionLevel)
+            && allowedTools.Count == 0
+            && deniedTools.Count == 0)
         {
             return null;
         }
@@ -333,12 +338,42 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
 
         return new AgentRuntimeContract
         {
+            Prompt = prompt,
             Permissions = new AgentPermissionContract
             {
                 Level = normalizedPermissionLevel,
                 AllowedTools = allowedTools,
                 DeniedTools = deniedTools
             }
+        };
+    }
+
+    /// <summary>
+    /// Parses a per-task prompt for an agentTask (#149). Supports, in priority order:
+    /// a child <c>&lt;autofac:prompt&gt;…&lt;/autofac:prompt&gt;</c> element (best for
+    /// multi-line text), the <c>prompt</c> attribute (inline), and the <c>promptFile</c>
+    /// attribute (a prompt-template file path). The prompt may contain <c>{{input.*}}</c>,
+    /// <c>{{output.*}}</c>, and other run-context placeholders, which the prompt assembler
+    /// renders at execution time. Returns null when no prompt is declared.
+    /// </summary>
+    private static AgentPromptContract? ParsePromptContract(XElement agentTask, XNamespace autofacNamespace)
+    {
+        var promptFile = agentTask.Attribute("promptFile")?.Value;
+
+        var inlineElement = agentTask.Element(autofacNamespace + "prompt")?.Value;
+        var inline = !string.IsNullOrWhiteSpace(inlineElement)
+            ? inlineElement.Trim()
+            : agentTask.Attribute("prompt")?.Value?.Trim();
+
+        if (string.IsNullOrWhiteSpace(inline) && string.IsNullOrWhiteSpace(promptFile))
+        {
+            return null;
+        }
+
+        return new AgentPromptContract
+        {
+            Inline = string.IsNullOrWhiteSpace(inline) ? null : inline,
+            File = string.IsNullOrWhiteSpace(promptFile) ? null : promptFile.Trim()
         };
     }
 
