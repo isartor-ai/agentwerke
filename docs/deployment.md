@@ -63,8 +63,18 @@ Do **not** ship the dev defaults. Before production:
   service) on deploy.
 - **Observability:** wire `Tracing__OtlpEndpoint` and scrape `/metrics`.
 
-A production-grade compose/Helm profile is tracked for 1.0
-(isartor-ai/autofac-private#160); Kubernetes sandboxing is #36.
+## Production deployment
+
+Two production paths, both with real auth (no dev tokens), env/secret-store
+config, and resource limits — see [`deploy/README.md`](../deploy/README.md):
+
+- **Kubernetes (Helm):** [`deploy/helm/autofac`](../deploy/helm/autofac) — API +
+  dispatch worker + Web (+ optional Postgres), HPA, RBAC, ingress with TLS,
+  and an OpenSandbox sandbox provider.
+- **Docker Compose (single host):** [`docker/docker-compose.prod.yml`](../docker/docker-compose.prod.yml)
+  — pinned published images, dev modes off, secrets from env, behind your TLS proxy.
+
+Kubernetes-native sandbox isolation is tracked in #36.
 
 ## Container images
 
