@@ -76,6 +76,7 @@ export interface RunStepPromptSnapshot {
   sections: { name: string; content: string; source: string }[];
   variables: Record<string, string>;
   sourceFiles: string[];
+  missingVariables: string[];
 }
 
 export interface RunStepHookExecution {

@@ -96,7 +96,7 @@ public sealed class AgentPromptAssemblerTests
     }
 
     [Fact]
-    public void Assemble_WithMissingVariable_ReturnsFailure()
+    public void Assemble_WithMissingVariable_LeavesPlaceholderAndRecordsMissingName()
     {
         var assembler = new AgentPromptAssembler();
 
@@ -119,9 +119,43 @@ public sealed class AgentPromptAssemblerTests
                 Inline = "Value: {{missing_value}}"
             }));
 
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.MissingVariables);
+        Assert.Equal("missing_value", Assert.Single(result.MissingVariables!));
+        Assert.Equal("missing_value", Assert.Single(result.PromptSnapshot.MissingVariables));
+        Assert.Contains("Value: {{missing_value}}", result.PromptSnapshot.FinalPrompt);
+        Assert.Null(result.FailureReason);
+    }
+
+    [Fact]
+    public void Assemble_WithStrictMissingVariable_ReturnsFailure()
+    {
+        var assembler = new AgentPromptAssembler();
+
+        var result = assembler.Assemble(new AgentPromptAssemblyRequest(
+            RunId: "run-1",
+            StepId: "step-1",
+            NodeId: "Node",
+            NodeName: "Node",
+            AgentName: "test-agent",
+            AgentDescription: "Runs tests.",
+            AgentCategory: "quality",
+            Action: "run-tests",
+            Environment: "dev",
+            PurposeType: "verification",
+            PolicyTag: "test-gate",
+            Attempt: 1,
+            RequiresEvidence: [],
+            Prompt: new AgentPromptContract
+            {
+                Inline = "Value: {{missing_value}}",
+                StrictVariables = true
+            }));
+
         Assert.False(result.Succeeded);
         Assert.NotNull(result.MissingVariables);
         Assert.Equal("missing_value", Assert.Single(result.MissingVariables!));
+        Assert.Equal("missing_value", Assert.Single(result.PromptSnapshot.MissingVariables));
         Assert.Contains("missing variables", result.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 

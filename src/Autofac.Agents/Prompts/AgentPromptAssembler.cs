@@ -124,7 +124,11 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
                 """,
             Source: "generated:runtime_context"));
 
-        if (missingVariables.Count > 0)
+        var orderedMissingVariables = missingVariables
+            .OrderBy(static v => v, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (prompt?.StrictVariables == true && orderedMissingVariables.Length > 0)
         {
             return new AgentPromptAssemblyResult(
                 Succeeded: false,
@@ -133,9 +137,10 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
                     RenderedAt: DateTimeOffset.UtcNow.ToString("o"),
                     Sections: sections.AsReadOnly(),
                     Variables: new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase),
-                    SourceFiles: sources.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static s => s, StringComparer.OrdinalIgnoreCase).ToArray()),
-                FailureReason: $"Prompt assembly failed: missing variables: {string.Join(", ", missingVariables.OrderBy(static v => v, StringComparer.OrdinalIgnoreCase))}.",
-                MissingVariables: missingVariables.OrderBy(static v => v, StringComparer.OrdinalIgnoreCase).ToArray());
+                    SourceFiles: sources.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static s => s, StringComparer.OrdinalIgnoreCase).ToArray(),
+                    MissingVariables: orderedMissingVariables),
+                FailureReason: $"Prompt assembly failed: missing variables: {string.Join(", ", orderedMissingVariables)}.",
+                MissingVariables: orderedMissingVariables);
         }
 
         var builder = new StringBuilder();
@@ -158,7 +163,9 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
                 RenderedAt: DateTimeOffset.UtcNow.ToString("o"),
                 Sections: sections.AsReadOnly(),
                 Variables: new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase),
-                SourceFiles: sources.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static s => s, StringComparer.OrdinalIgnoreCase).ToArray()));
+                SourceFiles: sources.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static s => s, StringComparer.OrdinalIgnoreCase).ToArray(),
+                MissingVariables: orderedMissingVariables),
+            MissingVariables: orderedMissingVariables.Length == 0 ? null : orderedMissingVariables);
     }
 
     private static Dictionary<string, string> BuildVariables(

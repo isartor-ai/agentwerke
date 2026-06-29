@@ -39,6 +39,8 @@ public sealed record AgentPromptContract
 
     public IReadOnlyDictionary<string, string> Variables { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public bool StrictVariables { get; init; }
 }
 
 public sealed record AgentSkillContract
