@@ -9,7 +9,9 @@ public sealed record StartRunCommand(
     string WorkflowId,
     string? Initiator,
     /// <summary>Optional metadata from an inbound integration trigger (Jira, GitHub, etc.).</summary>
-    TriggerMetadata? Trigger = null);
+    TriggerMetadata? Trigger = null,
+    /// <summary>Optional custom run-context inputs, written as input.&lt;key&gt; before execution starts.</summary>
+    IReadOnlyDictionary<string, string>? Inputs = null);
 
 /// <summary>Source metadata recorded when a workflow is started by an external webhook.</summary>
 public sealed record TriggerMetadata(
@@ -18,7 +20,9 @@ public sealed record TriggerMetadata(
     string ExternalId,
     string? ExternalUrl,
     string? Title,
-    string? Body);
+    string? Body,
+    /// <summary>Optional trigger-derived inputs, written as input.&lt;key&gt; before execution starts.</summary>
+    IReadOnlyDictionary<string, string>? Inputs = null);
 
 public sealed record StartRunResult(
     string RunId,

@@ -115,7 +115,10 @@ public sealed class RunsController : ControllerBase
         try
         {
             var result = await _orchestrationService.StartRunAsync(
-                new StartRunCommand(request.WorkflowId, Initiator: AuthenticatedPrincipal.ResolveSubject(User)),
+                new StartRunCommand(
+                    request.WorkflowId,
+                    Initiator: AuthenticatedPrincipal.ResolveSubject(User),
+                    Inputs: request.Inputs),
                 HttpContext.RequestAborted);
 
             return Accepted(new StartRunResponse(
