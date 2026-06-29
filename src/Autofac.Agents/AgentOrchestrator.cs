@@ -363,7 +363,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             FailureReason: modelResult.FailureReason,
             PolicyDecision: policyDecision,
             RuntimeSnapshot: enrichedSnapshot,
-            Artifacts: modelResult.Artifacts);
+            Artifacts: modelResult.Artifacts,
+            StepStatus: modelResult.StepStatus);
 
         return await MaybeOffloadOutputAsync(
             runId,

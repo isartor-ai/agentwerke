@@ -592,6 +592,18 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
             if (!outcome.Succeeded)
             {
+                if (IsNonFatalServiceTaskStatus(outcome.StepStatus))
+                {
+                    await store.AppendEventAsync(runId, "service_task_needs_config",
+                        Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempt, reason = outcome.FailureReason ?? "model_configuration_missing" }),
+                        cancellationToken);
+                    await store.AppendEventAsync(runId, "node_completed",
+                        Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName, reason = outcome.StepStatus }),
+                        cancellationToken);
+                    await store.UpdateStepStatusAsync(step.Id, outcome.StepStatus!, null, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+                    return ServiceExecutionResult.Completed;
+                }
+
                 await store.AppendEventAsync(runId, "service_task_failed",
                     Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempt, reason = outcome.FailureReason ?? "execution_error" }),
                     cancellationToken);
@@ -643,6 +655,9 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             return ServiceExecutionResult.Completed;
         }
     }
+
+    private static bool IsNonFatalServiceTaskStatus(string? status) =>
+        string.Equals(status, AgentTaskOutcomeStatuses.NeedsConfig, StringComparison.Ordinal);
 
     private async Task<WorkflowExecutionState> ScheduleTimerAndPauseAsync(
         string runId,

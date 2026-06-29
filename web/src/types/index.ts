@@ -5,7 +5,8 @@ export type RunStatus =
   | 'pending'
   | 'cancelled'
   | 'blocked'
-  | 'awaiting_approval';
+  | 'awaiting_approval'
+  | 'needs_config';
 
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low' | 'none';
 

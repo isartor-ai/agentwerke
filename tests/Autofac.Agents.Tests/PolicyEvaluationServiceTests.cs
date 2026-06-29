@@ -10,6 +10,7 @@ using Autofac.Integrations;
 using Autofac.Sandboxes;
 using Autofac.Storage.Artifacts;
 using Autofac.Workflows.Bpmn;
+using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 
@@ -297,6 +298,66 @@ public sealed class PolicyEvaluationServiceTests
         Assert.DoesNotContain("Prompt assembly failed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("output.Build", Assert.Single(outcome.RuntimeSnapshot!.Prompt!.MissingVariables));
         Assert.Contains("Deploy {{output.Build}} now.", outcome.RuntimeSnapshot.Prompt.FinalPrompt);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenModelIsNotConfigured_ReturnsNeedsConfigStepStatus()
+    {
+        var skills = new SkillRepository(CreateKnownSkills());
+        var policyService = new StubPolicyEvaluationService("allow");
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var assembler = new AgentPromptAssembler();
+        var orchestrator = new AgentOrchestrator(
+            skills,
+            assembler,
+            policyService,
+            CreateHookGateway(),
+            new StubMcpToolSessionFactory(),
+            new ToolRegistry([
+                new GitHubReadIssueTool(gitHub),
+                new GitHubCreateBranchTool(gitHub),
+                new GitHubCreatePullRequestTool(gitHub),
+                new GitHubRequestReviewTool(gitHub),
+                new GitHubPostReviewTool(gitHub),
+                new CicdTriggerDeployTool(gitHub),
+                new SandboxExecutionTool(sandbox)
+            ]),
+            CreateToolGateway(gitHub, sandbox, policyService),
+            new NullAgentModelRunner(),
+            new StubSandboxedAgentRunner(),
+            new NullArtifactStorage(),
+            new InMemoryRunContextRepository(),
+            new FileAgentRegistry([]),
+            Options.Create(new SandboxOptions()),
+            Options.Create(new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    BranchPrefix = "autofac/run-"
+                }
+            }));
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "WriteSpec",
+                "Write Spec",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "spec-agent",
+                    Action: "spec.generate",
+                    Environment: "dev",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [])),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(AgentTaskOutcomeStatuses.NeedsConfig, outcome.StepStatus);
+        Assert.Contains("Anthropic:ApiKey", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

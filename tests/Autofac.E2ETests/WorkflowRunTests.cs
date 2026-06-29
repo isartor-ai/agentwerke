@@ -4,8 +4,8 @@ namespace Autofac.E2ETests;
 
 /// <summary>
 /// Happy-path E2E: import → publish → start → assert waiting_user → approve → assert completed.
-/// The API runs against a real Postgres instance; agent execution is no-op (sandbox disabled,
-/// no LLM called) so the service task returns a success outcome immediately.
+/// The API runs against a real Postgres instance; local agent execution uses a WireMock-backed
+/// model endpoint so no external LLM credentials are required.
 /// </summary>
 public sealed class WorkflowRunTests : E2ETestBase
 {

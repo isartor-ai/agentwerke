@@ -16,6 +16,7 @@ function stepStateClass(status: RunStep['status']): string {
     case 'blocked':
       return 'timeline-dot-failed';
     case 'awaiting_approval':
+    case 'needs_config':
       return 'timeline-dot-awaiting';
     default:
       return 'timeline-dot-pending';

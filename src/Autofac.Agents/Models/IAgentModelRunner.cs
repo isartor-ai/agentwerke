@@ -1,4 +1,5 @@
 using Autofac.Domain.AgentRuntime;
+using Autofac.Workflows.Runtime;
 
 namespace Autofac.Agents.Models;
 
@@ -11,7 +12,8 @@ public sealed class NullAgentModelRunner : IAgentModelRunner
             FailureReason: "No language model client is configured. Set 'Anthropic:ApiKey' in configuration.",
             ToolInvocations: [],
             Artifacts: null,
-            TokenUsage: null));
+            TokenUsage: null,
+            StepStatus: AgentTaskOutcomeStatuses.NeedsConfig));
 }
 
 public interface IAgentModelRunner
@@ -40,4 +42,5 @@ public sealed record ModelRunResult(
     IReadOnlyDictionary<string, string>? Artifacts,
     AgentModelTokenUsage? TokenUsage,
     double ElapsedMs = 0,
-    AgentSandboxExecutionRecord? SandboxExecution = null);
+    AgentSandboxExecutionRecord? SandboxExecution = null,
+    string? StepStatus = null);
