@@ -1,0 +1,31 @@
+Autofac has been deployed to namespace: {{ .Release.Namespace }}
+
+1. Ensure the shared secret exists (referenced as {{ .Values.secretName }}):
+     kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.secretName }} \
+       --from-literal=POSTGRES_PASSWORD=... \
+       --from-literal=JWT_SECRET=...            # or configure Jwt__Authority for OIDC
+       --from-literal=ANTHROPIC_API_KEY=...
+{{- if eq .Values.sandbox.provider "opensandbox" }}
+       --from-literal=OPEN_SANDBOX_API_KEY=...  # sandbox.provider=opensandbox
+{{- end }}
+
+2. Authentication: ASPNETCORE_ENVIRONMENT=Production (dev tokens disabled).
+   Configure enterprise SSO via Jwt__Authority — see
+   docs/deployment-auth-data-residency.md.
+
+{{- if .Values.api.ingress.enabled }}
+3. API/Web are exposed via ingress at: https://{{ .Values.api.ingress.host }}
+   TLS secret: {{ .Values.api.ingress.tlsSecretName }}
+{{- else }}
+3. Ingress is disabled. Enable it (api.ingress.enabled=true) or port-forward:
+     kubectl -n {{ .Release.Namespace }} port-forward svc/autofac-web 8080:{{ .Values.web.service.port }}
+{{- end }}
+
+{{- if eq .Values.sandbox.provider "docker" }}
+
+WARNING: sandbox.provider=docker is for local development only and is not a
+production isolation boundary. Use "opensandbox" in production (see ADR-003).
+{{- end }}
+
+Check status:
+  kubectl -n {{ .Release.Namespace }} get pods,svc,hpa
