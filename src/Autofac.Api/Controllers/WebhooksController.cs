@@ -316,7 +316,7 @@ public sealed class WebhooksController : ControllerBase
 
         var resumePayload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["status"] = status.Status,
+            ["status"] = status.Status ?? string.Empty,
         };
         if (status.Conclusion is { Length: > 0 } conclusion)
             resumePayload["conclusion"] = conclusion;
