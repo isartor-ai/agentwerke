@@ -1,9 +1,9 @@
 name: CodeQL
 
 on:
+  # CodeQL is the heaviest job; run it on merges to main + weekly rather than on
+  # every PR (no per-PR cost on this public repo, but keeps the run count lean).
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
   schedule:
     - cron: '0 6 * * 1'
