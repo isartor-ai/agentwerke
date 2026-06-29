@@ -220,7 +220,8 @@ public sealed class PolicyEvaluationServiceTests
                     {
                         Prompt = new Domain.AgentRuntime.AgentPromptContract
                         {
-                            Inline = "Deploy {{missing_value}} now."
+                            Inline = "Deploy {{missing_value}} now.",
+                            StrictVariables = true
                         }
                     })),
             attempt: 1,
@@ -228,6 +229,74 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.False(outcome.Succeeded);
         Assert.Contains("Prompt assembly failed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenPromptVariableIsMissingInNonStrictMode_ReachesModelRunner()
+    {
+        var skills = new SkillRepository(CreateKnownSkills());
+        var policyService = new StubPolicyEvaluationService("allow");
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var assembler = new AgentPromptAssembler();
+        var orchestrator = new AgentOrchestrator(
+            skills,
+            assembler,
+            policyService,
+            CreateHookGateway(),
+            new StubMcpToolSessionFactory(),
+            new ToolRegistry([
+                new GitHubReadIssueTool(gitHub),
+                new GitHubCreateBranchTool(gitHub),
+                new GitHubCreatePullRequestTool(gitHub),
+                new GitHubRequestReviewTool(gitHub),
+                new GitHubPostReviewTool(gitHub),
+                new CicdTriggerDeployTool(gitHub),
+                new SandboxExecutionTool(sandbox)
+            ]),
+            CreateToolGateway(gitHub, sandbox, policyService),
+            new NullAgentModelRunner(),
+            new StubSandboxedAgentRunner(),
+            new NullArtifactStorage(),
+            new InMemoryRunContextRepository(),
+            new FileAgentRegistry([]),
+            Options.Create(new SandboxOptions()),
+            Options.Create(new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    BranchPrefix = "autofac/run-"
+                }
+            }));
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "Deploy",
+                "Deploy",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "deploy-agent",
+                    Action: "cloud.deploy_artifact",
+                    Environment: "staging",
+                    PurposeType: "implementation",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [],
+                    RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                    {
+                        Prompt = new Domain.AgentRuntime.AgentPromptContract
+                        {
+                            Inline = "Deploy {{output.Build}} now."
+                        }
+                    })),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.DoesNotContain("Prompt assembly failed", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("output.Build", Assert.Single(outcome.RuntimeSnapshot!.Prompt!.MissingVariables));
+        Assert.Contains("Deploy {{output.Build}} now.", outcome.RuntimeSnapshot.Prompt.FinalPrompt);
     }
 
     [Fact]
@@ -314,6 +383,56 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.False(outcome.Succeeded);
         Assert.Contains("unknown skill", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_WhenAgentProfileReferencesUnknownSkill_DoesNotFailStep()
+    {
+        // #166: a skill referenced by the agent PROFILE (not the runtime contract) that can't be
+        // resolved must not fail the step — unlike an explicit runtime-contract skill (above).
+        // Deterministic tool actions like github.create_branch use no skill at all.
+        var gitHub = new RecordingGitHubConnector();
+        var registry = new FileAgentRegistry(
+        [
+            new AgentProfile
+            {
+                AgentId = "github-agent",
+                Name = "GitHub Agent",
+                Runner = "agent-model",
+                SupportedActions = ["github.create_branch"],
+                Skills =
+                [
+                    new AgentSkillRef("github-branching", "Branching", "Create branches",
+                        ["github.create_branch"], SkillManifestId: "does-not-exist")
+                ]
+            }
+        ]);
+
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(), "allow", gitHub, new StubSandboxExecutor(), registry: registry);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "CreateBranch",
+                "Create Branch",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: "github.create_branch",
+                    Environment: "github",
+                    PurposeType: "repo-write",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [])),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded, outcome.FailureReason);
+        // The unresolved profile skill was skipped (nothing invoked) and the deterministic
+        // GitHub tool still ran.
+        Assert.DoesNotContain(outcome.RuntimeSnapshot!.Skills, static s => s.Invoked);
+        Assert.Contains(outcome.RuntimeSnapshot!.ToolInvocations, static t => t.ToolName == "github.create_branch");
     }
 
     [Fact]
