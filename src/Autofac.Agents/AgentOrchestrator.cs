@@ -978,14 +978,16 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         else if (matchedSkillRef is not null)
         {
             var manifest = ResolveSkillManifest(matchedSkillRef);
-            if (manifest is null)
+            if (manifest is not null)
             {
-                return SkillResolution.Fail(
-                    $"Agent profile action '{matchedSkillRef.SkillId}' references unknown skill '{matchedSkillRef.SkillManifestId ?? matchedSkillRef.SkillId}'.");
+                primarySkill = new ResolvedSkill(manifest, "agent-profile", Selected: true, Invoked: true);
+                availableSkills[manifest.SkillId] = primarySkill;
             }
-
-            primarySkill = new ResolvedSkill(manifest, "agent-profile", Selected: true, Invoked: true);
-            availableSkills[manifest.SkillId] = primarySkill;
+            // else: a skill inferred from the agent PROFILE is contextual guidance, not a hard
+            // requirement, so a dangling/misconfigured profile skill ref must NOT fail the step —
+            // especially deterministic tool actions (e.g. github.create_branch) that use no skill.
+            // Proceed without a primary skill. Only a skill explicitly REQUIRED by the runtime
+            // contract fails the step (handled above). (#166)
         }
 
         if (primarySkill is not null)

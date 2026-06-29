@@ -317,6 +317,56 @@ public sealed class PolicyEvaluationServiceTests
     }
 
     [Fact]
+    public async Task AgentOrchestrator_WhenAgentProfileReferencesUnknownSkill_DoesNotFailStep()
+    {
+        // #166: a skill referenced by the agent PROFILE (not the runtime contract) that can't be
+        // resolved must not fail the step — unlike an explicit runtime-contract skill (above).
+        // Deterministic tool actions like github.create_branch use no skill at all.
+        var gitHub = new RecordingGitHubConnector();
+        var registry = new FileAgentRegistry(
+        [
+            new AgentProfile
+            {
+                AgentId = "github-agent",
+                Name = "GitHub Agent",
+                Runner = "agent-model",
+                SupportedActions = ["github.create_branch"],
+                Skills =
+                [
+                    new AgentSkillRef("github-branching", "Branching", "Create branches",
+                        ["github.create_branch"], SkillManifestId: "does-not-exist")
+                ]
+            }
+        ]);
+
+        var orchestrator = CreateOrchestrator(
+            CreateKnownSkills(), "allow", gitHub, new StubSandboxExecutor(), registry: registry);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            new BpmnNodeDefinition(
+                "CreateBranch",
+                "Create Branch",
+                "serviceTask",
+                new AutofacTaskMetadata(
+                    Agent: "github-agent",
+                    Action: "github.create_branch",
+                    Environment: "github",
+                    PurposeType: "repo-write",
+                    PolicyTag: "repo-change",
+                    RequiresEvidence: [])),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded, outcome.FailureReason);
+        // The unresolved profile skill was skipped (nothing invoked) and the deterministic
+        // GitHub tool still ran.
+        Assert.DoesNotContain(outcome.RuntimeSnapshot!.Skills, static s => s.Invoked);
+        Assert.Contains(outcome.RuntimeSnapshot!.ToolInvocations, static t => t.ToolName == "github.create_branch");
+    }
+
+    [Fact]
     public async Task AgentOrchestrator_WhenRuntimeContractRequestsMismatchedSkillVersion_FailsEarly()
     {
         var orchestrator = CreateOrchestrator(CreateKnownSkills(), "allow", new RecordingGitHubConnector(), new StubSandboxExecutor());
