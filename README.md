@@ -70,6 +70,19 @@ A run moves through the nodes of a BPMN model. When it reaches an agent task, th
 
 ## Quick start
 
+**Try it in 5 minutes, no API keys** — the tokenless quickstart runs the full
+platform (API + Web UI) on a deterministic mock model provider:
+
+```bash
+docker compose -f docker/docker-compose.quickstart.yml up --build
+# → Web UI http://localhost:3002 · API http://localhost:8081
+```
+
+Then follow [docs/getting-started.md](docs/getting-started.md) to run a sample
+workflow through an agent step, an approval gate, and an evidence pack.
+
+### Build from source
+
 ```bash
 dotnet restore Autofac.sln
 dotnet build Autofac.sln
