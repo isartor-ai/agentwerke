@@ -195,6 +195,191 @@ export interface WorkflowRun {
   tags: string[];
 }
 
+export interface EvidencePack {
+  schemaVersion: string;
+  runId: string;
+  generatedAt: string;
+  workflow: EvidenceWorkflow;
+  runtime: EvidenceRuntime;
+  run: EvidenceRun;
+  agentSnapshots: EvidenceAgentSnapshot[];
+  approvals: EvidenceApproval[];
+  policyDecisions: EvidencePolicyDecision[];
+  toolCalls: EvidenceToolCall[];
+  connectorCalls: EvidenceConnectorCall[];
+  sandboxExecutions: EvidenceSandboxExecution[];
+  modelUsage: EvidenceModelUsage[];
+  artifacts: EvidenceArtifact[];
+  auditLog: EvidenceAuditEntry[];
+  logs: EvidenceLogEntry[];
+  runEvents: EvidenceRunEvent[];
+  camunda?: EvidenceCamundaMetadata | null;
+}
+
+export interface EvidenceWorkflow {
+  workflowId: string;
+  name: string;
+  version: string;
+  definitionVersion?: string | null;
+  bpmnSha256?: string | null;
+  hashAlgorithm: string;
+}
+
+export interface EvidenceRuntime {
+  mode: string;
+  camundaEnabled: boolean;
+}
+
+export interface EvidenceRun {
+  runId: string;
+  status: string;
+  riskLevel: string;
+  requestedBy: string;
+  startedAt: string;
+  completedAt?: string | null;
+  durationMs?: number | null;
+  pendingApprovals: number;
+  correlationId?: string | null;
+  tags: string[];
+}
+
+export interface EvidenceAgentSnapshot {
+  stepId: string;
+  stepName: string;
+  nodeId: string;
+  agentName?: string | null;
+  action?: string | null;
+  snapshot: RunStepRuntimeSnapshot;
+}
+
+export interface EvidenceApproval {
+  approvalId: string;
+  runId: string;
+  actionRequested: string;
+  requester: string;
+  agentName: string;
+  status: string;
+  riskLevel: string;
+  riskScore: number;
+  riskFactors: string[];
+  affectedSystems: string[];
+  policyRationale: string;
+  createdAt: string;
+  decidedAt?: string | null;
+  decidedBy?: string | null;
+  decisionComment?: string | null;
+}
+
+export interface EvidencePolicyDecision {
+  stepId: string;
+  stepName: string;
+  kind: string;
+  policyId?: string | null;
+  policyName?: string | null;
+  rationale?: string | null;
+  riskScore: number;
+  riskLevel?: string | null;
+  riskFactors: string[];
+  decidedAt?: string | null;
+  constraints: string[];
+}
+
+export interface EvidenceToolCall {
+  stepId: string;
+  stepName: string;
+  agentName?: string | null;
+  action?: string | null;
+  toolName: string;
+  category: string;
+  status: string;
+  policyDecisionId?: string | null;
+  policyDecisionKind?: string | null;
+  inputSummary?: string | null;
+  outputSummary?: string | null;
+  errorMessage?: string | null;
+  artifactNames: string[];
+  durationMs?: number | null;
+}
+
+export interface EvidenceConnectorCall {
+  auditId: string;
+  connectorId: string;
+  operation: string;
+  actor: string;
+  outcome: string;
+  resourceId?: string | null;
+  details?: string | null;
+  timestamp: string;
+  correlationId?: string | null;
+}
+
+export interface EvidenceSandboxExecution {
+  stepId: string;
+  stepName: string;
+  agentName?: string | null;
+  action?: string | null;
+  provider: string;
+  sandboxId?: string | null;
+  commandState: string;
+  exitCode?: number | null;
+  durationMs?: number | null;
+  logs: RunStepSandboxLogEntry[];
+  diagnostics: Record<string, string>;
+}
+
+export interface EvidenceModelUsage {
+  stepId: string;
+  stepName: string;
+  agentName?: string | null;
+  action?: string | null;
+  modelId?: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  elapsedMs?: number | null;
+}
+
+export interface EvidenceArtifact {
+  source: string;
+  stepId?: string | null;
+  name: string;
+  sizeBytes?: number | null;
+  lastModifiedAt?: string | null;
+  uri?: string | null;
+  contentType?: string | null;
+}
+
+export interface EvidenceAuditEntry {
+  auditId: string;
+  correlationId?: string | null;
+  actorType: string;
+  actor: string;
+  action: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  outcome: string;
+  details?: string | null;
+  timestamp: string;
+}
+
+export interface EvidenceLogEntry {
+  source: string;
+  type: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface EvidenceRunEvent {
+  eventId: string;
+  type: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface EvidenceCamundaMetadata {
+  adapter: string;
+  metadata: Record<string, string>;
+}
+
 export interface BpmnValidationError {
   message: string;
   elementId?: string | null;

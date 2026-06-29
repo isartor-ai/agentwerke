@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import type { RunEvent } from '../types';
 import { RunDetail } from '../views/RunDetail';
-import { runsFixture, workflowsFixture } from './fixtures';
+import { evidencePackFixture, runsFixture, workflowsFixture } from './fixtures';
 
 // BpmnViewer needs SVG layout unavailable in jsdom; use the test stub
 vi.mock('../components/BpmnViewer');
@@ -12,6 +13,7 @@ vi.mock('../api/client', () => ({
     getRun: vi.fn(),
     getWorkflow: vi.fn(),
     streamRunEvents: vi.fn(),
+    getRunEvidencePack: vi.fn(),
     getRunArtifactDownloadUrl: vi.fn(),
     getRunEvidencePackDownloadUrl: vi.fn(),
     downloadRunEvidencePack: vi.fn(),
@@ -29,6 +31,7 @@ describe('RunDetail integration', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getRun).mockResolvedValue(runsFixture[0]);
     vi.mocked(apiClient.getWorkflow).mockResolvedValue(WORKFLOW_WITH_BPMN);
+    vi.mocked(apiClient.getRunEvidencePack).mockResolvedValue(evidencePackFixture);
     vi.mocked(apiClient.getRunArtifactDownloadUrl).mockImplementation(
       (runId, artifactName) => `/api/runs/${runId}/artifacts/${artifactName}`,
     );
@@ -88,6 +91,94 @@ describe('RunDetail integration', () => {
       screen.getByRole('button', { name: 'Cancel run and stop further execution' }),
     );
     expect(screen.getByRole('dialog', { name: 'Cancel this run?' })).toBeInTheDocument();
+  });
+
+  it('renders the evidence pack in-app with model, policy, sandbox, and audit evidence', async () => {
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getRunEvidencePack)).toHaveBeenCalledWith('run-0421');
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
+
+    expect(screen.getByText('Evidence Pack Viewer')).toBeInTheDocument();
+    expect(screen.getByText('610 tokens')).toBeInTheDocument();
+    expect(screen.getByText('Cost not recorded')).toBeInTheDocument();
+    expect(screen.getAllByText('Production Merge Protection').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('opensandbox').length).toBeGreaterThan(0);
+    expect(screen.getByText('workflow.start')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download JSON' })).toBeInTheDocument();
+  });
+
+  it('refreshes the run payload when stream events arrive so BPMN statuses update live', async () => {
+    const runningRun = {
+      ...runsFixture[1],
+      steps: [
+        {
+          id: 'step-patch',
+          name: 'Patch dependencies',
+          type: 'service_task',
+          status: 'running' as const,
+        },
+      ],
+      events: [],
+    };
+    const completedRun = {
+      ...runningRun,
+      status: 'completed' as const,
+      currentStep: undefined,
+      steps: [
+        {
+          ...runningRun.steps[0],
+          status: 'completed' as const,
+        },
+      ],
+      events: [
+        {
+          id: 'evt-completed',
+          type: 'node_completed',
+          message: 'Patch dependencies completed.',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    vi.mocked(apiClient.getRun)
+      .mockResolvedValueOnce(runningRun)
+      .mockResolvedValueOnce(completedRun);
+
+    let emitEvent: ((event: RunEvent) => void) | undefined;
+    vi.mocked(apiClient.streamRunEvents).mockImplementation((_runId, onEvent) => {
+      emitEvent = onEvent;
+      return undefined;
+    });
+
+    renderDetail('run-0420');
+
+    expect(await screen.findByText('Run run-0420')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-step-name="Patch dependencies"][data-step-status="running"]'),
+      ).toBeInTheDocument();
+    });
+
+    act(() => {
+      emitEvent?.({
+        id: 'evt-completed',
+        type: 'node_completed',
+        message: 'Patch dependencies completed.',
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getRun)).toHaveBeenCalledTimes(2);
+      expect(
+        document.querySelector('[data-step-name="Patch dependencies"][data-step-status="completed"]'),
+      ).toBeInTheDocument();
+    });
   });
 
   it('shows prompt, output, and step artifacts in the I/O tab for a selected step', async () => {

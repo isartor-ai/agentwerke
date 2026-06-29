@@ -12,9 +12,9 @@ import { RunDiffModal } from '../components/RunDiffModal';
 import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
-import type { RunStatus, WorkflowRun } from '../types';
+import type { EvidencePack, RunStatus, WorkflowRun } from '../types';
 
-const tabs = ['Summary', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
+const tabs = ['Summary', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -30,6 +30,23 @@ function countToolInvocations(run: WorkflowRun): number {
   ), 0);
 }
 
+function formatDuration(ms?: number | null): string {
+  if (ms == null) return '-';
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function formatTimestamp(value?: string | null): string {
+  return value ? new Date(value).toLocaleString() : '-';
+}
+
+function totalEvidenceTokens(pack: EvidencePack | null): number {
+  return (pack?.modelUsage ?? []).reduce(
+    (total, usage) => total + usage.inputTokens + usage.outputTokens,
+    0,
+  );
+}
+
 export function RunDetail() {
   const { runId } = useParams();
   const navigate = useNavigate();
@@ -43,6 +60,9 @@ export function RunDetail() {
   const [cancelling, setCancelling] = useState(false);
   const [exportingEvidence, setExportingEvidence] = useState(false);
   const [evidenceExportError, setEvidenceExportError] = useState<string | null>(null);
+  const [evidencePack, setEvidencePack] = useState<EvidencePack | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   // Workflow BPMN XML for the viewer + diff modal
   const [workflowXml, setWorkflowXml] = useState('');
@@ -92,6 +112,22 @@ export function RunDetail() {
 
   useEffect(() => { void loadRun(); }, [loadRun]);
 
+  const loadEvidencePack = useCallback(async () => {
+    if (!runId) return;
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    try {
+      const pack = await apiClient.getRunEvidencePack(runId);
+      setEvidencePack(pack);
+    } catch (loadError) {
+      setEvidenceError(loadError instanceof Error ? loadError.message : 'Failed to load evidence pack.');
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }, [runId]);
+
+  useEffect(() => { void loadEvidencePack(); }, [loadEvidencePack]);
+
   // Polling: 10s while in-flight (fallback when SSE stream is unavailable)
   useEffect(() => {
     if (!run || isTerminal) return;
@@ -113,6 +149,7 @@ export function RunDetail() {
           if (existing.some((e) => e.id === event.id)) return prev;
           return { ...prev, events: [...existing, event] };
         });
+        void loadRun();
       },
       () => {
         void loadRun();
@@ -194,6 +231,18 @@ export function RunDetail() {
     };
   }, [isTerminal, run]);
 
+  const evidencePackSummary = useMemo(() => {
+    if (!evidencePack) return null;
+    return {
+      tokens: totalEvidenceTokens(evidencePack),
+      modelRuns: evidencePack.modelUsage.length,
+      policyDecisions: evidencePack.policyDecisions.length,
+      sandboxExecutions: evidencePack.sandboxExecutions.length,
+      auditEntries: evidencePack.auditLog.length,
+      artifacts: evidencePack.artifacts.length,
+    };
+  }, [evidencePack]);
+
   const handleApprovalDecision = async (
     approvalId: string,
     decision: 'approve' | 'reject' | 'escalate',
@@ -243,6 +292,175 @@ export function RunDetail() {
     }
   };
 
+  const renderEvidencePack = () => {
+    if (evidenceLoading && !evidencePack) {
+      return <p>Loading evidence pack…</p>;
+    }
+
+    if (evidenceError) {
+      return (
+        <section className="policy-box">
+          <h3>Evidence Pack Viewer</h3>
+          <p className="validation-error">{evidenceError}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => void loadEvidencePack()}>
+            Retry
+          </button>
+        </section>
+      );
+    }
+
+    if (!evidencePack || !evidencePackSummary) {
+      return <p>No evidence pack is available for this run yet.</p>;
+    }
+
+    const recentAudit = evidencePack.auditLog.slice(-4).reverse();
+    const recentSandboxLogs = evidencePack.sandboxExecutions.flatMap((sandbox) => sandbox.logs.slice(-2));
+
+    return (
+      <div className="evidence-viewer">
+        <div className="evidence-viewer-head">
+          <div>
+            <h3>Evidence Pack Viewer</h3>
+            <p className="cell-meta">
+              Generated {formatTimestamp(evidencePack.generatedAt)} · schema {evidencePack.schemaVersion}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={exportingEvidence}
+            onClick={() => void handleEvidenceExport()}
+          >
+            {exportingEvidence ? 'Downloading…' : 'Download JSON'}
+          </button>
+        </div>
+
+        <dl className="metric-strip evidence-metrics">
+          <div>
+            <dt>Tokens</dt>
+            <dd>{evidencePackSummary.tokens} tokens</dd>
+          </div>
+          <div>
+            <dt>Cost</dt>
+            <dd>Cost not recorded</dd>
+          </div>
+          <div>
+            <dt>Policy</dt>
+            <dd>{evidencePackSummary.policyDecisions}</dd>
+          </div>
+          <div>
+            <dt>Sandbox</dt>
+            <dd>{evidencePackSummary.sandboxExecutions}</dd>
+          </div>
+          <div>
+            <dt>Audit</dt>
+            <dd>{evidencePackSummary.auditEntries}</dd>
+          </div>
+        </dl>
+
+        <section className="policy-box">
+          <h3>Model Usage</h3>
+          {evidencePack.modelUsage.length > 0 ? (
+            <ul className="event-list compact-list" role="list">
+              {evidencePack.modelUsage.map((usage) => (
+                <li key={`${usage.stepId}-${usage.modelId ?? 'model'}`}>
+                  <strong>{usage.stepName}</strong>
+                  <p>
+                    {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens
+                    {usage.modelId ? ` · ${usage.modelId}` : ''}
+                  </p>
+                  <span className="cell-meta">{formatDuration(usage.elapsedMs)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No model usage recorded.</p>
+          )}
+        </section>
+
+        <section className="policy-box">
+          <h3>Policy Decisions</h3>
+          {evidencePack.policyDecisions.length > 0 ? (
+            <ul className="event-list compact-list" role="list">
+              {evidencePack.policyDecisions.map((decision) => (
+                <li key={`${decision.stepId}-${decision.kind}`}>
+                  <strong>{decision.policyName ?? decision.kind}</strong>
+                  <p>{decision.rationale ?? 'No rationale recorded.'}</p>
+                  <span className="cell-meta">
+                    {decision.stepName} · risk {decision.riskScore}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No policy decisions recorded.</p>
+          )}
+        </section>
+
+        <section className="policy-box">
+          <h3>Sandbox</h3>
+          {evidencePack.sandboxExecutions.length > 0 ? (
+            <ul className="event-list compact-list" role="list">
+              {evidencePack.sandboxExecutions.map((sandbox) => (
+                <li key={`${sandbox.stepId}-${sandbox.sandboxId ?? sandbox.provider}`}>
+                  <strong>{sandbox.provider}</strong>
+                  <p>
+                    {sandbox.stepName} · {sandbox.commandState}
+                    {sandbox.sandboxId ? ` · ${sandbox.sandboxId}` : ''}
+                  </p>
+                  <span className="cell-meta">{formatDuration(sandbox.durationMs)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No sandbox executions recorded.</p>
+          )}
+          {recentSandboxLogs.length > 0 ? (
+            <pre className="adp-pre evidence-log-preview">
+              {recentSandboxLogs.map((log) => `[${log.stream}] ${log.message}`).join('\n')}
+            </pre>
+          ) : null}
+        </section>
+
+        <section className="policy-box">
+          <h3>Audit</h3>
+          {recentAudit.length > 0 ? (
+            <ul className="event-list compact-list" role="list">
+              {recentAudit.map((audit) => (
+                <li key={audit.auditId}>
+                  <strong>{audit.action}</strong>
+                  <p>{audit.details ?? `${audit.actorType}:${audit.actor} ${audit.outcome}`}</p>
+                  <span className="cell-meta">{formatTimestamp(audit.timestamp)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No audit entries recorded.</p>
+          )}
+        </section>
+
+        <section className="policy-box">
+          <h3>Artifacts</h3>
+          {evidencePack.artifacts.length > 0 ? (
+            <ul className="event-list compact-list" role="list">
+              {evidencePack.artifacts.map((artifact) => (
+                <li key={`${artifact.source}-${artifact.name}`}>
+                  <strong>{artifact.name}</strong>
+                  <p>{artifact.source}</p>
+                  <span className="cell-meta">
+                    {artifact.sizeBytes != null ? formatBytes(artifact.sizeBytes) : artifact.contentType ?? 'metadata only'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No evidence artifacts recorded.</p>
+          )}
+        </section>
+      </div>
+    );
+  };
+
   const renderTabContent = () => {
     if (!run) return null;
     switch (activeTab) {
@@ -268,6 +486,9 @@ export function RunDetail() {
             ) : null}
           </>
         );
+
+      case 'Evidence':
+        return renderEvidencePack();
 
       case 'Logs':
         return run.events && run.events.length > 0 ? (
