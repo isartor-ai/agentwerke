@@ -100,7 +100,8 @@ public sealed class WebhooksController : ControllerBase
             ExternalId: payload.Issue.Key,
             ExternalUrl: payload.Issue.Self,
             Title: payload.Issue.Fields?.Summary,
-            Body: payload.Issue.Fields?.Description);
+            Body: payload.Issue.Fields?.Description,
+            Inputs: BuildTriggerInputs(("issue_url", payload.Issue.Self)));
 
         var initiator = payload.User?.DisplayName ?? payload.User?.EmailAddress ?? "jira-webhook";
 
@@ -181,7 +182,10 @@ public sealed class WebhooksController : ControllerBase
             ExternalId: $"{repo}#{payload.Issue.Number}",
             ExternalUrl: payload.Issue.HtmlUrl,
             Title: payload.Issue.Title,
-            Body: payload.Issue.Body);
+            Body: payload.Issue.Body,
+            Inputs: BuildTriggerInputs(
+                ("repository", payload.Repository?.FullName),
+                ("issue_url", payload.Issue.HtmlUrl)));
 
         var initiator = payload.Sender?.Login ?? "github-webhook";
 
@@ -422,6 +426,20 @@ public sealed class WebhooksController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    private static IReadOnlyDictionary<string, string>? BuildTriggerInputs(params (string Key, string? Value)[] inputs)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in inputs)
+        {
+            if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value))
+            {
+                result[key] = value;
+            }
+        }
+
+        return result.Count > 0 ? result : null;
     }
 
     private async Task<byte[]> ReadBodyAsync(CancellationToken cancellationToken)

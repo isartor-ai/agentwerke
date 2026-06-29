@@ -37,6 +37,38 @@ public sealed class RunsControllerTests
     }
 
     [Fact]
+    public async Task Start_ForwardsCustomInputsToStartCommand()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService();
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim("sub", "operator-456")],
+                        "test"))
+                }
+            }
+        };
+
+        var result = await controller.Start(new StartRunRequest(
+            "wf_1",
+            new Dictionary<string, string>
+            {
+                ["branch_name"] = "feature/issue-142",
+                ["repository"] = "isartor-ai/autofac"
+            }));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(orchestration.StartCommand);
+        Assert.NotNull(orchestration.StartCommand!.Inputs);
+        Assert.Equal("feature/issue-142", orchestration.StartCommand.Inputs["branch_name"]);
+        Assert.Equal("isartor-ai/autofac", orchestration.StartCommand.Inputs["repository"]);
+    }
+
+    [Fact]
     public async Task GetEvidencePack_KnownRun_ReturnsGeneratedPack()
     {
         var pack = SampleEvidencePack("run_1");

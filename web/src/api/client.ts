@@ -248,10 +248,10 @@ export const apiClient = {
     });
   },
 
-  async startRun(workflowId: string): Promise<{ runId: string }> {
+  async startRun(workflowId: string, inputs?: Record<string, string>): Promise<{ runId: string }> {
     return requestJson<{ runId: string }>('/api/runs', {
       method: 'POST',
-      body: JSON.stringify({ workflowId }),
+      body: JSON.stringify({ workflowId, ...(inputs ? { inputs } : {}) }),
     });
   },
 

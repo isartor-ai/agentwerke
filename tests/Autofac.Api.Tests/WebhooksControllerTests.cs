@@ -279,6 +279,36 @@ public sealed class WebhooksControllerTests
     }
 
     [Fact]
+    public async Task GitHub_IssuesEvent_PassesRepositoryAndIssueUrlAsTriggerInputs()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            eventHeader: "issues",
+            triggerRouter: new StubTriggerRouter("wf_1"));
+
+        var body = """
+            {
+              "action": "opened",
+              "issue": { "number": 142, "html_url": "https://github.com/isartor-ai/autofac/issues/142", "title": "Seed inputs", "body": "Do the thing", "state": "open" },
+              "repository": { "full_name": "isartor-ai/autofac" },
+              "sender": { "login": "alice" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(orchestration.StartCommand?.Trigger?.Inputs);
+        Assert.Equal("isartor-ai/autofac", orchestration.StartCommand!.Trigger!.Inputs!["repository"]);
+        Assert.Equal(
+            "https://github.com/isartor-ai/autofac/issues/142",
+            orchestration.StartCommand.Trigger.Inputs["issue_url"]);
+    }
+
+    [Fact]
     public async Task GitHub_WorkflowRunCompletedEvent_WhenOnlyTheCommitShaMatchesAWaitingRun_StillAutoResumesIt()
     {
         // Simulates the #139 "wait for CI green after a deploy dispatch" gate: the message-catch

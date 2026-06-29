@@ -8,6 +8,106 @@ namespace Autofac.Application.Tests;
 public sealed class WorkflowRunOrchestrationServiceTests
 {
     [Fact]
+    public async Task StartRunAsync_SeedsCustomInputsAsInputContext()
+    {
+        var runContext = new CapturingRunContextRepository();
+        var outbox = new CapturingRunOutbox();
+        var service = new WorkflowRunOrchestrationService(
+            new SingleWorkflowDefinitionRepository(new WorkflowDefinition
+            {
+                Id = "wf_1",
+                Name = "Autonomous SDLC",
+                Version = "v1",
+                Status = "active",
+                Tags = ["github"]
+            }),
+            new InMemoryWorkflowRunRepository(),
+            runContext,
+            new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "unused", Status = "pending", RiskLevel = "low" }),
+            new CapturingAuditRepository(),
+            outbox,
+            new StubCorrelationContext("corr_start"),
+            new NoOpWorkflowMetrics(),
+            NullLogger<WorkflowRunOrchestrationService>.Instance);
+
+        var result = await service.StartRunAsync(new StartRunCommand(
+            WorkflowId: "wf_1",
+            Initiator: "operator-1",
+            Inputs: new Dictionary<string, string>
+            {
+                ["branch_name"] = "feature/issue-142",
+                ["input.repository"] = "isartor-ai/autofac"
+            }));
+
+        Assert.Equal("pending", result.Status);
+        Assert.Contains(runContext.Writes, write =>
+            write.RunId == result.RunId &&
+            write.Key == "input.branch_name" &&
+            write.Value == "feature/issue-142" &&
+            write.Kind == RunContextKinds.Input);
+        Assert.Contains(runContext.Writes, write =>
+            write.RunId == result.RunId &&
+            write.Key == "input.repository" &&
+            write.Value == "isartor-ai/autofac" &&
+            write.Kind == RunContextKinds.Input);
+        Assert.DoesNotContain(runContext.Writes, static write => write.Key == "input.input.repository");
+        Assert.Single(outbox.Enqueued);
+        Assert.Equal("start", outbox.Enqueued[0].Operation);
+    }
+
+    [Fact]
+    public async Task StartRunAsync_WhenTriggerCarriesInputs_SeedsFixedAndCustomTriggerContext()
+    {
+        var runContext = new CapturingRunContextRepository();
+        var service = new WorkflowRunOrchestrationService(
+            new SingleWorkflowDefinitionRepository(new WorkflowDefinition
+            {
+                Id = "wf_github",
+                Name = "GitHub Trigger",
+                Version = "v1",
+                Status = "active",
+                Tags = ["github-trigger"]
+            }),
+            new InMemoryWorkflowRunRepository(),
+            runContext,
+            new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "unused", Status = "pending", RiskLevel = "low" }),
+            new CapturingAuditRepository(),
+            new CapturingRunOutbox(),
+            new StubCorrelationContext("corr_trigger"),
+            new NoOpWorkflowMetrics(),
+            NullLogger<WorkflowRunOrchestrationService>.Instance);
+
+        var result = await service.StartRunAsync(new StartRunCommand(
+            WorkflowId: "wf_github",
+            Initiator: "github-webhook",
+            Trigger: new TriggerMetadata(
+                Source: "github",
+                EventType: "issues.opened",
+                ExternalId: "isartor-ai/autofac#142",
+                ExternalUrl: "https://github.com/isartor-ai/autofac/issues/142",
+                Title: "Seed custom inputs",
+                Body: "Issue body",
+                Inputs: new Dictionary<string, string>
+                {
+                    ["repository"] = "isartor-ai/autofac",
+                    ["issue_url"] = "https://github.com/isartor-ai/autofac/issues/142"
+                })));
+
+        Assert.Contains(runContext.Writes, write =>
+            write.RunId == result.RunId &&
+            write.Key == "input.source" &&
+            write.Value == "github");
+        Assert.Contains(runContext.Writes, write =>
+            write.RunId == result.RunId &&
+            write.Key == "input.repository" &&
+            write.Value == "isartor-ai/autofac");
+        Assert.Contains(runContext.Writes, write =>
+            write.RunId == result.RunId &&
+            write.Key == "input.issue_url" &&
+            write.Value == "https://github.com/isartor-ai/autofac/issues/142");
+    }
+
+    [Fact]
     public async Task ResumeRunAsync_RecordsApprovalDecisionUnderAuthenticatedPrincipal()
     {
         var approval = new ApprovalRequest
@@ -110,20 +210,39 @@ public sealed class WorkflowRunOrchestrationServiceTests
             throw new NotImplementedException();
     }
 
+    private sealed class SingleWorkflowDefinitionRepository(WorkflowDefinition workflow) : IWorkflowDefinitionRepository
+    {
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowDefinition>>([workflow]);
+
+        public Task<WorkflowDefinition?> GetAsync(string workflowId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Equals(workflow.Id, workflowId, StringComparison.Ordinal) ? workflow : null);
+
+        public Task<WorkflowDefinition?> FindTrackedAsync(string workflowId, CancellationToken cancellationToken = default) =>
+            GetAsync(workflowId, cancellationToken);
+
+        public Task AddAsync(WorkflowDefinition workflow, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+    }
+
     private sealed class InMemoryWorkflowRunRepository : IWorkflowRunRepository
     {
-        private readonly WorkflowRun _run;
+        private WorkflowRun? _run;
 
-        public InMemoryWorkflowRunRepository(WorkflowRun run)
+        public InMemoryWorkflowRunRepository(WorkflowRun? run = null)
         {
             _run = run;
         }
 
         public int PendingApprovalDecrements { get; private set; }
+        public List<(string RunId, string Type, string Message)> Events { get; } = [];
 
         public Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken)
         {
-            return Task.FromResult(string.Equals(_run.Id, runId, StringComparison.Ordinal) ? _run : null);
+            return Task.FromResult(_run is not null && string.Equals(_run.Id, runId, StringComparison.Ordinal) ? _run : null);
         }
 
         public Task<WorkflowRun> CreatePendingRunAsync(
@@ -136,17 +255,39 @@ public sealed class WorkflowRunOrchestrationServiceTests
             string? correlationId,
             CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            _run = new WorkflowRun
+            {
+                Id = runId,
+                WorkflowId = workflowId,
+                WorkflowName = workflowName,
+                WorkflowVersion = workflowVersion,
+                Status = "pending",
+                RequestedBy = initiator ?? string.Empty,
+                StartedAt = DateTimeOffset.UtcNow.ToString("o"),
+                Tags = tags,
+                CorrelationId = correlationId
+            };
+            return Task.FromResult(_run);
         }
 
         public Task UpdateRunStatusAsync(string runId, string status, CancellationToken cancellationToken)
         {
+            if (_run is null)
+            {
+                throw new WorkflowRunNotFoundException(runId);
+            }
+
             _run.Status = status;
             return Task.CompletedTask;
         }
 
         public Task UpdateCurrentStepAsync(string runId, string? currentStep, CancellationToken cancellationToken)
         {
+            if (_run is null)
+            {
+                throw new WorkflowRunNotFoundException(runId);
+            }
+
             _run.CurrentStep = currentStep ?? string.Empty;
             return Task.CompletedTask;
         }
@@ -164,7 +305,41 @@ public sealed class WorkflowRunOrchestrationServiceTests
 
         public Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            Events.Add((runId, type, message));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class CapturingRunContextRepository : IRunContextRepository
+    {
+        public List<(string RunId, string Key, string Value, string Kind)> Writes { get; } = [];
+
+        public Task SetAsync(
+            string runId,
+            string key,
+            string value,
+            string kind,
+            CancellationToken cancellationToken)
+        {
+            Writes.Add((runId, key, value, kind));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<RunContextEntry>> GetAllAsync(
+            string runId,
+            CancellationToken cancellationToken)
+        {
+            var entries = Writes
+                .Where(write => write.RunId == runId)
+                .Select(static write => new RunContextEntry
+                {
+                    RunId = write.RunId,
+                    Key = write.Key,
+                    Value = write.Value,
+                    Kind = write.Kind
+                })
+                .ToArray();
+            return Task.FromResult<IReadOnlyList<RunContextEntry>>(entries);
         }
     }
 

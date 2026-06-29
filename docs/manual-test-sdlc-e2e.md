@@ -25,22 +25,13 @@ App/PAT with webhook delivery configured, and a publicly reachable Autofac insta
 call back into. Sections below are explicit about what you can verify locally vs. what requires
 that infrastructure.
 
-## Known gap found while writing this scenario (see "Gap log" below)
+## Start-time inputs for this scenario
 
-`POST /api/runs` (`StartRunRequest`) takes only a `workflowId` — there is no way to seed custom
-run-context input values (e.g. `branch_name`) when starting a templated run, and the GitHub
-`issues` webhook trigger (`WebhooksController.HandleIssuesEventAsync` → `SeedTriggerContextAsync`)
-only seeds `input.source`/`event_type`/`external_id`/`external_url`/`title`/`body` — never a
-custom key like `branch_name`. The template's two wait nodes are written against the *intended*
-target design (`correlationKeyTemplate="{{input.branch_name}}"`), but **today, nothing populates
-`input.branch_name`**, so that placeholder never resolves to a real value and the live
-webhook-driven auto-resume cannot complete for this template as authored. Filed as
-[isartor-ai/autofac-private#142](https://github.com/isartor-ai/autofac-private/issues/142). Until
-that lands, Part A below uses the **manual resume API** (`POST /api/runs/{runId}/resume-external`)
-at both wait points instead of relying on a live GitHub webhook to auto-resume — this still proves
-every other stage of the pipeline, and proves the wait/resume mechanics themselves (already
-covered by #137/#138's own test suites), just not the "no human in the loop" property for these
-two gates specifically.
+`POST /api/runs` accepts an optional `inputs` object. Each entry is written to run context as
+`input.<key>` before the workflow starts, so this scenario can seed `input.branch_name` for the two
+external wait gates authored with `correlationKeyTemplate="{{input.branch_name}}"`. The GitHub
+`issues` webhook trigger also seeds trigger-derived inputs such as `input.repository` and
+`input.issue_url`; template `RequiredInputs` remain descriptive catalog metadata for now.
 
 ## Prerequisites
 
@@ -108,10 +99,19 @@ then:
 ```bash
 curl -X POST http://localhost:8080/api/runs \
   -H "Content-Type: application/json" \
-  -d '{"workflowId": "<workflowId from step 1>"}'
+  -d '{
+        "workflowId": "<workflowId from step 1>",
+        "inputs": {
+          "issue_url": "https://github.com/isartor-ai/autofac/issues/<issue-number>",
+          "repository": "isartor-ai/autofac",
+          "branch_name": "feature/autonomous-sdlc-e2e"
+        }
+      }'
 ```
 
 Expected result: `202 Accepted` with a `runId`. Poll `GET /api/runs/{runId}` to follow progress.
+The two external wait gates should now render their correlation key as
+`feature/autonomous-sdlc-e2e` instead of leaving `{{input.branch_name}}` unresolved.
 
 ### Step 3: Requirement design + approval
 
@@ -141,7 +141,7 @@ spec from run context. Repeat step 3's approval flow for the architecture approv
 
 What to watch for specifically: does the architecture spec actually reference the requirements
 spec's content, or does it look like it ignored prior-stage context? This is exactly the kind of
-cross-stage prompt-quality gap this issue exists to catch.
+cross-stage prompt-quality gap this scenario exists to catch.
 
 ### Step 5: Technical analysis
 
@@ -164,7 +164,7 @@ its branch name for step 8.
 `toolInvocations` that it actually re-ran the build/tests via `sandbox.shell` rather than approving
 on faith, and that `github.post_review` was called.
 
-### Step 8: Wait for PR merge (manual resume, see the gap note above)
+### Step 8: Wait for PR merge
 
 The run is now `waiting_external` on `WaitForMerge`. Confirm via `GET /api/runs/{runId}` that
 `status` is `waiting_external`. Resolve it manually:
@@ -172,13 +172,10 @@ The run is now `waiting_external` on `WaitForMerge`. Confirm via `GET /api/runs/
 ```bash
 curl -X POST http://localhost:8080/api/runs/<runId>/resume-external \
   -H "Content-Type: application/json" \
-  -d '{"correlationKey": "{{input.branch_name}}", "payload": {"merged": "true", "pr_number": "1"}}'
+  -d '{"correlationKey": "feature/autonomous-sdlc-e2e", "payload": {"merged": "true", "pr_number": "1"}}'
 ```
 
-Note the literal `correlationKey` value: because of the gap above, the checkpoint's recorded
-correlation key really is the unresolved template string, not a real branch name — copy it exactly
-as shown in the run's `waitingOnNodeId`/checkpoint detail in the API response, don't substitute a
-real branch name yourself, or the resume call will 404/mismatch.
+Use the same branch name you provided in the start-run `inputs.branch_name` value.
 
 ### Step 9: Trigger deploy
 
@@ -214,21 +211,18 @@ Repeat steps 6 through 10 above, but:
 - Configure the repo's webhook deliveries (`pull_request`, `workflow_run`) to point at your
   Autofac instance's `POST /webhooks/github`, with the shared secret matching
   `Integrations:GitHub:WebhookSecret`.
-- **Until the gap above is closed**, the live webhook won't auto-resume the run (its correlation
-  hint will be a real branch name, but the checkpoint is waiting on the literal unresolved
-  template string) — you'll still need the manual resume calls from Part A, but you can now
-  cross-check the *webhook side*: confirm in the Autofac logs that the real `pull_request.merged`
-  and `workflow_run.completed` webhooks were received, signature-validated, and recorded as
-  `ExternalWorkflowEvent`s (per #136), even though they don't (yet) find a matching waiting run.
-- File any further prompt-quality or timing gaps found here the same way as the one above —
-  referencing this document and #89.
+- Confirm the implementation stage creates or uses the same branch name you seeded as
+  `inputs.branch_name`. When it does, the real `pull_request.merged` and
+  `workflow_run.completed` webhook deliveries should be received, signature-validated, recorded as
+  `ExternalWorkflowEvent`s (per #136), matched against the waiting correlation, and used to
+  auto-resume the run.
+- File any further prompt-quality or timing gaps found here referencing this document and #89.
 
 ## Gap log
 
-- **#142** — No mechanism to seed custom run-context input values (e.g. `branch_name`) when
-  starting a templated run via `POST /api/runs`, or via the GitHub `issues` webhook trigger. This
-  is what currently blocks live webhook auto-resume for the `autonomous-sdlc` template's two wait
-  gates. See the note at the top of this document.
+- **#142** — Resolved by start-run `inputs` seeding and trigger-derived issue inputs. This lets
+  `input.branch_name` resolve for the `autonomous-sdlc` template's two wait gates when callers
+  provide the branch name at run start.
 
 ## References
 

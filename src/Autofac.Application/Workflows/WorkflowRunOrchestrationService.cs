@@ -87,6 +87,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             await SeedTriggerContextAsync(runId, command.Trigger, cancellationToken);
         }
 
+        await SeedInputContextAsync(runId, command.Inputs, cancellationToken);
+
         var payload = new OutboxStartPayload(workflow.Id, command.Initiator, correlationId).Serialize();
         await _outbox.EnqueueAsync(OutboxOperations.Start, runId, payload, ct: cancellationToken);
 
@@ -245,6 +247,50 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             await _runContextRepository.SetAsync(runId, "input.title", trigger.Title, kind, cancellationToken);
         if (!string.IsNullOrWhiteSpace(trigger.Body))
             await _runContextRepository.SetAsync(runId, "input.body", trigger.Body, kind, cancellationToken);
+
+        await SeedInputContextAsync(runId, trigger.Inputs, cancellationToken);
+    }
+
+    private async Task SeedInputContextAsync(
+        string runId,
+        IReadOnlyDictionary<string, string>? inputs,
+        CancellationToken cancellationToken)
+    {
+        if (inputs is null || inputs.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var pair in inputs)
+        {
+            var key = BuildInputContextKey(pair.Key);
+            if (key is null)
+            {
+                continue;
+            }
+
+            await _runContextRepository.SetAsync(runId, key, pair.Value, RunContextKinds.Input, cancellationToken);
+        }
+    }
+
+    private static string? BuildInputContextKey(string rawKey)
+    {
+        var key = rawKey.Trim();
+        if (key.Length == 0)
+        {
+            return null;
+        }
+
+        if (key.StartsWith("input.", StringComparison.OrdinalIgnoreCase))
+        {
+            key = key["input.".Length..].Trim();
+            if (key.Length == 0)
+            {
+                return null;
+            }
+        }
+
+        return $"input.{key}";
     }
 
     private async Task WriteAuditAsync(
