@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import type { RunEvent } from '../types';
+import type { AuthState, RunEvent } from '../types';
 import { RunDetail } from '../views/RunDetail';
-import { evidencePackFixture, runsFixture, workflowsFixture } from './fixtures';
+import { adminAuthFixture, evidencePackFixture, runsFixture, viewerAuthFixture, workflowsFixture } from './fixtures';
 
 // BpmnViewer needs SVG layout unavailable in jsdom; use the test stub
 vi.mock('../components/BpmnViewer');
@@ -48,11 +48,11 @@ describe('RunDetail integration', () => {
     vi.clearAllMocks();
   });
 
-  function renderDetail(id = 'run-0421') {
+  function renderDetail(id = 'run-0421', auth: AuthState = adminAuthFixture) {
     return render(
       <MemoryRouter initialEntries={[`/runs/${id}`]}>
         <Routes>
-          <Route path="/runs/:runId" element={<RunDetail />} />
+          <Route path="/runs/:runId" element={<RunDetail auth={auth} />} />
           <Route path="/runs" element={<div>runs list</div>} />
         </Routes>
       </MemoryRouter>,
@@ -110,6 +110,18 @@ describe('RunDetail integration', () => {
     expect(screen.getAllByText('opensandbox').length).toBeGreaterThan(0);
     expect(screen.getByText('workflow.start')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download JSON' })).toBeInTheDocument();
+  });
+
+  it('does not fetch operator-only evidence or allow cancel for viewers', async () => {
+    renderDetail('run-0421', viewerAuthFixture);
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    expect(vi.mocked(apiClient.getRunEvidencePack)).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
+    expect(screen.getByText('Operator role required to view and export evidence packs.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export Evidence Pack' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel run and stop further execution' })).toBeDisabled();
   });
 
   it('refreshes the run payload when stream events arrive so BPMN statuses update live', async () => {

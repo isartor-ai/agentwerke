@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { roleLabel } from '../auth/permissions';
 import type { AuthState } from '../types';
 import { LoadingState } from '../components/LoadingState';
 
@@ -59,7 +60,7 @@ export function AppShell({ auth }: AppShellProps) {
             <div>
               <div className="avatar">{user.avatarInitials}</div>
               <p className="sidebar-user-name">{user.name}</p>
-              <p className="sidebar-user-role">{user.role}</p>
+              <p className="sidebar-user-role">{roleLabel(user.roles)}</p>
             </div>
           ) : (
             <NavLink to="/login" className="btn btn-secondary btn-block">

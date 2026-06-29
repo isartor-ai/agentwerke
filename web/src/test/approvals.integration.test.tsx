@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { ApprovalsDashboard } from '../views/ApprovalsDashboard';
-import { approvalsFixture, artifactApprovalFixture } from './fixtures';
+import { adminAuthFixture, approvalsFixture, artifactApprovalFixture, viewerAuthFixture } from './fixtures';
 
 vi.mock('../api/client', () => ({
   apiClient: {
@@ -22,7 +22,7 @@ describe('ApprovalsDashboard integration', () => {
   it('opens review drawer and submits approval decision', async () => {
     render(
       <MemoryRouter>
-        <ApprovalsDashboard />
+        <ApprovalsDashboard auth={adminAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -55,7 +55,7 @@ describe('ApprovalsDashboard integration', () => {
 
     render(
       <MemoryRouter>
-        <ApprovalsDashboard />
+        <ApprovalsDashboard auth={adminAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -67,7 +67,7 @@ describe('ApprovalsDashboard integration', () => {
   it('keeps reject validation inside the active review screen', async () => {
     render(
       <MemoryRouter>
-        <ApprovalsDashboard />
+        <ApprovalsDashboard auth={adminAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -83,7 +83,7 @@ describe('ApprovalsDashboard integration', () => {
   it('filters to decided approvals and shows their status history', async () => {
     render(
       <MemoryRouter>
-        <ApprovalsDashboard />
+        <ApprovalsDashboard auth={adminAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -103,7 +103,7 @@ describe('ApprovalsDashboard integration', () => {
 
     render(
       <MemoryRouter>
-        <ApprovalsDashboard />
+        <ApprovalsDashboard auth={adminAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -123,7 +123,7 @@ describe('ApprovalsDashboard integration', () => {
 
     render(
       <MemoryRouter>
-        <ApprovalsDashboard />
+        <ApprovalsDashboard auth={adminAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -133,5 +133,21 @@ describe('ApprovalsDashboard integration', () => {
     expect(screen.getByRole('dialog', { name: 'Approval Request' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Generated artifact')).not.toBeInTheDocument();
     expect(apiClient.getRunArtifactContent).not.toHaveBeenCalled();
+  });
+
+  it('opens approval detail for viewers without decision controls', async () => {
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard auth={viewerAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Approvals')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Approval Request' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText('Approver role required to submit a decision.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
   });
 });

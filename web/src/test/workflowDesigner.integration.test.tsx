@@ -2,8 +2,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { createEmptyDiagram } from '../bpmn/constants';
+import type { AuthState } from '../types';
 import { WorkflowDesigner } from '../views/WorkflowDesigner';
-import { templateDetailFixture, templatesFixture, workflowsFixture } from './fixtures';
+import { adminAuthFixture, templateDetailFixture, templatesFixture, viewerAuthFixture, workflowsFixture } from './fixtures';
 
 // The real <BpmnModeler /> wraps bpmn-js, which needs SVG layout and cannot
 // render in jsdom. Substitute the stub that mirrors the imperative handle.
@@ -50,10 +51,10 @@ describe('WorkflowDesigner integration', () => {
   let createObjectUrlSpy: { mockRestore: () => void };
   let revokeObjectUrlSpy: { mockRestore: () => void };
 
-  function renderDesigner() {
+  function renderDesigner(auth: AuthState = adminAuthFixture) {
     return render(
       <MemoryRouter>
-        <WorkflowDesigner />
+        <WorkflowDesigner auth={auth} />
       </MemoryRouter>,
     );
   }
@@ -195,6 +196,19 @@ describe('WorkflowDesigner integration', () => {
       expect(screen.getByText(/requires autofac:agentTask metadata/i)).toBeInTheDocument();
       expect(screen.getByText(/at line 12, col 5/i)).toBeInTheDocument();
     });
+  });
+
+  it('disables workflow write actions for viewers', async () => {
+    renderDesigner(viewerAuthFixture);
+    await switchToAdvancedTab();
+
+    expect(screen.getByRole('button', { name: 'Import BPMN' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Validate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Factory' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure Production Deploy' }));
+    expect(await screen.findByRole('button', { name: 'Create Draft' })).toBeDisabled();
   });
 
   it('shows validation warnings without marking the workflow invalid', async () => {

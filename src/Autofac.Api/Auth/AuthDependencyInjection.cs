@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
-using System.Text.Json;
 using System.Text;
 
 namespace Autofac.Api.Auth;
@@ -138,53 +137,18 @@ public static class AuthDependencyInjection
             .Select(claim => claim.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var claimType in opts.RoleClaimTypes.Where(type => !string.IsNullOrWhiteSpace(type)).Distinct())
+        var roleClaimValues = opts.RoleClaimTypes
+            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .Distinct()
+            .SelectMany(type => identity.FindAll(type).Select(claim => claim.Value));
+
+        foreach (var role in AutofacRoleMapper.ResolveRoles(roleClaimValues, opts))
         {
-            foreach (var claim in identity.FindAll(claimType))
+            if (existingRoles.Add(role))
             {
-                foreach (var role in ExpandRoleClaimValue(claim.Value))
-                {
-                    if (existingRoles.Add(role))
-                    {
-                        identity.AddClaim(new Claim(ClaimTypes.Role, role));
-                    }
-                }
+                identity.AddClaim(new Claim(ClaimTypes.Role, role));
             }
         }
-    }
-
-    private static IEnumerable<string> ExpandRoleClaimValue(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            yield break;
-        }
-
-        var trimmed = value.Trim();
-        if (trimmed.StartsWith("[", StringComparison.Ordinal))
-        {
-            string[]? roles = null;
-            try
-            {
-                roles = JsonSerializer.Deserialize<string[]>(trimmed);
-            }
-            catch (JsonException)
-            {
-                // Fall back to yielding the original value below.
-            }
-
-            if (roles is not null)
-            {
-                foreach (var role in roles.Where(role => !string.IsNullOrWhiteSpace(role)))
-                {
-                    yield return role;
-                }
-
-                yield break;
-            }
-        }
-
-        yield return trimmed;
     }
 
     private static void NormalizeNameClaim(ClaimsIdentity identity, JwtOptions opts)

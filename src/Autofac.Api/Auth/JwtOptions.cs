@@ -19,6 +19,7 @@ public sealed class JwtOptions
         "roles",
         "groups"
     ];
+    public Dictionary<string, string[]> RoleMappings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string[] NameClaimTypes { get; set; } =
     [
         System.Security.Claims.ClaimTypes.Name,

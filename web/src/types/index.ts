@@ -517,11 +517,31 @@ export interface RuntimeMode {
   camundaEnabled: boolean;
 }
 
+export type AuthRole = 'Viewer' | 'Operator' | 'Approver' | 'Admin';
+
+export interface AuthConfig {
+  authentication: 'oidc' | 'symmetric-jwt' | 'development-identity' | 'unconfigured' | string;
+  issuer?: string | null;
+  audience?: string | null;
+  authority?: string | null;
+  devTokensEnabled: boolean;
+  devIdentityEnabled: boolean;
+  roles: AuthRole[];
+}
+
+export interface DevTokenResponse {
+  token: string;
+  subject: string;
+  role: AuthRole;
+  expiresAt: string;
+}
+
 export interface AuthUser {
   id: string;
   name: string;
-  email: string;
-  role: string;
+  email?: string | null;
+  role: AuthRole;
+  roles: AuthRole[];
   avatarInitials: string;
 }
 

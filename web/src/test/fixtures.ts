@@ -1,4 +1,48 @@
-import type { ApprovalRequest, EvidencePack, TemplateDetail, TemplateSummary, Workflow, WorkflowRun } from '../types';
+import type {
+  ApprovalRequest,
+  AuthState,
+  EvidencePack,
+  TemplateDetail,
+  TemplateSummary,
+  Workflow,
+  WorkflowRun,
+} from '../types';
+
+export const adminAuthFixture: AuthState = {
+  status: 'authenticated',
+  user: {
+    id: 'admin-user',
+    name: 'Admin User',
+    email: 'admin@example.com',
+    role: 'Admin',
+    roles: ['Admin'],
+    avatarInitials: 'AU',
+  },
+};
+
+export const operatorAuthFixture: AuthState = {
+  status: 'authenticated',
+  user: {
+    id: 'operator-user',
+    name: 'Operator User',
+    email: 'operator@example.com',
+    role: 'Operator',
+    roles: ['Operator'],
+    avatarInitials: 'OU',
+  },
+};
+
+export const viewerAuthFixture: AuthState = {
+  status: 'authenticated',
+  user: {
+    id: 'viewer-user',
+    name: 'Viewer User',
+    email: 'viewer@example.com',
+    role: 'Viewer',
+    roles: ['Viewer'],
+    avatarInitials: 'VU',
+  },
+};
 
 export const workflowsFixture: Workflow[] = [
   {

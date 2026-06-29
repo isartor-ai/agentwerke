@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { canOperate } from '../auth/permissions';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
@@ -12,7 +13,7 @@ import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { ToastRegion } from '../components/ToastRegion';
 import { useToastQueue } from '../components/useToastQueue';
-import type { RiskLevel, RunStatus, Workflow, WorkflowRun } from '../types';
+import type { AuthState, RiskLevel, RunStatus, Workflow, WorkflowRun } from '../types';
 
 const FIRST_RUN_SAMPLE_WORKFLOW_ID = 'wf-first-run-sample';
 
@@ -53,7 +54,11 @@ const statusTone: Record<RunStatus, string> = {
   needs_config: 'warning',
 };
 
-export function RunBoard() {
+interface RunBoardProps {
+  auth: AuthState;
+}
+
+export function RunBoard({ auth }: RunBoardProps) {
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +69,7 @@ export function RunBoard() {
   const navigate = useNavigate();
   const runsRef = useRef<WorkflowRun[]>([]);
   const { toasts, pushToast, dismissToast } = useToastQueue();
+  const canStartRuns = canOperate(auth);
 
   const selectedStatus = (searchParams.get('status') ?? 'all') as 'all' | RunStatus;
   const selectedRisk = (searchParams.get('risk') ?? 'all') as 'all' | RiskLevel;
@@ -126,6 +132,15 @@ export function RunBoard() {
   }, [workflows]);
 
   const startSampleWorkflow = useCallback(async () => {
+    if (!canStartRuns) {
+      pushToast({
+        tone: 'error',
+        title: 'Operator role required',
+        message: 'Starting workflow runs requires the Operator or Admin role.',
+      });
+      return;
+    }
+
     if (!sampleWorkflow) {
       navigate('/workflows');
       return;
@@ -146,7 +161,7 @@ export function RunBoard() {
     } finally {
       setStartingSample(false);
     }
-  }, [navigate, pushToast, sampleWorkflow]);
+  }, [canStartRuns, navigate, pushToast, sampleWorkflow]);
 
   const filteredRuns = useMemo(() => {
     return runs.filter((run) => {
@@ -230,8 +245,12 @@ export function RunBoard() {
             >
               {refreshing ? 'Syncing...' : 'Sync'}
             </button>
-            <button type="button" className="btn btn-primary" onClick={() => navigate('/workflows')}>
-              Deploy Workflow
+            <button
+              type="button"
+              className={canStartRuns ? 'btn btn-primary' : 'btn btn-secondary'}
+              onClick={() => navigate('/workflows')}
+            >
+              {canStartRuns ? 'Deploy Workflow' : 'View Workflows'}
             </button>
           </>
         }
@@ -357,7 +376,8 @@ export function RunBoard() {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={startingSample}
+                disabled={startingSample || !canStartRuns}
+                title={canStartRuns ? undefined : 'Operator or Admin role required'}
                 onClick={() => void startSampleWorkflow()}
               >
                 {startingSample ? 'Starting...' : 'Run sample workflow'}

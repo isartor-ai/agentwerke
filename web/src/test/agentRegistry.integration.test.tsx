@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { apiClient } from '../api/client';
 import type { AgentDetail, AgentSummary, SkillSummary } from '../types';
 import { AgentRegistry } from '../views/AgentRegistry';
+import { adminAuthFixture, viewerAuthFixture } from './fixtures';
 import { renderWithRoute } from './test-utils';
 
 vi.mock('../api/client', () => ({
@@ -99,7 +100,7 @@ describe('AgentRegistry integration', () => {
   });
 
   it('loads an agent, binds a catalog skill, and saves the updated registry entry', async () => {
-    renderWithRoute(<AgentRegistry />, '/agents');
+    renderWithRoute(<AgentRegistry auth={adminAuthFixture} />, '/agents');
 
     expect(await screen.findByText('Agent Registry')).toBeInTheDocument();
     expect(await screen.findByDisplayValue('GitHub Agent')).toBeInTheDocument();
@@ -140,7 +141,7 @@ describe('AgentRegistry integration', () => {
         },
       ]);
 
-    renderWithRoute(<AgentRegistry />, '/agents');
+    renderWithRoute(<AgentRegistry auth={adminAuthFixture} />, '/agents');
 
     expect(await screen.findByDisplayValue('GitHub Agent')).toBeInTheDocument();
 
@@ -156,6 +157,15 @@ describe('AgentRegistry integration', () => {
     });
 
     expect(await screen.findByDisplayValue('Ops Agent')).toBeInTheDocument();
+  });
+
+  it('keeps agent editing controls read-only for viewers', async () => {
+    renderWithRoute(<AgentRegistry auth={viewerAuthFixture} />, '/agents');
+
+    expect(await screen.findByDisplayValue('GitHub Agent')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Bind' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save Agent' })).toBeDisabled();
+    expect(screen.getByText('Admin role required to edit agent definitions.')).toBeInTheDocument();
   });
 });
 

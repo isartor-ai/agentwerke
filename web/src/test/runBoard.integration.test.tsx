@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { RunBoard } from '../views/RunBoard';
-import { firstRunWorkflowFixture, runsFixture, workflowsFixture } from './fixtures';
+import { firstRunWorkflowFixture, operatorAuthFixture, runsFixture, viewerAuthFixture, workflowsFixture } from './fixtures';
 
 vi.mock('../api/client', () => ({
   apiClient: {
@@ -22,7 +22,7 @@ describe('RunBoard integration', () => {
   it('loads runs, filters by status, and navigates to detail', async () => {
     render(
       <MemoryRouter initialEntries={['/runs']}>
-        <RunBoard />
+        <RunBoard auth={operatorAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -44,7 +44,7 @@ describe('RunBoard integration', () => {
 
     render(
       <MemoryRouter initialEntries={['/runs']}>
-        <RunBoard />
+        <RunBoard auth={operatorAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -64,7 +64,7 @@ describe('RunBoard integration', () => {
 
     render(
       <MemoryRouter initialEntries={['/runs']}>
-        <RunBoard />
+        <RunBoard auth={operatorAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -79,7 +79,7 @@ describe('RunBoard integration', () => {
 
     render(
       <MemoryRouter initialEntries={['/runs']}>
-        <RunBoard />
+        <RunBoard auth={operatorAuthFixture} />
       </MemoryRouter>,
     );
 
@@ -90,5 +90,20 @@ describe('RunBoard integration', () => {
     await waitFor(() => {
       expect(apiClient.startRun).toHaveBeenCalledWith('wf-first-run-sample');
     });
+  });
+
+  it('does not offer run start controls to viewers', async () => {
+    vi.mocked(apiClient.getRuns).mockResolvedValue([]);
+    vi.mocked(apiClient.getWorkflows).mockResolvedValue([firstRunWorkflowFixture]);
+
+    render(
+      <MemoryRouter initialEntries={['/runs']}>
+        <RunBoard auth={viewerAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    const runButton = await screen.findByRole('button', { name: 'Run sample workflow' });
+    expect(runButton).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /View Workflows/i }).length).toBeGreaterThan(0);
   });
 });

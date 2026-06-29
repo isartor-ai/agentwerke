@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { apiClient } from '../api/client';
 import App from '../App';
-import { approvalsFixture, runsFixture, workflowsFixture } from './fixtures';
+import { adminAuthFixture, approvalsFixture, runsFixture, workflowsFixture } from './fixtures';
 
 // Use the lightweight modeler stub (bpmn-js cannot render in jsdom).
 vi.mock('../components/BpmnModeler');
@@ -17,6 +17,7 @@ vi.mock('../api/client', () => ({
     getTemplates: vi.fn(),
     getApprovals: vi.fn(),
     decideApproval: vi.fn(),
+    getCurrentUser: vi.fn(),
   },
 }));
 
@@ -35,6 +36,7 @@ describe('App integration', () => {
     vi.mocked(apiClient.getAgents).mockResolvedValue([]);
     vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
     vi.mocked(apiClient.getTemplates).mockResolvedValue([]);
+    vi.mocked(apiClient.getCurrentUser).mockResolvedValue(adminAuthFixture.user!);
     window.history.pushState({}, '', '/runs');
   });
 

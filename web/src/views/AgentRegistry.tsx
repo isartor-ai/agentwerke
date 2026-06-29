@@ -1,10 +1,11 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
+import { canAdmin } from '../auth/permissions';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
-import type { AgentDetail, AgentSkillBinding, AgentSummary, SkillSummary } from '../types';
+import type { AgentDetail, AgentSkillBinding, AgentSummary, AuthState, SkillSummary } from '../types';
 
 interface AgentFormState {
   agentId: string;
@@ -57,7 +58,11 @@ function toFormState(agent: AgentDetail): AgentFormState {
   };
 }
 
-export function AgentRegistry() {
+interface AgentRegistryProps {
+  auth: AuthState;
+}
+
+export function AgentRegistry({ auth }: AgentRegistryProps) {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -74,6 +79,7 @@ export function AgentRegistry() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canManageAgents = canAdmin(auth);
 
   const loadCatalog = async (nextSelectedAgentId?: string) => {
     setLoading(true);
@@ -156,10 +162,18 @@ export function AgentRegistry() {
   const selectedSkillIds = useMemo(() => new Set(form?.skills.map((skill) => skill.skillId) ?? []), [form]);
 
   const updateForm = <K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) => {
+    if (!canManageAgents) {
+      return;
+    }
+
     setForm((current) => (current ? { ...current, [key]: value } : current));
   };
 
   const toggleCatalogSkill = (skill: SkillSummary) => {
+    if (!canManageAgents) {
+      return;
+    }
+
     setForm((current) => {
       if (!current) {
         return current;
@@ -190,6 +204,10 @@ export function AgentRegistry() {
   };
 
   const updateSkillBinding = (index: number, updater: (skill: AgentSkillBinding) => AgentSkillBinding) => {
+    if (!canManageAgents) {
+      return;
+    }
+
     setForm((current) => {
       if (!current) {
         return current;
@@ -203,6 +221,10 @@ export function AgentRegistry() {
   };
 
   const removeSkillBinding = (index: number) => {
+    if (!canManageAgents) {
+      return;
+    }
+
     setForm((current) => {
       if (!current) {
         return current;
@@ -216,6 +238,10 @@ export function AgentRegistry() {
   };
 
   const addCustomSkill = () => {
+    if (!canManageAgents) {
+      return;
+    }
+
     const skillId = newSkillId.trim();
     if (!skillId) {
       return;
@@ -243,7 +269,7 @@ export function AgentRegistry() {
   };
 
   const handleSave = async () => {
-    if (!form) {
+    if (!form || !canManageAgents) {
       return;
     }
 
@@ -290,7 +316,7 @@ export function AgentRegistry() {
     const file = event.target.files?.[0];
     event.target.value = '';
 
-    if (!file) {
+    if (!file || !canManageAgents) {
       return;
     }
 
@@ -329,12 +355,14 @@ export function AgentRegistry() {
               accept=".md,text/markdown"
               aria-label="Upload AGENT.md file"
               className="sr-only"
+              disabled={!canManageAgents}
               onChange={(event) => void handleUpload(event)}
             />
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={uploading}
+              disabled={uploading || !canManageAgents}
+              title={canManageAgents ? undefined : 'Admin role required'}
               onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? 'Uploading…' : 'Upload AGENT.md'}
@@ -342,7 +370,13 @@ export function AgentRegistry() {
             <button type="button" className="btn btn-secondary" onClick={() => void loadCatalog(selectedAgentId ?? undefined)}>
               Refresh
             </button>
-            <button type="button" className="btn btn-primary" disabled={!form || saving} onClick={() => void handleSave()}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!form || saving || !canManageAgents}
+              title={canManageAgents ? undefined : 'Admin role required'}
+              onClick={() => void handleSave()}
+            >
               {saving ? 'Saving…' : 'Save Agent'}
             </button>
           </>
@@ -427,8 +461,9 @@ export function AgentRegistry() {
               </div>
 
               {saveError ? <p className="validation-error">{saveError}</p> : null}
+              {!canManageAgents ? <p className="cell-meta">Admin role required to edit agent definitions.</p> : null}
 
-              <div className="form-grid">
+              <fieldset className="form-grid form-fieldset" disabled={!canManageAgents}>
                 <label>
                   Agent ID
                   <input
@@ -548,7 +583,7 @@ export function AgentRegistry() {
                     onChange={(event) => updateForm('systemPrompt', event.target.value)}
                   />
                 </label>
-              </div>
+              </fieldset>
 
               <section className="agent-registry-section">
                 <div className="panel-title-row">
@@ -563,9 +598,16 @@ export function AgentRegistry() {
                     type="text"
                     value={newSkillId}
                     placeholder="Add custom skill id"
+                    disabled={!canManageAgents}
                     onChange={(event) => setNewSkillId(event.target.value)}
                   />
-                  <button type="button" className="btn btn-secondary" onClick={addCustomSkill}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={!canManageAgents}
+                    title={canManageAgents ? undefined : 'Admin role required'}
+                    onClick={addCustomSkill}
+                  >
                     Add Custom Skill
                   </button>
                 </div>
@@ -580,7 +622,7 @@ export function AgentRegistry() {
                   <div className="agent-skill-bindings">
                     {form.skills.map((skill, index) => (
                       <article key={`${skill.skillId}-${index}`} className="agent-skill-binding">
-                        <div className="form-grid">
+                        <fieldset className="form-grid form-fieldset" disabled={!canManageAgents}>
                           <label>
                             Skill ID
                             <input
@@ -646,11 +688,13 @@ export function AgentRegistry() {
                               }))}
                             />
                           </label>
-                        </div>
+                        </fieldset>
                         <div className="action-row">
                           <button
                             type="button"
                             className="btn btn-danger"
+                            disabled={!canManageAgents}
+                            title={canManageAgents ? undefined : 'Admin role required'}
                             onClick={() => removeSkillBinding(index)}
                           >
                             Remove Skill
@@ -691,6 +735,8 @@ export function AgentRegistry() {
                           <button
                             type="button"
                             className={`btn ${selectedSkillIds.has(skill.skillId) ? 'btn-danger' : 'btn-secondary'}`}
+                            disabled={!canManageAgents}
+                            title={canManageAgents ? undefined : 'Admin role required'}
                             onClick={() => toggleCatalogSkill(skill)}
                           >
                             {selectedSkillIds.has(skill.skillId) ? 'Remove' : 'Bind'}
