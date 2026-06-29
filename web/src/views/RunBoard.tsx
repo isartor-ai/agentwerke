@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
@@ -10,6 +10,8 @@ import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { ToastRegion } from '../components/ToastRegion';
+import { useToastQueue } from '../components/useToastQueue';
 import type { RiskLevel, RunStatus, WorkflowRun } from '../types';
 
 function toRelativeMinutes(iso: string): string {
@@ -52,31 +54,53 @@ const statusTone: Record<RunStatus, string> = {
 export function RunBoard() {
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const runsRef = useRef<WorkflowRun[]>([]);
+  const { toasts, pushToast, dismissToast } = useToastQueue();
 
   const selectedStatus = (searchParams.get('status') ?? 'all') as 'all' | RunStatus;
   const selectedRisk = (searchParams.get('risk') ?? 'all') as 'all' | RiskLevel;
 
-  const loadRuns = async () => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    runsRef.current = runs;
+  }, [runs]);
+
+  const loadRuns = useCallback(async (options: { background?: boolean } = {}) => {
+    const hasExistingRuns = runsRef.current.length > 0;
+    const shouldBlock = !options.background && !hasExistingRuns;
+
+    if (shouldBlock) {
+      setLoading(true);
+      setError(null);
+    } else {
+      setRefreshing(true);
+    }
+
     try {
       const data = await apiClient.getRuns();
       setRuns(data);
+      setError(null);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unknown error');
+      const message = loadError instanceof Error ? loadError.message : 'Unknown error';
+      if (hasExistingRuns) {
+        pushToast({ tone: 'error', title: 'Run refresh failed', message });
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [pushToast]);
 
   useEffect(() => {
-    loadRuns();
-    const timer = setInterval(loadRuns, 15_000);
+    void loadRuns();
+    const timer = setInterval(() => void loadRuns({ background: true }), 15_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadRuns]);
 
   const filteredRuns = useMemo(() => {
     return runs.filter((run) => {
@@ -140,19 +164,25 @@ export function RunBoard() {
     return <LoadingState message="Loading runs" />;
   }
 
-  if (error) {
-    return <ErrorState message={error} onRetry={loadRuns} />;
+  if (error && runs.length === 0) {
+    return <ErrorState message={error} onRetry={() => void loadRuns()} />;
   }
 
   return (
     <section className="ops-dashboard">
+      <ToastRegion toasts={toasts} onDismiss={dismissToast} />
       <PageHeader
         title="Runs"
         description="Execution monitoring for active workflow cohorts, approvals, failures, and agent throughput."
         actions={
           <>
-            <button type="button" className="btn btn-secondary" onClick={loadRuns}>
-              Sync
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={refreshing}
+              onClick={() => void loadRuns({ background: true })}
+            >
+              {refreshing ? 'Syncing...' : 'Sync'}
             </button>
             <button type="button" className="btn btn-primary" onClick={() => navigate('/workflows')}>
               Deploy Workflow
@@ -255,8 +285,12 @@ export function RunBoard() {
 
       {filteredRuns.length === 0 ? (
         <EmptyState
-          title="No runs found"
-          description="Try adjusting your filters or trigger a workflow run."
+          title={runs.length === 0 ? 'No runs have started yet' : 'No runs match the current filters'}
+          description={
+            runs.length === 0
+              ? 'Start from a workflow to create the first monitored run.'
+              : 'Adjust status or risk filters to widen the run ledger.'
+          }
           action={
             <button type="button" className="btn btn-primary" onClick={() => navigate('/workflows')}>
               Open Workflows
@@ -319,7 +353,12 @@ export function RunBoard() {
                 <span className="panel-kicker">Global</span>
                 <h2>Log Stream</h2>
               </div>
-              <button type="button" className="btn btn-secondary" onClick={loadRuns}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={refreshing}
+                onClick={() => void loadRuns({ background: true })}
+              >
                 Refresh
               </button>
             </div>

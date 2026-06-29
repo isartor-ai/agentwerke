@@ -123,6 +123,26 @@ describe('WorkflowDesigner integration', () => {
     });
   });
 
+  it('surfaces non-fatal agent catalog failures as a toast', async () => {
+    vi.mocked(apiClient.getAgents).mockRejectedValueOnce(new Error('agent registry offline'));
+
+    renderDesigner();
+
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
+    expect(await screen.findByText('Agent catalog unavailable')).toBeInTheDocument();
+    expect(screen.getByText('agent registry offline')).toBeInTheDocument();
+  });
+
+  it('shows a reusable empty state when the template catalog is empty', async () => {
+    vi.mocked(apiClient.getTemplates).mockResolvedValueOnce([]);
+
+    renderDesigner();
+
+    expect(await screen.findByText('No templates available')).toBeInTheDocument();
+    expect(screen.getByText('The catalog returned no governed SDLC paths.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry templates' })).toBeInTheDocument();
+  });
+
   it('loads the persisted BPMN for the auto-selected workflow into the Advanced BPMN canvas', async () => {
     renderDesigner();
 
@@ -295,6 +315,19 @@ describe('WorkflowDesigner integration', () => {
     await waitFor(() => {
       expect(screen.getByText('run-0421')).toBeInTheDocument();
     });
+  });
+
+  it('shows a retryable monitor error when run loading fails', async () => {
+    vi.mocked(apiClient.getRuns).mockRejectedValueOnce(new Error('run service down'));
+
+    renderDesigner();
+    expect(await screen.findByText('SDLC Factory')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Monitor' }));
+
+    expect(await screen.findByText('Unable to load workflow runs')).toBeInTheDocument();
+    expect(screen.getByText('run service down')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry monitor' })).toBeInTheDocument();
   });
 
   it('imports a BPMN file and surfaces returned validation', async () => {
