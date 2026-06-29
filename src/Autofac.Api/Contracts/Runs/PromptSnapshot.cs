@@ -7,7 +7,11 @@ public sealed record PromptSnapshot(
     string RenderedAt,
     IReadOnlyList<PromptSection> Sections,
     IReadOnlyDictionary<string, string> Variables,
-    IReadOnlyList<string> SourceFiles);
+    IReadOnlyList<string> SourceFiles,
+    IReadOnlyList<string>? MissingVariables = null)
+{
+    public IReadOnlyList<string> MissingVariables { get; init; } = MissingVariables ?? [];
+}
 
 public sealed record PromptSection(
     string Name,

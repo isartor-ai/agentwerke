@@ -48,7 +48,8 @@ public sealed class ApiContractMappingsTests
                             {
                                 ["environment"] = "staging"
                             },
-                            SourceFiles: ["inline:task_prompt"]),
+                            SourceFiles: ["inline:task_prompt"],
+                            MissingVariables: ["output.Build"]),
                         Skills =
                         [
                             new AgentSkillUsageRecord
@@ -142,6 +143,7 @@ public sealed class ApiContractMappingsTests
         Assert.NotNull(step.PromptSnapshot);
         Assert.Equal("assembled prompt", step.PromptSnapshot!.FinalPrompt);
         Assert.Equal("staging", step.PromptSnapshot.Variables["environment"]);
+        Assert.Equal("output.Build", Assert.Single(step.PromptSnapshot.MissingVariables));
         Assert.Single(step.PromptSnapshot.Sections);
         var skill = Assert.Single(step.Skills);
         Assert.Equal("shipping-and-launch", skill.SkillId);

@@ -38,7 +38,11 @@ public sealed record AgentPromptSnapshot(
     string RenderedAt,
     IReadOnlyList<AgentPromptSectionSnapshot> Sections,
     IReadOnlyDictionary<string, string> Variables,
-    IReadOnlyList<string> SourceFiles);
+    IReadOnlyList<string> SourceFiles,
+    IReadOnlyList<string>? MissingVariables = null)
+{
+    public IReadOnlyList<string> MissingVariables { get; init; } = MissingVariables ?? [];
+}
 
 public sealed record AgentPromptSectionSnapshot(
     string Name,

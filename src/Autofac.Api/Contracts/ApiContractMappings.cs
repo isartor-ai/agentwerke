@@ -262,7 +262,8 @@ internal static class ApiContractMappings
             prompt.RenderedAt,
             prompt.Sections.Select(static s => new PromptSection(s.Name, s.Content, s.Source)).ToArray(),
             prompt.Variables,
-            prompt.SourceFiles.ToArray());
+            prompt.SourceFiles.ToArray(),
+            prompt.MissingVariables.ToArray());
     }
 
     private static RunPolicyDecision ToPolicyDecision(DomainPolicyDecision decision)
@@ -302,7 +303,8 @@ internal static class ApiContractMappings
                     .Select(static s => new PromptSection(s.Name, s.Content, s.Source))
                     .ToArray(),
                 snapshot.Prompt.Variables,
-                snapshot.Prompt.SourceFiles.ToArray()),
+                snapshot.Prompt.SourceFiles.ToArray(),
+                snapshot.Prompt.MissingVariables.ToArray()),
             Skills: snapshot.Skills
                 .Select(static s => new RunStepSkillUsage(s.SkillId, s.Name, s.Selected, s.Fingerprint, s.Invoked, s.Source))
                 .ToArray(),
