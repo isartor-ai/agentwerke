@@ -1,4 +1,4 @@
-import type { ApprovalRequest, TemplateDetail, TemplateSummary, Workflow, WorkflowRun } from '../types';
+import type { ApprovalRequest, EvidencePack, TemplateDetail, TemplateSummary, Workflow, WorkflowRun } from '../types';
 
 export const workflowsFixture: Workflow[] = [
   {
@@ -174,6 +174,136 @@ export const runsFixture: WorkflowRun[] = [
     tags: ['security'],
   },
 ];
+
+export const evidencePackFixture: EvidencePack = {
+  schemaVersion: 'autofac.evidence-pack.v1',
+  runId: 'run-0421',
+  generatedAt: new Date(Date.now() - 30_000).toISOString(),
+  workflow: {
+    workflowId: 'wf-001',
+    name: 'GitHub PR Review',
+    version: 'v2.3.1',
+    definitionVersion: 'v2.3.1',
+    bpmnSha256: 'abc123',
+    hashAlgorithm: 'SHA-256',
+  },
+  runtime: {
+    mode: 'Autofac',
+    camundaEnabled: false,
+  },
+  run: {
+    runId: 'run-0421',
+    status: 'awaiting_approval',
+    riskLevel: 'high',
+    requestedBy: 'alice@example.com',
+    startedAt: runsFixture[0].startedAt,
+    completedAt: null,
+    durationMs: runsFixture[0].durationMs,
+    pendingApprovals: 1,
+    correlationId: 'corr-0421',
+    tags: ['production'],
+  },
+  agentSnapshots: [],
+  approvals: [
+    {
+      approvalId: 'apr-1001',
+      runId: 'run-0421',
+      actionRequested: 'Merge branch feature/auth-refactor to main',
+      requester: 'alice@example.com',
+      agentName: 'GitAgent',
+      status: 'pending',
+      riskLevel: 'high',
+      riskScore: 72,
+      riskFactors: ['production'],
+      affectedSystems: ['production/api'],
+      policyRationale: 'Policy requires review.',
+      createdAt: new Date(Date.now() - 6 * 60_000).toISOString(),
+      decidedAt: null,
+      decidedBy: null,
+      decisionComment: null,
+    },
+  ],
+  policyDecisions: [
+    {
+      stepId: 'step-2',
+      stepName: 'Merge to main',
+      kind: 'escalate',
+      policyId: 'pol-prod-merge',
+      policyName: 'Production Merge Protection',
+      rationale: 'Requires human approval.',
+      riskScore: 72,
+      riskLevel: 'high',
+      riskFactors: ['production'],
+      decidedAt: new Date().toISOString(),
+      constraints: [],
+    },
+  ],
+  toolCalls: [],
+  connectorCalls: [],
+  sandboxExecutions: [
+    {
+      stepId: 'step-2',
+      stepName: 'Merge to main',
+      agentName: 'spec-writer',
+      action: 'spec.generate',
+      provider: 'opensandbox',
+      sandboxId: 'sbx-42',
+      commandState: 'Completed',
+      exitCode: 0,
+      durationMs: 1388,
+      logs: [
+        {
+          stream: 'stdout',
+          message: 'spec generation running',
+          timestamp: new Date(Date.now() - 90_000).toISOString(),
+        },
+      ],
+      diagnostics: {
+        provider: 'opensandbox',
+      },
+    },
+  ],
+  modelUsage: [
+    {
+      stepId: 'step-2',
+      stepName: 'Merge to main',
+      agentName: 'spec-writer',
+      action: 'spec.generate',
+      modelId: 'claude-sonnet-4-6',
+      inputTokens: 412,
+      outputTokens: 198,
+      elapsedMs: 2140,
+    },
+  ],
+  artifacts: [
+    {
+      source: 'artifact-storage',
+      stepId: null,
+      name: 'scan-report.json',
+      sizeBytes: 2048,
+      lastModifiedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+      uri: null,
+      contentType: 'application/json',
+    },
+  ],
+  auditLog: [
+    {
+      auditId: 'aud-1',
+      correlationId: 'corr-0421',
+      actorType: 'system',
+      actor: 'alice@example.com',
+      action: 'workflow.start',
+      resourceType: 'workflow',
+      resourceId: 'wf-001',
+      outcome: 'enqueued',
+      details: 'Run started from test fixture.',
+      timestamp: new Date(Date.now() - 8 * 60_000).toISOString(),
+    },
+  ],
+  logs: [],
+  runEvents: [],
+  camunda: null,
+};
 
 export const approvalsFixture: ApprovalRequest[] = [
   {
