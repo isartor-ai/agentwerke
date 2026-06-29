@@ -27,6 +27,19 @@ export const workflowsFixture: Workflow[] = [
   },
 ];
 
+export const firstRunWorkflowFixture: Workflow = {
+  id: 'wf-first-run-sample',
+  name: 'First Run Sample',
+  description: 'Seeded workflow for fresh Autofac installs',
+  version: 'v1.0.0',
+  status: 'active',
+  owner: 'autofac',
+  createdAt: new Date(Date.now() - 60_000).toISOString(),
+  lastEditedAt: new Date(Date.now() - 60_000).toISOString(),
+  validationState: 'valid',
+  tags: ['sample', 'quickstart', 'first-run'],
+};
+
 export const runsFixture: WorkflowRun[] = [
   {
     id: 'run-0421',

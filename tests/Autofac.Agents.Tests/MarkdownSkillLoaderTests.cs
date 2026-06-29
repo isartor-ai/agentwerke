@@ -188,11 +188,39 @@ public sealed class MarkdownSkillLoaderTests
         Assert.Contains("invalid version", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void LoadFromDirectory_ParsesFirstRunSampleSkill()
+    {
+        var manifests = MarkdownSkillLoader.LoadFromDirectory(FindRepositorySkillsDirectory());
+
+        var manifest = Assert.Single(manifests, skill => skill.SkillId == "first-run-sample");
+        Assert.Equal("First Run Sample", manifest.Name);
+        Assert.Equal("1.0.0", manifest.Version);
+        Assert.Contains("seeded first-run sample workflow", string.Join(' ', manifest.InvocationRules), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("evidence", manifest.Content, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string CreateSkillDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         Directory.CreateDirectory(Path.Combine(directory, "templates"));
         return directory;
+    }
+
+    private static string FindRepositorySkillsDirectory()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Autofac.sln")))
+        {
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+        {
+            throw new InvalidOperationException("Could not locate the repository root (Autofac.sln) from the test output directory.");
+        }
+
+        return Path.Combine(directory.FullName, ".github", "skills");
     }
 }

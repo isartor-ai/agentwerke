@@ -12,7 +12,9 @@ import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { ToastRegion } from '../components/ToastRegion';
 import { useToastQueue } from '../components/useToastQueue';
-import type { RiskLevel, RunStatus, WorkflowRun } from '../types';
+import type { RiskLevel, RunStatus, Workflow, WorkflowRun } from '../types';
+
+const FIRST_RUN_SAMPLE_WORKFLOW_ID = 'wf-first-run-sample';
 
 function toRelativeMinutes(iso: string): string {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
@@ -53,8 +55,10 @@ const statusTone: Record<RunStatus, string> = {
 
 export function RunBoard() {
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [startingSample, setStartingSample] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -96,11 +100,53 @@ export function RunBoard() {
     }
   }, [pushToast]);
 
+  const loadWorkflows = useCallback(async () => {
+    try {
+      const data = await apiClient.getWorkflows();
+      setWorkflows(data);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Unknown error';
+      pushToast({ tone: 'error', title: 'Workflow catalog unavailable', message });
+    }
+  }, [pushToast]);
+
   useEffect(() => {
     void loadRuns();
+    void loadWorkflows();
     const timer = setInterval(() => void loadRuns({ background: true }), 15_000);
     return () => clearInterval(timer);
-  }, [loadRuns]);
+  }, [loadRuns, loadWorkflows]);
+
+  const sampleWorkflow = useMemo(() => {
+    const activeWorkflows = workflows.filter((workflow) => workflow.status === 'active');
+    return activeWorkflows.find((workflow) => workflow.id === FIRST_RUN_SAMPLE_WORKFLOW_ID)
+      ?? activeWorkflows.find((workflow) =>
+        workflow.tags.some((tag) => ['first-run', 'quickstart', 'sample'].includes(tag.toLowerCase())),
+      );
+  }, [workflows]);
+
+  const startSampleWorkflow = useCallback(async () => {
+    if (!sampleWorkflow) {
+      navigate('/workflows');
+      return;
+    }
+
+    setStartingSample(true);
+    try {
+      const result = await apiClient.startRun(sampleWorkflow.id);
+      pushToast({
+        tone: 'success',
+        title: 'Sample run started',
+        message: sampleWorkflow.name,
+      });
+      navigate(`/runs/${result.runId}`);
+    } catch (startError) {
+      const message = startError instanceof Error ? startError.message : 'Unknown error';
+      pushToast({ tone: 'error', title: 'Sample run failed', message });
+    } finally {
+      setStartingSample(false);
+    }
+  }, [navigate, pushToast, sampleWorkflow]);
 
   const filteredRuns = useMemo(() => {
     return runs.filter((run) => {
@@ -284,19 +330,58 @@ export function RunBoard() {
       />
 
       {filteredRuns.length === 0 ? (
-        <EmptyState
-          title={runs.length === 0 ? 'No runs have started yet' : 'No runs match the current filters'}
-          description={
-            runs.length === 0
-              ? 'Start from a workflow to create the first monitored run.'
-              : 'Adjust status or risk filters to widen the run ledger.'
-          }
-          action={
-            <button type="button" className="btn btn-primary" onClick={() => navigate('/workflows')}>
-              Open Workflows
-            </button>
-          }
-        />
+        runs.length === 0 && sampleWorkflow ? (
+          <section className="panel first-run-onboarding" aria-label="First-run onboarding">
+            <div className="first-run-onboarding-copy">
+              <span className="panel-kicker">Seeded sample</span>
+              <h2>Run your first workflow</h2>
+              <p>
+                Start the sample line to watch an agent task move into review with policy and evidence captured on the run.
+              </p>
+            </div>
+            <ol className="first-run-steps" aria-label="First-run path">
+              <li>
+                <strong>Agent</strong>
+                <span>{sampleWorkflow.name}</span>
+              </li>
+              <li>
+                <strong>Policy</strong>
+                <span>Decision recorded</span>
+              </li>
+              <li>
+                <strong>Review</strong>
+                <span>Approval gate</span>
+              </li>
+            </ol>
+            <div className="first-run-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={startingSample}
+                onClick={() => void startSampleWorkflow()}
+              >
+                {startingSample ? 'Starting...' : 'Run sample workflow'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => navigate('/workflows')}>
+                View workflows
+              </button>
+            </div>
+          </section>
+        ) : (
+          <EmptyState
+            title={runs.length === 0 ? 'No runs have started yet' : 'No runs match the current filters'}
+            description={
+              runs.length === 0
+                ? 'Start from a workflow to create the first monitored run.'
+                : 'Adjust status or risk filters to widen the run ledger.'
+            }
+            action={
+              <button type="button" className="btn btn-primary" onClick={() => navigate('/workflows')}>
+                Open Workflows
+              </button>
+            }
+          />
+        )
       ) : (
         <>
           <section className="section-heading-row" aria-label="Live run cards">

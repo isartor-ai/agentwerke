@@ -198,6 +198,23 @@ public sealed class MarkdownAgentLoaderTests
         Assert.False(string.IsNullOrWhiteSpace(profile.SystemPrompt));
     }
 
+    [Fact]
+    public void LoadFromDirectory_ParsesFirstRunSampleAgentProfile()
+    {
+        var profiles = MarkdownAgentLoader.LoadFromDirectory(FindRepositoryAgentsDirectory());
+
+        var profile = Assert.Single(profiles, p => p.AgentId == "first-run-engineer");
+        Assert.Equal("agent-model", profile.Runner);
+        Assert.Equal("onboarding", profile.Category);
+        Assert.Contains("first-run.implement", profile.SupportedActions);
+        Assert.Contains("quickstart", profile.SupportedEnvironments);
+
+        var skill = Assert.Single(profile.Skills);
+        Assert.Equal("first-run-sample", skill.SkillId);
+        Assert.Equal("first-run-sample", skill.SkillManifestId);
+        Assert.Equal(["first-run.implement"], skill.SupportedActions);
+    }
+
     private static string FindRepositoryAgentsDirectory()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
