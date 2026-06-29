@@ -12,9 +12,9 @@ import { RunDiffModal } from '../components/RunDiffModal';
 import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
-import type { RunStatus, WorkflowRun } from '../types';
+import type { EvidencePack, RunStatus, WorkflowRun } from '../types';
 
-const tabs = ['Summary', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
+const tabs = ['Summary', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals', 'Evidence'];
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -43,6 +43,11 @@ export function RunDetail() {
   const [cancelling, setCancelling] = useState(false);
   const [exportingEvidence, setExportingEvidence] = useState(false);
   const [evidenceExportError, setEvidenceExportError] = useState<string | null>(null);
+
+  // In-app evidence-pack viewer (Evidence tab) — lazy-loaded on first open.
+  const [evidence, setEvidence] = useState<EvidencePack | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   // Workflow BPMN XML for the viewer + diff modal
   const [workflowXml, setWorkflowXml] = useState('');
@@ -242,6 +247,26 @@ export function RunDetail() {
       setExportingEvidence(false);
     }
   };
+
+  const loadEvidence = useCallback(async () => {
+    if (!runId) return;
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    try {
+      setEvidence(await apiClient.getRunEvidencePack(runId));
+    } catch (err) {
+      setEvidenceError(err instanceof Error ? err.message : 'Failed to load evidence pack.');
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }, [runId]);
+
+  // Lazy-load the evidence pack the first time the Evidence tab is opened.
+  useEffect(() => {
+    if (activeTab === 'Evidence' && !evidence && !evidenceLoading && !evidenceError) {
+      void loadEvidence();
+    }
+  }, [activeTab, evidence, evidenceLoading, evidenceError, loadEvidence]);
 
   const renderTabContent = () => {
     if (!run) return null;
@@ -466,6 +491,108 @@ export function RunDetail() {
             )}
           </>
         );
+
+      case 'Evidence': {
+        const modelUsage = evidence?.modelUsage ?? [];
+        const totalIn = modelUsage.reduce((n, m) => n + (m.inputTokens ?? 0), 0);
+        const totalOut = modelUsage.reduce((n, m) => n + (m.outputTokens ?? 0), 0);
+        return (
+          <>
+            <div className="toolbar">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleEvidenceExport}
+                disabled={exportingEvidence}
+              >
+                {exportingEvidence ? 'Exporting…' : 'Download evidence pack (JSON)'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void loadEvidence()}
+                disabled={evidenceLoading}
+              >
+                {evidenceLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+            {evidenceExportError ? <p className="error">{evidenceExportError}</p> : null}
+            {evidenceError ? <p className="error">{evidenceError}</p> : null}
+            {evidenceLoading && !evidence ? <p>Loading evidence pack…</p> : null}
+            {evidence ? (
+              <>
+                <dl className="definition-list">
+                  <div><dt>Schema</dt><dd>{evidence.schemaVersion ?? '-'}</dd></div>
+                  <div><dt>Generated</dt><dd>{evidence.generatedAt ? new Date(evidence.generatedAt).toLocaleString() : '-'}</dd></div>
+                  <div><dt>Workflow</dt><dd>{evidence.workflow?.name ?? '-'} {evidence.workflow?.version ?? ''}</dd></div>
+                  <div><dt>BPMN SHA-256</dt><dd><code>{evidence.workflow?.bpmnSha256 ?? '-'}</code></dd></div>
+                </dl>
+
+                <section className="policy-box">
+                  <h3>Model usage ({totalIn.toLocaleString()} in / {totalOut.toLocaleString()} out tokens)</h3>
+                  {modelUsage.length > 0 ? (
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr><th>Step</th><th>Agent</th><th>Model</th><th>In</th><th>Out</th><th>ms</th></tr>
+                        </thead>
+                        <tbody>
+                          {modelUsage.map((m, i) => (
+                            <tr key={m.stepId ?? i}>
+                              <td>{m.stepName ?? '-'}</td>
+                              <td>{m.agentName ?? '-'}</td>
+                              <td>{m.modelId ?? '-'}</td>
+                              <td>{(m.inputTokens ?? 0).toLocaleString()}</td>
+                              <td>{(m.outputTokens ?? 0).toLocaleString()}</td>
+                              <td>{m.elapsedMs ? Math.round(m.elapsedMs) : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p>No model calls recorded (e.g. deterministic tool-only run).</p>}
+                </section>
+
+                <section className="policy-box">
+                  <h3>Policy decisions ({evidence.policyDecisions?.length ?? 0})</h3>
+                  {(evidence.policyDecisions?.length ?? 0) > 0 ? (
+                    <ul className="event-list" role="list">
+                      {evidence.policyDecisions!.map((p, i) => (
+                        <li key={i}>
+                          <strong>{p.kind ?? 'decision'}</strong>
+                          <p>{p.action ?? p.rationale ?? '—'}{p.riskLevel ? ` · risk: ${p.riskLevel}` : ''}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p>None recorded.</p>}
+                </section>
+
+                <section className="policy-box">
+                  <h3>Sandbox executions ({evidence.sandboxExecutions?.length ?? 0})</h3>
+                  {(evidence.sandboxExecutions?.length ?? 0) > 0 ? (
+                    <ul className="event-list" role="list">
+                      {evidence.sandboxExecutions!.map((s, i) => (
+                        <li key={i}>
+                          <strong>{s.provider ?? 'sandbox'} · {s.commandState ?? '-'}</strong>
+                          <p>exit {s.exitCode ?? '-'}{s.durationMs ? ` · ${Math.round(s.durationMs)}ms` : ''}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p>None recorded.</p>}
+                </section>
+
+                <div className="tag-row" aria-label="Evidence pack totals">
+                  <span className="chip chip-static">{evidence.approvals?.length ?? 0} approval(s)</span>
+                  <span className="chip chip-static">{evidence.toolCalls?.length ?? 0} tool call(s)</span>
+                  <span className="chip chip-static">{evidence.connectorCalls?.length ?? 0} connector call(s)</span>
+                  <span className="chip chip-static">{evidence.auditLog?.length ?? 0} audit entr(ies)</span>
+                  <span className="chip chip-static">{evidence.runEvents?.length ?? 0} event(s)</span>
+                </div>
+              </>
+            ) : null}
+          </>
+        );
+      }
 
       default:
         return <p>Unsupported tab.</p>;

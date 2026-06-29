@@ -14,6 +14,7 @@ vi.mock('../api/client', () => ({
     streamRunEvents: vi.fn(),
     getRunArtifactDownloadUrl: vi.fn(),
     getRunEvidencePackDownloadUrl: vi.fn(),
+    getRunEvidencePack: vi.fn(),
     downloadRunEvidencePack: vi.fn(),
     decideApproval: vi.fn(),
     cancelRun: vi.fn(),
@@ -37,6 +38,21 @@ describe('RunDetail integration', () => {
       (runId) => `/api/runs/${runId}/evidence-pack/download`,
     );
     vi.mocked(apiClient.downloadRunEvidencePack).mockResolvedValue(undefined);
+    vi.mocked(apiClient.getRunEvidencePack).mockResolvedValue({
+      schemaVersion: 'autofac.evidence-pack.v1',
+      generatedAt: '2026-06-26T00:00:00Z',
+      workflow: { name: 'Demo', version: 'v1', bpmnSha256: 'abc123' },
+      modelUsage: [
+        { stepName: 'Analyze', agentName: 'analyst', modelId: 'claude-haiku-4-5', inputTokens: 1200, outputTokens: 300, elapsedMs: 1500 },
+      ],
+      policyDecisions: [{ action: 'spec.generate', kind: 'allow' }],
+      sandboxExecutions: [{ provider: 'docker', commandState: 'Completed', exitCode: 0, durationMs: 4200 }],
+      approvals: [{ status: 'approved', decidedBy: 'dev:admin' }],
+      toolCalls: [],
+      connectorCalls: [],
+      auditLog: [{}],
+      runEvents: [{}, {}],
+    });
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     vi.mocked(apiClient.cancelRun).mockResolvedValue(undefined);
   });
@@ -196,5 +212,20 @@ describe('RunDetail integration', () => {
       expect(vi.mocked(apiClient.cancelRun)).toHaveBeenCalledWith('run-0421');
       expect(screen.getByText('runs list')).toBeInTheDocument();
     });
+  });
+
+  it('loads and renders the evidence pack on the Evidence tab', async () => {
+    renderDetail();
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getRunEvidencePack)).toHaveBeenCalledWith('run-0421');
+    });
+    // Model usage row + token totals render from the fetched pack.
+    expect(await screen.findByText('claude-haiku-4-5')).toBeInTheDocument();
+    expect(screen.getByText(/Model usage/)).toBeInTheDocument();
+    expect(screen.getByText('abc123')).toBeInTheDocument();
   });
 });

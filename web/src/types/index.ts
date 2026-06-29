@@ -344,3 +344,49 @@ export interface AuthState {
   status: 'loading' | 'authenticated' | 'unauthenticated';
   user?: AuthUser;
 }
+
+// Evidence pack (GET /api/runs/{id}/evidence-pack) — loosely typed for the viewer.
+export interface EvidenceModelUsage {
+  stepId?: string;
+  stepName?: string;
+  agentName?: string;
+  action?: string;
+  modelId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  elapsedMs?: number;
+}
+
+export interface EvidenceSandboxExecution {
+  provider?: string;
+  commandState?: string;
+  exitCode?: number;
+  durationMs?: number;
+}
+
+export interface EvidencePolicyDecision {
+  action?: string | null;
+  kind?: string;
+  rationale?: string;
+  riskLevel?: string;
+}
+
+export interface EvidenceApproval {
+  status?: string;
+  decidedBy?: string | null;
+}
+
+export interface EvidencePack {
+  schemaVersion?: string;
+  generatedAt?: string;
+  runId?: string;
+  workflow?: { name?: string; version?: string; bpmnSha256?: string };
+  modelUsage?: EvidenceModelUsage[];
+  sandboxExecutions?: EvidenceSandboxExecution[];
+  policyDecisions?: EvidencePolicyDecision[];
+  approvals?: EvidenceApproval[];
+  toolCalls?: unknown[];
+  connectorCalls?: unknown[];
+  auditLog?: unknown[];
+  runEvents?: unknown[];
+}

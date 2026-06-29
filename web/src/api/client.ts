@@ -3,6 +3,7 @@ import type {
   AgentSkillBinding,
   AgentSummary,
   ApprovalRequest,
+  EvidencePack,
   RunEvent,
   RuntimeMode,
   SkillSummary,
@@ -80,6 +81,10 @@ export const apiClient = {
 
   getRunEvidencePackDownloadUrl(runId: string): string {
     return `${API_BASE_URL ?? ''}/api/runs/${encodeURIComponent(runId)}/evidence-pack/download`;
+  },
+
+  async getRunEvidencePack(runId: string): Promise<EvidencePack> {
+    return requestJson<EvidencePack>(`/api/runs/${encodeURIComponent(runId)}/evidence-pack`);
   },
 
   async downloadRunEvidencePack(runId: string): Promise<void> {
