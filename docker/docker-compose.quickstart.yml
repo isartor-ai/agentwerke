@@ -1,0 +1,87 @@
+###############################################################################
+# Autofac — tokenless quickstart
+#
+# Run the full platform (API + Web UI) with NO credentials at all:
+#   * model calls use the deterministic mock provider (Anthropic:Provider=mock)
+#   * GitHub integration is disabled
+# so you can try a real governed workflow end to end in a few minutes.
+#
+#   docker compose -f docker/docker-compose.quickstart.yml up --build
+#
+#   Web UI : http://localhost:3002
+#   API    : http://localhost:8081   (e.g. /api/health/live)
+#
+# Stop and remove data:
+#   docker compose -f docker/docker-compose.quickstart.yml down -v
+#
+# See docs/getting-started.md for the walkthrough.
+###############################################################################
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: autofac_quickstart
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_quickstart"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: { context: .., dockerfile: docker/api/Dockerfile, target: build }
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
+      --startup-project src/Autofac.Api/Autofac.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_quickstart;Username=postgres;Password=postgres"
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: { context: .., dockerfile: docker/api/Dockerfile }
+    ports: ["8081:8080"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_quickstart;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      Agents__Skills__SkillsDirectory: /app/skills
+      Agents__Registry__AgentsDirectory: /app/agents
+      # Tokenless: deterministic mock model — no API key required.
+      Anthropic__Provider: "mock"
+      # No external integrations needed for the quickstart.
+      Integrations__GitHub__Enabled: "false"
+      Sandboxes__Docker__Enabled: "false"
+      # Dev-only JWT so the Web UI's pre-baked admin token works without a login flow.
+      # DO NOT use these settings in production.
+      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
+      Jwt__Issuer: "autofac-dev"
+      Jwt__Audience: "autofac-dev"
+      Jwt__DevTokensEnabled: "true"
+    volumes:
+      - ../.github/skills:/app/skills:ro
+      - ../agents:/app/agents:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+        # Pre-signed dev admin token (role=Admin) matching Jwt__SecretKey above.
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+    ports: ["3002:80"]
+    depends_on:
+      api: { condition: service_healthy }

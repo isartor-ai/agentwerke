@@ -9,7 +9,7 @@
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](global.json)
 [![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
 [![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Autofac.Agents/Models/AnthropicLanguageModelClient.cs)
-[![License](https://img.shields.io/badge/license-TBD-lightgrey)](#license)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 [Premise](#premise) | [Factory line](#factory-line) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
 
@@ -69,6 +69,19 @@ A run moves through the nodes of a BPMN model. When it reaches an agent task, th
 | Optional Camunda 8 runtime adapter | Available; see ADR-002 |
 
 ## Quick start
+
+**Try it in 5 minutes, no API keys** — the tokenless quickstart runs the full
+platform (API + Web UI) on a deterministic mock model provider:
+
+```bash
+docker compose -f docker/docker-compose.quickstart.yml up --build
+# → Web UI http://localhost:3002 · API http://localhost:8081
+```
+
+Then follow [docs/getting-started.md](docs/getting-started.md) to run a sample
+workflow through an agent step, an approval gate, and an evidence pack.
+
+### Build from source
 
 ```bash
 dotnet restore Autofac.sln
@@ -195,7 +208,7 @@ Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting
 
 ## License
 
-Not yet finalized. The intended model is open-core: an Apache-2.0 licensed core with a separately licensed commercial tier for enterprise governance, SSO/RBAC, and compliance features. A `LICENSE` file will be added before any public release.
+[Apache-2.0](LICENSE). Autofac is **open core** — the full self-hostable platform is Apache-2.0; a separately-licensed commercial tier adds enterprise governance, SSO/RBAC, scale, and compliance features. See [docs/open-core.md](docs/open-core.md) for the boundary.
 
 ---
 
