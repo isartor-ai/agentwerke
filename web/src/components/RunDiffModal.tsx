@@ -90,6 +90,7 @@ function statusClass(status?: RunStatus): string {
     case 'completed': return 'diff-status-completed';
     case 'running': return 'diff-status-running';
     case 'awaiting_approval': return 'diff-status-awaiting';
+    case 'needs_config': return 'diff-status-awaiting';
     case 'failed':
     case 'blocked': return 'diff-status-failed';
     case 'cancelled': return 'diff-status-cancelled';

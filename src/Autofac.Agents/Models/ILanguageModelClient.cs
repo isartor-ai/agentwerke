@@ -20,7 +20,8 @@ public sealed record LanguageModelResponse(
     string? FailureReason,
     IReadOnlyList<LanguageModelToolCall> AllToolCalls,
     LanguageModelTokenUsage Usage,
-    string? ModelId);
+    string? ModelId,
+    string? StepStatus = null);
 
 public sealed record LanguageModelToolDefinition(
     string Name,

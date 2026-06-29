@@ -12,8 +12,9 @@
 # What gets mocked
 # ----------------
 # • GitHub API  → WireMock (catch-all 200), so no real PAT is needed.
-# • Agent LLM   → Sandbox is disabled; AgentOrchestrator falls back to the
-#                  no-op skill path that returns success immediately.
+# • Agent LLM   → Anthropic API calls are routed to WireMock with a non-empty
+#                  test key, so core agent steps exercise the real model path
+#                  without external credentials.
 # • OpenSandbox → Not mocked in the opensandbox profile. The API talks to a
 #                  local OpenSandbox server that uses the host Docker daemon.
 ###############################################################################

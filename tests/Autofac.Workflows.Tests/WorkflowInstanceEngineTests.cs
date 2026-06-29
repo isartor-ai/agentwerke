@@ -388,6 +388,38 @@ public sealed class WorkflowInstanceEngineTests
     }
 
     [Fact]
+    public async Task StartAsync_WhenServiceTaskNeedsModelConfiguration_CompletesRunAndMarksStepNeedsConfig()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new NeedsConfigServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "NeedsConfigFlow",
+            ProcessName: "Needs Config Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("AgentTask", "Agent Task", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        Assert.Equal("completed", state.Status);
+        var persistedRun = await store.GetRunAsync(state.RunId, CancellationToken.None);
+        Assert.Equal("completed", persistedRun!.Status);
+
+        var step = Assert.Single(persistedRun.Steps);
+        Assert.Equal(AgentTaskOutcomeStatuses.NeedsConfig, step.Status);
+        Assert.Null(step.Output);
+        Assert.Contains("Anthropic:ApiKey", step.Error, StringComparison.OrdinalIgnoreCase);
+
+        var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
+        Assert.Contains(events, static e => e.Type == "service_task_needs_config");
+        Assert.DoesNotContain(events, static e => e.Type == "service_task_failed");
+    }
+
+    [Fact]
     public async Task StartAsync_WhenServiceTaskSucceeds_SetsStepOutputNotError()
     {
         var store = new InMemoryWorkflowRuntimeStore();
@@ -596,6 +628,20 @@ public sealed class WorkflowInstanceEngineTests
                 Succeeded: false,
                 Output: null,
                 FailureReason: "This executor always fails."));
+        }
+    }
+
+    private sealed class NeedsConfigServiceTaskExecutor : IServiceTaskExecutor
+    {
+        public Task<AgentTaskOutcome> ExecuteAsync(
+            string runId, string stepId, BpmnNodeDefinition node,
+            int attempt, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: "No language model client is configured. Set 'Anthropic:ApiKey' in configuration.",
+                StepStatus: AgentTaskOutcomeStatuses.NeedsConfig));
         }
     }
 

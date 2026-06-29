@@ -72,7 +72,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
                 ToolInvocations: invocations,
                 Artifacts: artifacts.Count > 0 ? artifacts : null,
                 TokenUsage: tokenUsage,
-                ElapsedMs: elapsedMs);
+                ElapsedMs: elapsedMs,
+                StepStatus: response.StepStatus);
         }
 
         return new ModelRunResult(

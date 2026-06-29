@@ -13,6 +13,7 @@ const statusLabel: Record<RunStatus, string> = {
   cancelled: 'Cancelled',
   blocked: 'Blocked',
   awaiting_approval: 'Awaiting Approval',
+  needs_config: 'Needs Config',
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

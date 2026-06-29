@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Anthropic.SDK;
 using Anthropic.SDK.Common;
 using Anthropic.SDK.Messaging;
+using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Autofac.Agents.Models;
@@ -256,6 +257,7 @@ public sealed class NullLanguageModelClient : ILanguageModelClient
             FailureReason: "No language model client is configured. Set 'Anthropic:ApiKey' in configuration.",
             AllToolCalls: [],
             Usage: new LanguageModelTokenUsage(0, 0),
-            ModelId: null));
+            ModelId: null,
+            StepStatus: AgentTaskOutcomeStatuses.NeedsConfig));
     }
 }

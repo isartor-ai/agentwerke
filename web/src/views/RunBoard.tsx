@@ -46,6 +46,7 @@ const statusTone: Record<RunStatus, string> = {
   cancelled: 'queued',
   blocked: 'error',
   awaiting_approval: 'warning',
+  needs_config: 'warning',
 };
 
 export function RunBoard() {

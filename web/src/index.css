@@ -509,6 +509,7 @@ th {
 }
 
 .status-awaiting_approval,
+.status-needs_config,
 .status-pending {
   border-color: rgb(255 180 162 / 0.45);
   background: rgb(255 180 162 / 0.13);

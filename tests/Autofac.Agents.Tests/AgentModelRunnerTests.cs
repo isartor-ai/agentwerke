@@ -2,6 +2,7 @@ using Autofac.Agents.Models;
 using Autofac.Agents.Tools;
 using Autofac.Application.Observability;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Autofac.Agents.Tests;
@@ -274,6 +275,22 @@ public sealed class AgentModelRunnerTests
 
         Assert.Single(metrics.ModelInvocations);
         Assert.False(metrics.ModelInvocations[0].Succeeded);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenNoModelClientIsConfigured_ReturnsNeedsConfigStatus()
+    {
+        var metrics = new CapturingMetrics();
+        var runner = BuildRunner(
+            new NullLanguageModelClient(),
+            new StubToolGateway(new ToolGatewayResult(true, null, null, null, new AgentToolInvocationRecord { ToolName = "noop" })),
+            metrics);
+
+        var result = await runner.RunAsync(MakeRequest(), CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(AgentTaskOutcomeStatuses.NeedsConfig, result.StepStatus);
+        Assert.Contains("Anthropic:ApiKey", result.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
     // -----------------------------------------------------------------------
