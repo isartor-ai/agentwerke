@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Autofac.Application.Workflows;
 using Autofac.Workflows.Bpmn;
 
@@ -76,5 +77,44 @@ public sealed class SdlcTemplateSeedsValidationTests
 
         var waitForCiGreen = definition.Nodes.Single(static n => n.Id == "WaitForCiGreen");
         Assert.Equal("github.workflow_run.completed", waitForCiGreen.ExternalEventMetadata!.MessageName);
+    }
+
+    [Fact]
+    public void FirstRunDockerSeedWorkflow_ValidatesWithoutErrors()
+    {
+        var seedSql = File.ReadAllText(FindRepositoryFile("docker", "seed-first-run.sql"));
+        var match = Regex.Match(seedSql, @"\$bpmn\$(?<xml>.*?)\$bpmn\$", RegexOptions.Singleline);
+        Assert.True(match.Success, "docker/seed-first-run.sql must dollar-quote the seeded BPMN XML.");
+
+        var result = new BpmnWorkflowValidator().Validate(match.Groups["xml"].Value);
+
+        Assert.True(
+            result.IsValid,
+            $"First-run seed workflow failed validation: {string.Join("; ", result.Errors.Select(static e => e.Message))}");
+        Assert.NotNull(result.Definition);
+
+        var agentTask = result.Definition.Nodes.Single(static n => n.Id == "DraftImplementationNote");
+        Assert.Equal("first-run-engineer", agentTask.Metadata!.Agent);
+        Assert.Equal("first-run.implement", agentTask.Metadata.Action);
+        Assert.Equal("local", agentTask.Metadata.ExecutionMode);
+
+        var approvalTask = result.Definition.Nodes.Single(static n => n.Id == "ReviewSampleOutput");
+        Assert.NotNull(approvalTask.ApprovalMetadata);
+    }
+
+    private static string FindRepositoryFile(params string[] segments)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Autofac.sln")))
+        {
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+        {
+            throw new InvalidOperationException("Could not locate the repository root (Autofac.sln) from the test output directory.");
+        }
+
+        return Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
     }
 }

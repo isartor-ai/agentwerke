@@ -47,6 +47,21 @@ services:
         condition: service_healthy
     restart: "no"
 
+  seed:
+    image: postgres:16-alpine
+    command: >
+      psql -h postgres -U postgres -d autofac
+      -v ON_ERROR_STOP=1
+      -f /seed/seed-first-run.sql
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./seed-first-run.sql:/seed/seed-first-run.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: ..
@@ -74,6 +89,8 @@ services:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
       jaeger:
         condition: service_healthy

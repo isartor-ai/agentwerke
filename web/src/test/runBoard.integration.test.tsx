@@ -2,17 +2,21 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { RunBoard } from '../views/RunBoard';
-import { runsFixture } from './fixtures';
+import { firstRunWorkflowFixture, runsFixture, workflowsFixture } from './fixtures';
 
 vi.mock('../api/client', () => ({
   apiClient: {
     getRuns: vi.fn(),
+    getWorkflows: vi.fn(),
+    startRun: vi.fn(),
   },
 }));
 
 describe('RunBoard integration', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getRuns).mockResolvedValue(runsFixture);
+    vi.mocked(apiClient.getWorkflows).mockResolvedValue(workflowsFixture);
+    vi.mocked(apiClient.startRun).mockResolvedValue({ runId: 'run-first-run-sample' });
   });
 
   it('loads runs, filters by status, and navigates to detail', async () => {
@@ -67,5 +71,24 @@ describe('RunBoard integration', () => {
     expect(await screen.findByText('No runs have started yet')).toBeInTheDocument();
     expect(screen.getByText('Start from a workflow to create the first monitored run.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Workflows' })).toBeInTheDocument();
+  });
+
+  it('starts the seeded first-run sample from the empty run board', async () => {
+    vi.mocked(apiClient.getRuns).mockResolvedValue([]);
+    vi.mocked(apiClient.getWorkflows).mockResolvedValue([firstRunWorkflowFixture]);
+
+    render(
+      <MemoryRouter initialEntries={['/runs']}>
+        <RunBoard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Run your first workflow' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run sample workflow' }));
+
+    await waitFor(() => {
+      expect(apiClient.startRun).toHaveBeenCalledWith('wf-first-run-sample');
+    });
   });
 });

@@ -26,45 +26,34 @@ Wait for the API to report healthy, then:
 curl -sf http://localhost:8081/api/health/live
 ```
 
-## 2. Import the sample workflow
+## 2. Run the seeded sample
 
-A tiny SDLC slice — **Analyze (agent) → Review (approval) → Done** — is in
-[`docs/quickstart/hello-sdlc.bpmn`](quickstart/hello-sdlc.bpmn).
+Open **http://localhost:3002**. The Runs page starts empty, but the quickstart
+database already contains **First Run Sample**. Click **Run sample workflow**.
 
-The quickstart API runs with a dev token, so set it once for the calls below:
+The sample is a tiny SDLC slice: **Draft Implementation Note (agent) → Review
+Sample Output (approval) → Done**. The agent step runs on the deterministic
+mock provider, so it needs no API key.
+
+Prefer curl? The quickstart API runs with a dev token, so set it once:
 
 ```bash
 TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
 API=http://localhost:8081
-XML=$(cat docs/quickstart/hello-sdlc.bpmn)
-
-WID=$(curl -sf "$API/api/workflows/import" -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"fileName\":\"hello-sdlc.bpmn\",\"bpmnXml\":$(printf '%s' "$XML" | jq -Rs .)}" | jq -r .workflowId)
-
-curl -sf "$API/api/workflows/$WID/publish" -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"bpmnXml\":$(printf '%s' "$XML" | jq -Rs .),\"description\":\"quickstart\"}" >/dev/null
-echo "workflow: $WID"
-```
-
-(Or open the **Workflows** page in the UI and import the file there.)
-
-## 3. Start a run
-
-```bash
+WID=wf-first-run-sample
 RID=$(curl -sf "$API/api/runs" -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d "{\"workflowId\":\"$WID\"}" | jq -r .runId)
 echo "run: $RID"
 ```
 
-The **Analyze** agent step runs immediately on the mock provider (zero tokens),
-then the run pauses at the **Review** approval gate.
+The agent step runs immediately on the mock provider (zero tokens), then the run
+pauses at the review approval gate.
 
-## 4. Watch it and approve
+## 3. Watch it and approve
 
-Open **http://localhost:3002 → Runs → your run**. The BPMN diagram shows
-*Analyze* completed and *Review* awaiting approval. Click **Approve** — or:
+Open **http://localhost:3002 → Runs → your run**. The BPMN diagram shows the
+agent step completed and the review gate awaiting approval. Click **Approve** —
+or:
 
 ```bash
 AID=$(curl -sf "$API/api/approvals" -H "Authorization: Bearer $TOKEN" \
@@ -75,7 +64,7 @@ curl -sf "$API/api/approvals/$AID/decision" -H "Authorization: Bearer $TOKEN" \
 curl -sf "$API/api/runs/$RID" -H "Authorization: Bearer $TOKEN" | jq .status   # -> "completed"
 ```
 
-## 5. Inspect the evidence
+## 4. Inspect the evidence
 
 Every run produces a tamper-evident evidence pack — prompts, agent output,
 policy decisions, token usage, and the audit log:
@@ -84,7 +73,7 @@ policy decisions, token usage, and the audit log:
 curl -sf "$API/api/runs/$RID/evidence-pack" -H "Authorization: Bearer $TOKEN" | jq '{runId, modelUsage, approvals}'
 ```
 
-## 6. Tear down
+## 5. Tear down
 
 ```bash
 docker compose -f docker/docker-compose.quickstart.yml down -v
