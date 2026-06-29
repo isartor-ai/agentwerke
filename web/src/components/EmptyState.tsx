@@ -5,6 +5,7 @@ interface EmptyStateProps {
   description: string;
   action?: ReactNode;
   className?: string;
+  variant?: 'panel' | 'inline';
 }
 
 export function EmptyState({
@@ -12,9 +13,12 @@ export function EmptyState({
   description,
   action,
   className,
+  variant = 'panel',
 }: EmptyStateProps) {
+  const classes = `${variant === 'panel' ? 'panel empty-state' : 'empty-state empty-state-inline'} ${className ?? ''}`.trim();
+
   return (
-    <section className={`panel empty-state ${className ?? ''}`.trim()}>
+    <section className={classes}>
       <h2>{title}</h2>
       <p>{description}</p>
       {action ? <div className="empty-state-action">{action}</div> : null}

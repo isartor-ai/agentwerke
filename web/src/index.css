@@ -1930,6 +1930,51 @@ th {
   gap: 0.65rem;
 }
 
+.approval-risk-summary {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+}
+
+.approval-risk-summary h3,
+.approval-risk-summary p,
+.approval-risk-grid {
+  margin: 0;
+}
+
+.approval-risk-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.approval-risk-summary-head h3 {
+  font-size: 0.875rem;
+}
+
+.approval-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.approval-risk-grid dt {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.approval-risk-grid dd {
+  margin: 0.15rem 0 0;
+  color: var(--color-text-strong);
+  font-size: 0.875rem;
+}
+
 .approval-artifact {
   display: grid;
   gap: 0.4rem;
@@ -2002,6 +2047,79 @@ textarea {
 .empty-state {
   display: grid;
   gap: 0.5rem;
+}
+
+.loading-state h2,
+.error-state h2,
+.empty-state h2,
+.loading-state p,
+.error-state p,
+.empty-state p {
+  margin: 0;
+}
+
+.empty-state-inline,
+.error-state-inline {
+  padding: 0.75rem;
+  border: 1px dashed var(--color-border-soft);
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+}
+
+.empty-state-inline h2,
+.error-state-inline h2 {
+  font-size: 0.875rem;
+}
+
+.toast-region {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 60;
+  display: grid;
+  gap: 0.5rem;
+  width: min(24rem, calc(100vw - 2rem));
+}
+
+.toast {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: 0.25rem;
+  background: var(--color-surface-container-high);
+  box-shadow: var(--shadow-drawer);
+}
+
+.toast strong,
+.toast p {
+  margin: 0;
+}
+
+.toast p {
+  margin-top: 0.2rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.toast-success {
+  border-left-color: var(--color-lime);
+}
+
+.toast-error {
+  border-left-color: var(--color-error);
+}
+
+.toast-info {
+  border-left-color: var(--color-brand);
+}
+
+.toast-dismiss {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
 }
 
 .compact-loading {

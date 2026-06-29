@@ -32,4 +32,40 @@ describe('RunBoard integration', () => {
       expect(screen.getByText('run-0420')).toBeInTheDocument();
     });
   });
+
+  it('keeps existing run data visible and shows a toast when refresh fails', async () => {
+    vi.mocked(apiClient.getRuns)
+      .mockResolvedValueOnce(runsFixture)
+      .mockRejectedValueOnce(new Error('runtime unavailable'));
+
+    render(
+      <MemoryRouter initialEntries={['/runs']}>
+        <RunBoard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Runs')).toBeInTheDocument();
+    expect(screen.getByText('run-0421')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sync' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Run refresh failed');
+    expect(screen.getByText('runtime unavailable')).toBeInTheDocument();
+    expect(screen.getByText('run-0421')).toBeInTheDocument();
+    expect(screen.queryByText('Unable to load data')).not.toBeInTheDocument();
+  });
+
+  it('shows an explicit empty state when no runs exist', async () => {
+    vi.mocked(apiClient.getRuns).mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={['/runs']}>
+        <RunBoard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('No runs have started yet')).toBeInTheDocument();
+    expect(screen.getByText('Start from a workflow to create the first monitored run.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Workflows' })).toBeInTheDocument();
+  });
 });

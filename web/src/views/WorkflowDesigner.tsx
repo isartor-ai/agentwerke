@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { setAgentCatalog } from '../bpmn/agentCatalog';
 import { createEmptyDiagram } from '../bpmn/constants';
 import { BpmnModeler, type BpmnModelerHandle } from '../components/BpmnModeler';
+import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
+import { ToastRegion } from '../components/ToastRegion';
 import { Toolbar } from '../components/Toolbar';
+import { useToastQueue } from '../components/useToastQueue';
 import { buildConfiguredTemplateBpmn } from '../templates/templateBpmn';
 import type {
   RuntimeMode,
@@ -140,12 +143,15 @@ export function WorkflowDesigner() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('factory');
   const [monitorRuns, setMonitorRuns] = useState<WorkflowRun[]>([]);
   const [monitorLoading, setMonitorLoading] = useState(false);
+  const [monitorError, setMonitorError] = useState<string | null>(null);
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Autofac', camundaEnabled: false });
+  const { toasts, pushToast, dismissToast } = useToastQueue();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelerRef = useRef<BpmnModelerHandle | null>(null);
   const modelerReadyRef = useRef(false);
   const pendingXmlRef = useRef<string | null>(null);
+  const monitorRunsRef = useRef<WorkflowRun[]>([]);
   const nextSelectionValidationRef = useRef<{
     validation: WorkflowValidationResult;
     workflowId: string;
@@ -197,39 +203,57 @@ export function WorkflowDesigner() {
   };
 
   useEffect(() => {
+    monitorRunsRef.current = monitorRuns;
+  }, [monitorRuns]);
+
+  const loadMonitorRuns = useCallback(async (options: { background?: boolean } = {}) => {
+    setMonitorLoading(true);
+    setMonitorError(null);
+    try {
+      const all = await apiClient.getRuns();
+      setMonitorRuns(selectedId ? all.filter((run) => run.workflowId === selectedId) : all);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Unable to load workflow runs.';
+      setMonitorError(message);
+      if (options.background && monitorRunsRef.current.length > 0) {
+        pushToast({ tone: 'error', title: 'Run monitor refresh failed', message });
+      }
+    } finally {
+      setMonitorLoading(false);
+    }
+  }, [pushToast, selectedId]);
+
+  useEffect(() => {
     void loadWorkflows();
     void loadTemplates();
     void apiClient
       .getAgents()
       .then(setAgentCatalog)
-      .catch(() => {});
+      .catch((catalogError: unknown) => {
+        pushToast({
+          tone: 'error',
+          title: 'Agent catalog unavailable',
+          message: catalogError instanceof Error ? catalogError.message : 'Agent metadata could not be loaded.',
+        });
+      });
     void apiClient
       .getRuntimeMode()
       .then(setRuntimeMode)
-      .catch(() => {}); // Non-fatal: default stays Autofac.
-  }, []);
+      .catch((runtimeError: unknown) => {
+        pushToast({
+          tone: 'error',
+          title: 'Runtime mode unavailable',
+          message: runtimeError instanceof Error ? runtimeError.message : 'Using the default Autofac runtime mode.',
+        });
+      });
+  }, [pushToast]);
 
   useEffect(() => {
     if (workspaceMode !== 'monitor') return;
-    let cancelled = false;
-    const load = async () => {
-      setMonitorLoading(true);
-      try {
-        const all = await apiClient.getRuns();
-        if (!cancelled) {
-          setMonitorRuns(selectedId ? all.filter((run) => run.workflowId === selectedId) : all);
-        }
-      } finally {
-        if (!cancelled) setMonitorLoading(false);
-      }
-    };
-    void load();
-    const timer = setInterval(() => void load(), 10_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [workspaceMode, selectedId]);
+    void loadMonitorRuns();
+    const timer = setInterval(() => void loadMonitorRuns({ background: true }), 10_000);
+    return () => clearInterval(timer);
+  }, [loadMonitorRuns, workspaceMode]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -553,8 +577,12 @@ export function WorkflowDesigner() {
     try {
       const result = await apiClient.startRun(workflowId);
       navigate(`/runs/${result.runId}`);
-    } catch {
-      navigate('/runs');
+    } catch (startError) {
+      pushToast({
+        tone: 'error',
+        title: 'Unable to start run',
+        message: startError instanceof Error ? startError.message : 'The workflow run could not be created.',
+      });
     } finally {
       setStartingRun(false);
     }
@@ -565,7 +593,7 @@ export function WorkflowDesigner() {
   }
 
   if (error) {
-    return <ErrorState message={error} onRetry={loadWorkflows} />;
+    return <ErrorState message={error} onRetry={() => void loadWorkflows()} />;
   }
 
   const validationPanel = (
@@ -636,6 +664,7 @@ export function WorkflowDesigner() {
 
   return (
     <section>
+      <ToastRegion toasts={toasts} onDismiss={dismissToast} />
       <PageHeader
         title="SDLC Factory"
         description="Start from a governed SDLC template, assign agents and approvals, then open BPMN only when advanced editing is needed."
@@ -740,7 +769,14 @@ export function WorkflowDesigner() {
                 {templateLoading ? <span className="mini-badge neutral">Loading</span> : null}
               </div>
 
-              {templateError ? <p className="validation-error">{templateError}</p> : null}
+              {templateError ? (
+                <ErrorState
+                  title="Unable to load templates"
+                  message={templateError}
+                  onRetry={() => void loadTemplates()}
+                  variant="inline"
+                />
+              ) : null}
 
               <div className="factory-layout">
                 <div className="factory-template-list" role="list" aria-label="SDLC templates">
@@ -771,10 +807,16 @@ export function WorkflowDesigner() {
                     </article>
                   ))}
                   {!templateLoading && templates.length === 0 ? (
-                    <div className="empty-inline">
-                      <strong>No templates available</strong>
-                      <p>Check the template catalog service and retry.</p>
-                    </div>
+                    <EmptyState
+                      title="No templates available"
+                      description="The catalog returned no governed SDLC paths."
+                      variant="inline"
+                      action={
+                        <button type="button" className="btn btn-secondary" onClick={() => void loadTemplates()}>
+                          Retry templates
+                        </button>
+                      }
+                    />
                   ) : null}
                 </div>
 
@@ -943,10 +985,11 @@ export function WorkflowDesigner() {
                       ) : null}
                     </>
                   ) : (
-                    <div className="empty-inline">
-                      <strong>Select a template</strong>
-                      <p>The configuration panel will show inputs, agents, approval owners, connectors, policy, and evidence.</p>
-                    </div>
+                    <EmptyState
+                      title="Select a template"
+                      description="The configuration panel will show inputs, agents, approval owners, connectors, policy, and evidence."
+                      variant="inline"
+                    />
                   )}
                 </section>
               </div>
@@ -1053,11 +1096,26 @@ export function WorkflowDesigner() {
                 </div>
               </div>
               {monitorLoading && monitorRuns.length === 0 ? (
-                <p>Loading runs...</p>
+                <LoadingState message="Loading workflow runs" className="compact-loading" />
+              ) : monitorError && monitorRuns.length === 0 ? (
+                <ErrorState
+                  title="Unable to load workflow runs"
+                  message={monitorError}
+                  onRetry={() => void loadMonitorRuns()}
+                  retryLabel="Retry monitor"
+                  variant="inline"
+                />
               ) : monitorRuns.length === 0 ? (
-                <p className="monitor-empty">
-                  No runs found for this workflow.{' '}
-                  {selectedId ? (
+                <EmptyState
+                  title={selectedId ? 'No runs found for this workflow' : 'No workflow runs found'}
+                  description={
+                    selectedId
+                      ? 'Start a run to watch this workflow from the monitor.'
+                      : 'Select a workflow or start a new run to populate the monitor.'
+                  }
+                  variant="inline"
+                  action={
+                    selectedId ? (
                     <button
                       type="button"
                       className="btn btn-primary"
@@ -1065,8 +1123,9 @@ export function WorkflowDesigner() {
                     >
                       Start Run
                     </button>
-                  ) : null}
-                </p>
+                    ) : null
+                  }
+                />
               ) : (
                 <ul className="monitor-run-list" role="list">
                   {monitorRuns.map((run) => (

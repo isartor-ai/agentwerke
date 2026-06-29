@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { apiClient } from '../api/client';
 import { DetailDrawer } from '../components/DetailDrawer';
@@ -8,6 +8,8 @@ import { KpiCard } from '../components/KpiCard';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
+import { ToastRegion } from '../components/ToastRegion';
+import { useToastQueue } from '../components/useToastQueue';
 import type { ApprovalRequest } from '../types';
 
 function minutesRemaining(deadline: string): number {
@@ -22,29 +24,52 @@ export function ApprovalsDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [artifactContent, setArtifactContent] = useState<string | null>(null);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [artifactLoading, setArtifactLoading] = useState(false);
+  const approvalsRef = useRef<ApprovalRequest[]>([]);
+  const { toasts, pushToast, dismissToast } = useToastQueue();
 
-  const loadApprovals = async () => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    approvalsRef.current = approvals;
+  }, [approvals]);
+
+  const loadApprovals = useCallback(async (options: { background?: boolean } = {}) => {
+    const hasExistingApprovals = approvalsRef.current.length > 0;
+    const shouldBlock = !options.background && !hasExistingApprovals;
+
+    if (shouldBlock) {
+      setLoading(true);
+      setLoadError(null);
+    } else {
+      setRefreshing(true);
+    }
+
     try {
       const data = await apiClient.getApprovals();
       setApprovals(data);
+      setLoadError(null);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unknown error');
+      const message = loadError instanceof Error ? loadError.message : 'Unknown error';
+      if (hasExistingApprovals) {
+        pushToast({ tone: 'error', title: 'Approval refresh failed', message });
+      } else {
+        setLoadError(message);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [pushToast]);
 
   useEffect(() => {
-    loadApprovals();
-    const timer = setInterval(loadApprovals, 15_000);
+    void loadApprovals();
+    const timer = setInterval(() => void loadApprovals({ background: true }), 15_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadApprovals]);
 
   const selectedApproval = approvals.find((item) => item.id === selectedId) ?? null;
 
@@ -91,19 +116,26 @@ export function ApprovalsDashboard() {
     }
 
     if (decision === 'reject' && !decisionComment.trim()) {
-      setError('A reason is required when rejecting an approval request.');
+      setDecisionError('Add a comment before rejecting this approval.');
       return;
     }
 
     try {
       setSubmittingDecision(true);
-      setError(null);
+      setDecisionError(null);
       await apiClient.decideApproval(selectedApproval.id, decision, decisionComment);
+      pushToast({
+        tone: 'success',
+        title: `Approval ${decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'escalated'}`,
+        message: selectedApproval.actionRequested,
+      });
       setDecisionComment('');
       setSelectedId(null);
-      await loadApprovals();
+      await loadApprovals({ background: true });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to submit approval decision.');
+      const message = submitError instanceof Error ? submitError.message : 'Unable to submit approval decision.';
+      setDecisionError(message);
+      pushToast({ tone: 'error', title: 'Approval decision failed', message });
     } finally {
       setSubmittingDecision(false);
     }
@@ -145,18 +177,24 @@ export function ApprovalsDashboard() {
     return <LoadingState message="Loading approvals" />;
   }
 
-  if (error && !selectedApproval) {
-    return <ErrorState message={error} onRetry={loadApprovals} />;
+  if (loadError && approvals.length === 0) {
+    return <ErrorState message={loadError} onRetry={() => void loadApprovals()} />;
   }
 
   return (
     <section>
+      <ToastRegion toasts={toasts} onDismiss={dismissToast} />
       <PageHeader
         title="Approvals"
         description="Human-in-the-loop review queue for agent actions."
         actions={
-          <button type="button" className="btn btn-secondary" onClick={loadApprovals}>
-            Refresh
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={refreshing}
+            onClick={() => void loadApprovals({ background: true })}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh approvals'}
           </button>
         }
       />
@@ -204,8 +242,21 @@ export function ApprovalsDashboard() {
 
       {sortedApprovals.length === 0 ? (
         <EmptyState
-          title="No approvals found"
-          description="Try a different status filter or search query."
+          title={approvals.length === 0 ? 'No pending approvals' : 'No approvals match these filters'}
+          description={
+            approvals.length === 0
+              ? 'Nothing needs human review right now.'
+              : 'Try a different status filter or search query.'
+          }
+          action={
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void loadApprovals({ background: true })}
+            >
+              Refresh approvals
+            </button>
+          }
         />
       ) : (
         <div className="approval-list">
@@ -233,7 +284,14 @@ export function ApprovalsDashboard() {
                     ? `${minutesRemaining(approval.slaDeadline)}m remaining`
                     : `Decision status: ${approval.status}`}
                 </span>
-                <button type="button" className="btn btn-secondary" onClick={() => setSelectedId(approval.id)}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setDecisionError(null);
+                    setSelectedId(approval.id);
+                  }}
+                >
                   Review
                 </button>
               </div>
@@ -244,12 +302,15 @@ export function ApprovalsDashboard() {
 
       <DetailDrawer
         open={Boolean(selectedApproval)}
-        onClose={() => setSelectedId(null)}
+        onClose={() => {
+          setSelectedId(null);
+          setDecisionError(null);
+        }}
         title="Approval Request"
       >
         {selectedApproval ? (
           <div className="drawer-body">
-            {error ? <p>{error}</p> : null}
+            {decisionError ? <p className="validation-error" role="alert">{decisionError}</p> : null}
             <p>
               <strong>Action:</strong> {selectedApproval.actionRequested}
             </p>
@@ -262,9 +323,27 @@ export function ApprovalsDashboard() {
             <p>
               <strong>Agent:</strong> {selectedApproval.agentName}
             </p>
-            <p>
-              <strong>Policy rationale:</strong> {selectedApproval.policyRationale}
-            </p>
+            <section className="approval-risk-summary" aria-label="Risk summary">
+              <div className="approval-risk-summary-head">
+                <h3>Risk Summary</h3>
+                <RiskBadge level={selectedApproval.riskLevel} score={selectedApproval.riskScore} />
+              </div>
+              <p>{selectedApproval.policyRationale}</p>
+              <dl className="approval-risk-grid">
+                <div>
+                  <dt>Risk factors</dt>
+                  <dd>{selectedApproval.riskFactors.length > 0 ? selectedApproval.riskFactors.join(', ') : 'None recorded'}</dd>
+                </div>
+                <div>
+                  <dt>Affected systems</dt>
+                  <dd>
+                    {selectedApproval.affectedSystems.length > 0
+                      ? selectedApproval.affectedSystems.join(', ')
+                      : 'None recorded'}
+                  </dd>
+                </div>
+              </dl>
+            </section>
             <p>
               <strong>SLA:</strong> {new Date(selectedApproval.slaDeadline).toLocaleString()}
             </p>

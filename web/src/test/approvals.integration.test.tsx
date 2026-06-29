@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { ApprovalsDashboard } from '../views/ApprovalsDashboard';
@@ -14,6 +14,7 @@ vi.mock('../api/client', () => ({
 
 describe('ApprovalsDashboard integration', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(apiClient.getApprovals).mockResolvedValue(approvalsFixture);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
   });
@@ -28,7 +29,11 @@ describe('ApprovalsDashboard integration', () => {
     expect(await screen.findByText('Approvals')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
 
-    expect(screen.getByRole('dialog', { name: 'Approval Request' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: 'Approval Request' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText('Risk Summary')).toBeInTheDocument();
+    expect(within(dialog).getByText('High 72')).toBeInTheDocument();
+    expect(screen.getAllByText('Policy requires review.').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText('Reason / comment (required for reject)'), {
       target: { value: 'Reviewed and accepted.' },
     });
@@ -42,6 +47,37 @@ describe('ApprovalsDashboard integration', () => {
         'Reviewed and accepted.',
       );
     });
+    expect(await screen.findByRole('status')).toHaveTextContent('Approval approved');
+  });
+
+  it('shows an empty approval queue without a blank review area', async () => {
+    vi.mocked(apiClient.getApprovals).mockResolvedValue([]);
+
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('No pending approvals')).toBeInTheDocument();
+    expect(screen.getByText('Nothing needs human review right now.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Refresh approvals' }).length).toBeGreaterThan(0);
+  });
+
+  it('keeps reject validation inside the active review screen', async () => {
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Approvals')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+
+    expect(screen.getByRole('dialog', { name: 'Approval Request' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Add a comment before rejecting this approval.');
+    expect(apiClient.decideApproval).not.toHaveBeenCalled();
   });
 
   it('filters to decided approvals and shows their status history', async () => {
