@@ -27,7 +27,7 @@ public sealed class WorkflowTracer : IWorkflowTracer
         {
             if (_activity is null) return;
             _activity.SetStatus(ActivityStatusCode.Error, ex.Message);
-            _activity.RecordException(ex);
+            _activity.AddException(ex);
         }
 
         public void Dispose() => _activity?.Dispose();
