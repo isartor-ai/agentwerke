@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { canAdmin, canOperate } from '../auth/permissions';
 import { setAgentCatalog } from '../bpmn/agentCatalog';
 import { createEmptyDiagram } from '../bpmn/constants';
 import { BpmnModeler, type BpmnModelerHandle } from '../components/BpmnModeler';
@@ -14,6 +15,7 @@ import { Toolbar } from '../components/Toolbar';
 import { useToastQueue } from '../components/useToastQueue';
 import { buildConfiguredTemplateBpmn } from '../templates/templateBpmn';
 import type {
+  AuthState,
   RuntimeMode,
   TemplateDetail,
   TemplateFactoryConfiguration,
@@ -116,7 +118,11 @@ function createTemplateConfiguration(template: TemplateDetail): TemplateFactoryC
   };
 }
 
-export function WorkflowDesigner() {
+interface WorkflowDesignerProps {
+  auth: AuthState;
+}
+
+export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -146,6 +152,8 @@ export function WorkflowDesigner() {
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Autofac', camundaEnabled: false });
   const { toasts, pushToast, dismissToast } = useToastQueue();
+  const canAuthorWorkflows = canOperate(auth);
+  const canPublishWorkflows = canAdmin(auth);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelerRef = useRef<BpmnModelerHandle | null>(null);
@@ -418,6 +426,15 @@ export function WorkflowDesigner() {
   };
 
   const onCreateTemplateDraft = async () => {
+    if (!canAuthorWorkflows) {
+      pushToast({
+        tone: 'error',
+        title: 'Operator role required',
+        message: 'Creating workflow drafts requires the Operator or Admin role.',
+      });
+      return;
+    }
+
     const xml = buildConfiguredXml();
     if (!xml || !selectedTemplate || !templateConfiguration) {
       setTemplateError('Select a template before creating a draft.');
@@ -451,6 +468,11 @@ export function WorkflowDesigner() {
   };
 
   const validateCurrentBpmn = async () => {
+    if (!canAuthorWorkflows) {
+      setValidationError('Operator or Admin role required to validate BPMN.');
+      return;
+    }
+
     const xml = await getModelerXml();
     if (!xml.trim()) {
       setValidationError('Add nodes to the canvas or choose a template before validation.');
@@ -472,6 +494,15 @@ export function WorkflowDesigner() {
   };
 
   const onImportClick = () => {
+    if (!canAuthorWorkflows) {
+      pushToast({
+        tone: 'error',
+        title: 'Operator role required',
+        message: 'Importing BPMN requires the Operator or Admin role.',
+      });
+      return;
+    }
+
     setWorkspaceMode('advanced');
     fileInputRef.current?.click();
   };
@@ -498,6 +529,14 @@ export function WorkflowDesigner() {
 
   const onFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    if (!canAuthorWorkflows) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setValidationError('Operator or Admin role required to import BPMN.');
+      return;
+    }
+
     if (!file) {
       return;
     }
@@ -532,6 +571,11 @@ export function WorkflowDesigner() {
   };
 
   const onPublishWorkflow = async () => {
+    if (!canPublishWorkflows) {
+      setPublishMessage('Admin role required to publish workflows.');
+      return;
+    }
+
     const xml = await getModelerXml();
     if (!xml.trim()) {
       setPublishMessage('Design a workflow or choose a template before publishing.');
@@ -571,6 +615,15 @@ export function WorkflowDesigner() {
   };
 
   const onStartRun = async () => {
+    if (!canAuthorWorkflows) {
+      pushToast({
+        tone: 'error',
+        title: 'Operator role required',
+        message: 'Starting workflow runs requires the Operator or Admin role.',
+      });
+      return;
+    }
+
     const workflowId = publishedWorkflowId ?? selectedId;
     if (!workflowId) return;
     setStartingRun(true);
@@ -670,7 +723,13 @@ export function WorkflowDesigner() {
         description="Start from a governed SDLC template, assign agents and approvals, then open BPMN only when advanced editing is needed."
         actions={
           <div className="inline-actions">
-            <button type="button" className="btn btn-secondary" onClick={onImportClick}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!canAuthorWorkflows}
+              title={canAuthorWorkflows ? undefined : 'Operator or Admin role required'}
+              onClick={onImportClick}
+            >
               Import BPMN
             </button>
             <button type="button" className="btn btn-primary" onClick={onNewWorkflow}>
@@ -682,6 +741,7 @@ export function WorkflowDesigner() {
               accept=".bpmn,.xml"
               className="sr-only"
               aria-label="Import BPMN file"
+              disabled={!canAuthorWorkflows}
               onChange={onFileSelected}
             />
           </div>
@@ -953,7 +1013,8 @@ export function WorkflowDesigner() {
                         <button
                           type="button"
                           className="btn btn-primary"
-                          disabled={draftCreating}
+                          disabled={draftCreating || !canAuthorWorkflows}
+                          title={canAuthorWorkflows ? undefined : 'Operator or Admin role required'}
                           onClick={() => void onCreateTemplateDraft()}
                         >
                           {draftCreating ? 'Creating...' : 'Create Draft'}
@@ -999,10 +1060,22 @@ export function WorkflowDesigner() {
           {workspaceMode === 'advanced' ? (
             <>
               <Toolbar>
-                <button type="button" className="btn btn-secondary" onClick={validateCurrentBpmn}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!canAuthorWorkflows}
+                  title={canAuthorWorkflows ? undefined : 'Operator or Admin role required'}
+                  onClick={validateCurrentBpmn}
+                >
                   Validate
                 </button>
-                <button type="button" className="btn btn-secondary" onClick={onPublishWorkflow}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!canPublishWorkflows}
+                  title={canPublishWorkflows ? undefined : 'Admin role required'}
+                  onClick={onPublishWorkflow}
+                >
                   Publish
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={onExportClick}>
@@ -1040,7 +1113,8 @@ export function WorkflowDesigner() {
                     <button
                       type="button"
                       className="btn btn-primary"
-                      disabled={startingRun}
+                      disabled={startingRun || !canAuthorWorkflows}
+                      title={canAuthorWorkflows ? undefined : 'Operator or Admin role required'}
                       onClick={() => void onStartRun()}
                     >
                       {startingRun ? 'Starting...' : 'Start Run'}
@@ -1083,7 +1157,8 @@ export function WorkflowDesigner() {
                     <button
                       type="button"
                       className="btn btn-primary"
-                      disabled={startingRun}
+                      disabled={startingRun || !canAuthorWorkflows}
+                      title={canAuthorWorkflows ? undefined : 'Operator or Admin role required'}
                       onClick={() => void onStartRun()}
                     >
                       {startingRun ? 'Starting...' : 'Start Run'}
@@ -1119,6 +1194,8 @@ export function WorkflowDesigner() {
                     <button
                       type="button"
                       className="btn btn-primary"
+                      disabled={!canAuthorWorkflows}
+                      title={canAuthorWorkflows ? undefined : 'Operator or Admin role required'}
                       onClick={() => void onStartRun()}
                     >
                       Start Run

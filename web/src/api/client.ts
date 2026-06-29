@@ -3,6 +3,10 @@ import type {
   AgentSkillBinding,
   AgentSummary,
   ApprovalRequest,
+  AuthConfig,
+  AuthRole,
+  AuthUser,
+  DevTokenResponse,
   EvidencePack,
   RunEvent,
   RuntimeMode,
@@ -14,6 +18,7 @@ import type {
   Workflow,
   WorkflowRun,
 } from '../types';
+import { avatarInitials, normalizeRoles, primaryRole } from '../auth/permissions';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const WORKFLOW_API_BASE_URL = API_BASE_URL ?? '';
@@ -21,16 +26,43 @@ const WORKFLOW_API_BASE_URL = API_BASE_URL ?? '';
 // Injected at build time for the manual test stack (docker-compose.manual.yml).
 // In production builds this variable is unset and auth is handled externally.
 const DEV_ADMIN_TOKEN = import.meta.env.VITE_DEV_ADMIN_TOKEN as string | undefined;
+let runtimeAuthToken: string | undefined;
 
 function authHeaders(): Record<string, string> {
-  return DEV_ADMIN_TOKEN ? { Authorization: `Bearer ${DEV_ADMIN_TOKEN}` } : {};
+  const token = runtimeAuthToken ?? DEV_ADMIN_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function requestJson<T>(path: string, init?: RequestInit, baseUrl: string = API_BASE_URL ?? ''): Promise<T> {
+interface CurrentUserResponse {
+  id: string;
+  name: string;
+  email?: string | null;
+  roles: string[];
+}
+
+function toAuthUser(response: CurrentUserResponse): AuthUser {
+  const roles = normalizeRoles(response.roles);
+
+  return {
+    id: response.id,
+    name: response.name,
+    email: response.email,
+    role: primaryRole(roles),
+    roles,
+    avatarInitials: avatarInitials(response.name),
+  };
+}
+
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+  baseUrl: string = API_BASE_URL ?? '',
+  includeAuth = true,
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init?.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json', ...(includeAuth ? authHeaders() : {}), ...(init?.headers ?? {}) },
     ...init,
   });
 
@@ -57,6 +89,43 @@ function extractErrorMessage(errorText: string): string | null {
 }
 
 export const apiClient = {
+  setAuthToken(token: string): void {
+    runtimeAuthToken = token;
+  },
+
+  clearAuthToken(): void {
+    runtimeAuthToken = undefined;
+  },
+
+  async getAuthConfig(): Promise<AuthConfig> {
+    return requestJson<AuthConfig>('/api/auth/config', undefined, API_BASE_URL ?? '', false);
+  },
+
+  async getCurrentUser(): Promise<AuthUser> {
+    const response = await requestJson<CurrentUserResponse>('/api/auth/me');
+    return toAuthUser(response);
+  },
+
+  async issueDevToken(payload: {
+    role: AuthRole;
+    subject?: string;
+    expiryHours?: number;
+  }): Promise<DevTokenResponse> {
+    return requestJson<DevTokenResponse>(
+      '/api/auth/token',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          role: payload.role,
+          subject: payload.subject,
+          expiryHours: payload.expiryHours,
+        }),
+      },
+      API_BASE_URL ?? '',
+      false,
+    );
+  },
+
   async getRuntimeMode(): Promise<RuntimeMode> {
     return requestJson<RuntimeMode>('/api/health/runtime');
   },

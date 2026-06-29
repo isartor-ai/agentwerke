@@ -33,6 +33,19 @@ Jwt__NameClaimTypes__0=preferred_username
 Jwt__NameClaimTypes__1=email
 ```
 
+If the provider emits enterprise group IDs or external app-role names, map them
+to the built-in Autofac roles explicitly:
+
+```bash
+Jwt__RoleMappings__autofac_viewers__0=Viewer
+Jwt__RoleMappings__autofac_operators__0=Operator
+Jwt__RoleMappings__autofac_approvers__0=Approver
+Jwt__RoleMappings__autofac_admins__0=Admin
+```
+
+Use JSON configuration or a secret/config provider for external group IDs that
+contain punctuation not allowed in shell variable names.
+
 For Microsoft Entra ID, assign app roles matching the Autofac roles below and
 emit them in the `roles` claim. For Keycloak, add a protocol mapper that emits
 realm or client roles into a top-level `roles` claim.

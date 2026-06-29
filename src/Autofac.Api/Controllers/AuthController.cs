@@ -11,7 +11,6 @@ namespace Autofac.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-[AllowAnonymous]
 public sealed class AuthController : ControllerBase
 {
     private readonly JwtOptions _jwt;
@@ -22,6 +21,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpGet("config")]
+    [AllowAnonymous]
     public IActionResult GetAuthConfig()
     {
         var mode = !string.IsNullOrWhiteSpace(_jwt.Authority)
@@ -44,7 +44,27 @@ public sealed class AuthController : ControllerBase
         });
     }
 
+    [HttpGet("me")]
+    [Authorize(Policy = AutofacPolicies.Viewer)]
+    public IActionResult GetCurrentUser()
+    {
+        var subject = AuthenticatedPrincipal.ResolveSubject(User);
+        var roles = User.FindAll(ClaimTypes.Role)
+            .Select(claim => AutofacRoleMapper.CanonicalizeRole(claim.Value))
+            .Where(role => role is not null)
+            .Select(role => role!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Ok(new CurrentUserResponse(
+            Id: subject,
+            Name: ResolveDisplayName(subject),
+            Email: ResolveEmail(),
+            Roles: roles));
+    }
+
     [HttpPost("token")]
+    [AllowAnonymous]
     public IActionResult IssueDevToken([FromBody] DevTokenRequest request)
     {
         if (!_jwt.DevTokensEnabled)
@@ -97,6 +117,39 @@ public sealed class AuthController : ControllerBase
             expiresAt = expiry.ToString("o")
         });
     }
+
+    private string ResolveDisplayName(string subject)
+    {
+        return FirstClaimValue(
+                ClaimTypes.Name,
+                "name",
+                "preferred_username",
+                ClaimTypes.Upn,
+                ClaimTypes.Email)
+            ?? User.Identity?.Name
+            ?? subject;
+    }
+
+    private string? ResolveEmail()
+    {
+        var value = FirstClaimValue(ClaimTypes.Email, "email", ClaimTypes.Upn, "preferred_username");
+        return value?.Contains('@', StringComparison.Ordinal) == true ? value : null;
+    }
+
+    private string? FirstClaimValue(params string[] claimTypes)
+    {
+        foreach (var claimType in claimTypes)
+        {
+            var value = User.FindFirst(claimType)?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
 }
 
 public sealed record DevTokenRequest(string Role, string? Subject = null, int ExpiryHours = 8);
+public sealed record CurrentUserResponse(string Id, string Name, string? Email, IReadOnlyList<string> Roles);

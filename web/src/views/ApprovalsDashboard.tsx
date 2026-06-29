@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { apiClient } from '../api/client';
+import { canApprove } from '../auth/permissions';
 import { DetailDrawer } from '../components/DetailDrawer';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
@@ -10,13 +11,17 @@ import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { ToastRegion } from '../components/ToastRegion';
 import { useToastQueue } from '../components/useToastQueue';
-import type { ApprovalRequest } from '../types';
+import type { ApprovalRequest, AuthState } from '../types';
 
 function minutesRemaining(deadline: string): number {
   return Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 60_000));
 }
 
-export function ApprovalsDashboard() {
+interface ApprovalsDashboardProps {
+  auth: AuthState;
+}
+
+export function ApprovalsDashboard({ auth }: ApprovalsDashboardProps) {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
@@ -32,6 +37,7 @@ export function ApprovalsDashboard() {
   const [artifactLoading, setArtifactLoading] = useState(false);
   const approvalsRef = useRef<ApprovalRequest[]>([]);
   const { toasts, pushToast, dismissToast } = useToastQueue();
+  const canSubmitDecisions = canApprove(auth);
 
   useEffect(() => {
     approvalsRef.current = approvals;
@@ -112,6 +118,11 @@ export function ApprovalsDashboard() {
 
   const submitDecision = async (decision: 'approve' | 'reject' | 'escalate') => {
     if (!selectedApproval) {
+      return;
+    }
+
+    if (!canSubmitDecisions) {
+      setDecisionError('Approver or Admin role required to submit approval decisions.');
       return;
     }
 
@@ -363,40 +374,46 @@ export function ApprovalsDashboard() {
               </section>
             ) : null}
 
-            <label htmlFor="decision-comment">Reason / comment (required for reject)</label>
-            <textarea
-              id="decision-comment"
-              value={decisionComment}
-              onChange={(event) => setDecisionComment(event.target.value)}
-              rows={4}
-            />
+            {canSubmitDecisions ? (
+              <>
+                <label htmlFor="decision-comment">Reason / comment (required for reject)</label>
+                <textarea
+                  id="decision-comment"
+                  value={decisionComment}
+                  onChange={(event) => setDecisionComment(event.target.value)}
+                  rows={4}
+                />
 
-            <div className="action-row">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={submittingDecision || selectedApproval.status !== 'pending'}
-                onClick={() => submitDecision('approve')}
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                disabled={submittingDecision || selectedApproval.status !== 'pending'}
-                onClick={() => submitDecision('reject')}
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={submittingDecision || selectedApproval.status !== 'pending'}
-                onClick={() => submitDecision('escalate')}
-              >
-                Escalate
-              </button>
-            </div>
+                <div className="action-row">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={submittingDecision || selectedApproval.status !== 'pending'}
+                    onClick={() => submitDecision('approve')}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={submittingDecision || selectedApproval.status !== 'pending'}
+                    onClick={() => submitDecision('reject')}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={submittingDecision || selectedApproval.status !== 'pending'}
+                    onClick={() => submitDecision('escalate')}
+                  >
+                    Escalate
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="cell-meta">Approver role required to submit a decision.</p>
+            )}
           </div>
         ) : null}
       </DetailDrawer>

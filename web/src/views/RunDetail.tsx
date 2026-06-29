@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { canApprove, canOperate } from '../auth/permissions';
 import { AgentDetailPanel } from '../components/AgentDetailPanel';
 import { BpmnViewer } from '../components/BpmnViewer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -12,7 +13,7 @@ import { RunDiffModal } from '../components/RunDiffModal';
 import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
-import type { EvidencePack, RunStatus, WorkflowRun } from '../types';
+import type { AuthState, EvidencePack, RunStatus, WorkflowRun } from '../types';
 
 const tabs = ['Summary', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
 
@@ -47,7 +48,11 @@ function totalEvidenceTokens(pack: EvidencePack | null): number {
   );
 }
 
-export function RunDetail() {
+interface RunDetailProps {
+  auth: AuthState;
+}
+
+export function RunDetail({ auth }: RunDetailProps) {
   const { runId } = useParams();
   const navigate = useNavigate();
   const [run, setRun] = useState<WorkflowRun | null>(null);
@@ -82,6 +87,8 @@ export function RunDetail() {
   const MANUAL_OVERRIDE_MS = 30_000;
   const TERMINAL = ['completed', 'failed', 'cancelled'] as const;
   const isTerminal = run ? (TERMINAL as readonly string[]).includes(run.status) : false;
+  const canControlRuns = canOperate(auth);
+  const canSubmitApprovals = canApprove(auth);
 
   const loadRun = useCallback(async () => {
     if (!runId) {
@@ -113,7 +120,7 @@ export function RunDetail() {
   useEffect(() => { void loadRun(); }, [loadRun]);
 
   const loadEvidencePack = useCallback(async () => {
-    if (!runId) return;
+    if (!runId || !canControlRuns) return;
     setEvidenceLoading(true);
     setEvidenceError(null);
     try {
@@ -124,9 +131,16 @@ export function RunDetail() {
     } finally {
       setEvidenceLoading(false);
     }
-  }, [runId]);
+  }, [canControlRuns, runId]);
 
-  useEffect(() => { void loadEvidencePack(); }, [loadEvidencePack]);
+  useEffect(() => {
+    if (!canControlRuns) {
+      setEvidencePack(null);
+      return;
+    }
+
+    void loadEvidencePack();
+  }, [canControlRuns, loadEvidencePack]);
 
   // Polling: 10s while in-flight (fallback when SSE stream is unavailable)
   useEffect(() => {
@@ -247,6 +261,11 @@ export function RunDetail() {
     approvalId: string,
     decision: 'approve' | 'reject' | 'escalate',
   ) => {
+    if (!canSubmitApprovals) {
+      setApprovalError('Approver or Admin role required to submit approval decisions.');
+      return;
+    }
+
     if (decision === 'reject' && !decisionComment.trim()) {
       setApprovalError('A reason is required when rejecting an approval request.');
       return;
@@ -265,7 +284,7 @@ export function RunDetail() {
   };
 
   const handleCancelRun = async () => {
-    if (!runId) return;
+    if (!runId || !canControlRuns) return;
     setCancelling(true);
     try {
       await apiClient.cancelRun(runId);
@@ -280,7 +299,7 @@ export function RunDetail() {
   };
 
   const handleEvidenceExport = async () => {
-    if (!runId) return;
+    if (!runId || !canControlRuns) return;
     setExportingEvidence(true);
     setEvidenceExportError(null);
     try {
@@ -293,6 +312,10 @@ export function RunDetail() {
   };
 
   const renderEvidencePack = () => {
+    if (!canControlRuns) {
+      return <p>Operator role required to view and export evidence packs.</p>;
+    }
+
     if (evidenceLoading && !evidencePack) {
       return <p>Loading evidence pack…</p>;
     }
@@ -631,7 +654,7 @@ export function RunDetail() {
                     {approval.decisionComment ? (
                       <p>Decision note: {approval.decisionComment}</p>
                     ) : null}
-                    {approval.status === 'pending' ? (
+                    {approval.status === 'pending' && canSubmitApprovals ? (
                       <div className="approval-inline-decision">
                         <textarea
                           className="approval-comment-input"
@@ -670,6 +693,8 @@ export function RunDetail() {
                           </button>
                         </div>
                       </div>
+                    ) : approval.status === 'pending' ? (
+                      <p className="cell-meta">Approver role required to submit a decision.</p>
                     ) : (
                       <p className="cell-meta approval-decided">
                         {approval.status.charAt(0).toUpperCase() + approval.status.slice(1)}
@@ -839,7 +864,8 @@ export function RunDetail() {
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={exportingEvidence}
+              disabled={exportingEvidence || !canControlRuns}
+              title={canControlRuns ? undefined : 'Operator or Admin role required'}
               onClick={() => void handleEvidenceExport()}
             >
               {exportingEvidence ? 'Exporting…' : 'Export Evidence Pack'}
@@ -848,6 +874,8 @@ export function RunDetail() {
               type="button"
               className="btn btn-danger"
               aria-label="Cancel run and stop further execution"
+              disabled={!canControlRuns}
+              title={canControlRuns ? undefined : 'Operator or Admin role required'}
               onClick={() => setConfirmOpen(true)}
             >
               Cancel Run

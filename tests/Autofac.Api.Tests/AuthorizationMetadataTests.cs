@@ -22,12 +22,22 @@ public sealed class AuthorizationMetadataTests
     }
 
     [Theory]
-    [InlineData(typeof(AuthController))]
     [InlineData(typeof(HealthController))]
     [InlineData(typeof(WebhooksController))]
     public void InfrastructureControllers_AllowAnonymous(Type controllerType)
     {
         Assert.NotEmpty(controllerType.GetCustomAttributes<AllowAnonymousAttribute>());
+    }
+
+    [Theory]
+    [InlineData(nameof(AuthController.GetAuthConfig))]
+    [InlineData(nameof(AuthController.IssueDevToken))]
+    public void AuthDiscoveryActions_AllowAnonymous(string actionName)
+    {
+        var method = typeof(AuthController).GetMethods()
+            .Single(method => method.Name == actionName);
+
+        Assert.NotEmpty(method.GetCustomAttributes<AllowAnonymousAttribute>());
     }
 
     [Theory]
