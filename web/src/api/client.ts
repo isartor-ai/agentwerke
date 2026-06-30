@@ -5,6 +5,7 @@ import type {
   ApprovalRequest,
   AuthConfig,
   AuthRole,
+  AuditEntry,
   AuthUser,
   ConnectorStatus,
   DevTokenResponse,
@@ -159,6 +160,14 @@ export const apiClient = {
 
   async getConnectors(): Promise<ConnectorStatus[]> {
     return requestJson<ConnectorStatus[]>('/api/connectors');
+  },
+
+  async getAuditEntries(params: { runId?: string; limit?: number } = {}): Promise<AuditEntry[]> {
+    const query = new URLSearchParams();
+    if (params.runId) query.set('runId', params.runId);
+    if (params.limit) query.set('limit', String(params.limit));
+    const suffix = query.toString();
+    return requestJson<AuditEntry[]>(`/api/audit${suffix ? `?${suffix}` : ''}`);
   },
 
   // Absolute (or API-base-relative) URL to register on the external side for an inbound webhook.

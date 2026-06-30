@@ -28,6 +28,16 @@ public interface IAuditRepository
 }
 
 /// <summary>
+/// Read side of the audit trail for the audit/decision-trace explorer (#189).
+/// Separate from <see cref="IAuditRepository"/> so the many write-side stubs need
+/// not implement it.
+/// </summary>
+public interface IAuditQuery
+{
+    Task<IReadOnlyList<AuditRecord>> QueryAsync(string? runId, int limit, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Records workflow execution metrics. Implemented in Autofac.Observability (singleton backed by System.Diagnostics.Metrics).
 /// </summary>
 public interface IWorkflowMetrics

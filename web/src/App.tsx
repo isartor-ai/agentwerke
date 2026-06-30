@@ -6,10 +6,10 @@ import { AppShell } from './layout/AppShell';
 import type { AuthState, AuthUser } from './types';
 import { ApprovalsDashboard } from './views/ApprovalsDashboard';
 import { AgentRegistry } from './views/AgentRegistry';
+import { Audit } from './views/Audit';
 import { Login } from './views/Login';
 import { Integrations } from './views/Integrations';
 import { NotFound } from './views/NotFound';
-import { Placeholder } from './views/Placeholder';
 import { Policies } from './views/Policies';
 import { RunBoard } from './views/RunBoard';
 import { RunDetail } from './views/RunDetail';
@@ -74,7 +74,7 @@ export default function App() {
             />
             <Route
               path="/audit"
-              element={<Placeholder title="Audit" description="Immutable audit events and decision trace explorer." />}
+              element={<Audit />}
             />
             <Route
               path="/integrations"
