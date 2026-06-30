@@ -49,7 +49,10 @@ public sealed class LexicalKnowledgeRetriever : IKnowledgeRetriever
     {
     }
 
-    public LexicalKnowledgeRetriever(IEnumerable<KnowledgeDocument> corpus)
+    // Internal (test) constructor: must NOT be public, or DI sees two activatable
+    // constructors (IEnumerable&lt;T&gt; resolves to empty) and fails with an ambiguous-ctor
+    // error at container build. The IOptions ctor above is the single public/DI ctor.
+    internal LexicalKnowledgeRetriever(IEnumerable<KnowledgeDocument> corpus)
     {
         _corpus = corpus.Where(d => !string.IsNullOrWhiteSpace(d.Text)).ToArray();
     }

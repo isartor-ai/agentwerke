@@ -1,4 +1,6 @@
 using Autofac.Agents.Knowledge;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Autofac.Agents.Tests;
 
@@ -38,5 +40,32 @@ public sealed class KnowledgeRetrieverTests
     public void Search_IrrelevantQuery_ReturnsEmpty()
     {
         Assert.Empty(Retriever().Search("xylophone zebra", 3));
+    }
+
+    [Fact]
+    public void LexicalKnowledgeRetriever_HasSinglePublicConstructor_SoDiIsUnambiguous()
+    {
+        // Two public constructors (IOptions + IEnumerable) make the DI container fail with an
+        // ambiguous-constructor error at startup, because IEnumerable<T> resolves to empty.
+        // The test/corpus constructor must stay internal.
+        Assert.Single(typeof(LexicalKnowledgeRetriever).GetConstructors());
+    }
+
+    [Fact]
+    public void LexicalKnowledgeRetriever_ResolvesFromContainerWithValidation()
+    {
+        // Reproduces the startup path: container activation with ValidateOnBuild, which is
+        // what surfaced the ambiguous-constructor failure in production.
+        var services = new ServiceCollection();
+        services.AddSingleton<IOptions<KnowledgeOptions>>(Options.Create(new KnowledgeOptions()));
+        services.AddSingleton<IKnowledgeRetriever, LexicalKnowledgeRetriever>();
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true,
+        });
+
+        Assert.NotNull(provider.GetRequiredService<IKnowledgeRetriever>());
     }
 }
