@@ -309,6 +309,60 @@ public sealed class WebhooksControllerTests
     }
 
     [Fact]
+    public async Task Jira_IssueCreated_SeedsEnrichedTicketContextAsInputs()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            eventHeader: "issues",
+            triggerRouter: new StubTriggerRouter("wf_1"));
+
+        var body = """
+            {
+              "webhookEvent": "jira:issue_created",
+              "issue": {
+                "id": "10001",
+                "key": "ENG-42",
+                "self": "https://acme.atlassian.net/rest/api/2/issue/10001",
+                "fields": {
+                  "summary": "Add dark mode",
+                  "description": "As a user I want dark mode.",
+                  "issuetype": { "name": "Story" },
+                  "project": { "key": "ENG", "name": "Engineering" },
+                  "priority": { "name": "High" },
+                  "status": { "name": "To Do" },
+                  "labels": ["frontend", "ux"],
+                  "assignee": { "displayName": "Alice Dev" },
+                  "reporter": { "displayName": "Bob PM" }
+                }
+              },
+              "user": { "displayName": "Bob PM" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.Jira(CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        var trigger = orchestration.StartCommand?.Trigger;
+        Assert.NotNull(trigger?.Inputs);
+        Assert.Equal("Add dark mode", trigger!.Title);
+        Assert.Equal("As a user I want dark mode.", trigger.Body);
+        var inputs = trigger.Inputs!;
+        Assert.Equal("ENG-42", inputs["issue_key"]);
+        Assert.Equal("Story", inputs["issue_type"]);
+        Assert.Equal("ENG", inputs["project_key"]);
+        Assert.Equal("Engineering", inputs["project_name"]);
+        Assert.Equal("High", inputs["priority"]);
+        Assert.Equal("To Do", inputs["status"]);
+        Assert.Equal("frontend, ux", inputs["labels"]);
+        Assert.Equal("Alice Dev", inputs["assignee"]);
+        Assert.Equal("Bob PM", inputs["reporter"]);
+        Assert.Equal("https://acme.atlassian.net/rest/api/2/issue/10001", inputs["issue_url"]);
+    }
+
+    [Fact]
     public async Task GitHub_WorkflowRunCompletedEvent_WhenOnlyTheCommitShaMatchesAWaitingRun_StillAutoResumesIt()
     {
         // Simulates the #139 "wait for CI green after a deploy dispatch" gate: the message-catch
