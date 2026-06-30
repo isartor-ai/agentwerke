@@ -6,6 +6,7 @@ import type {
   AuthConfig,
   AuthRole,
   AuthUser,
+  ConnectorStatus,
   DevTokenResponse,
   EvidencePack,
   PolicyRule,
@@ -154,6 +155,15 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({}),
     });
+  },
+
+  async getConnectors(): Promise<ConnectorStatus[]> {
+    return requestJson<ConnectorStatus[]>('/api/connectors');
+  },
+
+  // Absolute (or API-base-relative) URL to register on the external side for an inbound webhook.
+  webhookUrl(path: string): string {
+    return `${API_BASE_URL ?? ''}${path}`;
   },
 
   getRunArtifactDownloadUrl(runId: string, artifactName: string): string {

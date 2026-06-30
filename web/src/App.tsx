@@ -7,6 +7,7 @@ import type { AuthState, AuthUser } from './types';
 import { ApprovalsDashboard } from './views/ApprovalsDashboard';
 import { AgentRegistry } from './views/AgentRegistry';
 import { Login } from './views/Login';
+import { Integrations } from './views/Integrations';
 import { NotFound } from './views/NotFound';
 import { Placeholder } from './views/Placeholder';
 import { Policies } from './views/Policies';
@@ -77,7 +78,7 @@ export default function App() {
             />
             <Route
               path="/integrations"
-              element={<Placeholder title="Integrations" description="External connectors and webhook configuration." />}
+              element={<Integrations />}
             />
             <Route
               path="/settings"
