@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
@@ -17,6 +19,18 @@ public static class AuthDependencyInjection
         var opts = new JwtOptions();
         configuration.GetSection(JwtOptions.Section).Bind(opts);
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Section));
+
+        // LDAP/AD directory-group integration (#178). The resolver enriches authenticated
+        // principals with directory groups, which RoleMappings turns into Autofac roles.
+        services.Configure<LdapOptions>(configuration.GetSection(LdapOptions.Section));
+        if (configuration.GetValue<bool>($"{LdapOptions.Section}:Enabled"))
+        {
+            services.AddSingleton<ILdapGroupResolver, LdapGroupResolver>();
+        }
+        else
+        {
+            services.AddSingleton<ILdapGroupResolver, NullLdapGroupResolver>();
+        }
 
         var authBuilder = services.AddAuthentication(o =>
         {
@@ -123,6 +137,7 @@ public static class AuthDependencyInjection
                 if (context.Principal?.Identity is ClaimsIdentity identity)
                 {
                     NormalizeRoleClaims(identity, opts);
+                    EnrichRolesFromLdap(identity, opts, context.HttpContext.RequestServices);
                     NormalizeNameClaim(identity, opts);
                 }
 
@@ -149,6 +164,54 @@ public static class AuthDependencyInjection
                 identity.AddClaim(new Claim(ClaimTypes.Role, role));
             }
         }
+    }
+
+    private static void EnrichRolesFromLdap(ClaimsIdentity identity, JwtOptions opts, IServiceProvider services)
+    {
+        var ldapOptions = services.GetService<IOptions<LdapOptions>>()?.Value;
+        var resolver = services.GetService<ILdapGroupResolver>();
+        if (ldapOptions is null || resolver is null || !ldapOptions.Enabled)
+        {
+            return;
+        }
+
+        var username = ResolveLdapUsername(identity, ldapOptions);
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        var groups = resolver.ResolveGroups(username);
+        if (groups.Count == 0)
+        {
+            return;
+        }
+
+        var existingRoles = identity.FindAll(ClaimTypes.Role)
+            .Select(claim => claim.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var role in AutofacRoleMapper.ResolveRoles(groups, opts))
+        {
+            if (existingRoles.Add(role))
+            {
+                identity.AddClaim(new Claim(ClaimTypes.Role, role));
+            }
+        }
+    }
+
+    private static string? ResolveLdapUsername(ClaimsIdentity identity, LdapOptions ldap)
+    {
+        foreach (var claimType in ldap.UsernameClaimTypes)
+        {
+            var value = identity.FindFirst(claimType)?.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return identity.Name;
     }
 
     private static void NormalizeNameClaim(ClaimsIdentity identity, JwtOptions opts)
