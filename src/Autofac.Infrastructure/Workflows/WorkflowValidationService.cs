@@ -5,16 +5,16 @@ namespace Autofac.Infrastructure.Workflows;
 
 public sealed class WorkflowValidationService : IWorkflowValidationService
 {
-    private readonly IBpmnWorkflowValidator _validator;
+    private readonly ICamundaBpmnProjector _projector;
 
-    public WorkflowValidationService(IBpmnWorkflowValidator validator)
+    public WorkflowValidationService(ICamundaBpmnProjector projector)
     {
-        _validator = validator;
+        _projector = projector;
     }
 
     public WorkflowValidationResult Validate(string bpmnXml)
     {
-        var validation = _validator.Validate(bpmnXml);
+        var validation = _projector.Project(bpmnXml);
         return new WorkflowValidationResult(
             validation.IsValid,
             validation.Definition?.ProcessId,
