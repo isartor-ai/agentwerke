@@ -66,6 +66,43 @@ public sealed class AgentsControllerTests
     }
 
     [Fact]
+    public void Upsert_WhenWritableAgentDirectoryDiffers_WritesOverlayFileAndReloadsSavedAgent()
+    {
+        using var fixture = new AgentRegistryFixture(useWritableOverlay: true);
+        var controller = fixture.CreateController();
+
+        var result = controller.Upsert("business-analyst", new UpsertAgentRequest(
+            AgentId: "business-analyst",
+            Name: "Business Analyst",
+            Description: "Turns issues into requirements.",
+            Category: "analysis",
+            Runner: "agent-model",
+            Skills:
+            [
+                new AgentSkillBinding(
+                    "requirements",
+                    "Requirements",
+                    "Shape requirements.",
+                    ["requirement-design"],
+                    "test-driven-development")
+            ],
+            SupportedActions: ["requirement-design"],
+            SupportedEnvironments: ["all"],
+            SupportedPolicyTags: ["requirement-design"],
+            SystemPrompt: "Write crisp requirements."));
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var detail = Assert.IsType<AgentDetail>(ok.Value);
+
+        var sourcePath = Path.Combine(fixture.AgentsDirectory, "business-analyst", "AGENT.md");
+        var overlayPath = Path.Combine(fixture.WritableAgentsDirectory, "business-analyst", "AGENT.md");
+        Assert.False(File.Exists(sourcePath));
+        Assert.True(File.Exists(overlayPath));
+        Assert.Equal("test-driven-development", Assert.Single(detail.Skills).SkillManifestId);
+        Assert.Equal(Path.GetFullPath(overlayPath), detail.EffectiveFilePath);
+    }
+
+    [Fact]
     public void Upload_ParsesAgentMarkdownAndCreatesAgentFile()
     {
         using var fixture = new AgentRegistryFixture();
@@ -167,12 +204,14 @@ public sealed class AgentsControllerTests
 
     private sealed class AgentRegistryFixture : IDisposable
     {
-        public AgentRegistryFixture()
+        public AgentRegistryFixture(bool useWritableOverlay = false)
         {
             Root = Path.Combine(Path.GetTempPath(), $"agent_registry_{Guid.NewGuid():N}");
             AgentsDirectory = Path.Combine(Root, "agents");
+            WritableAgentsDirectory = useWritableOverlay ? Path.Combine(Root, "agent-overlays") : AgentsDirectory;
             SkillsDirectory = Path.Combine(Root, "skills");
             Directory.CreateDirectory(AgentsDirectory);
+            Directory.CreateDirectory(WritableAgentsDirectory);
             Directory.CreateDirectory(Path.Combine(SkillsDirectory, "test-driven-development"));
             File.WriteAllText(Path.Combine(SkillsDirectory, "test-driven-development", "SKILL.md"), """
                 ---
@@ -183,8 +222,11 @@ public sealed class AgentsControllerTests
                 Skill body.
                 """);
 
-            Paths = new AgentRegistryPaths(AgentsDirectory, SkillsDirectory);
-            Registry = new FileAgentRegistry(AgentsDirectory);
+            Paths = new AgentRegistryPaths(AgentsDirectory, SkillsDirectory)
+            {
+                WritableAgentsDirectory = WritableAgentsDirectory
+            };
+            Registry = new FileAgentRegistry(Paths);
             Skills = new SkillRepository(SkillsDirectory);
             Editor = new FileAgentRegistryEditor(Paths, Registry);
         }
@@ -192,6 +234,8 @@ public sealed class AgentsControllerTests
         public string Root { get; }
 
         public string AgentsDirectory { get; }
+
+        public string WritableAgentsDirectory { get; }
 
         public string SkillsDirectory { get; }
 

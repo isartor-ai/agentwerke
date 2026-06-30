@@ -7,6 +7,8 @@ public sealed record AgentRegistryPaths(
     string AgentsDirectory,
     string SkillsDirectory)
 {
+    public string WritableAgentsDirectory { get; init; } = AgentsDirectory;
+
     public static AgentRegistryPaths Resolve(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -23,6 +25,12 @@ public sealed record AgentRegistryPaths(
             agentsDirectory = Path.GetFullPath("agents");
         }
 
+        var writableAgentsDirectory = ResolveDirectory(agentOptions.WritableAgentsDirectory);
+        if (string.IsNullOrWhiteSpace(writableAgentsDirectory))
+        {
+            writableAgentsDirectory = agentsDirectory;
+        }
+
         var skillsDirectory = ResolveDirectory(skillOptions.SkillsDirectory);
         if (string.IsNullOrWhiteSpace(skillsDirectory))
         {
@@ -33,7 +41,10 @@ public sealed record AgentRegistryPaths(
             }
         }
 
-        return new AgentRegistryPaths(agentsDirectory, skillsDirectory);
+        return new AgentRegistryPaths(agentsDirectory, skillsDirectory)
+        {
+            WritableAgentsDirectory = writableAgentsDirectory
+        };
     }
 
     private static string ResolveDirectory(string? configuredDirectory)

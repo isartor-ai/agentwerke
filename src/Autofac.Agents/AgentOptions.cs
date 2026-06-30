@@ -10,4 +10,11 @@ public sealed class AgentOptions
     /// built-in agents of the same id. Defaults to empty (no file agents loaded).
     /// </summary>
     public string AgentsDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Absolute or relative path where UI/API-authored agent overlays are written.
+    /// Defaults to <see cref="AgentsDirectory"/> for backward compatibility. Set
+    /// this separately when <see cref="AgentsDirectory"/> is mounted read-only.
+    /// </summary>
+    public string WritableAgentsDirectory { get; set; } = string.Empty;
 }

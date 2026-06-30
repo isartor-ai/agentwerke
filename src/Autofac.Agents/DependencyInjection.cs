@@ -20,7 +20,7 @@ public static class DependencyInjection
     {
         var paths = AgentRegistryPaths.Resolve(configuration);
         services.AddSingleton(paths);
-        services.AddSingleton<IAgentRegistry>(new FileAgentRegistry(paths.AgentsDirectory));
+        services.AddSingleton<IAgentRegistry>(new FileAgentRegistry(paths));
         services.AddSingleton<ISkillRepository>(new SkillRepository(paths.SkillsDirectory));
         services.AddSingleton<IAgentRegistryEditor, FileAgentRegistryEditor>();
         services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
