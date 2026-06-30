@@ -12,6 +12,7 @@ import { Placeholder } from './views/Placeholder';
 import { Policies } from './views/Policies';
 import { RunBoard } from './views/RunBoard';
 import { RunDetail } from './views/RunDetail';
+import { Settings } from './views/Settings';
 import { WorkflowDesigner } from './views/WorkflowDesigner';
 
 function ProtectedRoutes({ auth }: { auth: AuthState }) {
@@ -80,7 +81,7 @@ export default function App() {
             />
             <Route
               path="/settings"
-              element={<Placeholder title="Settings" description="Tenant, access control, and platform settings." />}
+              element={<Settings auth={auth} />}
             />
             <Route path="*" element={<NotFound />} />
           </Route>

@@ -100,7 +100,7 @@ The OpenAPI document is served at `/openapi/v1.json`.
 
 ### Enabling real agents
 
-Agents run against Claude when an API key is configured. Without a key, Autofac uses a safe null client and agent steps report that no model is configured.
+Agents run against Claude when an API key is configured. Without a key, Autofac uses a safe null client and agent steps report that no model is configured. Admin users can inspect and rotate model credentials from **Settings**, or continue using appsettings, environment variables, and user-secrets.
 
 ```jsonc
 // appsettings.json, environment variables, or user-secrets
@@ -111,6 +111,9 @@ Agents run against Claude when an API key is configured. Without a key, Autofac 
   "MaxToolIterations": 10
 }
 ```
+
+Settings guidance, including override-file precedence and redaction rules, lives
+in [docs/settings.md](docs/settings.md).
 
 ## Architecture
 
@@ -165,6 +168,12 @@ Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting
 - `GET /api/auth/config`
 - `POST /api/auth/token`
 
+**Settings**
+
+- `GET /api/settings` - redacted Admin settings catalog
+- `PATCH /api/settings` - save supported non-secret values and rotate supported secrets
+- `POST /api/settings/tests/{target}` - dry-run readiness check for a settings target
+
 **Workflows and runs**
 
 - `GET /api/workflows`
@@ -202,6 +211,7 @@ Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting
 - **Plans and scenarios**
   - Architecture design: `docs/architecture-design.md`
   - Functional specification: `docs/functional-specification.md`
+  - Settings control plane: `docs/settings.md`
   - End-to-end autonomous SDLC scenario: `docs/manual-test-sdlc-e2e.md`
   - OpenSandbox manual test scenario: `docs/manual-test-opensandbox.md`
   - UI cleanup/refactor plan: `docs/ui-cleanup-refactor-plan.md`

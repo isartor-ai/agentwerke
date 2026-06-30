@@ -1,6 +1,7 @@
 using Autofac.Agents;
 using Autofac.AgentSecOps;
 using Autofac.Api.Auth;
+using Autofac.Api.Settings;
 using Autofac.Api.Services;
 using Autofac.Application.Workflows;
 using Autofac.Infrastructure;
@@ -11,11 +12,14 @@ using Autofac.Workflows;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var settingsFilePaths = builder.Configuration.AddAutofacSettingsConfiguration(builder.Environment);
+
 builder.Logging.AddAutofacLogging();
 
 builder.Services.AddControllers();
 builder.Services.AddAutofacAuth(builder.Configuration, builder.Environment);
 builder.Services.AddOpenApi("v1");
+builder.Services.AddAutofacSettings(builder.Configuration, settingsFilePaths);
 builder.Services.AddAutofacObservability(builder.Configuration);
 builder.Services.AddAutofacInfrastructure(builder.Configuration);
 builder.Services.AddAutofacStorage(builder.Configuration);
