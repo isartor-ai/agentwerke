@@ -682,3 +682,17 @@ export interface ConnectorStatus {
   enabled: boolean;
   supportedOperations: string[];
 }
+
+// Audit / decision-trace explorer (#189)
+export interface AuditEntry {
+  id: string;
+  runId: string;
+  timestamp: string;
+  actorType: string;
+  actor: string;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  outcome: string;
+  details: string | null;
+}

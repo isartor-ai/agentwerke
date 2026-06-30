@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Agents.IAgentFeedbackStore, Application.Agents.InMemoryAgentFeedbackStore>();
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
+        services.AddScoped<IAuditQuery, AuditRepository>();
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
 
         // Camunda services are only wired when the runtime is explicitly opted into
