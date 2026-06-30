@@ -1,11 +1,11 @@
 # Autofac Architecture Design
 
-Version: Draft v0.2
+Version: Draft v0.3
 Status: Working Draft
-Last reviewed: 2026-06-17
-Related Document: `docs/functional-specification.md`
+Last reviewed: 2026-06-29
+Related documents: `docs/architecture.md` (concise current overview), `docs/functional-specification.md`
 
-> **Reader's note.** Sections 1–20 describe the **target architecture** (the north star). Sections 21–24 were added after a full source review on 2026-06-15 and describe the **as-built reality**, the **gap analysis**, the **implementation roadmap**, and **future enhancements**. Where the target and the as-built state diverge, Section 21 is authoritative for "what exists today."
+> **Reader's note.** Sections 1–20 describe the **target architecture** (the north star). Sections 21–24 describe the **as-built reality**, the **gap analysis**, the **implementation roadmap**, and **future enhancements**, refreshed against the source on 2026-06-29. Where the target and the as-built state diverge, Section 21 is authoritative for "what exists today." For a short, current summary, see `docs/architecture.md`.
 
 ## 1. Purpose
 
@@ -767,7 +767,7 @@ The C4 views in this document show Autofac as a governed execution fabric sittin
 
 ## 21. Current Implementation Status (As-Built)
 
-This section reflects the codebase as of 2026-06-15. It is the authoritative description of what exists today.
+This section reflects the codebase as of 2026-06-29. It is the authoritative description of what exists today.
 
 ### 21.1 Solution Topology
 
@@ -778,9 +778,10 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 | `Autofac.Domain` | Persistence entities, agent-runtime contracts, policy decisions | Solid |
 | `Autofac.Application` | Run orchestration service, authoring service, observability + run contracts | Solid |
 | `Autofac.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary | Solid; graph-based traversal, sequence flow parsing |
-| `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Rich, but execution is simulated |
+| `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Solid; drives **real** model execution via `Autofac.Agents.Models` |
+| `Autofac.Agents.Models` | `ILanguageModelClient` (Anthropic + mock + null providers), `AnthropicRetryHandler` (resilient HTTP), `IAgentModelRunner` tool-use loop, sandboxed agent runner | Real LLM execution (#143/#149/#150/#151) |
 | `Autofac.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
-| `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; placeholder workload; target control plane selected in ADR-003 |
+| `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; runs the agent-runner workload; OpenSandbox control plane selected in ADR-003 |
 | `Autofac.Integrations` | `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF comments), Slack, Teams connectors; `IConnectorRegistry`; per-connector policy gate, audit, metrics, and OTel spans | Solid (Phase E) |
 | `Autofac.Infrastructure` | EF Core + PostgreSQL (Npgsql), repositories, runtime store, 8 migrations | Solid |
 | `Autofac.Storage` | Artifact storage abstraction; local filesystem + S3 (`AWSSDK.S3`) drivers | Phase E: S3 added |
@@ -795,21 +796,23 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 - **Workflow execution today** runs via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`. This is now the default runtime foundation for MVP and pilots, constrained to curated Autofac SDLC templates rather than arbitrary BPMN execution.
 - **Policy enforcement** at the Tool Gateway (`ToolGateway`): allow/deny lists, permission-level checks, input validation, and `PolicyEvaluationService` evaluation before every tool call — the single control point envisioned in Decision 3.
 - **Agent runtime assembly**: skill resolution from markdown manifests (`SkillRepository`/`MarkdownSkillLoader`), prompt assembly with full prompt snapshots, hook execution (`HookGateway` with `before/after_agent_run`), MCP tool sessions (`McpToolSessionFactory`), and a complete `AgentRuntimeSnapshot` persisted per step.
-- **GitHub delivery**: real branch creation, marker-file commit, and pull-request creation via `GitHubConnector`.
+- **Real agent execution**: `AgentOrchestrator` drives a governed model tool-use loop via `IAgentModelRunner` — the assembled prompt + resolved skills + allowed tools are sent to the configured `ILanguageModelClient` (Anthropic SDK behind `AnthropicRetryHandler`, with a deterministic `MockLanguageModelClient` for tokenless demos/CI and a `NullLanguageModelClient` fallback), and **every** tool call still routes through `ToolGateway` so policy stays authoritative. Provider is selected by `Anthropic:Provider` (`mock`/`anthropic`/`auto`); token usage, tool invocations, and artifacts are captured into `AgentRuntimeSnapshot`. The Docker/OpenSandbox path runs a real **agent runner** (`OpenSandboxedAgentRunner` / `SandboxedAgentRuntimeExecutor`), not a placeholder workload. Per-task prompts (#149) and seeded run-context inputs (#142) feed the prompt; agent output flows into the PR (#150).
+- **GitHub delivery**: real branch creation, commit, and pull-request creation via `GitHubConnector`; the PR body now includes the agent's output/artifacts (#150), not just a metadata marker.
 - **Approvals + audit**: approval requests created at user-task gates, decided through `ApprovalsController`, with run resume on approval and `AuditRecord` written for governance.
 - **Inbound triggers**: GitHub/Jira webhook ingestion with HMAC signature validation and tag-based workflow routing (`TagBasedTriggerRouter`).
 - **Observability**: workflow/step/approval/webhook metrics on `/metrics` (Prometheus), structured JSON logs with scoped `RunId`/`WorkflowId`/`Operation`, correlation-ID propagation, and **distributed tracing** via OTel `WithTracing` + OTLP to Jaeger (`Autofac.Workflows` `ActivitySource`; spans on engine start/resume/recover and every connector call).
 - **Connectors**: `IConnector`/`ConnectorBase` policy-gated abstraction; GitHub, Jira (Atlassian Document Format), Slack, Teams connectors; data-driven `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML-backed) and `InMemoryPolicyRuleStore` (tests); S3 artifact driver.
-- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web + Jaeger; **Helm chart** (`deploy/helm/autofac`) deploys api (HPA 2→8), worker (HPA 2→6), web, Postgres StatefulSet, RBAC for sandbox namespace; Grafana dashboard at `deploy/grafana/dashboards/workflow-overview.json`; Prometheus alert rules at `deploy/prometheus/alerts.yml`.
+- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web + Jaeger; **Helm chart** (`deploy/helm/autofac`) deploys api (HPA 2→8), worker (HPA 2→6), web, Postgres StatefulSet, RBAC for sandbox namespace; Grafana dashboard at `deploy/grafana/dashboards/workflow-overview.json`; Prometheus alert rules at `deploy/prometheus/alerts.yml`; a **production single-host profile** (`docker/docker-compose.prod.yml` — non-dev auth, env secrets, resource limits) and deploy docs (`deploy/README.md`) added in #160.
+- **OSS readiness + supply chain**: Apache-2.0 `LICENSE` with an open-core boundary doc; community health files (SECURITY, CODE_OF_CONDUCT, CHANGELOG, issue templates); a one-command tokenless quickstart; a stable docs set. CI gates build/test/lint on every PR plus CodeQL and dependency review (#168), and a tag-driven release pipeline publishes container images to GHCR + a GitHub Release (#159).
 
 ### 21.3 Honest Limitations
 
 These are the load-bearing gaps between the running system and the target architecture:
 
-1. **Agent execution is simulated.** `AgentOrchestrator.BuildSimulatedOutput` produces deterministic text; there is **no LLM/model client** anywhere in the solution. The Docker sandbox runs a fixed shell entrypoint that writes `result.json` — it does not invoke a model.
+1. ~~**Agent execution is simulated.**~~ **Resolved.** Agents run a real model tool-use loop (`IAgentModelRunner` → `ILanguageModelClient`): the Anthropic SDK behind `AnthropicRetryHandler` (jittered backoff, `Retry-After`), with a deterministic tokenless `MockLanguageModelClient` for demos/CI and a `NullLanguageModelClient` fallback. Every tool call is routed through `ToolGateway`, and the Docker/OpenSandbox path runs a real agent runner. Remaining hardening: broader provider coverage (OpenAI/Azure are drop-in via the interface) and per-run cost/budget governance (see Section 24).
 2. **Runtime strategy has been reset to Autofac-default.** The current implementation executes through `WorkflowInstanceEngine`, backed by Postgres persistence, run context, outbox dispatch, and recovery. This is now the default path for MVP and pilots, not a temporary gap. Camunda work is optional adapter groundwork only.
 3. ~~**No asynchronous backbone.**~~ **Resolved (Phase C).** `WorkflowRunOrchestrationService.StartRunAsync` now creates a `pending` run and enqueues an outbox entry; the API returns 202 immediately. `RunDispatchWorker` (BackgroundService) polls the `run_outbox` table every 2 s, executes via `WorkflowRunExecutor`, and handles crash recovery on startup.
-4. ~~**Authentication/RBAC is stubbed.**~~ **Resolved (Phase B baseline).** `AuthController` exposes auth configuration and dev-token issuance, JWT/OIDC bearer validation is wired, product controllers enforce Viewer/Operator/Approver/Admin policies, and approval decisions record the authenticated principal. Secret-provider integration remains future work.
+4. ~~**Authentication/RBAC is stubbed.**~~ **Resolved.** JWT/OIDC bearer validation (enterprise SSO via configurable `Authority`), Viewer/Operator/Approver/Admin enforcement on product controllers, a role-based administration model (#33/#120), and approval decisions that record the authenticated principal. Dev-token/dev-identity modes are explicit and disabled by default in the production profile (#160). Secret-provider (vault) integration remains future work — see limitation #10.
 5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
 6. ~~**One outbound connector.**~~ **Resolved (Phase E).** `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF), Slack, Teams connectors registered via `IConnectorRegistry`; email/CI-CD remain future work.
 7. ~~**No distributed tracing.**~~ **Resolved (Phase F).** `WithTracing` + OTLP exporter wired; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application`; engine and connectors emit spans to Jaeger.
@@ -823,9 +826,9 @@ These are the load-bearing gaps between the running system and the target archit
 | --- | --- | --- | --- |
 | BPMN modeling (bpmn-js) | Implemented (Phase 1–3 complete) | — | Drag-and-drop canvas; Autofac moddle extension; properties panel; palette; markers; validation overlays |
 | BPMN execution engine | Bounded Autofac runtime backed by Postgres/outbox | Medium | Keep scope capped to SDLC templates; do not expand into arbitrary BPMN |
-| Agent task execution (LLM) | Simulated only | **Critical** | No model client; blocks the core value prop |
+| Agent task execution (LLM) | Real model client (Anthropic) + tokenless mock; governed tool-use loop | — | **Resolved** (#143/#149/#150/#151); OpenAI/Azure drop-in via `ILanguageModelClient` |
 | Tool Gateway + policy | Implemented | — | Strong; single control point in place |
-| Sandbox isolation | Container lifecycle real; workload placeholder | High | network=none, mem/cpu limits applied; ADR-003 selects OpenSandbox control plane with Kata-class production runtime |
+| Sandbox isolation | Real container lifecycle + agent-runner workload | Medium | network=none, mem/cpu limits; OpenSandbox runner wired (ADR-003); Kata-class production runtime + K8s provider (#36) remain |
 | Human approvals | Implemented | — | Create/decide/resume + audit |
 | Policy engine | Hardcoded MVP rules | Medium | Needs policy-as-data + store |
 | Async coordination / outbox | Postgres outbox + BackgroundService worker | — | **Resolved (Phase C)**: 202-async API; crash recovery; timer scheduling |
@@ -840,22 +843,22 @@ These are the load-bearing gaps between the running system and the target archit
 | Deployment | docker-compose + Helm chart (api/worker/web/postgres/RBAC/HPA); Grafana + Prometheus alerts | — | **Resolved (Phase F)** |
 | Timers / true parallelism | Real timer scheduling (Phase C); sequential branches (Phase D standalone) | Low | Parallel concurrency available via Phase C `Task.WhenAll` |
 
-**Critical path:** real LLM execution remains the main pilot blocker after the Phase B auth baseline. The runtime should be hardened only within the bounded SDLC-template scope; Camunda migration is not on the default critical path.
+**Critical path:** the former blocker — real LLM execution — is resolved (Phase A complete). Remaining work is incremental hardening: secret/vault management, the K8s sandbox provider (#36), and per-run cost/budget governance. The runtime should be hardened only within the bounded SDLC-template scope; Camunda migration is not on the default critical path.
 
 ## 23. Implementation Roadmap
 
 A phased plan ordered by dependency and risk. Each phase is independently shippable and leaves the system in a working state.
 
-### Phase A — Make agents real (Critical, ~highest value)
+### Phase A — Make agents real (Critical, ~highest value) ✓ **Complete**
 
 **Goal:** replace simulation with governed LLM execution.
 
-1. Add an `Autofac.Agents.Models` abstraction: `ILanguageModelClient` with a provider-agnostic request/response (messages, tools, max-tokens, stop). Implement a first provider (Anthropic Claude) behind it; keep the interface so OpenAI/Azure are drop-in.
-2. Wire the client into `AgentOrchestrator`: feed the assembled `PromptSnapshot` + resolved skills + allowed tools into a tool-use loop, routing every tool call through the existing `ToolGateway` (policy stays authoritative).
-3. Run the loop behind the sandbox interface, preferably through an OpenSandbox-backed provider once the sandbox-control-plane spike is complete. Replace the placeholder workload with an agent runner image and capture token usage, tool invocations, and artifacts into `AgentRuntimeSnapshot`. Docker may remain the interim local fallback.
-4. Add model-call metrics (latency, tokens, cost) and redaction of secrets from prompts/outputs.
+1. ✓ `Autofac.Agents.Models` abstraction: `ILanguageModelClient` with a provider-agnostic request/response (messages, tools, max-tokens, stop). First provider is Anthropic Claude behind `AnthropicRetryHandler`; the interface keeps OpenAI/Azure drop-in. A tokenless `MockLanguageModelClient` (#151) and a `NullLanguageModelClient` fallback round out provider selection (`Anthropic:Provider` = `mock`/`anthropic`/`auto`).
+2. ✓ Wired into `AgentOrchestrator` via `IAgentModelRunner`: the assembled prompt + resolved skills + allowed tools drive a tool-use loop, with every tool call routed through `ToolGateway` (policy stays authoritative).
+3. ✓ The loop runs behind the sandbox interface through `OpenSandboxedAgentRunner`/`SandboxedAgentRuntimeExecutor` — a real agent runner replaces the placeholder workload, capturing token usage, tool invocations, and artifacts into `AgentRuntimeSnapshot`. Docker remains the interim local fallback.
+4. ~ Model-call usage (tokens) is captured per run; latency/cost metrics and full prompt/output secret-redaction remain incremental hardening (see Section 24, cost/budget governance).
 
-*Exit:* a service task drives a real model that reads context, calls policy-gated tools, and produces non-deterministic output with full snapshot capture.
+*Exit met:* a service task drives a real model that reads context, calls policy-gated tools, and produces non-deterministic output with full snapshot capture — proven by the BYO-key end-to-end run (`docs/manual-test-sdlc-e2e.md`) and the gated `RealClaudeIntegrationTests`.
 
 ### Phase B — Authentication, authorization, and secrets (Critical)
 
