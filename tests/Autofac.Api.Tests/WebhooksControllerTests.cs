@@ -397,12 +397,66 @@ public sealed class WebhooksControllerTests
         Assert.Equal("sha789", orchestration.ResumeExternalCommand.CorrelationKey);
     }
 
+    [Fact]
+    public async Task SlackInteractions_ValidSignature_AppliesApprovalDecision()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        const string secret = "slack-signing-secret";
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret);
+
+        var json = "{\"actions\":[{\"action_id\":\"approve\",\"value\":\"apr_1:run_42\"}],\"user\":{\"username\":\"alice\"}}";
+        SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
+
+        var result = await controller.SlackInteractions(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeCommand);
+        Assert.Equal("run_42", orchestration.ResumeCommand!.RunId);
+        Assert.Equal("apr_1", orchestration.ResumeCommand.ApprovalId);
+        Assert.Equal("approve", orchestration.ResumeCommand.Decision);
+        Assert.Contains("alice", orchestration.ResumeCommand.DecidedBy!);
+    }
+
+    [Fact]
+    public async Task SlackInteractions_BadSignature_ReturnsUnauthorized()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: "secret");
+
+        var bytes = Encoding.UTF8.GetBytes("payload=%7B%7D");
+        var request = controller.ControllerContext.HttpContext.Request;
+        request.Body = new MemoryStream(bytes);
+        request.Headers["X-Slack-Signature"] = "v0=deadbeef";
+        request.Headers["X-Slack-Request-Timestamp"] = "1700000000";
+
+        var result = await controller.SlackInteractions(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeCommand);
+    }
+
+    private static void SetSignedBody(WebhooksController controller, string rawBody, string secret)
+    {
+        var bytes = Encoding.UTF8.GetBytes(rawBody);
+        const string ts = "1700000000";
+        var basestring = Encoding.UTF8.GetBytes($"v0:{ts}:").Concat(bytes).ToArray();
+        var hash = System.Security.Cryptography.HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), basestring);
+        var request = controller.ControllerContext.HttpContext.Request;
+        request.Body = new MemoryStream(bytes);
+        request.ContentLength = bytes.Length;
+        request.Headers["X-Slack-Signature"] = "v0=" + Convert.ToHexString(hash).ToLowerInvariant();
+        request.Headers["X-Slack-Request-Timestamp"] = ts;
+    }
+
     private static WebhooksController CreateController(
         IWorkflowRunOrchestrationService orchestration,
         IExternalWorkflowEventRepository eventRepository,
         string eventHeader,
         ITriggerRouter? triggerRouter = null,
-        IWaitingExternalCorrelationRepository? waitingExternalCorrelationRepository = null)
+        IWaitingExternalCorrelationRepository? waitingExternalCorrelationRepository = null,
+        string? slackSigningSecret = null)
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-GitHub-Event"] = eventHeader;
@@ -419,6 +473,10 @@ public sealed class WebhooksControllerTests
                     Enabled = true,
                     WebhookSecret = string.Empty,
                     TriggerActions = ["opened"],
+                },
+                Slack = new SlackOptions
+                {
+                    SigningSecret = slackSigningSecret ?? string.Empty,
                 },
             }),
             NullLogger<WebhooksController>.Instance)
@@ -440,14 +498,19 @@ public sealed class WebhooksControllerTests
 
         public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
 
+        public ResumeRunCommand? ResumeCommand { get; private set; }
+
         public Task<StartRunResult> StartRunAsync(StartRunCommand command, CancellationToken cancellationToken = default)
         {
             StartCommand = command;
             return Task.FromResult(new StartRunResult("run_1", command.WorkflowId, "pending", null));
         }
 
-        public Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default)
+        {
+            ResumeCommand = command;
+            return Task.FromResult(new ResumeRunResult(command.RunId, "running", null));
+        }
 
         public Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default)
         {

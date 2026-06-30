@@ -38,7 +38,13 @@ public sealed class ConnectorApprovalNotifier : IApprovalNotifier
         var command = BuildCommand(notification);
 
         if (_options.Slack.Enabled)
-            await SendAsync("slack", () => _slack.SendNotificationAsync(command, cancellationToken));
+        {
+            // Attach approve/reject buttons when interactive approvals are enabled (#172).
+            var slackCommand = _options.Notifications.Interactive
+                ? command with { ApprovalId = notification.ApprovalId, RunId = notification.RunId }
+                : command;
+            await SendAsync("slack", () => _slack.SendNotificationAsync(slackCommand, cancellationToken));
+        }
 
         if (_options.Teams.Enabled)
             await SendAsync("teams", () => _teams.SendNotificationAsync(command, cancellationToken));

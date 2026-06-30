@@ -7,7 +7,11 @@ using Microsoft.Extensions.Options;
 
 namespace Autofac.Integrations;
 
-public sealed record SendNotificationCommand(string Title, string Message);
+public sealed record SendNotificationCommand(
+    string Title,
+    string Message,
+    string? ApprovalId = null,
+    string? RunId = null);
 
 public sealed record NotificationResult(string Summary);
 
@@ -53,19 +57,42 @@ public sealed class SlackConnector : ConnectorBase, ISlackConnector
         CancellationToken cancellationToken = default)
     {
         var webhookUrl = await ResolveWebhookUrlAsync(cancellationToken);
+        var payload = command.ApprovalId is { Length: > 0 } approvalId
+            ? BuildInteractivePayload(command, approvalId)
+            : new { text = $"*{command.Title}*\n{command.Message}" };
+
         using var response = await _httpClient.PostAsync(
             webhookUrl,
-            new StringContent(
-                JsonSerializer.Serialize(new
-                {
-                    text = $"*{command.Title}*\n{command.Message}"
-                }),
-                Encoding.UTF8,
-                "application/json"),
+            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
             cancellationToken);
 
         response.EnsureSuccessStatusCode();
         return new NotificationResult($"Slack notification sent: {command.Title}");
+    }
+
+    // Interactive approval message (#172): Approve/Reject buttons whose value carries
+    // "{approvalId}:{runId}" so the interactions endpoint can decide without a lookup.
+    private static object BuildInteractivePayload(SendNotificationCommand command, string approvalId)
+    {
+        var value = $"{approvalId}:{command.RunId}";
+        var body = $"*{command.Title}*\n{command.Message}";
+        return new
+        {
+            text = body,
+            blocks = new object[]
+            {
+                new { type = "section", text = new { type = "mrkdwn", text = body } },
+                new
+                {
+                    type = "actions",
+                    elements = new object[]
+                    {
+                        new { type = "button", action_id = "approve", style = "primary", text = new { type = "plain_text", text = "Approve" }, value },
+                        new { type = "button", action_id = "reject", style = "danger", text = new { type = "plain_text", text = "Reject" }, value },
+                    },
+                },
+            },
+        };
     }
 
     protected override async Task<ConnectorExecutionResult> ExecuteAllowedAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
