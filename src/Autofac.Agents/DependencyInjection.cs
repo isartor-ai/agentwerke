@@ -34,6 +34,9 @@ public static class DependencyInjection
         services.Configure<Knowledge.KnowledgeOptions>(configuration.GetSection(Knowledge.KnowledgeOptions.Section));
         services.AddSingleton<Knowledge.IKnowledgeRetriever, Knowledge.LexicalKnowledgeRetriever>();
         services.AddScoped<IAgentTool, KnowledgeSearchTool>();
+        services.AddSingleton<Coordination.IAgentCoordinationChannel, Coordination.InMemoryAgentCoordinationChannel>();
+        services.AddScoped<IAgentTool, AgentPostMessageTool>();
+        services.AddScoped<IAgentTool, AgentReadMessagesTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();
         services.AddScoped<IAgentHookHandler, TemplateHookHandler>();
         services.AddScoped<IAgentHookGateway, HookGateway>();
