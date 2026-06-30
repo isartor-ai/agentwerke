@@ -66,7 +66,13 @@ public sealed class SettingsCatalog
                 Field("Jwt:DevIdentityRoles", "Development roles", "Roles granted to the local development identity.", SettingsValueKind.StringArray, new[] { "Admin" }),
                 Field("Jwt:RoleClaimTypes", "Role claim types", "Claim types inspected for role values.", SettingsValueKind.StringArray, new[] { "role", "roles", "groups" }),
                 Field("Jwt:NameClaimTypes", "Name claim types", "Claim types inspected for display names.", SettingsValueKind.StringArray, new[] { "name", "preferred_username", "email" }),
-                Field("Jwt:RoleMappings", "Role mappings", "External group-to-role mappings. Edit as deployment JSON for now.", SettingsValueKind.StringMap, null, isEditable: false)
+                Field("Jwt:RoleMappings", "Role mappings", "External group-to-role mappings (also applied to LDAP groups). Edit as deployment JSON for now.", SettingsValueKind.StringMap, null, isEditable: false),
+                Field("Ldap:Enabled", "LDAP enabled", "Enable LDAP/AD directory-group integration.", SettingsValueKind.Boolean, false),
+                Field("Ldap:Host", "LDAP host", "Directory server hostname.", SettingsValueKind.String, string.Empty),
+                Field("Ldap:BaseDn", "LDAP base DN", "Search base for user lookups (e.g. ou=Users,dc=corp,dc=example).", SettingsValueKind.String, string.Empty),
+                Field("Ldap:BindDn", "LDAP bind DN", "Service-account DN used to bind before searching.", SettingsValueKind.String, string.Empty),
+                Secret("Ldap:BindPassword", "LDAP bind password", "Service-account password for the bind DN."),
+                Field("Ldap:UserSearchFilter", "LDAP user filter", "User search filter; {0} is the username (e.g. (sAMAccountName={0})).", SettingsValueKind.String, "(sAMAccountName={0})")
             ]),
 
         new SettingsCategoryDefinition(
