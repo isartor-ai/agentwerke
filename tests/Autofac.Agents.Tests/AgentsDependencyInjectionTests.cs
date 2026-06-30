@@ -1,4 +1,5 @@
 using Autofac.Agents;
+using Autofac.Agents.Knowledge;
 using Autofac.Agents.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -72,5 +73,19 @@ public sealed class AgentsDependencyInjectionTests
         var client = scope.ServiceProvider.GetRequiredService<ILanguageModelClient>();
 
         Assert.IsType<AnthropicLanguageModelClient>(client);
+    }
+
+    [Fact]
+    public void KnowledgeRetriever_ResolvesConfiguredCorpus()
+    {
+        using var provider = (ServiceProvider)Build(
+            ("Knowledge:Documents:0:Source", "quickstart.md"),
+            ("Knowledge:Documents:0:Text", "Quickstart runs with Docker Compose."));
+
+        var retriever = provider.GetRequiredService<IKnowledgeRetriever>();
+        var results = retriever.Search("docker quickstart", topK: 1);
+
+        var snippet = Assert.Single(results);
+        Assert.Equal("quickstart.md", snippet.Source);
     }
 }

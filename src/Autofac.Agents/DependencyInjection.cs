@@ -32,7 +32,9 @@ public static class DependencyInjection
         services.AddScoped<IAgentTool, CicdTriggerDeployTool>();
         services.AddScoped<IAgentTool, SandboxExecutionTool>();
         services.Configure<Knowledge.KnowledgeOptions>(configuration.GetSection(Knowledge.KnowledgeOptions.Section));
-        services.AddSingleton<Knowledge.IKnowledgeRetriever, Knowledge.LexicalKnowledgeRetriever>();
+        services.AddSingleton<Knowledge.IKnowledgeRetriever>(sp =>
+            new Knowledge.LexicalKnowledgeRetriever(
+                sp.GetRequiredService<IOptions<Knowledge.KnowledgeOptions>>()));
         services.AddScoped<IAgentTool, KnowledgeSearchTool>();
         services.AddSingleton<Coordination.IAgentCoordinationChannel, Coordination.InMemoryAgentCoordinationChannel>();
         services.AddScoped<IAgentTool, AgentPostMessageTool>();
