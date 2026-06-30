@@ -41,9 +41,10 @@ public static class DependencyInjection
         services.AddAutofacSandboxes(configuration);
 
         // Language model client selection (see LanguageModelOptions.Provider):
-        //   mock      → deterministic, zero-cost client for demos/CI (#151)
-        //   anthropic → real client (also the default when an API key is present)
-        //   else      → null client (agent steps report "no model configured")
+        //   mock              → deterministic, zero-cost client for demos/CI (#151)
+        //   anthropic         → real Anthropic client (default when an API key is present)
+        //   openai | litellm  → any OpenAI Chat Completions-compatible endpoint (#174)
+        //   else              → null client (agent steps report "no model configured")
         services.Configure<LanguageModelOptions>(configuration.GetSection(LanguageModelOptions.Section));
         var apiKey = configuration[$"{LanguageModelOptions.Section}:ApiKey"];
         var provider = (configuration[$"{LanguageModelOptions.Section}:Provider"] ?? string.Empty)
@@ -54,6 +55,20 @@ public static class DependencyInjection
         if (provider == "mock")
         {
             services.AddScoped<ILanguageModelClient, MockLanguageModelClient>();
+        }
+        else if (provider is "openai" or "litellm")
+        {
+            // Any OpenAI-compatible endpoint (OpenAI, Azure OpenAI, or a LiteLLM proxy).
+            // Same pooled/timeout-bounded HttpClient + transient-retry pipeline as Anthropic.
+            services.AddTransient<AnthropicRetryHandler>();
+            services.AddHttpClient<OpenAiCompatibleLanguageModelClient>((sp, client) =>
+                {
+                    var options = sp.GetRequiredService<IOptions<LanguageModelOptions>>().Value;
+                    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+                })
+                .AddHttpMessageHandler<AnthropicRetryHandler>();
+            services.AddScoped<ILanguageModelClient>(sp =>
+                sp.GetRequiredService<OpenAiCompatibleLanguageModelClient>());
         }
         else if (useAnthropic)
         {
