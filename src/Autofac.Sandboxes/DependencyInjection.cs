@@ -27,6 +27,8 @@ public static class DependencyInjection
             Timeout = Timeout.InfiniteTimeSpan
         });
 
+        services.AddSingleton<IKubernetesClientProvider, DefaultKubernetesClientProvider>();
+
         services.AddScoped<IOpenSandboxClient, OpenSandboxApiClient>();
         services.AddScoped<OpenSandboxRequestMapper>();
         services.AddScoped<ISandboxProviderExecutor, DockerSandboxExecutor>();
