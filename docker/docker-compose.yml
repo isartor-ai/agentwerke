@@ -75,6 +75,7 @@ services:
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: /app/skills
       Agents__Registry__AgentsDirectory: /app/agents
+      Agents__Registry__WritableAgentsDirectory: /app/storage/agents
       Sandboxes__Docker__Enabled: "false"
       Sandboxes__Docker__DockerEndpoint: "unix:///var/run/docker.sock"
       Tracing__OtlpEndpoint: "http://jaeger:4317"

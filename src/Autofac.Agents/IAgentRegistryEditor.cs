@@ -45,7 +45,7 @@ public sealed class FileAgentRegistryEditor : IAgentRegistryEditor
             throw new InvalidOperationException("Agent id is required.");
         }
 
-        var destinationPath = GetAgentFilePath(profile.AgentId);
+        var destinationPath = GetWritableAgentFilePath(profile.AgentId);
         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
 
         var rawMarkdown = AgentMarkdownSerializer.Serialize(profile);
@@ -74,7 +74,7 @@ public sealed class FileAgentRegistryEditor : IAgentRegistryEditor
             throw new InvalidOperationException("Uploaded agent file must declare an id in frontmatter or use a named file.");
         }
 
-        var destinationPath = GetAgentFilePath(parsed.AgentId);
+        var destinationPath = GetWritableAgentFilePath(parsed.AgentId);
         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
         File.WriteAllText(destinationPath, content.TrimEnd() + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
@@ -84,7 +84,7 @@ public sealed class FileAgentRegistryEditor : IAgentRegistryEditor
 
     private ManagedAgentDocument ToDocument(AgentProfile profile)
     {
-        var effectiveFilePath = GetAgentFilePath(profile.AgentId);
+        var effectiveFilePath = GetWritableAgentFilePath(profile.AgentId);
         if (File.Exists(effectiveFilePath))
         {
             return new ManagedAgentDocument(
@@ -94,6 +94,17 @@ public sealed class FileAgentRegistryEditor : IAgentRegistryEditor
                 effectiveFilePath);
         }
 
+        var sourceFilePath = GetConfiguredAgentFilePath(profile.AgentId);
+        if (!string.Equals(sourceFilePath, effectiveFilePath, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(sourceFilePath))
+        {
+            return new ManagedAgentDocument(
+                profile,
+                File.ReadAllText(sourceFilePath, Encoding.UTF8),
+                sourceFilePath,
+                sourceFilePath);
+        }
+
         return new ManagedAgentDocument(
             profile,
             AgentMarkdownSerializer.Serialize(profile),
@@ -101,7 +112,10 @@ public sealed class FileAgentRegistryEditor : IAgentRegistryEditor
             null);
     }
 
-    private string GetAgentFilePath(string agentId) =>
+    private string GetWritableAgentFilePath(string agentId) =>
+        Path.Combine(_paths.WritableAgentsDirectory, NormalizeAgentId(agentId), "AGENT.md");
+
+    private string GetConfiguredAgentFilePath(string agentId) =>
         Path.Combine(_paths.AgentsDirectory, NormalizeAgentId(agentId), "AGENT.md");
 
     private static string DeriveDirectoryId(string fileName)

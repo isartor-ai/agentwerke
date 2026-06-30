@@ -29,6 +29,11 @@ public sealed class FileAgentRegistry : IAgentRegistry
     {
     }
 
+    public FileAgentRegistry(AgentRegistryPaths paths)
+        : this(() => LoadFromDirectories(paths))
+    {
+    }
+
     private FileAgentRegistry(Func<IReadOnlyList<AgentProfile>> fileProfileLoader)
     {
         _fileProfileLoader = fileProfileLoader;
@@ -57,5 +62,23 @@ public sealed class FileAgentRegistry : IAgentRegistry
         }
 
         return byId;
+    }
+
+    private static IReadOnlyList<AgentProfile> LoadFromDirectories(AgentRegistryPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        var profiles = new List<AgentProfile>();
+        var directories = new[] { paths.AgentsDirectory, paths.WritableAgentsDirectory }
+            .Where(static directory => !string.IsNullOrWhiteSpace(directory))
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var directory in directories)
+        {
+            profiles.AddRange(MarkdownAgentLoader.LoadFromDirectory(directory));
+        }
+
+        return profiles;
     }
 }

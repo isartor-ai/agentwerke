@@ -5,6 +5,13 @@ configured directories (`Agents:Registry:AgentsDirectory` and
 `Agents:Skills:SkillsDirectory`). The defaults ship under `agents/` and
 `.github/skills/`.
 
+When the bundled agents directory is mounted read-only, set
+`Agents:Registry:WritableAgentsDirectory` to a writable overlay directory.
+Autofac loads `AgentsDirectory` first and then `WritableAgentsDirectory`, so
+admin UI saves can customize or add agents without mutating the shipped files.
+If `WritableAgentsDirectory` is omitted, saves use `AgentsDirectory` for
+backward compatibility.
+
 ## Agents (`agents/<id>/AGENT.md`)
 
 An agent profile declares what an agent is allowed to do; the Markdown body is

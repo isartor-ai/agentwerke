@@ -65,6 +65,7 @@ services:
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: /app/skills
       Agents__Registry__AgentsDirectory: /app/agents
+      Agents__Registry__WritableAgentsDirectory: /app/storage/agents
       # Tokenless: deterministic mock model — no API key required.
       Anthropic__Provider: "mock"
       # No external integrations needed for the quickstart.
@@ -77,6 +78,7 @@ services:
       Jwt__Audience: "autofac-dev"
       Jwt__DevTokensEnabled: "true"
     volumes:
+      - api_storage:/app/storage
       - ../.github/skills:/app/skills:ro
       - ../agents:/app/agents:ro
     depends_on:
@@ -100,3 +102,6 @@ services:
     ports: ["3002:80"]
     depends_on:
       api: { condition: service_healthy }
+
+volumes:
+  api_storage:
