@@ -52,6 +52,7 @@ public static class DependencyInjection
         services.AddScoped<IWaitingExternalCorrelationRepository, WaitingExternalCorrelationRepository>();
         services.AddScoped<IApprovalRepository, ApprovalRepository>();
         services.AddScoped<IWorkflowRunner, WorkflowRunnerAdapter>();
+        services.AddSingleton<Application.Agents.IAgentFeedbackStore, Application.Agents.InMemoryAgentFeedbackStore>();
         services.AddScoped<IWorkflowRunOrchestrationService, WorkflowRunOrchestrationService>();
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();

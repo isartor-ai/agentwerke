@@ -1,3 +1,4 @@
+using Autofac.Application.Agents;
 using Autofac.Application.Observability;
 using Autofac.Domain.Persistence;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     private readonly ICorrelationContext _correlationContext;
     private readonly IWorkflowMetrics _metrics;
     private readonly ILogger<WorkflowRunOrchestrationService> _logger;
+    private readonly IAgentFeedbackStore? _feedbackStore;
 
     public WorkflowRunOrchestrationService(
         IWorkflowDefinitionRepository definitionRepository,
@@ -29,7 +31,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         IRunOutbox outbox,
         ICorrelationContext correlationContext,
         IWorkflowMetrics metrics,
-        ILogger<WorkflowRunOrchestrationService> logger)
+        ILogger<WorkflowRunOrchestrationService> logger,
+        IAgentFeedbackStore? feedbackStore = null)
     {
         _definitionRepository = definitionRepository;
         _runRepository = runRepository;
@@ -40,6 +43,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         _correlationContext = correlationContext;
         _metrics = metrics;
         _logger = logger;
+        _feedbackStore = feedbackStore;
     }
 
     public async Task<StartRunResult> StartRunAsync(
@@ -154,6 +158,15 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             command.RunId, command.ApprovalId, command.Decision, decidedBy, correlationId);
 
         _metrics.ApprovalDecided(command.Decision, approval.RiskLevel ?? "low");
+
+        // Capture the human decision as feedback about the agent that produced the work (#177).
+        _feedbackStore?.Record(new AgentFeedback(
+            AgentName: approval.AgentName,
+            RunId: command.RunId,
+            Kind: "approval",
+            Signal: command.Decision,
+            Comment: command.Comment,
+            RecordedAt: DateTimeOffset.UtcNow.ToString("o")));
 
         await WriteAuditAsync(
             runId: command.RunId,
