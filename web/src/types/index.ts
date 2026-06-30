@@ -550,6 +550,75 @@ export interface AuthState {
   user?: AuthUser;
 }
 
+// ── Policy lifecycle + simulation (#34/#170) ──────────────────────────────
+export interface PolicyRulePredicate {
+  field: string;
+  match: string;
+  values: string[];
+}
+
+export interface PolicyRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  decisionKind: string;
+  rationale: string;
+  riskScore: number;
+  riskLevel: string;
+  riskFactors: string[];
+  constraints: string[];
+  predicates: PolicyRulePredicate[];
+}
+
+export interface PolicyRuleSet {
+  version: string;
+  updatedAt: string;
+  rules: PolicyRule[];
+}
+
+export interface PolicyDecisionView {
+  kind: string;
+  policyId: string;
+  policyName: string;
+  rationale: string;
+  riskScore: number;
+  riskLevel: string;
+  riskFactors: string[];
+  decidedAt: string;
+  constraints: string[];
+}
+
+export interface PolicySimulationOutcome {
+  scenarioName: string;
+  current: PolicyDecisionView;
+  proposed: PolicyDecisionView;
+  changed: boolean;
+  changes: string[];
+}
+
+export interface PolicySimulationReport {
+  scenarioCount: number;
+  changedCount: number;
+  outcomes: PolicySimulationOutcome[];
+}
+
+export interface PolicySimulationScenarioInput {
+  name?: string;
+  agentName?: string;
+  action: string;
+  environment?: string;
+  purposeType?: string;
+  policyTag?: string;
+  requiresEvidence?: string[];
+  attempt?: number;
+}
+
+export interface PolicySimulationRequestInput {
+  proposedRules?: PolicyRuleSet | null;
+  scenarios: PolicySimulationScenarioInput[];
+}
+
 export type SettingsFieldValue = string | number | boolean | string[] | Record<string, string[]> | null;
 
 export interface SettingsSecretStatus {
