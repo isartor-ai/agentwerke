@@ -8,6 +8,17 @@ public sealed class IntegrationOptions
     public GitHubOptions GitHub { get; set; } = new();
     public SlackOptions Slack { get; set; } = new();
     public TeamsOptions Teams { get; set; } = new();
+    public NotificationOptions Notifications { get; set; } = new();
+}
+
+public sealed class NotificationOptions
+{
+    /// <summary>
+    /// Send a Slack/Teams notification when a run enters a human-approval gate.
+    /// Enabled by default; per-channel delivery still requires that channel's
+    /// connector to be enabled and configured.
+    /// </summary>
+    public bool OnApprovalRequested { get; set; } = true;
 }
 
 public sealed class JiraOptions
