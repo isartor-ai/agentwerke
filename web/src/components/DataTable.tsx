@@ -12,6 +12,7 @@ interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  rowAriaLabel?: (row: T) => string;
   className?: string;
 }
 
@@ -21,6 +22,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   onRowClick,
+  rowAriaLabel,
   className,
 }: DataTableProps<T>) {
   const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, row: T) => {
@@ -53,7 +55,8 @@ export function DataTable<T>({
             return (
               <tr
                 key={key}
-                tabIndex={onRowClick ? 0 : -1}
+                tabIndex={onRowClick ? 0 : undefined}
+                aria-label={rowAriaLabel?.(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 onKeyDown={(event) => handleKeyDown(event, row)}
                 className={onRowClick ? 'row-interactive' : undefined}

@@ -47,16 +47,24 @@ describe('App integration', () => {
   it('boots authenticated shell and navigates between core views', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Runs')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Runs' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('link', { name: 'Workflows' }));
+    fireEvent.change(screen.getByLabelText('Search workflows and runs'), { target: { value: 'Dependency' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('run-0420')).toBeInTheDocument();
+      expect(screen.queryByText('run-0421')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByRole('link', { name: 'Workflows' })[0]);
     await waitFor(() => {
       expect(screen.getByText('SDLC Factory')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('link', { name: 'Approvals' }));
+    fireEvent.click(screen.getAllByRole('link', { name: 'Approvals' })[0]);
     await waitFor(() => {
-      expect(screen.getByText('Approvals')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Approvals' })).toBeInTheDocument();
     });
   });
 });

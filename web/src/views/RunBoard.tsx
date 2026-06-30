@@ -35,6 +35,24 @@ function toDuration(durationMs?: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+function toPercent(value: number, total: number): number {
+  return total > 0 ? Math.round((value / total) * 100) : 100;
+}
+
+function toP95Duration(runs: WorkflowRun[]): string {
+  const durations = runs
+    .map((run) => run.durationMs)
+    .filter((duration): duration is number => typeof duration === 'number')
+    .sort((a, b) => a - b);
+
+  if (durations.length === 0) {
+    return '-';
+  }
+
+  const index = Math.max(0, Math.ceil(durations.length * 0.95) - 1);
+  return toDuration(durations[index]);
+}
+
 function formatTime(iso: string): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
@@ -73,6 +91,7 @@ export function RunBoard({ auth }: RunBoardProps) {
 
   const selectedStatus = (searchParams.get('status') ?? 'all') as 'all' | RunStatus;
   const selectedRisk = (searchParams.get('risk') ?? 'all') as 'all' | RiskLevel;
+  const selectedSearch = searchParams.get('q') ?? '';
 
   useEffect(() => {
     runsRef.current = runs;
@@ -164,12 +183,25 @@ export function RunBoard({ auth }: RunBoardProps) {
   }, [canStartRuns, navigate, pushToast, sampleWorkflow]);
 
   const filteredRuns = useMemo(() => {
+    const normalizedSearch = selectedSearch.trim().toLowerCase();
+
     return runs.filter((run) => {
       const statusMatch = selectedStatus === 'all' || run.status === selectedStatus;
       const riskMatch = selectedRisk === 'all' || run.riskLevel === selectedRisk;
-      return statusMatch && riskMatch;
+      const searchMatch = normalizedSearch.length === 0 || [
+        run.id,
+        run.workflowName,
+        run.workflowVersion,
+        run.status,
+        run.riskLevel,
+        run.currentStep ?? '',
+        run.requestedBy,
+        ...run.tags,
+      ].some((value) => value.toLowerCase().includes(normalizedSearch));
+
+      return statusMatch && riskMatch && searchMatch;
     });
-  }, [runs, selectedRisk, selectedStatus]);
+  }, [runs, selectedRisk, selectedSearch, selectedStatus]);
 
   const columns: DataTableColumn<WorkflowRun>[] = [
     { key: 'run', label: 'Run ID', render: (run) => run.id },
@@ -206,8 +238,32 @@ export function RunBoard({ auth }: RunBoardProps) {
 
   const activeCount = stats.running + stats.awaiting;
   const resolvedRuns = stats.completed + stats.failed + stats.blocked;
-  const successRate = resolvedRuns > 0 ? Math.round((stats.completed / resolvedRuns) * 100) : 100;
+  const successRate = toPercent(stats.completed, resolvedRuns);
   const criticalCount = runs.filter((run) => run.riskLevel === 'critical' || run.riskLevel === 'high').length;
+  const pendingApprovalCount = runs.reduce((total, run) => total + run.pendingApprovals, 0);
+  const evidenceReadyCount = runs.filter(
+    (run) => (run.events?.length ?? 0) > 0 || (run.artifacts?.length ?? 0) > 0 || (run.approvals?.length ?? 0) > 0,
+  ).length;
+  const evidenceCoverage = toPercent(evidenceReadyCount, runs.length);
+  const policyGateCount = runs.filter(
+    (run) => run.pendingApprovals > 0 || run.riskLevel === 'critical' || run.riskLevel === 'high',
+  ).length;
+  const readinessSignals = [
+    { label: 'Environment', value: 'Prod EU-West', detail: 'Tenant isolated', tone: 'healthy' },
+    { label: 'Access', value: 'SSO + RBAC', detail: auth.user?.roles.join(', ') ?? 'Guest', tone: 'healthy' },
+    {
+      label: 'Audit',
+      value: `${evidenceCoverage}% captured`,
+      detail: `${evidenceReadyCount}/${runs.length || 0} runs with evidence`,
+      tone: evidenceCoverage >= 95 ? 'healthy' : 'warning',
+    },
+    {
+      label: 'SLO Risk',
+      value: criticalCount > 0 ? `${criticalCount} elevated` : 'Normal',
+      detail: `${pendingApprovalCount} approvals pending`,
+      tone: criticalCount > 0 || pendingApprovalCount > 0 ? 'warning' : 'healthy',
+    },
+  ] as const;
   const liveEvents = filteredRuns.flatMap((run) =>
     (run.events ?? []).map((event) => ({
       ...event,
@@ -256,6 +312,19 @@ export function RunBoard({ auth }: RunBoardProps) {
         }
       />
 
+      <section className="readiness-strip" aria-label="Enterprise readiness summary">
+        {readinessSignals.map((signal) => (
+          <article key={signal.label} className={`readiness-item readiness-${signal.tone}`}>
+            <span className={`status-dot ${signal.tone}`} aria-hidden="true" />
+            <div>
+              <span className="panel-kicker">{signal.label}</span>
+              <strong>{signal.value}</strong>
+              <p>{signal.detail}</p>
+            </div>
+          </article>
+        ))}
+      </section>
+
       <section className="ops-hero-grid" aria-label="Execution monitoring overview">
         <article className="panel performance-panel">
           <div className="panel-title-row">
@@ -271,9 +340,9 @@ export function RunBoard({ auth }: RunBoardProps) {
 
           <dl className="metric-strip">
             <div>
-              <dt>Throughput</dt>
-              <dd>{runs.length * 247}</dd>
-              <span>ops/day observed</span>
+              <dt>Active Runs</dt>
+              <dd>{activeCount}</dd>
+              <span>running + approvals</span>
             </div>
             <div>
               <dt>Agent Success</dt>
@@ -281,9 +350,9 @@ export function RunBoard({ auth }: RunBoardProps) {
               <span>resolved runs</span>
             </div>
             <div>
-              <dt>Deploy Freq</dt>
-              <dd>{stats.completed + stats.running}</dd>
-              <span>active + complete</span>
+              <dt>P95 Duration</dt>
+              <dd>{toP95Duration(runs)}</dd>
+              <span>observed run duration</span>
             </div>
           </dl>
 
@@ -311,6 +380,11 @@ export function RunBoard({ auth }: RunBoardProps) {
               <span className="mini-badge healthy">HEALTHY</span>
             </li>
             <li>
+              <span className="status-dot healthy" aria-hidden="true" />
+              <strong>evidence-store</strong>
+              <span className="mini-badge healthy">SYNCED</span>
+            </li>
+            <li>
               <span className={criticalCount > 0 ? 'status-dot warning' : 'status-dot healthy'} aria-hidden="true" />
               <strong>approval-policy-gate</strong>
               <span className={criticalCount > 0 ? 'mini-badge warning' : 'mini-badge healthy'}>
@@ -319,19 +393,49 @@ export function RunBoard({ auth }: RunBoardProps) {
             </li>
           </ul>
         </article>
+
+        <article className="panel governance-panel">
+          <div className="panel-title-row">
+            <div>
+              <span className="panel-kicker">Enterprise control</span>
+              <h2>Governance Posture</h2>
+            </div>
+            <span className={criticalCount > 0 ? 'mini-badge warning' : 'mini-badge healthy'}>
+              {criticalCount > 0 ? 'REVIEW' : 'READY'}
+            </span>
+          </div>
+          <dl className="governance-list">
+            <div>
+              <dt>Policy gates</dt>
+              <dd>{policyGateCount}</dd>
+              <span>approval or elevated risk</span>
+            </div>
+            <div>
+              <dt>Evidence coverage</dt>
+              <dd>{evidenceCoverage}%</dd>
+              <span>events, artifacts, approvals</span>
+            </div>
+            <div>
+              <dt>High risk</dt>
+              <dd>{criticalCount}</dd>
+              <span>critical + high runs</span>
+            </div>
+          </dl>
+        </article>
       </section>
 
       <section className="kpi-grid" aria-label="Run summary metrics">
-        <KpiCard label="Running" value={stats.running} accent="running" />
-        <KpiCard label="Failed" value={stats.failed} accent="failed" />
-        <KpiCard label="Awaiting Approval" value={stats.awaiting} accent="awaiting" />
-        <KpiCard label="Completed" value={stats.completed} accent="completed" />
-        <KpiCard label="Blocked" value={stats.blocked} accent="blocked" />
+        <KpiCard label="Running" value={stats.running} accent="running" hint="Live workers" />
+        <KpiCard label="Failed" value={stats.failed} accent="failed" hint="Needs triage" />
+        <KpiCard label="Awaiting Approval" value={stats.awaiting} accent="awaiting" hint="Human gate" />
+        <KpiCard label="Completed" value={stats.completed} accent="completed" hint="Resolved cleanly" />
+        <KpiCard label="Blocked" value={stats.blocked} accent="blocked" hint="SLO risk" />
       </section>
 
       <FilterBar
         status={selectedStatus}
         risk={selectedRisk}
+        search={selectedSearch}
         onStatusChange={(status) => {
           setSearchParams((previous) => {
             const next = new URLSearchParams(previous);
@@ -343,6 +447,18 @@ export function RunBoard({ auth }: RunBoardProps) {
           setSearchParams((previous) => {
             const next = new URLSearchParams(previous);
             next.set('risk', risk);
+            return next;
+          });
+        }}
+        onSearchChange={(search) => {
+          setSearchParams((previous) => {
+            const next = new URLSearchParams(previous);
+            const trimmed = search.trim();
+            if (trimmed) {
+              next.set('q', trimmed);
+            } else {
+              next.delete('q');
+            }
             return next;
           });
         }}
@@ -393,7 +509,7 @@ export function RunBoard({ auth }: RunBoardProps) {
             description={
               runs.length === 0
                 ? 'Start from a workflow to create the first monitored run.'
-                : 'Adjust status or risk filters to widen the run ledger.'
+                : 'Adjust search, status, or risk filters to widen the run ledger.'
             }
             action={
               <button type="button" className="btn btn-primary" onClick={() => navigate('/workflows')}>
@@ -430,6 +546,16 @@ export function RunBoard({ auth }: RunBoardProps) {
                     <RiskBadge level={run.riskLevel} />
                     <span>{run.currentStep ?? 'No active step'}</span>
                   </div>
+                  <dl className="run-card-facts">
+                    <div>
+                      <dt>Owner</dt>
+                      <dd>{run.requestedBy}</dd>
+                    </div>
+                    <div>
+                      <dt>Approvals</dt>
+                      <dd>{run.pendingApprovals > 0 ? `${run.pendingApprovals} pending` : 'Clear'}</dd>
+                    </div>
+                  </dl>
                   <div className="run-log" aria-label={`${run.id} latest events`}>
                     {latestEvents.length > 0 ? (
                       latestEvents.map((event) => (
@@ -496,11 +622,12 @@ export function RunBoard({ auth }: RunBoardProps) {
               </div>
             </div>
             <DataTable
-              caption="Workflow runs"
+              caption="Workflow runs with status, risk, ownership, and approval state"
               columns={columns}
               rows={filteredRuns}
               rowKey={(run) => run.id}
               onRowClick={(run) => navigate(`/runs/${run.id}`)}
+              rowAriaLabel={(run) => `Open run ${run.id} for ${run.workflowName}`}
             />
           </section>
         </>

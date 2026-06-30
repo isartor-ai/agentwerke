@@ -52,11 +52,13 @@ describe('UI component unit tests', () => {
         rows={[{ id: '1', name: 'Row 1' }]}
         rowKey={(row) => row.id}
         onRowClick={onRowClick}
+        rowAriaLabel={(row) => `Open ${row.name}`}
       />,
     );
 
     const row = screen.getByText('Row 1').closest('tr');
     expect(row).not.toBeNull();
+    expect(row).toHaveAttribute('aria-label', 'Open Row 1');
 
     fireEvent.click(row!);
     fireEvent.keyDown(row!, { key: 'Enter' });
