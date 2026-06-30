@@ -33,3 +33,4 @@ src/Autofac.Api/config/settings.secrets.json
 
 # scripts/run-agent-sandboxed-e2e.sh artifacts bind-mount (see docker-compose.e2e.yml)
 docker/.agent-sandboxed-artifacts/
+docker/.real-e2e-artifacts/
