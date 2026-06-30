@@ -674,3 +674,11 @@ export interface SettingsTestResponse {
   testedAt: string;
   auditId: string;
 }
+
+// Integrations dashboard (#188)
+export interface ConnectorStatus {
+  connectorId: string;
+  displayName: string;
+  enabled: boolean;
+  supportedOperations: string[];
+}

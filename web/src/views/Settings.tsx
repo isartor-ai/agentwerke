@@ -182,6 +182,8 @@ export function Settings({ auth }: SettingsProps) {
 
   useEffect(() => {
     void loadSettings();
+    // loadSettings is intentionally re-run only when the permission gate changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageSettings]);
 
   const selectedCategory = useMemo<SettingsCategory | undefined>(
