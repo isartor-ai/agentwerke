@@ -27,6 +27,8 @@ describe('RunBoard integration', () => {
     );
 
     expect(await screen.findByText('Runs')).toBeInTheDocument();
+    expect(screen.getByText('Governance Posture')).toBeInTheDocument();
+    expect(screen.getByText('Prod EU-West')).toBeInTheDocument();
     expect(screen.getByText('run-0421')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Running' }));
@@ -34,6 +36,28 @@ describe('RunBoard integration', () => {
     await waitFor(() => {
       expect(screen.queryByText('run-0421')).not.toBeInTheDocument();
       expect(screen.getByText('run-0420')).toBeInTheDocument();
+    });
+  });
+
+  it('filters runs by searchable enterprise context', async () => {
+    render(
+      <MemoryRouter initialEntries={['/runs?q=dependency']}>
+        <RunBoard auth={operatorAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Runs')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByText('run-0421')).not.toBeInTheDocument();
+      expect(screen.getByText('run-0420')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'alice' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('run-0421')).toBeInTheDocument();
+      expect(screen.queryByText('run-0420')).not.toBeInTheDocument();
     });
   });
 
