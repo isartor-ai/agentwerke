@@ -9,7 +9,7 @@ public sealed class SettingsCatalog
             "Model",
             "Language-model provider, runtime limits, retries, and credential status.",
             [
-                Field("Anthropic:Provider", "Provider", "Language-model backend selection.", SettingsValueKind.Enum, "auto", ["auto", "anthropic", "mock"]),
+                Field("Anthropic:Provider", "Provider", "Language-model backend selection.", SettingsValueKind.Enum, "auto", ["auto", "anthropic", "openai", "litellm", "mock"]),
                 Secret("Anthropic:ApiKey", "API key", "Provider API key used for model calls."),
                 Field("Anthropic:ApiBaseUrl", "API base URL", "Provider API endpoint.", SettingsValueKind.Url, "https://api.anthropic.com/"),
                 Field("Anthropic:Model", "Model", "Default model used by agent-model runners.", SettingsValueKind.String, "claude-sonnet-4-6"),
