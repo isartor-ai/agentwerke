@@ -277,7 +277,9 @@ internal static class ApiContractMappings
             decision.RiskLevel,
             decision.RiskFactors.ToArray(),
             decision.DecidedAt,
-            decision.Constraints.ToArray());
+            decision.Constraints.ToArray(),
+            decision.PurposeConfidence,
+            decision.PurposeRationale);
     }
 
     private static RunArtifact ToRunArtifact(ArtifactDescriptor artifact)

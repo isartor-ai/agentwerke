@@ -44,15 +44,17 @@ public sealed class PolicyEvaluationService : IPolicyEvaluationService
 
         if (matchingRule is not null)
         {
-            return CreateDecision(
-                matchingRule.DecisionKind,
-                matchingRule.Id,
-                matchingRule.Name,
-                matchingRule.Rationale,
-                matchingRule.RiskScore,
-                matchingRule.RiskLevel,
-                BuildRiskFactors(request, matchingRule),
-                matchingRule.Constraints);
+            return ApplyPurposeRiskScoring(
+                CreateDecision(
+                    matchingRule.DecisionKind,
+                    matchingRule.Id,
+                    matchingRule.Name,
+                    matchingRule.Rationale,
+                    matchingRule.RiskScore,
+                    matchingRule.RiskLevel,
+                    BuildRiskFactors(request, matchingRule),
+                    matchingRule.Constraints),
+                request);
         }
 
         var riskFactors = new List<string>();
@@ -66,19 +68,58 @@ public sealed class PolicyEvaluationService : IPolicyEvaluationService
             riskFactors.Add($"Evidence requirements: {string.Join(", ", request.RequiresEvidence)}");
         }
 
-        return CreateDecision(
-            kind: "allow",
-            policyId: "default-allow",
-            policyName: "Default Allow",
-            rationale: "No sensitive-action rule matched; execution may proceed under standard audit logging.",
-            riskScore: action.StartsWith("github.create_", StringComparison.Ordinal) ? 28 : 18,
-            riskLevel: action.StartsWith("github.create_", StringComparison.Ordinal) ? "medium" : "low",
-            riskFactors: riskFactors,
-            constraints:
-            [
-                "Record policy decision and execution outcome in the run history."
-            ]);
+        return ApplyPurposeRiskScoring(
+            CreateDecision(
+                kind: "allow",
+                policyId: "default-allow",
+                policyName: "Default Allow",
+                rationale: "No sensitive-action rule matched; execution may proceed under standard audit logging.",
+                riskScore: action.StartsWith("github.create_", StringComparison.Ordinal) ? 28 : 18,
+                riskLevel: action.StartsWith("github.create_", StringComparison.Ordinal) ? "medium" : "low",
+                riskFactors: riskFactors,
+                constraints:
+                [
+                    "Record policy decision and execution outcome in the run history."
+                ]),
+            request);
     }
+
+    /// <summary>
+    /// Attaches purpose confidence and a context-correlated risk assessment to a
+    /// decision (#26). Escalation only ever raises risk — it never lowers an
+    /// explicit rule's risk level or score.
+    /// </summary>
+    private static PolicyDecision ApplyPurposeRiskScoring(PolicyDecision decision, PolicyEvaluationRequest request)
+    {
+        var assessment = PurposeRiskScorer.Score(request, decision.RiskLevel);
+
+        decision.PurposeConfidence = assessment.PurposeConfidence;
+        decision.PurposeRationale = assessment.PurposeRationale;
+
+        foreach (var factor in assessment.AdditionalRiskFactors)
+        {
+            if (!decision.RiskFactors.Contains(factor, StringComparer.OrdinalIgnoreCase))
+            {
+                decision.RiskFactors.Add(factor);
+            }
+        }
+
+        if (assessment.EscalatedRiskLevel is { Length: > 0 } escalated)
+        {
+            decision.RiskLevel = escalated;
+            decision.RiskScore = Math.Max(decision.RiskScore, RiskScoreFloor(escalated));
+        }
+
+        return decision;
+    }
+
+    private static int RiskScoreFloor(string riskLevel) => riskLevel.ToLowerInvariant() switch
+    {
+        "critical" => 90,
+        "high" => 70,
+        "medium" => 40,
+        _ => 20,
+    };
 
     private static bool MatchesRule(PolicyRule rule, PolicyEvaluationRequest request)
     {
