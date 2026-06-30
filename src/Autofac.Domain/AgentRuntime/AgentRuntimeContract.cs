@@ -73,6 +73,7 @@ public static class AgentToolCategories
     public const string Mcp = "mcp";
     public const string SubAgent = "sub-agent";
     public const string Knowledge = "knowledge";
+    public const string Coordination = "coordination";
 }
 
 public sealed record AgentMcpServerContract
