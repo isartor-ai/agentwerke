@@ -549,3 +549,59 @@ export interface AuthState {
   status: 'loading' | 'authenticated' | 'unauthenticated';
   user?: AuthUser;
 }
+
+export type SettingsFieldValue = string | number | boolean | string[] | Record<string, string[]> | null;
+
+export interface SettingsSecretStatus {
+  configured: boolean;
+  source: string;
+  fingerprint?: string | null;
+  canWrite: boolean;
+}
+
+export interface SettingsField {
+  path: string;
+  label: string;
+  description: string;
+  valueType: 'string' | 'url' | 'boolean' | 'integer' | 'decimal' | 'string-array' | 'string-map' | 'enum' | 'secret' | string;
+  value: SettingsFieldValue;
+  isSecret: boolean;
+  isEditable: boolean;
+  requiresRestart: boolean;
+  source: string;
+  options: string[];
+  secret?: SettingsSecretStatus | null;
+}
+
+export interface SettingsCategory {
+  id: string;
+  title: string;
+  description: string;
+  fields: SettingsField[];
+}
+
+export interface SettingsSnapshot {
+  generatedAt: string;
+  categories: SettingsCategory[];
+}
+
+export interface SettingsUpdateRequest {
+  values?: Record<string, unknown>;
+  secrets?: Record<string, string>;
+}
+
+export interface SettingsUpdateResponse {
+  snapshot: SettingsSnapshot;
+  changedValues: string[];
+  rotatedSecrets: string[];
+  restartRequired: boolean;
+  auditId: string;
+}
+
+export interface SettingsTestResponse {
+  target: string;
+  succeeded: boolean;
+  messages: string[];
+  testedAt: string;
+  auditId: string;
+}

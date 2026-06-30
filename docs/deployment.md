@@ -16,7 +16,13 @@ and production hardening. For auth/data-residency specifics see
 
 Quickest path: see [getting-started.md](getting-started.md).
 
-## Configuration (environment variables)
+## Configuration
+
+Autofac can be bootstrapped with environment variables and then operated through
+the Admin-only Settings page. See [settings.md](settings.md) for the Settings UI,
+redaction rules, local override files, and configuration precedence.
+
+### Environment variables
 
 Settings use the standard .NET `Section__Key` env mapping.
 
@@ -49,6 +55,15 @@ Settings use the standard .NET `Section__Key` env mapping.
 - `Jwt__SecretKey`, `Jwt__Issuer`, `Jwt__Audience`. Dev stacks also set
   `Jwt__DevTokensEnabled=true` — **development only**.
 
+### Settings override files
+
+When an Admin saves supported values in `/settings`, Autofac writes non-secret
+overrides to `config/settings.overrides.json` and local secret rotations to
+`config/settings.secrets.json` by default. These files are loaded after
+appsettings/env configuration and take effect after API restart. Use
+`Settings__AllowLocalSecretWrites=false` in production if local secret files
+should be disabled.
+
 ## Production hardening
 
 Do **not** ship the dev defaults. Before production:
@@ -56,7 +71,9 @@ Do **not** ship the dev defaults. Before production:
 - **Auth:** disable dev tokens; configure a real `Jwt__SecretKey` (or enterprise
   SSO/OIDC — commercial tier). Put the API behind TLS.
 - **Secrets:** inject `Anthropic__ApiKey`, GitHub PAT, and DB credentials from a
-  secret manager, not plaintext compose.
+  secret manager, not plaintext compose. Settings never returns raw secrets, but
+  production should still prefer deployment-managed secret stores over local
+  file-backed writes.
 - **Sandboxing:** enable a sandbox provider with an appropriate network policy for
   any agent that executes code; prefer OpenSandbox/Kubernetes for enforced egress.
 - **Database:** managed Postgres with backups; run EF migrations (`migrate`

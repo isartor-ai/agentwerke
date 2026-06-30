@@ -76,4 +76,12 @@ public sealed class AuthorizationMetadataTests
 
         Assert.Equal(AutofacPolicies.Admin, attribute.Policy);
     }
+
+    [Fact]
+    public void SettingsController_RequiresAdminPolicy()
+    {
+        var attribute = Assert.Single(typeof(SettingsController).GetCustomAttributes<AuthorizeAttribute>());
+
+        Assert.Equal(AutofacPolicies.Admin, attribute.Policy);
+    }
 }
