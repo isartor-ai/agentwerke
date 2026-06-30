@@ -247,7 +247,8 @@ public sealed class AgentsControllerTests
 
         public IAgentRegistryEditor Editor { get; }
 
-        public AgentsController CreateController() => new(Registry, Editor, Skills);
+        public AgentsController CreateController() =>
+            new(Registry, Editor, Skills, new Autofac.Application.Agents.InMemoryAgentFeedbackStore());
 
         public void Dispose()
         {

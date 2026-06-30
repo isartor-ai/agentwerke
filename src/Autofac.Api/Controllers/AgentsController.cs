@@ -2,6 +2,7 @@ using Autofac.Api.Auth;
 using Autofac.Api.Contracts.Agents;
 using Autofac.Agents;
 using Autofac.Agents.Skills;
+using Autofac.Application.Agents;
 using Autofac.Sandboxes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,15 +17,18 @@ public sealed class AgentsController : ControllerBase
     private readonly IAgentRegistry _agentRegistry;
     private readonly IAgentRegistryEditor _editor;
     private readonly ISkillRepository _skillRepository;
+    private readonly IAgentFeedbackStore _feedbackStore;
 
     public AgentsController(
         IAgentRegistry agentRegistry,
         IAgentRegistryEditor editor,
-        ISkillRepository skillRepository)
+        ISkillRepository skillRepository,
+        IAgentFeedbackStore feedbackStore)
     {
         _agentRegistry = agentRegistry;
         _editor = editor;
         _skillRepository = skillRepository;
+        _feedbackStore = feedbackStore;
     }
 
     [HttpGet]
@@ -44,6 +48,34 @@ public sealed class AgentsController : ControllerBase
         }
 
         return Ok(ToDetail(document));
+    }
+
+    /// <summary>Aggregated feedback for an agent — the basis of its scorecard (#177).</summary>
+    [HttpGet("{agentId}/scorecard")]
+    public IActionResult Scorecard(string agentId)
+    {
+        return Ok(_feedbackStore.Scorecard(agentId));
+    }
+
+    /// <summary>Record explicit feedback (e.g. a reviewer rating) about an agent (#177).</summary>
+    [Authorize(Policy = AutofacPolicies.Operator)]
+    [HttpPost("{agentId}/feedback")]
+    public IActionResult RecordFeedback(string agentId, [FromBody] AgentFeedbackRequest? request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Signal))
+        {
+            return BadRequest(new { message = "Feedback 'signal' is required (e.g. positive, negative)." });
+        }
+
+        _feedbackStore.Record(new AgentFeedback(
+            AgentName: agentId,
+            RunId: request.RunId ?? string.Empty,
+            Kind: "rating",
+            Signal: request.Signal,
+            Comment: request.Comment,
+            RecordedAt: DateTimeOffset.UtcNow.ToString("o")));
+
+        return Accepted(_feedbackStore.Scorecard(agentId));
     }
 
     [Authorize(Policy = AutofacPolicies.Admin)]
@@ -223,3 +255,5 @@ public sealed class AgentsController : ControllerBase
     private static string? NormalizeOptionalMultiline(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
+
+public sealed record AgentFeedbackRequest(string? RunId, string Signal, string? Comment);
