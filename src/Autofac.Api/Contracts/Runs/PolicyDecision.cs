@@ -11,4 +11,6 @@ public sealed record PolicyDecision(
     string RiskLevel,
     IReadOnlyList<string> RiskFactors,
     string DecidedAt,
-    IReadOnlyList<string> Constraints);
+    IReadOnlyList<string> Constraints,
+    int PurposeConfidence,
+    string PurposeRationale);
