@@ -24,6 +24,29 @@ Work toward the first stable open-source release (1.0). See the
 - **Apache-2.0 LICENSE**, open-core boundary doc, and community health files
   (security policy, code of conduct, issue templates, this changelog).
 
+- **Multiple model providers**: OpenAI, Azure OpenAI, and any LiteLLM proxy via
+  `Anthropic:Provider=openai|litellm` (OpenAI Chat Completions-compatible).
+- **Per-run cost & token budgets** (`MaxRunCostUsd` / `MaxRunTokens`) that halt a
+  run's model calls when exceeded.
+- **Knowledge retrieval (RAG)**: `knowledge.search` tool over a pluggable
+  `IKnowledgeRetriever` (lexical default), returning snippets with citations.
+- **Inter-agent coordination**: `agent.post_message` / `agent.read_messages`
+  tools over a run-scoped channel.
+- **Per-agent feedback & scorecard**: approval decisions captured as feedback;
+  `GET /api/agents/{id}/scorecard` + `POST /api/agents/{id}/feedback`.
+- **Policy lifecycle & simulation**: draft → publish (`/api/policies/{id}/publish`
+  | `unpublish`) and impact analysis (`/api/policies/simulate`), with a Policies
+  admin UI; every decision carries a purpose-confidence + risk score.
+- **Interactive Slack approvals**: Approve/Reject buttons + a signature-verified
+  `/webhooks/slack/interactions` endpoint (notifications were already present).
+- **Jira intake enrichment**: Jira-triggered runs seed issue type/priority/status/
+  labels/assignee/reporter into run context.
+- **Per-policy/project sandbox provider selection** (Docker / OpenSandbox /
+  Kubernetes), plus a kata-isolated Kubernetes executor with NetworkPolicy egress.
+- **LDAP/Active Directory** group-to-role mapping for authentication.
+- **Production deployment**: Helm chart, single-host production compose, and a
+  tag-driven container-publish pipeline; CI gates build/test/lint on every PR.
+
 ### Fixed
 - Approval gate now creates the approval record before the run is observable as
   `awaiting_approval`, so it is always surfaced by `GET /api/approvals`.
