@@ -9,6 +9,7 @@ import { AgentRegistry } from './views/AgentRegistry';
 import { Login } from './views/Login';
 import { NotFound } from './views/NotFound';
 import { Placeholder } from './views/Placeholder';
+import { Policies } from './views/Policies';
 import { RunBoard } from './views/RunBoard';
 import { RunDetail } from './views/RunDetail';
 import { WorkflowDesigner } from './views/WorkflowDesigner';
@@ -67,7 +68,7 @@ export default function App() {
             <Route path="/approvals" element={<ApprovalsDashboard auth={auth} />} />
             <Route
               path="/policies"
-              element={<Placeholder title="Policies" description="Policy authoring and simulation workflow." />}
+              element={<Policies auth={auth} />}
             />
             <Route
               path="/audit"

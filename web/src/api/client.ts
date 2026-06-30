@@ -8,6 +8,10 @@ import type {
   AuthUser,
   DevTokenResponse,
   EvidencePack,
+  PolicyRule,
+  PolicyRuleSet,
+  PolicySimulationReport,
+  PolicySimulationRequestInput,
   RunEvent,
   RuntimeMode,
   SkillSummary,
@@ -154,6 +158,25 @@ export const apiClient = {
 
   async getRunEvidencePack(runId: string): Promise<EvidencePack> {
     return requestJson<EvidencePack>(`/api/runs/${encodeURIComponent(runId)}/evidence-pack`);
+  },
+
+  async getPolicies(): Promise<PolicyRuleSet> {
+    return requestJson<PolicyRuleSet>('/api/policies');
+  },
+
+  async publishPolicy(policyId: string): Promise<PolicyRule> {
+    return requestJson<PolicyRule>(`/api/policies/${encodeURIComponent(policyId)}/publish`, { method: 'POST' });
+  },
+
+  async unpublishPolicy(policyId: string): Promise<PolicyRule> {
+    return requestJson<PolicyRule>(`/api/policies/${encodeURIComponent(policyId)}/unpublish`, { method: 'POST' });
+  },
+
+  async simulatePolicies(request: PolicySimulationRequestInput): Promise<PolicySimulationReport> {
+    return requestJson<PolicySimulationReport>('/api/policies/simulate', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 
   async downloadRunEvidencePack(runId: string): Promise<void> {
