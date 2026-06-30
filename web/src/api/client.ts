@@ -10,6 +10,10 @@ import type {
   EvidencePack,
   RunEvent,
   RuntimeMode,
+  SettingsSnapshot,
+  SettingsTestResponse,
+  SettingsUpdateRequest,
+  SettingsUpdateResponse,
   SkillSummary,
   TemplateDetail,
   TemplateSummary,
@@ -128,6 +132,24 @@ export const apiClient = {
 
   async getRuntimeMode(): Promise<RuntimeMode> {
     return requestJson<RuntimeMode>('/api/health/runtime');
+  },
+
+  async getSettings(): Promise<SettingsSnapshot> {
+    return requestJson<SettingsSnapshot>('/api/settings');
+  },
+
+  async updateSettings(payload: SettingsUpdateRequest): Promise<SettingsUpdateResponse> {
+    return requestJson<SettingsUpdateResponse>('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async testSettingsTarget(target: string): Promise<SettingsTestResponse> {
+    return requestJson<SettingsTestResponse>(`/api/settings/tests/${encodeURIComponent(target)}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   },
 
   getRunArtifactDownloadUrl(runId: string, artifactName: string): string {
