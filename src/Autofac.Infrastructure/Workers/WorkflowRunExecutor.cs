@@ -1,3 +1,4 @@
+using Autofac.Application.Notifications;
 using Autofac.Application.Observability;
 using Autofac.Application.Workflows;
 using Autofac.Domain.Persistence;
@@ -14,6 +15,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
     private readonly IWaitingExternalCorrelationRepository _waitingExternalCorrelationRepository;
     private readonly IRunOutbox _outbox;
     private readonly IWorkflowTracer _tracer;
+    private readonly IApprovalNotifier _approvalNotifier;
     private readonly ILogger<WorkflowRunExecutor> _logger;
 
     public WorkflowRunExecutor(
@@ -24,6 +26,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         IWaitingExternalCorrelationRepository waitingExternalCorrelationRepository,
         IRunOutbox outbox,
         IWorkflowTracer tracer,
+        IApprovalNotifier approvalNotifier,
         ILogger<WorkflowRunExecutor> logger)
     {
         _runner = runner;
@@ -33,6 +36,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         _waitingExternalCorrelationRepository = waitingExternalCorrelationRepository;
         _outbox = outbox;
         _tracer = tracer;
+        _approvalNotifier = approvalNotifier;
         _logger = logger;
     }
 
@@ -249,6 +253,18 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         await _approvalRepository.AddApprovalAsync(approval, ct);
         await _approvalRepository.SaveChangesAsync(ct);
         await _runRepository.IncrementPendingApprovalsAsync(runId, ct);
+
+        // Notify configured chat channels that a human decision is needed (#31).
+        // Best-effort inside the notifier — delivery failures never fail the run.
+        await _approvalNotifier.NotifyApprovalRequestedAsync(
+            new ApprovalNotification(
+                RunId: runId,
+                ApprovalId: approval.Id,
+                WorkflowName: approval.WorkflowName,
+                ActionRequested: approval.ActionRequested,
+                RiskLevel: approval.RiskLevel,
+                ArtifactName: approval.ArtifactName),
+            ct);
     }
 
     private async Task<string> GetBpmnXmlAsync(string workflowId, CancellationToken ct)

@@ -44,6 +44,9 @@ public static class DependencyInjection
 
         services.AddScoped<IConnectorRegistry, ConnectorRegistry>();
 
+        // Approval-gate notifications fan out to the enabled chat connectors (#31).
+        services.AddScoped<Application.Notifications.IApprovalNotifier, ConnectorApprovalNotifier>();
+
         return services;
     }
 }

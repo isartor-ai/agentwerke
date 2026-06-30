@@ -11,6 +11,7 @@ using Autofac.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -86,6 +87,10 @@ public static class DependencyInjection
         services.AddScoped<IRunOutbox, OutboxRepository>();
         services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();
         services.AddHostedService<RunDispatchWorker>();
+
+        // Default no-op notifier; AddAutofacIntegrations overrides it with the
+        // connector-backed implementation when chat channels are configured (#31).
+        services.TryAddScoped<Application.Notifications.IApprovalNotifier, Application.Notifications.NullApprovalNotifier>();
 
         return services;
     }
