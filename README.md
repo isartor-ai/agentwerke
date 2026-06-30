@@ -59,13 +59,20 @@ A run moves through the nodes of a BPMN model. When it reaches an agent task, th
 | Capability | Status |
 | --- | --- |
 | BPMN-native workflow runtime with durable checkpoints | Built |
-| Real Claude-backed agents with a policy-enforced tool-use loop | Built |
+| Real agents with a policy-enforced tool-use loop | Built |
+| Multiple model providers — Anthropic, OpenAI, Azure OpenAI, LiteLLM proxy | Built |
+| Per-run cost and token budget enforcement | Built |
 | Tool Gateway, Hook Gateway, Skill repository, and prompt assembler | Built |
-| Docker-sandboxed agent execution with offline and controlled profiles | Built |
-| GitHub connector for issues, branches, pull requests, reviews, and CI triggers | Built |
-| Evidence-pack export and artifact storage | Built |
-| End-to-end `autonomous-sdlc` template: BA to architecture to implementation to review to CI/CD to test | In progress; live proof is tracked in the project backlog |
-| Enterprise SSO, RBAC, and data-residency hardening | Roadmap |
+| Knowledge retrieval (RAG) tool with source citations | Built |
+| Inter-agent coordination channel and tools | Built |
+| Per-agent feedback capture and scorecard | Built |
+| Policy engine: data-driven rules, draft to simulate to publish lifecycle with impact analysis, purpose/risk scoring | Built |
+| Sandboxed execution (Docker / OpenSandbox) with per-policy provider selection, incl. a Kubernetes provider | Built |
+| GitHub & Jira intake; GitHub branches/PRs/reviews/CI; Slack/Teams notifications with interactive Slack approvals | Built |
+| Enterprise auth: OIDC SSO, RBAC, LDAP/AD group-to-role mapping; self-hostable for data residency | Built |
+| Evidence-pack export and artifact storage (filesystem or S3) | Built |
+| End-to-end `autonomous-sdlc` template: BA to architecture to implementation to review to CI/CD to test | Built |
+| Production deployment: Helm chart and single-host compose; tag-driven container publish | Built |
 | Optional Camunda 8 runtime adapter | Available; see ADR-002 |
 
 ## Quick start
@@ -98,22 +105,27 @@ dotnet run --project src/Autofac.Api/Autofac.Api.csproj
 
 The OpenAPI document is served at `/openapi/v1.json`.
 
-### Enabling real agents
+### Enabling real agents and choosing a model provider
 
-Agents run against Claude when an API key is configured. Without a key, Autofac uses a safe null client and agent steps report that no model is configured. Admin users can inspect and rotate model credentials from **Settings**, or continue using appsettings, environment variables, and user-secrets.
+Agents run against a real model when an API key is configured. Without a key, Autofac uses a safe null client and agent steps report that no model is configured; set `Anthropic:Provider=mock` for deterministic, tokenless runs. Admin users can inspect and rotate model credentials from **Settings**, or continue using appsettings, environment variables, and user-secrets.
+
+`Anthropic:Provider` selects the backend: `anthropic` (default when a key is present), `openai`, `litellm` (any OpenAI-compatible endpoint — Azure OpenAI or a LiteLLM proxy fronting many models), `mock`, or `auto`.
 
 ```jsonc
 // appsettings.json, environment variables, or user-secrets
 "Anthropic": {
+  "Provider": "anthropic",          // anthropic | openai | litellm | mock | auto
   "ApiKey": "sk-ant-...",
+  "ApiBaseUrl": "https://api.anthropic.com/", // e.g. http://litellm:4000/v1 for LiteLLM
   "Model": "claude-sonnet-4-6",
   "MaxTokens": 4096,
-  "MaxToolIterations": 10
+  "MaxToolIterations": 10,
+  "MaxRunCostUsd": 0,               // per-run USD budget; 0 = unlimited
+  "MaxRunTokens": 0                 // per-run token budget; 0 = unlimited
 }
 ```
 
-Settings guidance, including override-file precedence and redaction rules, lives
-in [docs/settings.md](docs/settings.md).
+When a run reaches its `MaxRunCostUsd`/`MaxRunTokens` budget, further model calls are halted with a `budget_exceeded` status. Settings guidance, including override-file precedence and redaction rules, lives in [docs/settings.md](docs/settings.md).
 
 ## Architecture
 
@@ -200,7 +212,10 @@ Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting
 
 ### Authentication and data residency
 
-- Enterprise SSO/RBAC and self-hosted data boundary guidance: `docs/deployment-auth-data-residency.md`
+- OIDC/JWT SSO with a Viewer/Operator/Approver/Admin role model and configurable role-claim mapping.
+- **LDAP/Active Directory** group-to-role mapping (`Ldap:*` settings): authenticated users receive Autofac roles from their directory groups via the existing role mappings.
+- Fully self-hostable (in-process engine, Postgres, local artifact storage) so content can stay within the customer boundary.
+- Enterprise SSO/RBAC and self-hosted data-boundary guidance: `docs/deployment-auth-data-residency.md`
 
 ## Documentation
 

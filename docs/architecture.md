@@ -53,14 +53,28 @@ advances the run (and resumes it on approval / external event / timer).
 
 The agent layer talks to an `ILanguageModelClient`, selected by
 `Anthropic:Provider`: `anthropic` (real, via `IHttpClientFactory` with retries +
-prompt caching), `mock` (deterministic, zero-cost — for demos/CI), or a null
-client when nothing is configured.
+prompt caching), `openai`/`litellm` (any OpenAI Chat Completions-compatible
+endpoint — OpenAI, Azure OpenAI, or a LiteLLM proxy), `mock` (deterministic,
+zero-cost — for demos/CI), or a null client when nothing is configured. Per-run
+**cost/token budgets** (`MaxRunCostUsd`/`MaxRunTokens`) halt a run's model calls
+once exceeded.
+
+## Agent capabilities
+
+Beyond the model loop, agents have policy-gated tools for **knowledge retrieval**
+(`knowledge.search` over `IKnowledgeRetriever`, with citations) and **inter-agent
+coordination** (`agent.post_message`/`agent.read_messages` on a run-scoped channel).
+Human approval decisions are captured as per-agent **feedback** and aggregated into
+a scorecard.
 
 ## Governance & evidence
 
 The Tool Gateway enforces policy on every action; approval gates add humans where
-needed; and each run produces a tamper-evident evidence pack. See
-[security-model.md](security-model.md).
+needed (including interactive **approve/reject from Slack**); and each run produces
+a tamper-evident evidence pack. Policy rules are data-driven with a
+**draft → simulate → publish** lifecycle and impact analysis, and every decision
+carries a purpose-confidence + risk score. Enterprise auth covers OIDC SSO, RBAC,
+and **LDAP/AD** group-to-role mapping. See [security-model.md](security-model.md).
 
 ## Web UI
 
