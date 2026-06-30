@@ -94,14 +94,28 @@ public sealed class WebhooksController : ControllerBase
             });
         }
 
+        var fields = payload.Issue.Fields;
+        var labels = fields?.Labels is { Count: > 0 } l ? string.Join(", ", l) : null;
         var trigger = new TriggerMetadata(
             Source: "jira",
             EventType: payload.WebhookEvent,
             ExternalId: payload.Issue.Key,
             ExternalUrl: payload.Issue.Self,
-            Title: payload.Issue.Fields?.Summary,
-            Body: payload.Issue.Fields?.Description,
-            Inputs: BuildTriggerInputs(("issue_url", payload.Issue.Self)));
+            Title: fields?.Summary,
+            Body: fields?.Description,
+            // Enrich run context with Jira ticket fields so agents/templates can
+            // reference {{input.priority}}, {{input.issue_type}}, etc. (#30).
+            Inputs: BuildTriggerInputs(
+                ("issue_url", payload.Issue.Self),
+                ("issue_key", payload.Issue.Key),
+                ("issue_type", fields?.IssueType?.Name),
+                ("project_key", fields?.Project?.Key),
+                ("project_name", fields?.Project?.Name),
+                ("priority", fields?.Priority?.Name),
+                ("status", fields?.Status?.Name),
+                ("labels", labels),
+                ("assignee", fields?.Assignee?.DisplayName),
+                ("reporter", fields?.Reporter?.DisplayName)));
 
         var initiator = payload.User?.DisplayName ?? payload.User?.EmailAddress ?? "jira-webhook";
 

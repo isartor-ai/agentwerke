@@ -46,9 +46,31 @@ public sealed class JiraIssueFields
 
     [JsonPropertyName("project")]
     public JiraProject? Project { get; set; }
+
+    [JsonPropertyName("priority")]
+    public JiraNamedValue? Priority { get; set; }
+
+    [JsonPropertyName("status")]
+    public JiraNamedValue? Status { get; set; }
+
+    [JsonPropertyName("labels")]
+    public List<string> Labels { get; set; } = [];
+
+    [JsonPropertyName("assignee")]
+    public JiraUser? Assignee { get; set; }
+
+    [JsonPropertyName("reporter")]
+    public JiraUser? Reporter { get; set; }
 }
 
 public sealed class JiraIssueType
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>A Jira field reduced to its display name (priority, status, …).</summary>
+public sealed class JiraNamedValue
 {
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
