@@ -74,6 +74,7 @@ public static class DependencyInjection
         {
             services.AddScoped<ILanguageModelClient, NullLanguageModelClient>();
         }
+        services.AddSingleton<IModelRunBudget, ModelRunBudget>();
         services.AddScoped<IAgentModelRunner, AgentModelRunner>();
         services.AddScoped<ISandboxedAgentRunner, OpenSandboxedAgentRunner>();
 

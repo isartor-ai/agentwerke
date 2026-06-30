@@ -23,6 +23,18 @@ public sealed class LanguageModelOptions
 
     public int MaxToolIterations { get; set; } = 10;
 
+    /// <summary>
+    /// Maximum cumulative model spend (USD) per workflow run before further agent model
+    /// calls are halted (#175). 0 = unlimited.
+    /// </summary>
+    public decimal MaxRunCostUsd { get; set; } = 0m;
+
+    /// <summary>
+    /// Maximum cumulative model tokens per workflow run before further agent model calls
+    /// are halted (#175). 0 = unlimited.
+    /// </summary>
+    public long MaxRunTokens { get; set; } = 0;
+
     /// <summary>Cost in USD per million input tokens. Used for the agent.model.cost_usd metric.</summary>
     public decimal InputCostPerMillionTokens { get; set; } = 3.00m;
 

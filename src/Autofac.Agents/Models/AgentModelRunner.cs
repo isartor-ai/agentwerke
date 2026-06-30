@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autofac.Agents.Tools;
 using Autofac.Application.Observability;
 using Autofac.Domain.AgentRuntime;
+using Autofac.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Autofac.Agents.Models;
@@ -12,6 +13,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
     private readonly IToolGateway _toolGateway;
     private readonly IToolRegistry _toolRegistry;
     private readonly IWorkflowMetrics _metrics;
+    private readonly IModelRunBudget _budget;
     private readonly LanguageModelOptions _options;
 
     public AgentModelRunner(
@@ -19,12 +21,14 @@ public sealed class AgentModelRunner : IAgentModelRunner
         IToolGateway toolGateway,
         IToolRegistry toolRegistry,
         IWorkflowMetrics metrics,
+        IModelRunBudget budget,
         IOptions<LanguageModelOptions> options)
     {
         _modelClient = modelClient;
         _toolGateway = toolGateway;
         _toolRegistry = toolRegistry;
         _metrics = metrics;
+        _budget = budget;
         _options = options.Value;
     }
 
@@ -37,6 +41,20 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
         var invocations = new List<AgentToolInvocationRecord>();
         var artifacts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Halt before spending more if this run has already reached its model budget (#175).
+        var budget = _budget.Evaluate(request.RunId, _options.MaxRunCostUsd, _options.MaxRunTokens);
+        if (budget.Exceeded)
+        {
+            return new ModelRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: budget.Reason,
+                ToolInvocations: [],
+                Artifacts: null,
+                TokenUsage: null,
+                StepStatus: AgentTaskOutcomeStatuses.BudgetExceeded);
+        }
 
         var llmRequest = new LanguageModelRequest(
             SystemPrompt: systemPrompt,
@@ -53,14 +71,18 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
         var elapsedMs = sw.Elapsed.TotalMilliseconds;
         var tokenUsage = ToTokenUsage(response, elapsedMs);
-        var costUsd = CalculateCost(response.Usage);
+        var costUsd = ModelCostCalculator.CalculateCostUsd(response.Usage, _options);
+
+        // Record this step's spend so the run's cumulative budget is enforced on later steps (#175).
+        _budget.Record(request.RunId, costUsd, ModelCostCalculator.TotalTokens(response.Usage));
+
         _metrics.ModelInvoked(
             request.AgentName,
             response.ModelId ?? _options.Model,
             response.Usage.InputTokens,
             response.Usage.OutputTokens,
             elapsedMs,
-            costUsd,
+            (double)costUsd,
             response.Succeeded);
 
         if (!response.Succeeded)
@@ -184,11 +206,4 @@ public sealed class AgentModelRunner : IAgentModelRunner
             elapsedMs);
     }
 
-    // Prices uncached input, output, and the two prompt-cache token classes separately so the
-    // agent.model.cost_usd metric reflects the savings (and write premium) from prompt caching.
-    private double CalculateCost(LanguageModelTokenUsage usage) =>
-        (double)((usage.InputTokens * _options.InputCostPerMillionTokens +
-                  usage.OutputTokens * _options.OutputCostPerMillionTokens +
-                  usage.CacheReadInputTokens * _options.CacheReadCostPerMillionTokens +
-                  usage.CacheCreationInputTokens * _options.CacheWriteCostPerMillionTokens) / 1_000_000m);
 }
