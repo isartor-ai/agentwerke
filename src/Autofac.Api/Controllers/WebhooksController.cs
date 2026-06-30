@@ -123,6 +123,115 @@ public sealed class WebhooksController : ControllerBase
     }
 
     /// <summary>
+    /// Handles Slack interactivity callbacks: an approver clicking Approve/Reject on an
+    /// approval notification (#172). The button value carries "{approvalId}:{runId}", so the
+    /// decision is applied without a lookup. The request signature is verified with the Slack
+    /// signing secret. Authorization is the shared-secret trust boundary; mapping the Slack
+    /// user to an Autofac role is a follow-up.
+    /// </summary>
+    [HttpPost("slack/interactions")]
+    public async Task<IActionResult> SlackInteractions(CancellationToken cancellationToken)
+    {
+        var body = await ReadBodyAsync(cancellationToken);
+
+        var validation = WebhookSignatureValidator.ValidateSlack(
+            body,
+            Request.Headers["X-Slack-Signature"].FirstOrDefault(),
+            Request.Headers["X-Slack-Request-Timestamp"].FirstOrDefault(),
+            _options.Slack.SigningSecret);
+        if (!validation.IsValid)
+        {
+            return Unauthorized(new { error = validation.ErrorMessage });
+        }
+
+        var payloadJson = ExtractFormField(Encoding.UTF8.GetString(body), "payload");
+        if (payloadJson is null)
+        {
+            return BadRequest(new { error = "Missing 'payload' field." });
+        }
+
+        SlackAction action;
+        try
+        {
+            action = ParseSlackAction(payloadJson);
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = "Invalid interaction payload.", detail = ex.Message });
+        }
+
+        if (action.Decision is null)
+        {
+            return Ok(new { text = $"Ignored action '{action.ActionId}'." });
+        }
+
+        try
+        {
+            await _orchestrationService.ResumeRunAsync(
+                new ResumeRunCommand(
+                    RunId: action.RunId,
+                    ApprovalId: action.ApprovalId,
+                    Decision: action.Decision,
+                    Comment: $"Decided via Slack by {action.User}.",
+                    DecidedBy: $"slack:{action.User}"),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is ApprovalNotFoundException or ApprovalNotPendingException or WorkflowRunNotFoundException)
+        {
+            return Ok(new { replace_original = false, text = $"Could not apply decision: {ex.Message}" });
+        }
+
+        return Ok(new { replace_original = true, text = $":white_check_mark: Approval *{action.Decision}d* by {action.User}." });
+    }
+
+    private static string? ExtractFormField(string formBody, string field)
+    {
+        foreach (var pair in formBody.Split('&'))
+        {
+            var separator = pair.IndexOf('=');
+            if (separator > 0 && pair[..separator] == field)
+            {
+                return System.Net.WebUtility.UrlDecode(pair[(separator + 1)..]);
+            }
+        }
+
+        return null;
+    }
+
+    private static SlackAction ParseSlackAction(string payloadJson)
+    {
+        using var doc = JsonDocument.Parse(payloadJson);
+        var root = doc.RootElement;
+
+        var firstAction = root.GetProperty("actions")[0];
+        var actionId = firstAction.GetProperty("action_id").GetString() ?? string.Empty;
+        var value = firstAction.TryGetProperty("value", out var v) ? v.GetString() ?? string.Empty : string.Empty;
+
+        string user = "unknown";
+        if (root.TryGetProperty("user", out var userEl))
+        {
+            user = (userEl.TryGetProperty("username", out var un) ? un.GetString() : null)
+                ?? (userEl.TryGetProperty("id", out var id) ? id.GetString() : null)
+                ?? "unknown";
+        }
+
+        var separator = value.IndexOf(':');
+        var approvalId = separator > 0 ? value[..separator] : value;
+        var runId = separator > 0 ? value[(separator + 1)..] : string.Empty;
+
+        var decision = actionId switch
+        {
+            "approve" => "approve",
+            "reject" => "reject",
+            _ => null,
+        };
+
+        return new SlackAction(actionId, decision, approvalId, runId, user);
+    }
+
+    private sealed record SlackAction(string ActionId, string? Decision, string ApprovalId, string RunId, string User);
+
+    /// <summary>
     /// Accepts GitHub webhooks. "issues" triggers the configured workflow (workflows must
     /// carry the tag "github-trigger"). "pull_request", "workflow_run", and "check_suite"
     /// are normalized and recorded for the SDLC external-wait gates (#136), then matched

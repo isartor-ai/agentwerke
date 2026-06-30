@@ -19,6 +19,13 @@ public sealed class NotificationOptions
     /// connector to be enabled and configured.
     /// </summary>
     public bool OnApprovalRequested { get; set; } = true;
+
+    /// <summary>
+    /// Render interactive Approve/Reject buttons on Slack approval notifications so an
+    /// approver can decide from chat (#172). Requires Slack:SigningSecret + a Slack app
+    /// with an interactivity request URL pointing at /webhooks/slack/interactions.
+    /// </summary>
+    public bool Interactive { get; set; } = false;
 }
 
 public sealed class JiraOptions
@@ -107,6 +114,12 @@ public sealed class SlackOptions
     public bool Enabled { get; set; }
 
     public string WebhookUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Slack app signing secret used to verify inbound interaction callbacks
+    /// (approve/reject from a message). Leave empty to skip verification (dev only). #172
+    /// </summary>
+    public string SigningSecret { get; set; } = string.Empty;
 }
 
 public sealed class TeamsOptions
