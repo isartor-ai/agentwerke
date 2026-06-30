@@ -48,7 +48,12 @@ public sealed record SandboxExecutionProfile(
     IReadOnlyList<SandboxFilesystemMount>? FilesystemMounts = null,
     IReadOnlyList<SandboxCredentialBinding>? CredentialBindings = null,
     SandboxCleanupPolicy? CleanupPolicy = null,
-    SandboxCommandExecutionMode CommandExecutionMode = SandboxCommandExecutionMode.Foreground);
+    SandboxCommandExecutionMode CommandExecutionMode = SandboxCommandExecutionMode.Foreground,
+    /// <summary>
+    /// Optional per-policy/project execution backend override (#36). When set, the run is
+    /// routed to this provider's executor instead of the globally configured default.
+    /// </summary>
+    SandboxProviderKind? Provider = null);
 
 public sealed record SandboxResourceLimits(
     int? CpuMilliCores = null,
