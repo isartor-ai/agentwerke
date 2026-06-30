@@ -31,6 +31,9 @@ public static class DependencyInjection
         services.AddScoped<IAgentTool, GitHubPostReviewTool>();
         services.AddScoped<IAgentTool, CicdTriggerDeployTool>();
         services.AddScoped<IAgentTool, SandboxExecutionTool>();
+        services.Configure<Knowledge.KnowledgeOptions>(configuration.GetSection(Knowledge.KnowledgeOptions.Section));
+        services.AddSingleton<Knowledge.IKnowledgeRetriever, Knowledge.LexicalKnowledgeRetriever>();
+        services.AddScoped<IAgentTool, KnowledgeSearchTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();
         services.AddScoped<IAgentHookHandler, TemplateHookHandler>();
         services.AddScoped<IAgentHookGateway, HookGateway>();
