@@ -17,6 +17,9 @@ public interface IServiceTaskExecutor
 public static class AgentTaskOutcomeStatuses
 {
     public const string NeedsConfig = "needs_config";
+
+    /// <summary>The run reached its configured model cost/token budget (#175).</summary>
+    public const string BudgetExceeded = "budget_exceeded";
 }
 
 public sealed record AgentTaskOutcome(

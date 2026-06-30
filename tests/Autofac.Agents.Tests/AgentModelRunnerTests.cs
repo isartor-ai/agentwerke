@@ -113,7 +113,7 @@ public sealed class AgentModelRunnerTests
         LanguageModelOptions? options = null)
     {
         options ??= new LanguageModelOptions();
-        return new AgentModelRunner(client, gateway, new StubToolRegistry(), metrics, Options.Create(options));
+        return new AgentModelRunner(client, gateway, new StubToolRegistry(), metrics, new ModelRunBudget(), Options.Create(options));
     }
 
     private static ModelRunRequest MakeRequest(string agentName = "test-agent") =>
