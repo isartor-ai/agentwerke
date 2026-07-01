@@ -65,7 +65,9 @@ The Settings catalog currently includes:
 - **Model:** `Anthropic:*` provider, model, limits, retries, prompt caching, and
   API key status.
 - **Integrations:** Slack, Teams, Jira, GitHub, notification behavior, webhook
-  secrets, tokens, repo defaults, and trigger actions.
+  secrets, tokens, repo defaults, trigger actions, and the required issue
+  label that gates the GitHub `issues` trigger (see
+  [GitHub issue trigger](github-issue-trigger.md)).
 - **Authentication:** `Jwt:*` issuer/audience/authority, dev auth controls,
   claim types, role mappings status, and JWT signing key status.
 - **Runtime:** `WorkflowRuntime:*`, policy file, and optional Camunda adapter

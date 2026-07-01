@@ -11,6 +11,7 @@ Start here.
 - [Security model](security-model.md)
 - [BPMN extensions reference](bpmn-extensions.md) — the `autofac:` elements
 - [Authoring agents and skills](agent-and-skill-authoring.md)
+- [GitHub issue trigger](github-issue-trigger.md) — starting a run from a labeled issue
 
 ## Operations
 - [Deployment](deployment.md)

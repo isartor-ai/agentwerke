@@ -48,6 +48,7 @@ public sealed class SettingsCatalog
                 Field("Integrations:GitHub:BranchPrefix", "Branch prefix", "Prefix for Autofac-created branch names.", SettingsValueKind.String, "autofac/run-"),
                 Field("Integrations:GitHub:CreateDraftPullRequests", "Draft pull requests", "Create pull requests as drafts by default.", SettingsValueKind.Boolean, true),
                 Field("Integrations:GitHub:TriggerActions", "GitHub trigger actions", "GitHub issue actions that start workflows.", SettingsValueKind.StringArray, new[] { "opened" }),
+                Field("Integrations:GitHub:RequiredLabel", "GitHub required label", "Label an issue must carry to start a run. Empty disables the check.", SettingsValueKind.String, "autofac"),
                 Field("Integrations:GitHub:DeployWorkflowFileName", "Deploy workflow file", "Default GitHub Actions workflow dispatched for deploy gates.", SettingsValueKind.String, "deploy-to-test.yml")
             ]),
 
