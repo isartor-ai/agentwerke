@@ -11,6 +11,20 @@
   <link rel="preload" href="assets/styles.css" as="style" />
   <link rel="stylesheet" href="assets/styles.css" />
 
+  <!-- Applied before first paint: marks JS available (so reveal animations are
+       opt-in and content is visible without JS) and sets the stored/dark theme
+       to avoid a flash. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      try {
+        var t = localStorage.getItem("autofac-theme");
+        if (t) d.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Autofac" />
