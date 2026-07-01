@@ -14,7 +14,7 @@
   function applyTheme(theme) {
     root.setAttribute("data-theme", theme);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", theme === "light" ? "#FBFCFD" : "#0B0F14");
+    if (meta) meta.setAttribute("content", theme === "light" ? "#FBFCFC" : "#0e0e0f");
   }
   // Dark is the brand default first paint; a stored user choice always wins.
   // (systemPrefersLight retained for teams that prefer to honor the OS setting.)
@@ -51,20 +51,27 @@
     });
   }
 
-  /* ---- reveal on scroll ---- */
+  /* ---- reveal on scroll ----
+     Anything already in the initial viewport is revealed immediately (no reliance
+     on the observer firing, so above-the-fold content never depends on scroll);
+     the rest animates in as it scrolls into view. */
   var reveals = document.querySelectorAll(".reveal");
+  function revealNow(el) { el.classList.add("is-visible"); }
   if ("IntersectionObserver" in window && reveals.length) {
+    var vh = window.innerHeight || document.documentElement.clientHeight;
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          io.unobserve(entry.target);
-        }
+        if (entry.isIntersecting) { revealNow(entry.target); io.unobserve(entry.target); }
       });
     }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
-    reveals.forEach(function (el) { io.observe(el); });
+    reveals.forEach(function (el) {
+      if (el.getBoundingClientRect().top < vh) { revealNow(el); io.unobserve(el); }
+      else { io.observe(el); }
+    });
+    // Safety net: never leave content hidden if the observer misfires.
+    setTimeout(function () { reveals.forEach(revealNow); }, 1200);
   } else {
-    reveals.forEach(function (el) { el.classList.add("is-visible"); });
+    reveals.forEach(revealNow);
   }
 
   /* ---- year ---- */

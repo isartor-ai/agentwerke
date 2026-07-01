@@ -9,11 +9,17 @@ All product copy is derived from the repository documentation
 
 ## Stack
 
-Zero-dependency, static, and framework-free: semantic HTML, one CSS file, and a
-small progressive-enhancement script. No build step, no toolchain, no runtime.
-This keeps the site ultra-fast, trivially cacheable on any static/CDN host, and
-free of supply-chain surface — a deliberate fit for an enterprise/security
-audience.
+Static and framework-free: semantic HTML, one CSS file, and a small
+progressive-enhancement script. No build step, no toolchain, no runtime — the
+site is ultra-fast and trivially cacheable on any static/CDN host.
+
+**Brand.** Colors, typography, the `[]` logo mark, and the sharp-cornered
+industrial styling mirror the Autofac product UI (`web/src/index.css`): cyan
+`#00dce5` brand + lime `#c3f400` accent on a near-black `#0e0e0f` canvas, with
+**Inter** (body) and **JetBrains Mono** (marks, labels, chips). Those two fonts
+are loaded from Google Fonts — the only external request. Self-host them under
+`assets/` and swap the `<link>` in `index.html` if you need zero third-party
+requests.
 
 ```
 website/

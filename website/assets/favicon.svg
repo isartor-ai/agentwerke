@@ -1,11 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Autofac">
-  <rect width="32" height="32" rx="8" fill="#0B0F14"/>
-  <rect x="6" y="6" width="20" height="20" rx="6" fill="url(#g)"/>
-  <path d="M12 20 v-6 a4 4 0 0 1 8 0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
-  <circle cx="16" cy="21" r="1.7" fill="#fff"/>
-  <defs>
-    <linearGradient id="g" x1="6" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#D97757"/><stop offset="1" stop-color="#B8593C"/>
-    </linearGradient>
-  </defs>
+  <rect width="32" height="32" rx="6" fill="#0e0e0f"/>
+  <rect x="5.5" y="5.5" width="21" height="21" rx="4" fill="#00dce5" fill-opacity="0.14" stroke="#00dce5" stroke-opacity="0.55"/>
+  <text x="16" y="21.5" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="14" font-weight="700" fill="#00dce5">[]</text>
 </svg>
