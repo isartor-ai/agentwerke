@@ -86,6 +86,9 @@ docker compose -f docker/docker-compose.quickstart.yml down -v
 - **Wire up GitHub:** set `Integrations__GitHub__Enabled=true` plus
   `RepositoryOwner` / `RepositoryName` / `PersonalAccessToken` to let agents open
   real branches and pull requests.
+- **Start runs from GitHub issues:** tag a workflow `github-trigger`, point the
+  repo's `issues` webhook at your instance, and label issues `autofac` to opt
+  them in — see [GitHub issue trigger](github-issue-trigger.md).
 - **Author your own workflows** in the designer, or see the BPMN extension and
   agent-authoring references under [`docs/`](.).
 - **Deploy for real:** do not keep the dev JWT/dev-token settings in production —

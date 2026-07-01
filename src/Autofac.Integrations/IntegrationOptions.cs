@@ -103,6 +103,13 @@ public sealed class GitHubOptions
     public List<string> TriggerActions { get; set; } = ["opened"];
 
     /// <summary>
+    /// Label an issue must carry (case-insensitive) for its webhook to start a run.
+    /// Prevents every issue opened on the configured repo from spending model budget.
+    /// Set to empty/whitespace to disable the check and trigger on any matching action.
+    /// </summary>
+    public string RequiredLabel { get; set; } = "autofac";
+
+    /// <summary>
     /// Workflow file name (or numeric workflow id) dispatched by the SDLC "deploy to test" gate
     /// (#139) when a tool call doesn't specify one explicitly.
     /// </summary>

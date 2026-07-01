@@ -233,10 +233,11 @@ public sealed class WebhooksController : ControllerBase
 
     /// <summary>
     /// Accepts GitHub webhooks. "issues" triggers the configured workflow (workflows must
-    /// carry the tag "github-trigger"). "pull_request", "workflow_run", and "check_suite"
-    /// are normalized and recorded for the SDLC external-wait gates (#136), then matched
-    /// against the waiting-external correlation store and auto-resumed if a run is waiting
-    /// on that exact event kind + correlation key (#138).
+    /// carry the tag "github-trigger") when the issue also carries the
+    /// <see cref="GitHubOptions.RequiredLabel"/> label (#191). "pull_request", "workflow_run",
+    /// and "check_suite" are normalized and recorded for the SDLC external-wait gates (#136),
+    /// then matched against the waiting-external correlation store and auto-resumed if a run
+    /// is waiting on that exact event kind + correlation key (#138).
     /// </summary>
     [HttpPost("github")]
     public async Task<IActionResult> GitHub(CancellationToken cancellationToken)
@@ -288,6 +289,15 @@ public sealed class WebhooksController : ControllerBase
             return BadRequest(new { error = "Payload is missing 'issue' field." });
         }
 
+        if (!HasRequiredLabel(payload.Issue.Labels, _options.GitHub.RequiredLabel))
+        {
+            return Ok(new
+            {
+                skipped = true,
+                reason = $"Issue is missing required label '{_options.GitHub.RequiredLabel}'."
+            });
+        }
+
         var workflowId = await _triggerRouter.ResolveWorkflowIdAsync("github", cancellationToken);
         if (workflowId is null)
         {
@@ -313,6 +323,33 @@ public sealed class WebhooksController : ControllerBase
         var initiator = payload.Sender?.Login ?? "github-webhook";
 
         return await StartRunAsync(workflowId, initiator, trigger, cancellationToken);
+    }
+
+    /// <summary>
+    /// An empty/whitespace <paramref name="requiredLabel"/> disables the check (opt-out,
+    /// preserves pre-#191 behavior). Matching is case-insensitive.
+    /// </summary>
+    private static bool HasRequiredLabel(List<GitHubLabel>? labels, string requiredLabel)
+    {
+        if (string.IsNullOrWhiteSpace(requiredLabel))
+        {
+            return true;
+        }
+
+        if (labels is null)
+        {
+            return false;
+        }
+
+        foreach (var label in labels)
+        {
+            if (string.Equals(label.Name, requiredLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<IActionResult> HandlePullRequestEventAsync(byte[] body, CancellationToken cancellationToken)

@@ -263,7 +263,7 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 5, "html_url": "https://github.com/octo/autofac/issues/5", "title": "Idea", "body": "Do the thing", "state": "open" },
+              "issue": { "number": 5, "html_url": "https://github.com/octo/autofac/issues/5", "title": "Idea", "body": "Do the thing", "state": "open", "labels": [ { "name": "autofac" } ] },
               "repository": { "full_name": "octo/autofac" },
               "sender": { "login": "alice" }
             }
@@ -279,6 +279,113 @@ public sealed class WebhooksControllerTests
     }
 
     [Fact]
+    public async Task GitHub_IssuesEvent_MissingRequiredLabel_IsSkippedWithoutStartingARun()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "issues",
+            triggerRouter: new StubTriggerRouter("wf_1"));
+
+        var body = """
+            {
+              "action": "opened",
+              "issue": { "number": 6, "html_url": "https://github.com/octo/autofac/issues/6", "title": "Unrelated", "body": "Not for Autofac", "state": "open", "labels": [ { "name": "bug" } ] },
+              "repository": { "full_name": "octo/autofac" },
+              "sender": { "login": "alice" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(orchestration.StartCommand);
+        Assert.Empty(eventRepository.Added);
+    }
+
+    [Fact]
+    public async Task GitHub_IssuesEvent_NoLabelsAtAll_IsSkippedWithoutStartingARun()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            eventHeader: "issues",
+            triggerRouter: new StubTriggerRouter("wf_1"));
+
+        var body = """
+            {
+              "action": "opened",
+              "issue": { "number": 7, "html_url": "https://github.com/octo/autofac/issues/7", "title": "No labels", "body": "Do the thing", "state": "open" },
+              "repository": { "full_name": "octo/autofac" },
+              "sender": { "login": "alice" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(orchestration.StartCommand);
+    }
+
+    [Fact]
+    public async Task GitHub_IssuesEvent_RequiredLabelMatchIsCaseInsensitive()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            eventHeader: "issues",
+            triggerRouter: new StubTriggerRouter("wf_1"));
+
+        var body = """
+            {
+              "action": "opened",
+              "issue": { "number": 8, "html_url": "https://github.com/octo/autofac/issues/8", "title": "Casing", "body": "Do the thing", "state": "open", "labels": [ { "name": "AutoFac" } ] },
+              "repository": { "full_name": "octo/autofac" },
+              "sender": { "login": "alice" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(orchestration.StartCommand);
+    }
+
+    [Fact]
+    public async Task GitHub_IssuesEvent_WhenRequiredLabelIsBlank_TriggersRegardlessOfLabels()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            eventHeader: "issues",
+            triggerRouter: new StubTriggerRouter("wf_1"),
+            requiredLabel: string.Empty);
+
+        var body = """
+            {
+              "action": "opened",
+              "issue": { "number": 9, "html_url": "https://github.com/octo/autofac/issues/9", "title": "Opt out", "body": "Do the thing", "state": "open" },
+              "repository": { "full_name": "octo/autofac" },
+              "sender": { "login": "alice" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(orchestration.StartCommand);
+    }
+
+    [Fact]
     public async Task GitHub_IssuesEvent_PassesRepositoryAndIssueUrlAsTriggerInputs()
     {
         var orchestration = new CapturingOrchestrationService();
@@ -291,7 +398,7 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 142, "html_url": "https://github.com/isartor-ai/autofac/issues/142", "title": "Seed inputs", "body": "Do the thing", "state": "open" },
+              "issue": { "number": 142, "html_url": "https://github.com/isartor-ai/autofac/issues/142", "title": "Seed inputs", "body": "Do the thing", "state": "open", "labels": [ { "name": "autofac" } ] },
               "repository": { "full_name": "isartor-ai/autofac" },
               "sender": { "login": "alice" }
             }
@@ -456,7 +563,8 @@ public sealed class WebhooksControllerTests
         string eventHeader,
         ITriggerRouter? triggerRouter = null,
         IWaitingExternalCorrelationRepository? waitingExternalCorrelationRepository = null,
-        string? slackSigningSecret = null)
+        string? slackSigningSecret = null,
+        string requiredLabel = "autofac")
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-GitHub-Event"] = eventHeader;
@@ -473,6 +581,7 @@ public sealed class WebhooksControllerTests
                     Enabled = true,
                     WebhookSecret = string.Empty,
                     TriggerActions = ["opened"],
+                    RequiredLabel = requiredLabel,
                 },
                 Slack = new SlackOptions
                 {

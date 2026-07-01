@@ -12,6 +12,11 @@ Work toward the first stable open-source release (1.0). See the
 [v1.0 epic](https://github.com/isartor-ai/autofac-private/issues/162).
 
 ### Added
+- **Required label on the GitHub issue trigger** (`Integrations:GitHub:RequiredLabel`,
+  default `autofac`): an issue must carry the label for its `issues` webhook to
+  start a run, so every issue opened on the configured repo no longer spends
+  model budget by default. Set to empty to restore the old behavior
+  (isartor-ai/autofac-private#191).
 - Tokenless **mock model provider** (`Anthropic:Provider=mock`) so full
   workflows run end to end with no API key — for demos and CI.
 - **Per-task prompts** on BPMN `agentTask` (child `<autofac:prompt>` element,
