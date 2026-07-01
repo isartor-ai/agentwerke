@@ -1,0 +1,46 @@
+name: Deploy marketing site (GitHub Pages)
+
+# Publishes the static site in `website/` to GitHub Pages.
+# One-time setup: repo Settings → Pages → "Build and deployment" → Source = "GitHub Actions".
+# Custom domain (autofac.de) is pinned via website/CNAME; see website/README.md for DNS.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+# Least-privilege token plus the OIDC + pages scopes deploy-pages requires.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deploy; don't cancel an in-flight publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

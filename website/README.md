@@ -59,14 +59,39 @@ recommended (it matches production path resolution).
 
 ## Deployment
 
-The site is fully static. Deploy `website/` to any static host or CDN:
+The site is fully static. Deploy `website/` to any static host or CDN.
+
+### GitHub Pages (configured)
+
+`.github/workflows/pages.yml` publishes `website/` to GitHub Pages on every push
+to `main` that touches `website/**` (and on manual `workflow_dispatch`). It uses
+the official Actions pipeline (`configure-pages` → `upload-pages-artifact` →
+`deploy-pages`) — no branch juggling, no `gh-pages` branch.
+
+One-time setup:
+
+1. **Repo Settings → Pages → Build and deployment → Source = "GitHub Actions".**
+2. **Custom domain.** `website/CNAME` pins `autofac.de`, so it ships in every
+   deploy. Configure DNS at your registrar:
+   - Apex `autofac.de` → four `A` records to GitHub Pages:
+     `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
+     (add the matching `AAAA` records for IPv6 if desired, or an `ALIAS`/`ANAME`
+     if your DNS supports it at the apex).
+   - `www.autofac.de` → `CNAME` to `<org-or-user>.github.io`.
+3. In Settings → Pages, tick **Enforce HTTPS** once the certificate is issued.
+
+Until DNS resolves to GitHub Pages, the custom domain won't serve — that's
+expected for a pinned custom domain.
+
+### Other hosts
 
 - **Netlify / Vercel / Cloudflare Pages** — set the publish/output directory to
   `website` and leave the build command empty.
-- **GitHub Pages** — publish the `website/` subfolder.
 - **S3 + CloudFront / nginx** — copy the folder to the web root.
 
-Point the `autofac.de` apex (and `www`) DNS at the host and enable HTTPS.
+For any non-Pages host, point the `autofac.de` apex (and `www`) DNS at that host
+and enable HTTPS. (`website/CNAME` is GitHub-Pages-specific and is ignored by
+other static hosts.)
 
 ### Before launch — founder review checklist
 
