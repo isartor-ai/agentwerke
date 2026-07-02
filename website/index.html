@@ -70,8 +70,9 @@
 
       <nav class="nav__links" aria-label="Primary">
         <a href="#problem">Problem</a>
+        <a href="#manifesto">Manifesto</a>
         <a href="#product">Platform</a>
-        <a href="#why">Why Autofac</a>
+        <a href="#why">Why</a>
         <a href="#enterprise">Enterprise</a>
         <a href="#evidence">Evidence</a>
         <a href="#integrations">Integrations</a>
@@ -90,6 +91,7 @@
     </div>
     <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile" hidden>
       <a href="#problem">Problem</a>
+      <a href="#manifesto">Manifesto</a>
       <a href="#product">Platform</a>
       <a href="#why">Why Autofac</a>
       <a href="#enterprise">Enterprise</a>
@@ -177,6 +179,83 @@
             <p>High-risk steps merge without an explicit decision. Approval is bolted on after the fact instead of being part of the process.</p>
           </article>
         </div>
+      </div>
+    </section>
+
+    <!-- ===================== MANIFESTO ===================== -->
+    <section class="section section--manifesto" id="manifesto">
+      <div class="container">
+        <header class="section__head">
+          <p class="eyebrow">Manifesto</p>
+          <h2>The dark factory</h2>
+          <p class="section__lede">
+            “Lights-out” manufacturing runs a factory floor with no one present.
+            Autofac takes its name from Philip K. Dick's 1955 story about automatic
+            factories that keep producing long after human control has slipped away.
+            That warning — not the fantasy — is the product thesis.
+          </p>
+        </header>
+
+        <p class="manifesto__prose">
+          AI agents can now plan, code, test, review, and open pull requests. Left
+          alone, that becomes another opaque production system: fast, tireless, hard
+          to interrogate, and too easy to trust because it looks useful. Autofac is
+          the countermeasure — not another coding agent, but the control plane
+          around them, where every job has a process model, every tool call crosses
+          a policy gate, every sandbox has a boundary, and every run leaves evidence
+          behind.
+        </p>
+
+        <blockquote class="manifesto__quote">
+          <span class="manifesto__kicker">The thesis</span>
+          The point is not to make agents harmless. The point is to make powerful
+          automation <strong>inspectable, interruptible, and accountable</strong>.
+        </blockquote>
+
+        <ol class="principles">
+          <li>
+            <span class="principles__no">01</span>
+            <div>
+              <h3>Autonomy without blind trust</h3>
+              <p>Agents can act, but never get direct access to credentials, networks, repositories, or deployment paths.</p>
+            </div>
+          </li>
+          <li>
+            <span class="principles__no">02</span>
+            <div>
+              <h3>Workflow over vibes</h3>
+              <p>Software delivery is modeled as versioned BPMN, not hidden in a prompt transcript.</p>
+            </div>
+          </li>
+          <li>
+            <span class="principles__no">03</span>
+            <div>
+              <h3>Sandboxes by default</h3>
+              <p>Agent work happens inside controlled Docker, OpenSandbox, or Kubernetes execution environments.</p>
+            </div>
+          </li>
+          <li>
+            <span class="principles__no">04</span>
+            <div>
+              <h3>Humans at the right choke points</h3>
+              <p>Approval gates, wait states, and policy outcomes are part of the process — not bolted on later.</p>
+            </div>
+          </li>
+          <li>
+            <span class="principles__no">05</span>
+            <div>
+              <h3>Evidence as exhaust</h3>
+              <p>Prompts, tool calls, policy decisions, costs, artifacts, and outcomes are captured into evidence packs.</p>
+            </div>
+          </li>
+          <li>
+            <span class="principles__no">06</span>
+            <div>
+              <h3>Self-hosted by design</h3>
+              <p>Run the factory on your infrastructure, with your model keys and your data boundary.</p>
+            </div>
+          </li>
+        </ol>
       </div>
     </section>
 
@@ -319,8 +398,8 @@
           <p class="eyebrow">Why Autofac</p>
           <h2>Coding agents optimize speed. Autofac optimizes governed delivery.</h2>
           <p class="section__lede">
-            The point is not to make agents harmless. The point is to make powerful
-            automation inspectable, interruptible, and accountable.
+            Same agents, same models — a different objective. Autofac trades a sliver
+            of raw speed for delivery you can put in front of an auditor.
           </p>
         </header>
 
