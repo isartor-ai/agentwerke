@@ -3349,3 +3349,14 @@ textarea {
 .timeline-interaction-badge {
   margin-left: auto;
 }
+.conversation-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}

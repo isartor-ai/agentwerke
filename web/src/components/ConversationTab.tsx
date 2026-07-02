@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { RunInteraction } from '../types';
+import { agentIdentity } from '../utils/agentIdentity';
 
 interface ConversationTabProps {
   interactions: RunInteraction[];
@@ -61,6 +62,7 @@ function ConversationEntry({ interaction, canAnswer, onAnswer }: ConversationEnt
   const [error, setError] = useState<string | null>(null);
 
   const isPending = interaction.status === 'pending' && interaction.addresseeType === 'human';
+  const identity = agentIdentity(interaction.from);
 
   const submit = async (value: string) => {
     if (!value.trim() || submitting) return;
@@ -76,9 +78,16 @@ function ConversationEntry({ interaction, canAnswer, onAnswer }: ConversationEnt
   };
 
   return (
-    <li className="conversation-entry">
+    <li className="conversation-entry" style={{ borderLeftColor: identity.accent, borderLeftWidth: 3 }}>
       <div className="conversation-head">
-        <strong className="conversation-from">{interaction.from}</strong>
+        <span
+          className="conversation-avatar"
+          style={{ backgroundColor: identity.accent, color: identity.onAccent }}
+          aria-hidden="true"
+        >
+          {identity.initials}
+        </span>
+        <strong className="conversation-from" style={{ color: identity.accent }}>{interaction.from}</strong>
         <span aria-hidden="true"> → </span>
         <span>{addresseeLabel(interaction)}</span>
         <span className="chip chip-static">{kindLabel(interaction)}</span>
