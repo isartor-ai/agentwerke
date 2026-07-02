@@ -104,10 +104,33 @@ assembly as template variables and a rendered `run_context` section.
 - `DecidedAt` (text, nullable)
 - `DecidedBy` (varchar(128), nullable)
 
+### agent_interactions
+
+Run-scoped record of every agent communication (#192): coordination-bus posts, agent-to-agent
+delegations, and questions/notifications to a human. Backs the run **Conversation** view.
+
+- `Id` (text, PK)
+- `RunId` (varchar(128), required, indexed)
+- `StepId` (varchar(128), nullable) — the step that produced the interaction, for anchoring in the UI
+- `FromAgent` (varchar(128), required)
+- `Kind` (varchar(64), required) — `post` | `question` | `choice` | `notify` | `agent_request` | `approval`
+- `AddresseeType` (varchar(32), required) — `human` | `agent`
+- `Addressee` (varchar(128), nullable) — agent id or human role/user; null = broadcast to the run
+- `Blocking` (boolean, required) — whether the sender suspends until answered
+- `Prompt` (varchar(8192), required) — the message / question / task text
+- `Options` (jsonb, required) — choices offered to the responder
+- `CorrelationId` (varchar(128), nullable) — links a request to its reply (e.g. `agent.request` ↔ result)
+- `Status` (varchar(64), required) — `pending` | `answered` | `posted` | `expired`
+- `Response` (varchar(8192), nullable)
+- `RespondedBy` (varchar(128), nullable)
+- `RespondedAt` (text, nullable)
+- `CreatedAt` (text, required)
+
 ## Notes
 
 - `PolicyDecision` is an owned type on `workflow_run_steps`, so it does not have its own table.
 - `approval_requests` is intentionally modeled as a standalone table without a foreign key back to `workflow_runs` in the current EF model.
+- `agent_interactions` is likewise standalone (no FK), keyed and indexed by `RunId`. Approvals still live in their own `approval_requests` table (conceptually `Kind=approval`); folding them into `agent_interactions` is a possible future consolidation.
 - `workflow_run_context` is likewise standalone (no FK), keyed by `RunId`; entries are upserted by (`RunId`, `Key`).
 - To add a migration:
   - `dotnet ef migrations add <Name> --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`

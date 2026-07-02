@@ -64,7 +64,8 @@ A run moves through the nodes of a BPMN model. When it reaches an agent task, th
 | Per-run cost and token budget enforcement | Built |
 | Tool Gateway, Hook Gateway, Skill repository, and prompt assembler | Built |
 | Knowledge retrieval (RAG) tool with source citations | Built |
-| Inter-agent coordination channel and tools | Built |
+| Inter-agent coordination: persisted message bus, plus `agent.request` inline delegation | Built |
+| Human-in-the-loop: agents pause to ask a human (`human.ask`) and resume on answer; per-run Conversation view with inline answering | Built |
 | Per-agent feedback capture and scorecard | Built |
 | Policy engine: data-driven rules, draft to simulate to publish lifecycle with impact analysis, purpose/risk scoring | Built |
 | Sandboxed execution (Docker / OpenSandbox) with per-policy provider selection, incl. a Kubernetes provider | Built |
