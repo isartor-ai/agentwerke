@@ -3299,3 +3299,53 @@ textarea {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Agent conversation thread (#192) */
+.conversation-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.conversation-entry {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--color-surface-container);
+}
+.conversation-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+.conversation-from {
+  color: var(--color-text-strong);
+}
+.conversation-prompt {
+  margin: 6px 0 4px;
+  color: var(--color-text);
+}
+.conversation-response {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+}
+.conversation-answer {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.conversation-answer-row {
+  display: flex;
+  gap: 8px;
+}
+.conversation-answer-row input {
+  flex: 1;
+}
+.timeline-interaction-badge {
+  margin-left: auto;
+}

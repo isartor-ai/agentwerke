@@ -11,6 +11,8 @@ vi.mock('../components/BpmnViewer');
 vi.mock('../api/client', () => ({
   apiClient: {
     getRun: vi.fn(),
+    getRunInteractions: vi.fn(),
+    answerInteraction: vi.fn(),
     getWorkflow: vi.fn(),
     streamRunEvents: vi.fn(),
     getRunEvidencePack: vi.fn(),
@@ -42,6 +44,8 @@ describe('RunDetail integration', () => {
     vi.mocked(apiClient.downloadRunEvidencePack).mockResolvedValue(undefined);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     vi.mocked(apiClient.cancelRun).mockResolvedValue(undefined);
+    vi.mocked(apiClient.getRunInteractions).mockResolvedValue([]);
+    vi.mocked(apiClient.answerInteraction).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -298,6 +302,43 @@ describe('RunDetail integration', () => {
     await waitFor(() => {
       expect(vi.mocked(apiClient.cancelRun)).toHaveBeenCalledWith('run-0421');
       expect(screen.getByText('runs list')).toBeInTheDocument();
+    });
+  });
+
+  it('shows the agent conversation and answers a pending human question', async () => {
+    vi.mocked(apiClient.getRunInteractions).mockResolvedValue([
+      {
+        id: 'int-1',
+        runId: 'run-0421',
+        stepId: 'step-7',
+        from: 'reviewer',
+        kind: 'choice',
+        addresseeType: 'human',
+        addressee: null,
+        blocking: true,
+        prompt: 'Ship as-is, or add tests first?',
+        options: ['Ship as-is', 'Add tests first'],
+        status: 'pending',
+        response: null,
+        respondedBy: null,
+        respondedAt: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    renderDetail();
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }));
+    expect(await screen.findByText('Ship as-is, or add tests first?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add tests first' }));
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.answerInteraction)).toHaveBeenCalledWith(
+        'run-0421',
+        'int-1',
+        'Add tests first',
+      );
     });
   });
 });
