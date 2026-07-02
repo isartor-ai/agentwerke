@@ -2,6 +2,7 @@ using Autofac.Api.Auth;
 using Autofac.Api.Contracts;
 using Autofac.Api.Contracts.Runs;
 using Autofac.Application.Workflows;
+using Autofac.Domain.Persistence;
 using Autofac.Infrastructure.Persistence;
 using Autofac.Storage.Artifacts;
 using Microsoft.AspNetCore.Authorization;
@@ -340,4 +341,57 @@ public sealed class RunsController : ControllerBase
         var stream = await _artifactStorage.OpenReadAsync(runId, artifactName, cancellationToken);
         return File(stream, "application/octet-stream", artifactName);
     }
+
+    [HttpGet("{runId}/interactions")]
+    public async Task<IActionResult> ListInteractions(string runId, CancellationToken cancellationToken)
+    {
+        var interactions = await _dbContext.AgentInteractions
+            .AsNoTracking()
+            .Where(i => i.RunId == runId)
+            .OrderBy(i => i.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return Ok(interactions.Select(ToInteractionSummary).ToList());
+    }
+
+    [Authorize(Policy = AutofacPolicies.Approver)]
+    [HttpPost("{runId}/interactions/{interactionId}/answer")]
+    public async Task<IActionResult> AnswerInteraction(
+        string runId,
+        string interactionId,
+        [FromBody] AnswerInteractionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Answer))
+        {
+            return BadRequest(new { message = "An answer is required." });
+        }
+
+        try
+        {
+            var answeredBy = AuthenticatedPrincipal.ResolveSubject(User);
+            var result = await _orchestrationService.AnswerInteractionAsync(
+                new AnswerInteractionCommand(runId, interactionId, request.Answer, answeredBy),
+                cancellationToken);
+
+            return Accepted(result);
+        }
+        catch (InteractionNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (InteractionNotPendingException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (WorkflowRunNotFoundException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+    }
+
+    private static InteractionSummary ToInteractionSummary(AgentInteraction i) =>
+        new(
+            i.Id, i.RunId, i.StepId, i.FromAgent, i.Kind, i.AddresseeType, i.Addressee,
+            i.Blocking, i.Prompt, i.Options, i.Status, i.Response, i.RespondedBy, i.RespondedAt, i.CreatedAt);
 }

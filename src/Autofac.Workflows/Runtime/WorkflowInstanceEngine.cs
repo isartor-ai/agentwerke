@@ -267,6 +267,15 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         await SaveCheckpointAsync(runId, FailedStatus, null, null, null, cancellationToken);
                         return new WorkflowExecutionState(runId, FailedStatus, null, null, null);
                     }
+                    if (result == ServiceExecutionResult.WaitingUser)
+                    {
+                        // The agent asked a human and is waiting (#192). Suspend with the checkpoint
+                        // pointing back at THIS node so resume re-runs the step with the answer
+                        // available. WaitingOnNodeId is null in the returned state so the executor
+                        // does not create an approval row — the pending AgentInteraction is the record.
+                        await SaveCheckpointAsync(runId, WaitingUserStatus, node.Id, node.Id, null, cancellationToken);
+                        return new WorkflowExecutionState(runId, WaitingUserStatus, node.Id, null, null);
+                    }
                     var afterService = graph.GetSingleSuccessor(node.Id);
                     // Skip the boundary event node when present — it was already handled inline
                     if (graph.NodeById.TryGetValue(afterService, out var afterNode) && afterNode.ElementName == "boundaryEvent")
@@ -590,6 +599,17 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     }), cancellationToken);
             }
 
+            if (string.Equals(outcome.StepStatus, WaitingUserStatus, StringComparison.Ordinal))
+            {
+                // The agent paused mid-step to ask a human (#192). Record the wait and hand back
+                // to the caller, which suspends the run and re-runs this node on resume.
+                await store.AppendEventAsync(runId, "service_task_waiting_user",
+                    Serialize(new { runId, nodeId = node.Id, stepId = step.Id, attempt, reason = outcome.FailureReason ?? "awaiting_human_input" }),
+                    cancellationToken);
+                await store.UpdateStepStatusAsync(step.Id, WaitingUserStatus, null, outcome.FailureReason, DateTime.UtcNow.ToString("o"), outcome.PolicyDecision, outcome.RuntimeSnapshot, cancellationToken);
+                return ServiceExecutionResult.WaitingUser;
+            }
+
             if (!outcome.Succeeded)
             {
                 if (IsNonFatalServiceTaskStatus(outcome.StepStatus))
@@ -897,7 +917,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         string? ExternalCorrelationKey,
         string? ExternalMessageName);
 
-    private enum ServiceExecutionResult { Completed, Failed }
+    private enum ServiceExecutionResult { Completed, Failed, WaitingUser }
 
     // ── Flow graph ────────────────────────────────────────────────────────────
 

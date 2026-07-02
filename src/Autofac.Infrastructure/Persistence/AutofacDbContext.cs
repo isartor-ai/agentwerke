@@ -25,6 +25,8 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
 
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
 
+    public DbSet<AgentInteraction> AgentInteractions => Set<AgentInteraction>();
+
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
     public DbSet<OutboxEntry> OutboxEntries => Set<OutboxEntry>();
@@ -153,6 +155,30 @@ public sealed class AutofacDbContext(DbContextOptions<AutofacDbContext> options)
             entity.Property(e => e.Priority).HasMaxLength(64);
             entity.Property(e => e.DecisionComment).HasMaxLength(2048);
             entity.Property(e => e.DecidedBy).HasMaxLength(128);
+        });
+
+        modelBuilder.Entity<AgentInteraction>(entity =>
+        {
+            entity.ToTable("agent_interactions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.StepId).HasMaxLength(128);
+            entity.Property(e => e.FromAgent).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.Kind).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.AddresseeType).HasMaxLength(32).IsRequired();
+            entity.Property(e => e.Addressee).HasMaxLength(128);
+            entity.Property(e => e.Prompt).HasMaxLength(8192).IsRequired();
+            entity.Property(e => e.Options)
+                .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                .HasColumnType("jsonb")
+                .Metadata.SetValueComparer(StringListComparer);
+            entity.Property(e => e.CorrelationId).HasMaxLength(128);
+            entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Response).HasMaxLength(8192);
+            entity.Property(e => e.RespondedBy).HasMaxLength(128);
+            entity.HasIndex(e => e.RunId);
         });
 
         modelBuilder.Entity<OutboxEntry>(entity =>

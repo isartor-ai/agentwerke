@@ -62,10 +62,20 @@ once exceeded.
 ## Agent capabilities
 
 Beyond the model loop, agents have policy-gated tools for **knowledge retrieval**
-(`knowledge.search` over `IKnowledgeRetriever`, with citations) and **inter-agent
-coordination** (`agent.post_message`/`agent.read_messages` on a run-scoped channel).
-Human approval decisions are captured as per-agent **feedback** and aggregated into
-a scorecard.
+(`knowledge.search` over `IKnowledgeRetriever`, with citations), **inter-agent
+coordination** (`agent.post_message`/`agent.read_messages` on a run-scoped bus),
+**delegation** (`agent.request` runs another agent inline and returns its result), and
+**asking a human** (`human.ask` pauses the run until the person answers; `human.notify`
+sends a non-blocking heads-up).
+
+A blocking `human.ask` suspends the run (`waiting_user`) with the checkpoint pointing
+back at the same step, so answering re-runs the step and the agent proceeds with the
+answer in hand — no thread is held while a person is away. All of these exchanges are
+persisted as **`AgentInteraction`** records — one run-scoped store that also backs the
+run **Conversation** view — so the full agent-to-agent and agent-to-human history is
+auditable and survives restart. `agent.request` is depth-guarded: the callee runs
+read-only and cannot delegate again or pause the run. Human approval decisions are
+captured as per-agent **feedback** and aggregated into a scorecard.
 
 ## Governance & evidence
 

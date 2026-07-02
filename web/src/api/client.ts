@@ -15,6 +15,7 @@ import type {
   PolicySimulationReport,
   PolicySimulationRequestInput,
   RunEvent,
+  RunInteraction,
   RuntimeMode,
   SettingsSnapshot,
   SettingsTestResponse,
@@ -377,6 +378,17 @@ export const apiClient = {
 
   async getRun(id: string): Promise<WorkflowRun | undefined> {
     return requestJson<WorkflowRun>(`/api/runs/${id}`);
+  },
+
+  async getRunInteractions(runId: string): Promise<RunInteraction[]> {
+    return requestJson<RunInteraction[]>(`/api/runs/${encodeURIComponent(runId)}/interactions`);
+  },
+
+  async answerInteraction(runId: string, interactionId: string, answer: string): Promise<void> {
+    await requestJson<void>(
+      `/api/runs/${encodeURIComponent(runId)}/interactions/${encodeURIComponent(interactionId)}/answer`,
+      { method: 'POST', body: JSON.stringify({ answer }) },
+    );
   },
 
   async cancelRun(runId: string): Promise<void> {

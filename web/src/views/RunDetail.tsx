@@ -13,9 +13,10 @@ import { RunDiffModal } from '../components/RunDiffModal';
 import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
-import type { AuthState, EvidencePack, RunStatus, WorkflowRun } from '../types';
+import { ConversationTab } from '../components/ConversationTab';
+import type { AuthState, EvidencePack, RunInteraction, RunStatus, WorkflowRun } from '../types';
 
-const tabs = ['Summary', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
+const tabs = ['Summary', 'Conversation', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -56,6 +57,7 @@ export function RunDetail({ auth }: RunDetailProps) {
   const { runId } = useParams();
   const navigate = useNavigate();
   const [run, setRun] = useState<WorkflowRun | null>(null);
+  const [interactions, setInteractions] = useState<RunInteraction[]>([]);
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   const [panelStepId, setPanelStepId] = useState<string | null>(null);
@@ -110,6 +112,8 @@ export function RunDetail({ auth }: RunDetailProps) {
         prevCurrentStep.current = data.currentStep;
       }
       setRun(data);
+      // Best-effort: the conversation thread should never block the run view (#192).
+      void apiClient.getRunInteractions(runId).then(setInteractions).catch(() => undefined);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unknown error');
     } finally {
@@ -118,6 +122,23 @@ export function RunDetail({ auth }: RunDetailProps) {
   }, [runId]);
 
   useEffect(() => { void loadRun(); }, [loadRun]);
+
+  const handleAnswerInteraction = useCallback(async (interactionId: string, answer: string) => {
+    if (!runId) return;
+    await apiClient.answerInteraction(runId, interactionId, answer);
+    await loadRun();
+  }, [runId, loadRun]);
+
+  // Count interactions per step so the timeline can mark steps that talked to a human or agent (#192).
+  const interactionCountByStep = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const interaction of interactions) {
+      if (interaction.stepId) {
+        counts[interaction.stepId] = (counts[interaction.stepId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [interactions]);
 
   const loadEvidencePack = useCallback(async () => {
     if (!runId || !canControlRuns) return;
@@ -510,6 +531,15 @@ export function RunDetail({ auth }: RunDetailProps) {
           </>
         );
 
+      case 'Conversation':
+        return (
+          <ConversationTab
+            interactions={interactions}
+            canAnswer={canSubmitApprovals}
+            onAnswer={handleAnswerInteraction}
+          />
+        );
+
       case 'Evidence':
         return renderEvidencePack();
 
@@ -787,6 +817,7 @@ export function RunDetail({ auth }: RunDetailProps) {
 
           <StepTimeline
             steps={run.steps ?? []}
+            interactionCountByStep={interactionCountByStep}
             expandedStepId={expandedStepId}
             onToggleStep={(stepId) => {
               const next = expandedStepId === stepId ? null : stepId;

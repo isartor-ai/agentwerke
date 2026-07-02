@@ -140,6 +140,12 @@ public sealed class ToolGateway : IToolGateway
                 ExternalActions: result.ExternalActions,
                 SandboxExecution: result.SandboxExecution);
         }
+        catch (AgentInteractionRequiredException)
+        {
+            // A blocking tool is asking for human/agent input (#192). This is control flow, not a
+            // tool failure — let it unwind so the orchestrator can suspend the run for re-run.
+            throw;
+        }
         catch (Exception ex)
         {
             stopwatch.Stop();

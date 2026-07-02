@@ -4,6 +4,8 @@ interface StepTimelineProps {
   steps: RunStep[];
   expandedStepId: string | null;
   onToggleStep: (stepId: string) => void;
+  /** Number of agent-conversation interactions produced by each step (#192). */
+  interactionCountByStep?: Record<string, number>;
 }
 
 function stepStateClass(status: RunStep['status']): string {
@@ -23,13 +25,14 @@ function stepStateClass(status: RunStep['status']): string {
   }
 }
 
-export function StepTimeline({ steps, expandedStepId, onToggleStep }: StepTimelineProps) {
+export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionCountByStep }: StepTimelineProps) {
   return (
     <section className="panel timeline-panel" aria-label="Execution timeline">
       <h2>Execution Timeline</h2>
       <ol className="timeline" role="list">
         {steps.map((step) => {
           const expanded = expandedStepId === step.id;
+          const interactionCount = interactionCountByStep?.[step.id] ?? 0;
           return (
             <li key={step.id} className="timeline-item">
               <button
@@ -43,6 +46,11 @@ export function StepTimeline({ steps, expandedStepId, onToggleStep }: StepTimeli
                   <strong>{step.name}</strong>
                   <span>{step.status.replace('_', ' ')}</span>
                 </span>
+                {interactionCount > 0 ? (
+                  <span className="chip chip-static timeline-interaction-badge">
+                    {interactionCount} message{interactionCount === 1 ? '' : 's'}
+                  </span>
+                ) : null}
               </button>
               {expanded ? (
                 <div className="timeline-details">

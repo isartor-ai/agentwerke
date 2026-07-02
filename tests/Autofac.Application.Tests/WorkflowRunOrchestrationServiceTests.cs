@@ -1,3 +1,4 @@
+using Autofac.Application.Agents;
 using Autofac.Application.Observability;
 using Autofac.Application.Workflows;
 using Autofac.Domain.Persistence;
@@ -24,6 +25,7 @@ public sealed class WorkflowRunOrchestrationServiceTests
             new InMemoryWorkflowRunRepository(),
             runContext,
             new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "unused", Status = "pending", RiskLevel = "low" }),
+            new InMemoryAgentInteractionRepository(),
             new CapturingAuditRepository(),
             outbox,
             new StubCorrelationContext("corr_start"),
@@ -71,6 +73,7 @@ public sealed class WorkflowRunOrchestrationServiceTests
             new InMemoryWorkflowRunRepository(),
             runContext,
             new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "unused", Status = "pending", RiskLevel = "low" }),
+            new InMemoryAgentInteractionRepository(),
             new CapturingAuditRepository(),
             new CapturingRunOutbox(),
             new StubCorrelationContext("corr_trigger"),
@@ -125,6 +128,7 @@ public sealed class WorkflowRunOrchestrationServiceTests
             new InMemoryWorkflowRunRepository(new WorkflowRun { Id = "run_1", Status = "waiting" }),
             new NoOpRunContextRepository(),
             approvalRepository,
+            new InMemoryAgentInteractionRepository(),
             auditRepository,
             outbox,
             new StubCorrelationContext("corr_1"),
@@ -151,6 +155,82 @@ public sealed class WorkflowRunOrchestrationServiceTests
     }
 
     [Fact]
+    public async Task AnswerInteractionAsync_MarksAnsweredAndEnqueuesResumeWithAnswerer()
+    {
+        var interaction = new AgentInteraction
+        {
+            Id = "int_1",
+            RunId = "run_1",
+            FromAgent = "reviewer",
+            Kind = AgentInteractionKinds.Question,
+            AddresseeType = AgentInteractionAddresseeTypes.Human,
+            Blocking = true,
+            Prompt = "Ship or add tests?",
+            Status = AgentInteractionStatuses.Pending,
+            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+        };
+        var interactions = new InMemoryAgentInteractionRepository(interaction);
+        var auditRepository = new CapturingAuditRepository();
+        var outbox = new CapturingRunOutbox();
+        var service = new WorkflowRunOrchestrationService(
+            new UnusedWorkflowDefinitionRepository(),
+            new InMemoryWorkflowRunRepository(new WorkflowRun { Id = "run_1", Status = "waiting_user" }),
+            new NoOpRunContextRepository(),
+            new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "unused", Status = "pending", RiskLevel = "low" }),
+            interactions,
+            auditRepository,
+            outbox,
+            new StubCorrelationContext("corr_ans"),
+            new NoOpWorkflowMetrics(),
+            NullLogger<WorkflowRunOrchestrationService>.Instance);
+
+        var result = await service.AnswerInteractionAsync(new AnswerInteractionCommand(
+            RunId: "run_1",
+            InteractionId: "int_1",
+            Answer: "add tests",
+            AnsweredBy: "entra-user-9"));
+
+        Assert.Equal("pending", result.Status);
+        Assert.Equal(AgentInteractionStatuses.Answered, interaction.Status);
+        Assert.Equal("add tests", interaction.Response);
+        Assert.Equal("entra-user-9", interaction.RespondedBy);
+        Assert.Single(outbox.Enqueued);
+        Assert.Equal("resume", outbox.Enqueued[0].Operation);
+        Assert.Equal("entra-user-9", OutboxResumePayload.Deserialize(outbox.Enqueued[0].Payload)?.ApprovedBy);
+        Assert.Contains(auditRepository.Records, static r => r.Action == "interaction.answer");
+    }
+
+    [Fact]
+    public async Task AnswerInteractionAsync_WhenNotPending_ThrowsAndDoesNotResume()
+    {
+        var interaction = new AgentInteraction
+        {
+            Id = "int_1",
+            RunId = "run_1",
+            Kind = AgentInteractionKinds.Question,
+            Status = AgentInteractionStatuses.Answered,
+            Prompt = "already answered",
+            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+        };
+        var outbox = new CapturingRunOutbox();
+        var service = new WorkflowRunOrchestrationService(
+            new UnusedWorkflowDefinitionRepository(),
+            new InMemoryWorkflowRunRepository(new WorkflowRun { Id = "run_1", Status = "waiting_user" }),
+            new NoOpRunContextRepository(),
+            new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "unused", Status = "pending", RiskLevel = "low" }),
+            new InMemoryAgentInteractionRepository(interaction),
+            new CapturingAuditRepository(),
+            outbox,
+            new StubCorrelationContext("corr_ans2"),
+            new NoOpWorkflowMetrics(),
+            NullLogger<WorkflowRunOrchestrationService>.Instance);
+
+        await Assert.ThrowsAsync<InteractionNotPendingException>(() =>
+            service.AnswerInteractionAsync(new AnswerInteractionCommand("run_1", "int_1", "x", "u")));
+        Assert.Empty(outbox.Enqueued);
+    }
+
+    [Fact]
     public async Task ResumeExternalRunAsync_EnqueuesResumeWithCorrelationPayloadAndAuditActor()
     {
         var auditRepository = new CapturingAuditRepository();
@@ -160,6 +240,7 @@ public sealed class WorkflowRunOrchestrationServiceTests
             new InMemoryWorkflowRunRepository(new WorkflowRun { Id = "run_2", Status = "waiting_external" }),
             new NoOpRunContextRepository(),
             new InMemoryApprovalRepository(new ApprovalRequest { Id = "unused", RunId = "run_2", Status = "pending", RiskLevel = "low" }),
+            new InMemoryAgentInteractionRepository(),
             auditRepository,
             outbox,
             new StubCorrelationContext("corr_2"),
@@ -395,6 +476,36 @@ public sealed class WorkflowRunOrchestrationServiceTests
         {
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class InMemoryAgentInteractionRepository : IAgentInteractionRepository
+    {
+        public List<AgentInteraction> Items { get; } = new();
+
+        public InMemoryAgentInteractionRepository(params AgentInteraction[] seed) => Items.AddRange(seed);
+
+        public Task AddAsync(AgentInteraction interaction, CancellationToken cancellationToken)
+        {
+            Items.Add(interaction);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<AgentInteraction>> GetByRunAsync(string runId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AgentInteraction>>(Items.Where(i => i.RunId == runId).ToList());
+
+        public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(
+            string runId, string? fromFilter, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AgentInteraction>>(
+                Items.Where(i => i.RunId == runId && i.Kind == AgentInteractionKinds.Post).ToList());
+
+        public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) =>
+            Task.FromResult(Items.FirstOrDefault(i => i.Id == interactionId));
+
+        public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) =>
+            Task.FromResult(Items.FirstOrDefault(i =>
+                i.RunId == runId && i.Status == AgentInteractionStatuses.Pending));
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class CapturingAuditRepository : IAuditRepository
