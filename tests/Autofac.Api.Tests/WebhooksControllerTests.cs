@@ -629,6 +629,9 @@ public sealed class WebhooksControllerTests
 
         public Task<RecoverRunResult> RecoverRunAsync(string runId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<AnswerInteractionResult> AnswerInteractionAsync(AnswerInteractionCommand command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class CapturingExternalWorkflowEventRepository : IExternalWorkflowEventRepository
