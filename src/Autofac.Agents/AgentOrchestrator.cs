@@ -336,7 +336,23 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 }, cancellationToken);
             }
             default:
-                modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
+                try
+                {
+                    modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
+                }
+                catch (AgentInteractionRequiredException ex)
+                {
+                    // The agent asked a human mid-step and is waiting for an answer (#192).
+                    // Suspend the run; the step re-runs on resume, when the answer is available.
+                    return new AgentTaskOutcome(
+                        Succeeded: false,
+                        Output: null,
+                        FailureReason: $"Awaiting response to: {ex.Prompt}",
+                        PolicyDecision: policyDecision,
+                        RuntimeSnapshot: runtimeSnapshot with { ExecutionMode = executionMode },
+                        StepStatus: AgentTaskOutcomeStatuses.WaitingUser);
+                }
+
                 break;
         }
 

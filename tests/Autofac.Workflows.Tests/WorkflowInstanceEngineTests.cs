@@ -275,6 +275,43 @@ public sealed class WorkflowInstanceEngineTests
     }
 
     [Fact]
+    public async Task ServiceTask_WhenAgentAsksHuman_SuspendsWaitingUser_AndReRunsStepOnResume()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var executor = new AsksHumanOnceServiceTaskExecutor();
+        var engine = new WorkflowInstanceEngine(store, executor, new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "AskFlow",
+            ProcessName: "Ask Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition(
+                    "Ask",
+                    "Ask human",
+                    "serviceTask",
+                    new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        // First pass: the agent asks a human, so the run parks at waiting_user.
+        var started = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+        Assert.Equal("waiting_user", started.Status);
+        // No approval was requested — WaitingOnNodeId is null so the executor won't create one.
+        Assert.Null(started.WaitingOnNodeId);
+        Assert.Null(started.WaitingApprovalArtifactName);
+
+        var events = await store.ListRunEventsAsync(started.RunId, CancellationToken.None);
+        Assert.Contains(events, static e => e.Type == "service_task_waiting_user");
+
+        // Second pass: the human answered, so the step re-runs and the run completes.
+        var resumed = await engine.ResumeAsync(started.RunId, definition, "human", CancellationToken.None);
+        Assert.Equal("completed", resumed.Status);
+        Assert.Equal(2, executor.Calls);
+    }
+
+    [Fact]
     public async Task StartAsync_WhenServiceTaskTimeoutTriggersBoundary_ContinuesToCompletion()
     {
         var store = new InMemoryWorkflowRuntimeStore();
@@ -686,6 +723,34 @@ public sealed class WorkflowInstanceEngineTests
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: true,
                 Output: "no-op executor",
+                FailureReason: null));
+        }
+    }
+
+    private sealed class AsksHumanOnceServiceTaskExecutor : IServiceTaskExecutor
+    {
+        public int Calls { get; private set; }
+
+        public Task<AgentTaskOutcome> ExecuteAsync(
+            string runId, string stepId, BpmnNodeDefinition node,
+            int attempt, CancellationToken cancellationToken)
+        {
+            Calls++;
+
+            // First execution: the agent asks a human and the run must suspend (#192).
+            if (Calls == 1)
+            {
+                return Task.FromResult(new AgentTaskOutcome(
+                    Succeeded: false,
+                    Output: null,
+                    FailureReason: "Awaiting response to: which auth scheme?",
+                    StepStatus: AgentTaskOutcomeStatuses.WaitingUser));
+            }
+
+            // Re-run after the answer is available: complete normally.
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: true,
+                Output: "used SessionAuth",
                 FailureReason: null));
         }
     }
