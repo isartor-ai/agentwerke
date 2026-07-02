@@ -36,7 +36,7 @@ public static class DependencyInjection
             new Knowledge.LexicalKnowledgeRetriever(
                 sp.GetRequiredService<IOptions<Knowledge.KnowledgeOptions>>()));
         services.AddScoped<IAgentTool, KnowledgeSearchTool>();
-        services.AddSingleton<Coordination.IAgentCoordinationChannel, Coordination.InMemoryAgentCoordinationChannel>();
+        services.AddScoped<Coordination.IAgentCoordinationChannel, Coordination.PersistentAgentCoordinationChannel>();
         services.AddScoped<IAgentTool, AgentPostMessageTool>();
         services.AddScoped<IAgentTool, AgentReadMessagesTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();

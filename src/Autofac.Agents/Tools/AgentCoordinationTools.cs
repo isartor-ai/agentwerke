@@ -31,16 +31,17 @@ public sealed class AgentPostMessageTool : IAgentTool, IToolSchemaProvider
         }
     }
 
-    public Task<AgentToolExecutionResult> ExecuteAsync(
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
         AgentToolExecutionContext context,
         IReadOnlyDictionary<string, string> input,
         CancellationToken cancellationToken)
     {
-        var message = _channel.Post(context.RunId, context.AgentName, input["text"]);
-        return Task.FromResult(new AgentToolExecutionResult(
+        var message = await _channel.PostAsync(
+            context.RunId, context.AgentName, input["text"], context.StepId, cancellationToken);
+        return new AgentToolExecutionResult(
             Succeeded: true,
             Output: $"Posted coordination message as '{message.From}'.",
-            FailureReason: null));
+            FailureReason: null);
     }
 }
 
@@ -68,20 +69,20 @@ public sealed class AgentReadMessagesTool : IAgentTool, IToolSchemaProvider
         // No required input.
     }
 
-    public Task<AgentToolExecutionResult> ExecuteAsync(
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
         AgentToolExecutionContext context,
         IReadOnlyDictionary<string, string> input,
         CancellationToken cancellationToken)
     {
         var fromFilter = input.TryGetValue("from", out var from) && !string.IsNullOrWhiteSpace(from) ? from : null;
-        var messages = _channel.Read(context.RunId, fromFilter);
+        var messages = await _channel.ReadAsync(context.RunId, fromFilter, cancellationToken);
 
         if (messages.Count == 0)
         {
-            return Task.FromResult(new AgentToolExecutionResult(
+            return new AgentToolExecutionResult(
                 Succeeded: true,
                 Output: "No coordination messages yet.",
-                FailureReason: null));
+                FailureReason: null);
         }
 
         var builder = new StringBuilder();
@@ -91,9 +92,9 @@ public sealed class AgentReadMessagesTool : IAgentTool, IToolSchemaProvider
             builder.AppendLine($"- [{message.CreatedAt}] {message.From}: {message.Text}");
         }
 
-        return Task.FromResult(new AgentToolExecutionResult(
+        return new AgentToolExecutionResult(
             Succeeded: true,
             Output: builder.ToString().TrimEnd(),
-            FailureReason: null));
+            FailureReason: null);
     }
 }
