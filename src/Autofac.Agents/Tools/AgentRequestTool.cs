@@ -3,6 +3,7 @@ using Autofac.Agents.Models;
 using Autofac.Application.Agents;
 using Autofac.Domain.AgentRuntime;
 using Autofac.Domain.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 
 // IAgentRegistry and AgentProfile live in the Autofac.Agents root namespace.
 using Autofac.Agents;
@@ -20,16 +21,19 @@ namespace Autofac.Agents.Tools;
 public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IAgentRegistry _registry;
-    private readonly IAgentModelRunner _modelRunner;
+    private readonly IServiceProvider _services;
     private readonly IAgentInteractionRepository _interactions;
 
+    // IAgentModelRunner is resolved lazily (not injected) to avoid a construction cycle: this tool
+    // is collected into IToolRegistry, and AgentModelRunner → ToolGateway → ToolRegistry would close
+    // the loop. Resolving it at execution time breaks the cycle; the scoped runner is reentrant.
     public AgentRequestTool(
         IAgentRegistry registry,
-        IAgentModelRunner modelRunner,
+        IServiceProvider services,
         IAgentInteractionRepository interactions)
     {
         _registry = registry;
-        _modelRunner = modelRunner;
+        _services = services;
         _interactions = interactions;
     }
 
@@ -78,7 +82,8 @@ public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
         var correlationId = Guid.NewGuid().ToString("n");
         await RecordAsync(context, correlationId, from: context.AgentName, addressee: to, text: task, cancellationToken);
 
-        var result = await _modelRunner.RunAsync(
+        var modelRunner = _services.GetRequiredService<IAgentModelRunner>();
+        var result = await modelRunner.RunAsync(
             BuildDelegatedRequest(context, profile, task),
             cancellationToken);
 

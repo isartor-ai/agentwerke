@@ -21,7 +21,7 @@ public sealed class AgentRequestToolTests
             Succeeded: true, Output: "scaffolding done", FailureReason: null,
             ToolInvocations: [], Artifacts: null, TokenUsage: null));
         store = new FakeInteractionStore();
-        return new AgentRequestTool(new FakeRegistry(profiles), runner, store);
+        return new AgentRequestTool(new FakeRegistry(profiles), new StubServiceProvider(runner), store);
     }
 
     [Fact]
@@ -97,7 +97,8 @@ public sealed class AgentRequestToolTests
             Succeeded: false, Output: null, FailureReason: "model not configured",
             ToolInvocations: [], Artifacts: null, TokenUsage: null));
         var tool = new AgentRequestTool(
-            new FakeRegistry(new AgentProfile { AgentId = "coder", Name = "coder" }), runner, store);
+            new FakeRegistry(new AgentProfile { AgentId = "coder", Name = "coder" }),
+            new StubServiceProvider(runner), store);
 
         var result = await tool.ExecuteAsync(
             Context("planner"),
@@ -130,6 +131,16 @@ public sealed class AgentRequestToolTests
         public AgentProfile? Find(string agentId) => _byId.GetValueOrDefault(agentId);
 
         public IReadOnlyList<AgentProfile> All() => _byId.Values.ToList();
+    }
+
+    private sealed class StubServiceProvider : IServiceProvider
+    {
+        private readonly IAgentModelRunner _runner;
+
+        public StubServiceProvider(IAgentModelRunner runner) => _runner = runner;
+
+        public object? GetService(Type serviceType) =>
+            serviceType == typeof(IAgentModelRunner) ? _runner : null;
     }
 
     private sealed class FakeAgentModelRunner : IAgentModelRunner
