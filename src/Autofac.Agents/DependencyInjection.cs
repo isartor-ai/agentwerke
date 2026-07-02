@@ -39,6 +39,8 @@ public static class DependencyInjection
         services.AddScoped<Coordination.IAgentCoordinationChannel, Coordination.PersistentAgentCoordinationChannel>();
         services.AddScoped<IAgentTool, AgentPostMessageTool>();
         services.AddScoped<IAgentTool, AgentReadMessagesTool>();
+        services.AddScoped<IAgentTool, HumanAskTool>();
+        services.AddScoped<IAgentTool, HumanNotifyTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();
         services.AddScoped<IAgentHookHandler, TemplateHookHandler>();
         services.AddScoped<IAgentHookGateway, HookGateway>();
