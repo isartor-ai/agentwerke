@@ -38,7 +38,7 @@ jobs:
           global-json-file: global.json
 
       - name: Build
-        run: dotnet build Autofac.sln --configuration Release
+        run: dotnet build Agentwerke.sln --configuration Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

@@ -137,7 +137,7 @@ sandbox:
     # API key is read from `secretName` (key: OPEN_SANDBOX_API_KEY) when set.
 
   # Namespace + RBAC for the reserved direct Kubernetes/Kata executor
-  # (Autofac.Sandboxes.KubernetesKataSandboxExecutor). This internal class keeps
+  # (Agentwerke.Sandboxes.KubernetesKataSandboxExecutor). This internal class keeps
   # the legacy namespace until the deferred technical namespace migration.
   # This is the fallback architecture only if the OpenSandbox spike fails — see ADR-003. It is not
   # used while provider is "opensandbox" or "docker".

@@ -16,8 +16,8 @@ echo "Postgres is ready."
 
 echo "Running EF Core migrations..."
 dotnet ef database update \
-  --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj \
-  --startup-project src/Autofac.Api/Autofac.Api.csproj \
+  --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj \
+  --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj \
   --connection "$CONNECTION_STRING"
 
 echo "Migrations complete."

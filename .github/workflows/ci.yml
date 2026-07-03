@@ -24,15 +24,15 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore Autofac.sln
+        run: dotnet restore Agentwerke.sln
 
       - name: Build
-        run: dotnet build Autofac.sln --no-restore --configuration Release
+        run: dotnet build Agentwerke.sln --no-restore --configuration Release
 
       - name: Test
         # Exclude the E2E suite — it requires a running stack (Postgres + API +
         # docker sandbox) and is run via docker/docker-compose.e2e.yml, not unit CI.
-        run: dotnet test Autofac.sln --no-build --configuration Release --filter "FullyQualifiedName!~Autofac.E2ETests" --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test Agentwerke.sln --no-build --configuration Release --filter "FullyQualifiedName!~Agentwerke.E2ETests" --logger "trx;LogFileName=test-results.trx"
 
       - name: Upload test results
         if: always()

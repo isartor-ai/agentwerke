@@ -29,9 +29,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - run: dotnet restore Autofac.sln
-      - run: dotnet build Autofac.sln --no-restore --configuration Release
-      - run: dotnet test Autofac.sln --no-build --configuration Release
+      - run: dotnet restore Agentwerke.sln
+      - run: dotnet build Agentwerke.sln --no-restore --configuration Release
+      - run: dotnet test Agentwerke.sln --no-build --configuration Release
 
   images:
     name: Publish ${{ matrix.name }} image

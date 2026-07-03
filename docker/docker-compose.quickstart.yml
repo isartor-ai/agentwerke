@@ -34,8 +34,8 @@ services:
     working_dir: /repo
     command: >
       dotnet ef database update
-      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
-      --startup-project src/Autofac.Api/Autofac.Api.csproj
+      --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
+      --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_quickstart;Username=postgres;Password=postgres"
     depends_on:

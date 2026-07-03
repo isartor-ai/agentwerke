@@ -28,8 +28,9 @@ Thumbs.db
 docker/.env.pilot.local
 config/settings.overrides.json
 config/settings.secrets.json
-src/Autofac.Api/config/settings.overrides.json
-src/Autofac.Api/config/settings.secrets.json
+src/Agentwerke.Api/config/settings.overrides.json
+src/Agentwerke.Api/config/settings.secrets.json
 
 # scripts/run-agent-sandboxed-e2e.sh artifacts bind-mount (see docker-compose.e2e.yml)
 docker/.agent-sandboxed-artifacts/
+docker/.real-e2e-artifacts/

@@ -43,8 +43,8 @@ services:
     working_dir: /repo
     command: >
       dotnet ef database update
-      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
-      --startup-project src/Autofac.Api/Autofac.Api.csproj
+      --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
+      --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_e2e;Username=postgres;Password=postgres"
     depends_on:
@@ -53,7 +53,7 @@ services:
     restart: "no"
 
   # WireMock — stubs external HTTP calls so tests need no real credentials.
-  # Mapping file: tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json
+  # Mapping file: tests/Agentwerke.E2ETests/Fixtures/wiremock-github-stub.json
   wiremock:
     image: wiremock/wiremock:3.10.0
     command: --port 8080
@@ -65,9 +65,9 @@ services:
     ports:
       - "9093:8080"
     volumes:
-      - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github.json:ro
-      - ../tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json:/home/wiremock/mappings/anthropic.json:ro
-      - ../tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-tool-use-stub.json:/home/wiremock/mappings/anthropic-tool-use.json:ro
+      - ../tests/Agentwerke.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github.json:ro
+      - ../tests/Agentwerke.E2ETests/Fixtures/wiremock-anthropic-stub.json:/home/wiremock/mappings/anthropic.json:ro
+      - ../tests/Agentwerke.E2ETests/Fixtures/wiremock-anthropic-tool-use-stub.json:/home/wiremock/mappings/anthropic-tool-use.json:ro
     healthcheck:
       # WireMock 3.10+ admin endpoint returns {"status":"healthy"}
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]
@@ -101,8 +101,8 @@ services:
     working_dir: /repo
     command: >
       dotnet ef database update
-      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
-      --startup-project src/Autofac.Api/Autofac.Api.csproj
+      --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
+      --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
       ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=autofac_e2e_opensandbox;Username=postgres;Password=postgres"
     depends_on:
@@ -271,7 +271,7 @@ services:
   # ── agent_sandboxed E2E infrastructure ───────────────────────────────────────
   #
   # Exercises the real OpenSandboxedAgentRunner path (a claude-code-runner agent
-  # running Autofac.AgentRunner.dll inside a real container) via the local Docker
+  # running Agentwerke.AgentRunner.dll inside a real container) via the local Docker
   # sandbox provider, not OpenSandbox — see docs/manual-test-opensandbox.md for why.
   # The Anthropic Messages API is stubbed through the shared wiremock service so no
   # real model API key is needed.
@@ -300,8 +300,8 @@ services:
     working_dir: /repo
     command: >
       dotnet ef database update
-      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
-      --startup-project src/Autofac.Api/Autofac.Api.csproj
+      --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
+      --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
       ConnectionStrings__Postgres: "Host=postgres-agent-sandboxed;Port=5432;Database=autofac_e2e_agent_sandboxed;Username=postgres;Password=postgres"
     depends_on:
@@ -347,7 +347,7 @@ services:
       Sandboxes__Docker__ArtifactsHostPath: "${PWD}/docker/.agent-sandboxed-artifacts"
       Sandboxes__OpenSandbox__AgentRunnerImage: "agentwerke-agent-runner:e2e"
       # The Anthropic Messages API is stubbed by the shared wiremock service (see
-      # tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json) — ApiKey just
+      # tests/Agentwerke.E2ETests/Fixtures/wiremock-anthropic-stub.json) — ApiKey just
       # needs to be non-empty for the runner's "is a credential configured" check.
       # This value is forwarded verbatim into the sandbox container as
       # AUTOFAC_MODEL_API_BASE_URL, so it must resolve from there too — hence

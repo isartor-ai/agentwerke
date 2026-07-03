@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
+    <ProjectReference Include="..\Agentwerke.AgentSecOps\Agentwerke.AgentSecOps.csproj" />
+    <ProjectReference Include="..\Agentwerke.Application\Agentwerke.Application.csproj" />
+    <ProjectReference Include="..\Agentwerke.Domain\Agentwerke.Domain.csproj" />
+    <ProjectReference Include="..\Agentwerke.Integrations\Agentwerke.Integrations.csproj" />
+    <ProjectReference Include="..\Agentwerke.Sandboxes\Agentwerke.Sandboxes.csproj" />
+    <ProjectReference Include="..\Agentwerke.Storage\Agentwerke.Storage.csproj" />
+    <ProjectReference Include="..\Agentwerke.Workflows\Agentwerke.Workflows.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Agentwerke.Agents.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -11,10 +11,10 @@
 docs
 *.md
 # Exclude unit/integration test projects but keep E2E tests (needed by docker/e2e/Dockerfile)
-tests/Autofac.Domain.Tests/
-tests/Autofac.Application.Tests/
-tests/Autofac.Agents.Tests/
-tests/Autofac.Integrations.Tests/
-tests/Autofac.Sandboxes.Tests/
-tests/Autofac.Workflows.Tests/
+tests/Agentwerke.Domain.Tests/
+tests/Agentwerke.Application.Tests/
+tests/Agentwerke.Agents.Tests/
+tests/Agentwerke.Integrations.Tests/
+tests/Agentwerke.Sandboxes.Tests/
+tests/Agentwerke.Workflows.Tests/
 .claude/
