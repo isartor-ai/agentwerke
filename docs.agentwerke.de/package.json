@@ -8,6 +8,7 @@
     "preview": "vitepress preview . --host 127.0.0.1"
   },
   "devDependencies": {
+    "search-insights": "^2.17.3",
     "vitepress": "1.6.4"
   }
 }
