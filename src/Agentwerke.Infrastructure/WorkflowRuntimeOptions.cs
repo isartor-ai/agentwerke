@@ -16,11 +16,8 @@ public enum WorkflowRuntimeMode
 public sealed class WorkflowRuntimeOptions
 {
     public const string Section = "WorkflowRuntime";
-    public const string LegacyAutofacMode = "Autofac";
 
     public WorkflowRuntimeMode Mode { get; set; } = WorkflowRuntimeMode.Agentwerke;
-
-    public bool LegacyModeAliasUsed { get; set; }
 
     public bool IsCamundaMode => Mode == WorkflowRuntimeMode.Camunda;
 
@@ -40,22 +37,13 @@ public sealed class WorkflowRuntimeOptions
         }
 
         var normalized = raw.Trim();
-        if (string.Equals(normalized, LegacyAutofacMode, StringComparison.OrdinalIgnoreCase))
-        {
-            return new WorkflowRuntimeOptions
-            {
-                Mode = WorkflowRuntimeMode.Agentwerke,
-                LegacyModeAliasUsed = true
-            };
-        }
-
         if (Enum.TryParse<WorkflowRuntimeMode>(normalized, ignoreCase: true, out var mode)
             && Enum.IsDefined(mode))
         {
             return new WorkflowRuntimeOptions { Mode = mode };
         }
 
-        var supported = $"{string.Join(", ", Enum.GetNames<WorkflowRuntimeMode>())} (legacy alias: {LegacyAutofacMode})";
+        var supported = string.Join(", ", Enum.GetNames<WorkflowRuntimeMode>());
         throw new InvalidOperationException(
             $"Unsupported workflow runtime mode '{raw}'. " +
             $"Set '{Section}:Mode' to one of: {supported}.");

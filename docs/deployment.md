@@ -30,7 +30,7 @@ Settings use the standard .NET `Section__Key` env mapping.
 - `ConnectionStrings__Postgres` — Postgres connection string.
 
 **Workflow runtime**
-- `WorkflowRuntime__Mode` — `Agentwerke` (default), `Camunda`, or the legacy `Autofac` alias.
+- `WorkflowRuntime__Mode` — `Agentwerke` (default), `Camunda`, or the legacy `Agentwerke` alias.
 
 **Model provider**
 - `Anthropic__Provider` — `anthropic` | `mock` | (empty = auto).

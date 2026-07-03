@@ -208,7 +208,7 @@ Example Agentwerke BPMN extension:
 ```xml
 <bpmn:serviceTask id="DeployProduction" name="Deploy to Production">
   <bpmn:extensionElements>
-    <autofac:agentTask
+    <agentwerke:agentTask
       agent="DeploymentAgent"
       action="cloud.deploy_artifact"
       environment="production"
@@ -286,7 +286,7 @@ Example action request:
   "target": {
     "repository": "org/payment-service",
     "baseBranch": "main",
-    "headBranch": "autofac/JIRA-123-auth-fix"
+    "headBranch": "agentwerke/JIRA-123-auth-fix"
   },
   "purpose": {
     "type": "feature_implementation",
@@ -844,7 +844,7 @@ C4Context
     Person(engineer, "Engineer", "Creates workflows, starts runs, reviews outputs, approves gates")
     Person(admin, "Administrator", "Configures providers, policies, integrations, storage, and security")
 
-    System(autofac, "Agentwerke", "Secure BPMN-native autonomous software factory")
+    System(agentwerke, "Agentwerke", "Secure BPMN-native autonomous software factory")
 
     System_Ext(github, "GitHub", "Repositories, pull requests, issues, webhooks")
     System_Ext(jira, "Jira", "Issue tracking and workflow triggers")
@@ -854,16 +854,16 @@ C4Context
     System_Ext(secrets, "Secrets Manager", "Vault, AWS Secrets Manager, Azure Key Vault")
     System_Ext(observability, "Observability Platform", "OTel, Prometheus, Grafana, Sentry, SIEM")
 
-    Rel(engineer, autofac, "Uses", "Web UI / API")
-    Rel(admin, autofac, "Administers", "Web UI / API")
+    Rel(engineer, agentwerke, "Uses", "Web UI / API")
+    Rel(admin, agentwerke, "Administers", "Web UI / API")
 
-    Rel(autofac, github, "Reads repos, creates PRs, receives webhooks", "HTTPS")
-    Rel(autofac, jira, "Reads and updates tickets", "HTTPS")
-    Rel(autofac, llm, "Requests model completions", "HTTPS")
-    Rel(autofac, docker, "Creates containers and exec sessions", "Docker API")
-    Rel(autofac, storage, "Stores artifacts and logs", "S3/Blob/File API")
-    Rel(autofac, secrets, "Retrieves scoped secrets", "API")
-    Rel(autofac, observability, "Emits logs, metrics, traces, audit events", "OTLP/HTTP")
+    Rel(agentwerke, github, "Reads repos, creates PRs, receives webhooks", "HTTPS")
+    Rel(agentwerke, jira, "Reads and updates tickets", "HTTPS")
+    Rel(agentwerke, llm, "Requests model completions", "HTTPS")
+    Rel(agentwerke, docker, "Creates containers and exec sessions", "Docker API")
+    Rel(agentwerke, storage, "Stores artifacts and logs", "S3/Blob/File API")
+    Rel(agentwerke, secrets, "Retrieves scoped secrets", "API")
+    Rel(agentwerke, observability, "Emits logs, metrics, traces, audit events", "OTLP/HTTP")
 ```
 
 ---
@@ -876,7 +876,7 @@ C4Container
 
     Person(engineer, "Engineer", "Uses Agentwerke")
 
-    System_Boundary(autofac, "Agentwerke") {
+    System_Boundary(agentwerke, "Agentwerke") {
         Container(web, "Web UI", "React, TypeScript, BPMN.js", "Workflow designer, run board, approvals, audit explorer")
         Container(api, "API Server", "ASP.NET Core", "REST API, auth, orchestration facade, SignalR/SSE")
         Container(workflow, "BPMN Workflow Runtime", "C#/.NET", "Executes BPMN workflow instances")
@@ -1230,17 +1230,17 @@ Important principle:
 
 ```yaml
 services:
-  autofac-api:
-    image: ghcr.io/example/autofac:latest
+  agentwerke-api:
+    image: ghcr.io/example/agentwerke:latest
     restart: unless-stopped
     ports:
       - "32276:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - autofac-storage:/storage
+      - agentwerke-storage:/storage
     environment:
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Postgres: Host=postgres;Database=autofac;Username=autofac;Password=autofac
+      ConnectionStrings__Postgres: Host=postgres;Database=agentwerke;Username=agentwerke;Password=agentwerke
       Storage__Provider: local
       Storage__Root: /storage
       Policy__Engine: opa
@@ -1252,9 +1252,9 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: autofac
-      POSTGRES_USER: autofac
-      POSTGRES_PASSWORD: autofac
+      POSTGRES_DB: agentwerke
+      POSTGRES_USER: agentwerke
+      POSTGRES_PASSWORD: agentwerke
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
@@ -1275,14 +1275,14 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - autofac-api
+      - agentwerke-api
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy-data:/data
       - caddy-config:/config
 
 volumes:
-  autofac-storage:
+  agentwerke-storage:
   postgres-data:
   caddy-data:
   caddy-config:

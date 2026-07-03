@@ -9,7 +9,7 @@ namespace Agentwerke.E2ETests;
 public abstract class E2ETestBase
 {
     protected static readonly string ApiBaseUrl =
-        Environment.GetEnvironmentVariable("AUTOFAC_API_URL") ?? "http://localhost:8081";
+        Environment.GetEnvironmentVariable("AGENTWERKE_API_URL") ?? "http://localhost:8081";
 
     protected ApiClient Api { get; } = new(ApiBaseUrl);
 

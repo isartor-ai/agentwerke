@@ -222,7 +222,7 @@ The following API endpoints need to be implemented in the `Agentwerke.Api` proje
     *   **Response**: `WorkflowValidationResult`
     *   **Logic**:
         1.  Parse and validate the BPMN XML.
-        2.  The validation should check for `autofac:` extension elements.
+        2.  The validation should check for `agentwerke:` extension elements.
         3.  Return the validation result.
 
 *   **`POST /api/workflows/{id}/publish`**: Publish a workflow definition.

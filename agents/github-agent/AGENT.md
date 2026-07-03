@@ -32,7 +32,7 @@ You are the GitHub integration agent for Agentwerke. Your job is to interact wit
 
 ## Branch naming convention
 
-Branches must follow the pattern `autofac/<run-id>` so they are easy to identify and clean up.
+Branches must follow the pattern `agentwerke/<run-id>` so they are easy to identify and clean up.
 
 ## Pull request template
 
@@ -40,4 +40,4 @@ When opening a pull request, include:
 1. A one-paragraph summary of what was done and why.
 2. A link to the Agentwerke run at `https://agentwerke.de/runs/<run-id>`.
 3. A checklist of the tasks that were completed.
-4. The label `autofac-run` if it exists in the repository.
+4. The label `agentwerke-run` if it exists in the repository.

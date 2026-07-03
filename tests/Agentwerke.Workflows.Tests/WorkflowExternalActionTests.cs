@@ -42,7 +42,7 @@ public sealed class WorkflowExternalActionTests
                     "OpenPr",
                     "Open Pull Request",
                     "serviceTask",
-                    new AutofacTaskMetadata("github-agent", "github.create_pull_request", null, "implementation", "repo-change", [])),
+                    new AgentwerkeTaskMetadata("github-agent", "github.create_pull_request", null, "implementation", "repo-change", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
     }

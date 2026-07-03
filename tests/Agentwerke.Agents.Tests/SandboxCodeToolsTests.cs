@@ -323,7 +323,7 @@ public sealed class SandboxCodeToolsTests
 
     private sealed class TempWorkspace : IDisposable
     {
-        public string Path { get; } = Directory.CreateTempSubdirectory("autofac-sandbox-tool-tests-").FullName;
+        public string Path { get; } = Directory.CreateTempSubdirectory("agentwerke-sandbox-tool-tests-").FullName;
 
         public void Dispose()
         {

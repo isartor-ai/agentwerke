@@ -471,7 +471,7 @@ Use Camunda 8 from the beginning of the next execution phase. The in-process run
 3. Project Agentwerke task metadata to Camunda-compatible BPMN.
 4. Deploy workflows to Camunda during publish.
 5. Start Camunda process instances from Agentwerke run APIs.
-6. Execute `autofac.agent` service tasks with Agentwerke job workers.
+6. Execute `agentwerke.agent` service tasks with Agentwerke job workers.
 7. Bridge Camunda user tasks to Agentwerke approval requests.
 8. Surface retries, incidents, evidence, and artifacts in Agentwerke run views.
 

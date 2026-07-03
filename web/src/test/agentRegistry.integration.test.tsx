@@ -47,7 +47,7 @@ const skillsFixture: SkillSummary[] = [
     requiredFiles: ['README.md'],
     optionalTools: ['git'],
     fingerprint: 'skill-fingerprint',
-    filePath: '/Users/let7mu/github/autofac/.github/skills/github-pr/SKILL.md',
+    filePath: '/Users/let7mu/github/agentwerke/.github/skills/github-pr/SKILL.md',
   },
 ];
 
@@ -60,8 +60,8 @@ name: GitHub Agent
 skills:
   - skill.github-pr
 ---`,
-  effectiveFilePath: '/Users/let7mu/github/autofac/agents/github-agent/AGENT.md',
-  sourceFilePath: '/Users/let7mu/github/autofac/agents/github-agent/AGENT.md',
+  effectiveFilePath: '/Users/let7mu/github/agentwerke/agents/github-agent/AGENT.md',
+  sourceFilePath: '/Users/let7mu/github/agentwerke/agents/github-agent/AGENT.md',
 };
 
 describe('AgentRegistry integration', () => {
@@ -179,6 +179,6 @@ const uploadedAgentFixture: AgentDetail = {
 id: ops-agent
 name: Ops Agent
 ---`,
-  effectiveFilePath: '/Users/let7mu/github/autofac/agents/ops-agent/AGENT.md',
-  sourceFilePath: '/Users/let7mu/github/autofac/agents/ops-agent/AGENT.md',
+  effectiveFilePath: '/Users/let7mu/github/agentwerke/agents/ops-agent/AGENT.md',
+  sourceFilePath: '/Users/let7mu/github/agentwerke/agents/ops-agent/AGENT.md',
 };

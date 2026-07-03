@@ -2,7 +2,7 @@
 -- Idempotent: the sample workflow is inserted only when it does not already exist.
 -- Run after EF Core migrations have created the schema.
 
-INSERT INTO autofac.workflows (
+INSERT INTO agentwerke.workflows (
     "Id", "Name", "Description", "Version", "Status", "Owner",
     "CreatedAt", "LastEditedAt", "ValidationState", "Tags", "BpmnXml"
 ) VALUES (
@@ -22,7 +22,7 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="first-run-sample-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="FirstRunSample" name="First Run Sample" isExecutable="true">
@@ -31,7 +31,7 @@ INSERT INTO autofac.workflows (
     </bpmn:startEvent>
     <bpmn:serviceTask id="DraftImplementationNote" name="Draft Implementation Note">
       <bpmn:extensionElements>
-        <autofac:agentTask
+        <agentwerke:agentTask
           agent="first-run-engineer"
           action="first-run.implement"
           environment="quickstart"
@@ -40,17 +40,17 @@ INSERT INTO autofac.workflows (
           requiresEvidence="agent-output"
           executionMode="local"
           permissionLevel="read-only">
-          <autofac:prompt>
+          <agentwerke:prompt>
             Write a concise implementation note for a first Agentwerke run. Mention that the BPMN runtime, policy decision, sample agent, and evidence capture path are working.
-          </autofac:prompt>
-        </autofac:agentTask>
+          </agentwerke:prompt>
+        </agentwerke:agentTask>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow1</bpmn:incoming>
       <bpmn:outgoing>Flow2</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:userTask id="ReviewSampleOutput" name="Review Sample Output">
       <bpmn:extensionElements>
-        <autofac:approvalTask purposeType="sample-review" policyTag="standard" />
+        <agentwerke:approvalTask purposeType="sample-review" policyTag="standard" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow2</bpmn:incoming>
       <bpmn:outgoing>Flow3</bpmn:outgoing>

@@ -44,7 +44,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             {
                 AgentId = "spec-writer",
                 Runner = "claude-code",
-                DockerImage = "autofac/agent-runner:test"
+                DockerImage = "agentwerke/agent-runner:test"
             },
             SandboxProfileNames.Offline,
             CancellationToken.None);
@@ -52,9 +52,9 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.True(result.Succeeded);
         Assert.Equal("sandboxed spec", result.Output);
         Assert.NotNull(result.TokenUsage);
-        Assert.Equal("autofac/agent-runner:test", sandbox.LastRequest!.Image);
-        Assert.Equal(AgentExecutionModes.AgentSandboxed, sandbox.LastRequest.Metadata!["autofac.executionMode"]);
-        Assert.Equal("offline", sandbox.LastRequest.Metadata["autofac.sandboxProfile"]);
+        Assert.Equal("agentwerke/agent-runner:test", sandbox.LastRequest!.Image);
+        Assert.Equal(AgentExecutionModes.AgentSandboxed, sandbox.LastRequest.Metadata!["agentwerke.executionMode"]);
+        Assert.Equal("offline", sandbox.LastRequest.Metadata["agentwerke.sandboxProfile"]);
         Assert.Equal("dotnet", sandbox.LastRequest.Command!.Arguments[0]);
         Assert.NotNull(result.SandboxExecution);
         Assert.Equal("opensandbox", result.SandboxExecution!.Provider);
@@ -82,7 +82,7 @@ public sealed class OpenSandboxedAgentRunnerTests
                     Enabled = true,
                     ApiBaseUrl = "https://api.github.com/",
                     RepositoryOwner = "isartor-ai",
-                    RepositoryName = "autofac",
+                    RepositoryName = "agentwerke",
                     PersonalAccessToken = "gh-test",
                     DefaultBaseBranch = "main",
                     BranchPrefix = "agentwerke/run-",
@@ -101,7 +101,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             SandboxProfileNames.Offline,
             CancellationToken.None);
 
-        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AGENTWERKE_AGENT_RUN_ENVELOPE_B64"];
         var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
             Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -110,11 +110,11 @@ public sealed class OpenSandboxedAgentRunnerTests
         var tool = Assert.Single(envelope!.ResolvedTools);
         Assert.Equal("github.create_branch", tool.Name);
         Assert.Equal(AgentToolCategories.Integration, tool.Category);
-        Assert.Equal("sk-ant-api03-SECRET-FROM-STORE", sandbox.LastRequest.EnvironmentVariables["AUTOFAC_MODEL_API_KEY"]);
+        Assert.Equal("sk-ant-api03-SECRET-FROM-STORE", sandbox.LastRequest.EnvironmentVariables["AGENTWERKE_MODEL_API_KEY"]);
         Assert.DoesNotContain(sandbox.LastRequest.EnvironmentVariables.Keys, key => string.Equals(key, "ANTHROPIC_API_KEY", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal("anthropic", sandbox.LastRequest.EnvironmentVariables["AUTOFAC_MODEL_PROVIDER"]);
+        Assert.Equal("anthropic", sandbox.LastRequest.EnvironmentVariables["AGENTWERKE_MODEL_PROVIDER"]);
         Assert.Equal("isartor-ai", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryOwner"]);
-        Assert.Equal("autofac", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+        Assert.Equal("agentwerke", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class OpenSandboxedAgentRunnerTests
 
         Assert.True(result.Succeeded);
 
-        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AGENTWERKE_AGENT_RUN_ENVELOPE_B64"];
         var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
             Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -162,7 +162,7 @@ public sealed class OpenSandboxedAgentRunnerTests
                 {
                     Enabled = true,
                     RepositoryOwner = "isartor-ai",
-                    RepositoryName = "autofac"
+                    RepositoryName = "agentwerke"
                 }
             });
 
@@ -178,7 +178,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             CancellationToken.None);
 
         Assert.Equal("isartor-ai", sandbox.LastRequest!.EnvironmentVariables!["Integrations__GitHub__RepositoryOwner"]);
-        Assert.Equal("autofac", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+        Assert.Equal("agentwerke", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
         Assert.Equal("ghp_secret_token_abcdefghijklmnopqrstuvwxyz123456", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__PersonalAccessToken"]);
     }
 
@@ -266,7 +266,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             SandboxProfileNames.Offline,
             CancellationToken.None);
 
-        var payload = sandbox.LastRequest!.EnvironmentVariables!["AUTOFAC_AGENT_RUN_ENVELOPE_B64"];
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AGENTWERKE_AGENT_RUN_ENVELOPE_B64"];
         var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
             Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -330,7 +330,7 @@ public sealed class OpenSandboxedAgentRunnerTests
             {
                 OpenSandbox = new OpenSandboxProviderOptions
                 {
-                    AgentRunnerImage = "autofac/agent-runner:latest"
+                    AgentRunnerImage = "agentwerke/agent-runner:latest"
                 }
             }));
 

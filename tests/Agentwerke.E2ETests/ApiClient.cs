@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace Agentwerke.E2ETests;
 
-/// <summary>Thin typed wrapper around the Autofac REST API for E2E tests.</summary>
+/// <summary>Thin typed wrapper around the Agentwerke REST API for E2E tests.</summary>
 public sealed class ApiClient
 {
     private readonly HttpClient _http;

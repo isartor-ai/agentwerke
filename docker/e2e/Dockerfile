@@ -10,6 +10,6 @@ RUN dotnet restore tests/Agentwerke.E2ETests/Agentwerke.E2ETests.csproj
 COPY tests/Agentwerke.E2ETests/ tests/Agentwerke.E2ETests/
 RUN dotnet build tests/Agentwerke.E2ETests/Agentwerke.E2ETests.csproj -c Release --no-restore
 
-# ENV vars (AUTOFAC_API_URL, CAMUNDA_ENABLED, etc.) are injected by compose at runtime
+# ENV vars (AGENTWERKE_API_URL, CAMUNDA_ENABLED, etc.) are injected by compose at runtime
 ENTRYPOINT ["dotnet", "test", "tests/Agentwerke.E2ETests/Agentwerke.E2ETests.csproj", \
             "-c", "Release", "--no-build", "--logger", "console;verbosity=normal"]

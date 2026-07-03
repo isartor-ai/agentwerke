@@ -107,8 +107,8 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
             },
             Labels = new Dictionary<string, string>
             {
-                ["autofac.run"] = request.RunId,
-                ["autofac.step"] = request.StepId,
+                ["agentwerke.run"] = request.RunId,
+                ["agentwerke.step"] = request.StepId,
             },
         };
 
@@ -262,7 +262,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
     private string ResolveArtifactsDir(string stepId)
     {
         var baseDir = string.IsNullOrWhiteSpace(_options.ArtifactsHostPath)
-            ? Path.Combine(Path.GetTempPath(), "autofac-sandboxes")
+            ? Path.Combine(Path.GetTempPath(), "agentwerke-sandboxes")
             : _options.ArtifactsHostPath;
 
         return Path.Combine(baseDir, stepId);

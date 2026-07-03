@@ -42,8 +42,8 @@ public abstract class ConnectorBase : IConnector
         using var span = _tracer.StartSpan($"connector.{ConnectorId}.{request.Operation}");
         span.SetTag("connector.id", ConnectorId);
         span.SetTag("connector.operation", request.Operation);
-        span.SetTag("autofac.run_id", request.RunId);
-        span.SetTag("autofac.correlation_id", _correlationContext.CorrelationId);
+        span.SetTag("agentwerke.run_id", request.RunId);
+        span.SetTag("agentwerke.correlation_id", _correlationContext.CorrelationId);
 
         if (!Enabled)
         {

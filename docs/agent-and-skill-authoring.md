@@ -82,6 +82,6 @@ binding or a workflow's runtime contract. Resolution is by id, then by `name`.
 
 For each agent step the prompt assembler combines, in order: a system preamble,
 the agent profile (description/category and system-prompt body), the **task
-prompt** (the `agentTask` `prompt`/`promptFile`/`<autofac:prompt>`, or a default),
+prompt** (the `agentTask` `prompt`/`promptFile`/`<agentwerke:prompt>`, or a default),
 the resolved **skill** content, and the **run context**. All `{{…}}` placeholders
 are rendered from run context (see [BPMN extensions](bpmn-extensions.md)).

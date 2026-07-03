@@ -155,18 +155,18 @@ public sealed class OpenSandboxRequestMapper
     {
         var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["autofac.run"] = request.RunId,
-            ["autofac.step"] = request.StepId,
-            ["autofac.agent"] = request.AgentName,
-            ["autofac.action"] = request.Action,
-            ["autofac.purpose"] = request.PurposeType,
-            ["autofac.policy"] = request.PolicyTag,
-            ["autofac.attempt"] = request.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ["agentwerke.run"] = request.RunId,
+            ["agentwerke.step"] = request.StepId,
+            ["agentwerke.agent"] = request.AgentName,
+            ["agentwerke.action"] = request.Action,
+            ["agentwerke.purpose"] = request.PurposeType,
+            ["agentwerke.policy"] = request.PolicyTag,
+            ["agentwerke.attempt"] = request.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
 
         if (!string.IsNullOrWhiteSpace(request.Environment))
         {
-            metadata["autofac.environment"] = request.Environment;
+            metadata["agentwerke.environment"] = request.Environment;
         }
 
         foreach (var pair in request.Metadata?.AsEnumerable() ?? Enumerable.Empty<KeyValuePair<string, string>>())

@@ -4,7 +4,7 @@ using k8s.Models;
 namespace Agentwerke.Sandboxes;
 
 /// <summary>
-/// Translates an Autofac sandbox run into the Kubernetes objects that execute it:
+/// Translates an Agentwerke sandbox run into the Kubernetes objects that execute it:
 /// a kata-isolated Pod and an egress <see cref="V1NetworkPolicy"/> derived from the
 /// run's <see cref="SandboxNetworkPolicy"/>. Pure and deterministic so the pod spec
 /// and the network-policy translation are fully unit-testable without a cluster (#171).
@@ -12,13 +12,13 @@ namespace Agentwerke.Sandboxes;
 public static class KubernetesSandboxManifestBuilder
 {
     public const string ManagedByLabel = "app.kubernetes.io/managed-by";
-    public const string RunLabel = "autofac.dev/run";
-    public const string StepLabel = "autofac.dev/step";
-    public const string AllowedHostsAnnotation = "autofac.dev/allowed-egress-hosts";
+    public const string RunLabel = "agentwerke.dev/run";
+    public const string StepLabel = "agentwerke.dev/step";
+    public const string AllowedHostsAnnotation = "agentwerke.dev/allowed-egress-hosts";
 
     public static string PodName(SandboxExecutionRequest request)
     {
-        var raw = $"autofac-{Sanitize(request.RunId)}-{Sanitize(request.StepId)}";
+        var raw = $"agentwerke-{Sanitize(request.RunId)}-{Sanitize(request.StepId)}";
         return Truncate(raw.Trim('-'), 63);
     }
 
@@ -147,7 +147,7 @@ public static class KubernetesSandboxManifestBuilder
 
     private static Dictionary<string, string> Labels(SandboxExecutionRequest request) => new()
     {
-        [ManagedByLabel] = "autofac",
+        [ManagedByLabel] = "agentwerke",
         [RunLabel] = Sanitize(request.RunId),
         [StepLabel] = Sanitize(request.StepId),
     };

@@ -19,7 +19,7 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                         new Dictionary<string, string>
                         {
                             ["head_branch"] = "agentwerke/run-1",
-                            ["title"] = "Autofac PR",
+                            ["title"] = "Agentwerke PR",
                             ["body"] = "Body",
                             ["commit_message"] = "Commit"
                         },

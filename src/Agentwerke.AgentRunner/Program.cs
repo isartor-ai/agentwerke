@@ -5,10 +5,10 @@ using Agentwerke.Agents.Mcp;
 using Agentwerke.Agents.Models;
 using Microsoft.Extensions.Options;
 
-const string EnvelopeEnvironmentVariable = "AUTOFAC_AGENT_RUN_ENVELOPE_B64";
-const string ModelApiKeyEnvironmentVariable = "AUTOFAC_MODEL_API_KEY";
+const string EnvelopeEnvironmentVariable = "AGENTWERKE_AGENT_RUN_ENVELOPE_B64";
+const string ModelApiKeyEnvironmentVariable = "AGENTWERKE_MODEL_API_KEY";
 const string LegacyModelApiKeyEnvironmentVariable = "ANTHROPIC_API_KEY";
-const string ModelApiBaseUrlEnvironmentVariable = "AUTOFAC_MODEL_API_BASE_URL";
+const string ModelApiBaseUrlEnvironmentVariable = "AGENTWERKE_MODEL_API_BASE_URL";
 const string OutputDirectory = "/output";
 const string ResultFileName = "agent-run-result.json";
 

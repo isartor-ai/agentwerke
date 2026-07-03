@@ -23,7 +23,7 @@ Trigger (API / GitHub webhook)
 
 ## Components (by project)
 
-Internal .NET projects still use the legacy `Autofac.*` prefix during the staged
+Internal .NET projects still use the legacy `Agentwerke.*` prefix during the staged
 public rebrand. Treat those names as implementation details until the optional
 namespace/project rename is approved.
 
@@ -46,7 +46,7 @@ namespace/project rename is approved.
 
 - **Default (`WorkflowRuntime:Mode=Agentwerke`):** a bounded, Postgres-backed
   in-process engine (`EngineId = "in-process"`) with event-sourced checkpoints.
-  This is the default ([ADR-002](decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)).
+  This is the default ([ADR-002](decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md)).
 - **Legacy alias (`Mode=Agentwerke`):** accepted for existing installs and mapped to
   the Agentwerke runtime with a startup deprecation warning.
 - **Opt-in (`Mode=Camunda`):** an enterprise Camunda 8 adapter.

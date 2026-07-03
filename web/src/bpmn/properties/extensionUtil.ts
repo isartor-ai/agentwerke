@@ -4,7 +4,7 @@ import { getBusinessObject } from 'bpmn-js/lib/util/ModelUtil';
 
 /**
  * Helpers for reading and writing Agentwerke extension elements
- * (`autofac:agentTask` / `autofac:approvalTask`) on a BPMN element's business
+ * (`agentwerke:agentTask` / `agentwerke:approvalTask`) on a BPMN element's business
  * object. All writes go through `modeling.updateModdleProperties` so they are
  * undoable and trigger a re-render + change event.
  */

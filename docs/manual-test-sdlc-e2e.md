@@ -37,7 +37,7 @@ external wait gates authored with `correlationKeyTemplate="{{input.branch_name}}
 
 - A running Agentwerke API + Postgres (the standard `docker/docker-compose.yml` dev stack, or
   `docker/docker-compose.e2e.yml`).
-- An operator account (`AutofacPolicies.Operator`/`Approver`) to start runs, decide approvals, and
+- An operator account (`AgentwerkePolicies.Operator`/`Approver`) to start runs, decide approvals, and
   call the manual resume endpoint.
 - For Part B only: a disposable GitHub repository you control, a GitHub PAT with `repo` scope and
   `workflow_dispatch` permission on a deploy-to-test Actions workflow, and a way to receive GitHub
@@ -48,7 +48,7 @@ external wait gates authored with `correlationKeyTemplate="{{input.branch_name}}
 Before the manual full-workflow run below, the **real Claude agent path** can be proven automatically
 at the agent layer — no GitHub repo, webhook, or host required. This exercises the production
 `AnthropicLanguageModelClient` (through its `IHttpClientFactory` resilience pipeline) driving a real
-tool-use loop, which is the core of issue [#143](https://github.com/isartor-ai/autofac-private/issues/143).
+tool-use loop, which is the core of issue [#143](https://github.com/isartor-ai/agentwerke-private/issues/143).
 
 The test is gated on an API key so it is a no-op without credentials:
 
@@ -58,13 +58,13 @@ dotnet test tests/Agentwerke.Agents.Tests/Agentwerke.Agents.Tests.csproj \
   --filter "FullyQualifiedName~RealClaudeIntegrationTests"
 
 # Runs against the real API when a key is present:
-AUTOFAC_E2E_ANTHROPIC_API_KEY=sk-ant-... \
+AGENTWERKE_E2E_ANTHROPIC_API_KEY=sk-ant-... \
   dotnet test tests/Agentwerke.Agents.Tests/Agentwerke.Agents.Tests.csproj \
   --filter "FullyQualifiedName~RealClaudeIntegrationTests"
 ```
 
 It asserts the model invoked the declared tool (`record_decision`), returned a final text reply, and
-reported real token usage. Optionally override the model with `AUTOFAC_E2E_ANTHROPIC_MODEL`.
+reported real token usage. Optionally override the model with `AGENTWERKE_E2E_ANTHROPIC_MODEL`.
 
 > **Record your run here.** After running with a real key, note the date, model id, and observed
 > token usage / approximate cost (the `agent.model.cost_usd` metric, which now includes prompt-cache
@@ -230,5 +230,5 @@ Repeat steps 6 through 10 above, but:
 - `tests/Agentwerke.Workflows.Tests/SdlcTemplateSeedsValidationTests.cs` — automated structural
   validation of this template (and every other seeded template) against the real BPMN validator
 - `docs/manual-test-opensandbox.md` — the `agent_sandboxed` validation this scenario builds on
-- isartor-ai/autofac-private#89 — the parent SDLC epic and original target scenario
-- isartor-ai/autofac-private#134–#140 — the phase issues this scenario integrates
+- isartor-ai/agentwerke-private#89 — the parent SDLC epic and original target scenario
+- isartor-ai/agentwerke-private#134–#140 — the phase issues this scenario integrates

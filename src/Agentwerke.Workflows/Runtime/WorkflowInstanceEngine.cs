@@ -886,10 +886,10 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             throw new InvalidOperationException("Workflow definition must include both startEvent and endEvent nodes.");
 
         if (definition.Nodes.Any(static n => (n.ElementName is "serviceTask" or "scriptTask") && n.Metadata is null))
-            throw new InvalidOperationException("Service/script tasks must include parsed autofac:agentTask metadata.");
+            throw new InvalidOperationException("Service/script tasks must include parsed agentwerke:agentTask metadata.");
 
         if (definition.Nodes.Any(static n => n.ElementName == "userTask" && n.ApprovalMetadata is null))
-            throw new InvalidOperationException("User tasks must include parsed autofac:approvalTask metadata.");
+            throw new InvalidOperationException("User tasks must include parsed agentwerke:approvalTask metadata.");
     }
 
     private static TimeSpan ParseDuration(string? isoDuration)

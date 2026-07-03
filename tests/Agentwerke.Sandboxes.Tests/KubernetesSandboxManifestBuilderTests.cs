@@ -30,7 +30,7 @@ public sealed class KubernetesSandboxManifestBuilderTests
         Assert.Equal("default", pod.Metadata.NamespaceProperty);
         Assert.Equal("Never", pod.Spec.RestartPolicy);
         Assert.False(pod.Spec.AutomountServiceAccountToken);
-        Assert.Equal("autofac", pod.Metadata.Labels[KubernetesSandboxManifestBuilder.ManagedByLabel]);
+        Assert.Equal("agentwerke", pod.Metadata.Labels[KubernetesSandboxManifestBuilder.ManagedByLabel]);
         Assert.Equal("run-1", pod.Metadata.Labels[KubernetesSandboxManifestBuilder.RunLabel]);
         Assert.Equal("step-1", pod.Metadata.Labels[KubernetesSandboxManifestBuilder.StepLabel]);
         var container = Assert.Single(pod.Spec.Containers);

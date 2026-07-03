@@ -1,15 +1,15 @@
 # Agentwerke BPMN extensions reference
 
-Agentwerke runs standard BPMN 2.0, augmented with a small set of `autofac:`
+Agentwerke runs standard BPMN 2.0, augmented with a small set of `agentwerke:`
 extension elements that make a task executable by the agent runtime. The
-`autofac:` prefix is intentionally retained as the stable workflow XML contract
+`agentwerke:` prefix is intentionally retained as the stable workflow XML contract
 for existing definitions during the product rename. The engine executes nodes in
 document order; sequence flows are honored for layout and gateways.
 
 ```xml
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
   ...
 </bpmn:definitions>
 ```
@@ -17,14 +17,14 @@ document order; sequence flows are honored for layout and gateways.
 > Include a `<bpmndi:BPMNDiagram>` (shape coordinates) so the workflow renders in
 > the web designer/viewer. Workflows authored in the UI get this automatically.
 
-## `autofac:agentTask` (on `serviceTask` / `scriptTask`)
+## `agentwerke:agentTask` (on `serviceTask` / `scriptTask`)
 
 Makes a task run an agent action or a deterministic tool.
 
 ```xml
 <bpmn:serviceTask id="Implement" name="Implement">
   <bpmn:extensionElements>
-    <autofac:agentTask
+    <agentwerke:agentTask
       agent="implementation-engineer"
       action="implement"
       executionMode="agent_sandboxed"
@@ -33,8 +33,8 @@ Makes a task run an agent action or a deterministic tool.
       policyTag="repo-change"
       permissionLevel="read-write"
       allowedTools="sandbox.file_write,sandbox.git">
-      <autofac:prompt>Implement the change described in {{input.body}}. Keep it minimal.</autofac:prompt>
-    </autofac:agentTask>
+      <agentwerke:prompt>Implement the change described in {{input.body}}. Keep it minimal.</agentwerke:prompt>
+    </agentwerke:agentTask>
   </bpmn:extensionElements>
 </bpmn:serviceTask>
 ```
@@ -51,7 +51,7 @@ Makes a task run an agent action or a deterministic tool.
 | `sandboxProfile` | | `offline` (default, no network), `repo-read`, `repo-write`, `deployment`. Governs checkout + egress. |
 | `permissionLevel` | | `read-only` (default), `read-write`, `full` — the agent's tool permission ceiling. |
 | `allowedTools` / `deniedTools` | | CSV allow/deny lists narrowing the agent's tools. |
-| `prompt` / `promptFile` / `<autofac:prompt>` | | Per-task instructions (inline attr, file path, or child element for multi-line). Supports `{{…}}` interpolation. |
+| `prompt` / `promptFile` / `<agentwerke:prompt>` | | Per-task instructions (inline attr, file path, or child element for multi-line). Supports `{{…}}` interpolation. |
 | `includeAgentOutput` / `outputFrom` | | For `github.create_pull_request`: include prior agent output in the PR (all `output.*`, or a specific `output.<nodeId>`). |
 | `maxRetries`, `retryBackoffSeconds` | | Retry policy for the step. |
 
@@ -63,7 +63,7 @@ These dispatch straight to the Tool Gateway connector — no tokens spent:
 (`github.create_pr`), `github.request_review`, `github.post_review`,
 `cicd.trigger_deploy`, and registered `mcp.*` tools.
 
-## `autofac:approvalTask` (on `userTask`)
+## `agentwerke:approvalTask` (on `userTask`)
 
 A human-in-the-loop approval gate. The run pauses (`awaiting_approval`) until a
 decision is posted to `POST /api/approvals/{id}/decision`.
@@ -71,7 +71,7 @@ decision is posted to `POST /api/approvals/{id}/decision`.
 ```xml
 <bpmn:userTask id="Review" name="Code Review">
   <bpmn:extensionElements>
-    <autofac:approvalTask purposeType="code_review" policyTag="human-code-review" />
+    <agentwerke:approvalTask purposeType="code_review" policyTag="human-code-review" />
   </bpmn:extensionElements>
 </bpmn:userTask>
 ```
@@ -81,14 +81,14 @@ decision is posted to `POST /api/approvals/{id}/decision`.
 | `purposeType` | ✅ | Shown on the approval card; drives risk display. |
 | `policyTag` | ✅ | Policy bucket (influences risk level). |
 
-## `autofac:externalEvent` (on `receiveTask` / message `intermediateCatchEvent`)
+## `agentwerke:externalEvent` (on `receiveTask` / message `intermediateCatchEvent`)
 
 Waits for an inbound event (e.g. a merged PR or green CI) correlated to the run.
 
 ```xml
 <bpmn:intermediateCatchEvent id="WaitForMerge">
   <bpmn:extensionElements>
-    <autofac:externalEvent messageName="github.pull_request.merged"
+    <agentwerke:externalEvent messageName="github.pull_request.merged"
       correlationKeyTemplate="{{input.branch_name}}" />
   </bpmn:extensionElements>
   <bpmn:messageEventDefinition />

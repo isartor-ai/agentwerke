@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Agentwerke.Workflows.Tests;
 
 /// <summary>
-/// Conformance tests for the default (Postgres-backed, in-process) Autofac workflow runtime.
+/// Conformance tests for the default (Postgres-backed, in-process) Agentwerke workflow runtime.
 ///
 /// Purpose: prove the runtime reliably executes the curated SDLC templates it ships with, rejects
 /// BPMN constructs that are outside its governed subset, and persists correct checkpoints so
@@ -22,7 +22,7 @@ namespace Agentwerke.Workflows.Tests;
 /// </summary>
 public sealed class DefaultRuntimeConformanceTests
 {
-    private static readonly string AutofacNs = "https://autofac.de/bpmn/extensions/v1";
+    private static readonly string AgentwerkeNs = "https://agentwerke.de/bpmn/extensions/v1";
     private static readonly string BpmnNs = "http://www.omg.org/spec/BPMN/20100524/MODEL";
 
     private readonly BpmnWorkflowValidator _validator = new();
@@ -39,12 +39,12 @@ public sealed class DefaultRuntimeConformanceTests
     private const string IssueToPrTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+            xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
           <bpmn:process id="IssueToPr" name="Issue to PR">
             <bpmn:startEvent id="Start" name="Issue Received" />
             <bpmn:serviceTask id="Specify" name="Specify Requirements">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="specification-agent"
                   action="spec.generate"
                   purposeType="specification"
@@ -53,7 +53,7 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:serviceTask id="Plan" name="Plan Implementation">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="planning-agent"
                   action="plan.generate"
                   purposeType="planning"
@@ -62,7 +62,7 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:serviceTask id="Implement" name="Implement Changes">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="implementation-agent"
                   action="code.generate"
                   purposeType="implementation"
@@ -71,14 +71,14 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:userTask id="CodeReview" name="Code Review Approval">
               <bpmn:extensionElements>
-                <autofac:approvalTask
+                <agentwerke:approvalTask
                   purposeType="code_review"
                   policyTag="human-code-review" />
               </bpmn:extensionElements>
             </bpmn:userTask>
             <bpmn:serviceTask id="OpenPR" name="Open Pull Request">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="github-agent"
                   action="github.open_pr"
                   purposeType="pull_request"
@@ -103,12 +103,12 @@ public sealed class DefaultRuntimeConformanceTests
     private const string BugfixTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+            xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
           <bpmn:process id="Bugfix" name="Bugfix">
             <bpmn:startEvent id="Start" name="Bug Reported" />
             <bpmn:serviceTask id="Diagnose" name="Diagnose Root Cause">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="analysis-agent"
                   action="bug.diagnose"
                   purposeType="diagnosis"
@@ -119,7 +119,7 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:serviceTask id="Fix" name="Implement Fix">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="implementation-agent"
                   action="code.fix"
                   purposeType="bugfix"
@@ -128,7 +128,7 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:userTask id="TestApproval" name="Test and Merge Approval">
               <bpmn:extensionElements>
-                <autofac:approvalTask
+                <agentwerke:approvalTask
                   purposeType="bugfix_merge"
                   policyTag="human-merge-approval" />
               </bpmn:extensionElements>
@@ -150,13 +150,13 @@ public sealed class DefaultRuntimeConformanceTests
     private const string ParallelBuildAndTestTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+            xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
           <bpmn:process id="ParallelBuildAndTest" name="Parallel Build and Test">
             <bpmn:startEvent id="Start" name="Build Triggered" />
             <bpmn:parallelGateway id="Fork" name="Quality Gate Fork" />
             <bpmn:serviceTask id="RunTests" name="Run Test Suite">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="testing-agent"
                   action="tests.run"
                   purposeType="quality_assurance"
@@ -165,7 +165,7 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:serviceTask id="SecurityScan" name="Run Security Scan">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="security-agent"
                   action="security.scan"
                   purposeType="security_review"
@@ -175,14 +175,14 @@ public sealed class DefaultRuntimeConformanceTests
             <bpmn:parallelGateway id="Join" name="Quality Gate Join" />
             <bpmn:userTask id="DeployApproval" name="Deploy Approval">
               <bpmn:extensionElements>
-                <autofac:approvalTask
+                <agentwerke:approvalTask
                   purposeType="production_deployment"
                   policyTag="human-deploy-approval" />
               </bpmn:extensionElements>
             </bpmn:userTask>
             <bpmn:serviceTask id="Deploy" name="Deploy to Production">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="deployment-agent"
                   action="cloud.deploy"
                   purposeType="production_deployment"
@@ -212,12 +212,12 @@ public sealed class DefaultRuntimeConformanceTests
     private const string SecurityReviewTemplate = """
         <bpmn:definitions
             xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-            xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+            xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
           <bpmn:process id="SecurityReview" name="Security Review">
             <bpmn:startEvent id="Start" name="Review Requested" />
             <bpmn:serviceTask id="Scan" name="Run Security Scan">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="security-agent"
                   action="security.scan"
                   purposeType="security_review"
@@ -232,7 +232,7 @@ public sealed class DefaultRuntimeConformanceTests
             <bpmn:exclusiveGateway id="SeverityGate" name="Findings Severity Gate" />
             <bpmn:serviceTask id="Remediate" name="Remediate Findings">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="security-agent"
                   action="security.remediate"
                   purposeType="remediation"
@@ -241,7 +241,7 @@ public sealed class DefaultRuntimeConformanceTests
             </bpmn:serviceTask>
             <bpmn:userTask id="VerifyApproval" name="Security Sign-Off">
               <bpmn:extensionElements>
-                <autofac:approvalTask
+                <agentwerke:approvalTask
                   purposeType="security_sign_off"
                   policyTag="human-security-approval" />
               </bpmn:extensionElements>
@@ -622,8 +622,8 @@ public sealed class DefaultRuntimeConformanceTests
                 <bpmn:startEvent id="Start" />
                 <bpmn:serviceTask id="Task1" name="Task">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
-                      xmlns:autofac="{AutofacNs}"
+                    <agentwerke:agentTask
+                      xmlns:agentwerke="{AgentwerkeNs}"
                       agent="a" action="b" purposeType="c" policyTag="d" />
                   </bpmn:extensionElements>
                 </bpmn:serviceTask>
@@ -648,12 +648,12 @@ public sealed class DefaultRuntimeConformanceTests
     public void Supported_MessageIntermediateCatchEvent_WithExternalEventMetadata_PassesValidation()
     {
         var xml = $$"""
-            <bpmn:definitions xmlns:bpmn="{{BpmnNs}}" xmlns:autofac="{{AutofacNs}}">
+            <bpmn:definitions xmlns:bpmn="{{BpmnNs}}" xmlns:agentwerke="{{AgentwerkeNs}}">
               <bpmn:process id="MessageProcess" name="Test">
                 <bpmn:startEvent id="Start" />
                 <bpmn:intermediateCatchEvent id="WaitForMessage">
                   <bpmn:extensionElements>
-                    <autofac:externalEvent messageName="github.pull_request.merged"
+                    <agentwerke:externalEvent messageName="github.pull_request.merged"
                                            correlationKeyTemplate="__CORRELATION_TEMPLATE__" />
                   </bpmn:extensionElements>
                   <bpmn:messageEventDefinition />
@@ -719,9 +719,9 @@ public sealed class DefaultRuntimeConformanceTests
     }
 
     [Fact]
-    public void Unsupported_ServiceTask_WithoutAutofacMetadata_FailsValidation()
+    public void Unsupported_ServiceTask_WithoutAgentwerkeMetadata_FailsValidation()
     {
-        // A bare serviceTask with no autofac:agentTask extension is not supported —
+        // A bare serviceTask with no agentwerke:agentTask extension is not supported —
         // every service task must declare which agent and policy govern it.
         var xml = $"""
             <bpmn:definitions xmlns:bpmn="{BpmnNs}">
@@ -759,7 +759,7 @@ public sealed class DefaultRuntimeConformanceTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, static e =>
             e.ElementId == "BareUser1" &&
-            e.Message.Contains("autofac:approvalTask", StringComparison.Ordinal));
+            e.Message.Contains("agentwerke:approvalTask", StringComparison.Ordinal));
     }
 
     // =========================================================================

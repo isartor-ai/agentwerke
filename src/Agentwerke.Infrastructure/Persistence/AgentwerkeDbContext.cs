@@ -39,7 +39,7 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasDefaultSchema("autofac");
+        modelBuilder.HasDefaultSchema("agentwerke");
 
         modelBuilder.Entity<WorkflowDefinition>(entity =>
         {

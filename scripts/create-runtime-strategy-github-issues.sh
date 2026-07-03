@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="${1:-isartor-ai/autofac-private}"
+repo="${1:-isartor-ai/agentwerke-private}"
 issue_dir="${2:-docs/github-issues/runtime-strategy-reset}"
 
 if [ -n "${GH_TOKEN:-}" ]; then

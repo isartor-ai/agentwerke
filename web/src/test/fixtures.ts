@@ -77,7 +77,7 @@ export const firstRunWorkflowFixture: Workflow = {
   description: 'Seeded workflow for fresh Agentwerke installs',
   version: 'v1.0.0',
   status: 'active',
-  owner: 'autofac',
+  owner: 'agentwerke',
   createdAt: new Date(Date.now() - 60_000).toISOString(),
   lastEditedAt: new Date(Date.now() - 60_000).toISOString(),
   validationState: 'valid',
@@ -224,7 +224,7 @@ export const runsFixture: WorkflowRun[] = [
     status: 'running',
     riskLevel: 'medium',
     currentStep: 'Patch dependencies',
-    requestedBy: 'bot@autofac',
+    requestedBy: 'bot@agentwerke',
     startedAt: new Date(Date.now() - 22 * 60_000).toISOString(),
     durationMs: 22 * 60_000,
     pendingApprovals: 0,
@@ -233,7 +233,7 @@ export const runsFixture: WorkflowRun[] = [
 ];
 
 export const evidencePackFixture: EvidencePack = {
-  schemaVersion: 'autofac.evidence-pack.v1',
+  schemaVersion: 'agentwerke.evidence-pack.v1',
   runId: 'run-0421',
   generatedAt: new Date(Date.now() - 30_000).toISOString(),
   workflow: {

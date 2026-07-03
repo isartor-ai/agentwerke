@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.CreateTable(
                 name: "waiting_external_correlations",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     RunId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
@@ -27,7 +27,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "ix_waiting_external_correlations_lookup",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "waiting_external_correlations",
                 columns: new[] { "MessageName", "CorrelationKey" });
         }
@@ -37,7 +37,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "waiting_external_correlations",
-                schema: "autofac");
+                schema: "agentwerke");
         }
     }
 }

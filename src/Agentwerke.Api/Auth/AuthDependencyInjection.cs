@@ -21,7 +21,7 @@ public static class AuthDependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Section));
 
         // LDAP/AD directory-group integration (#178). The resolver enriches authenticated
-        // principals with directory groups, which RoleMappings turns into Autofac roles.
+        // principals with directory groups, which RoleMappings turns into Agentwerke roles.
         services.Configure<LdapOptions>(configuration.GetSection(LdapOptions.Section));
         if (configuration.GetValue<bool>($"{LdapOptions.Section}:Enabled"))
         {
@@ -39,7 +39,7 @@ public static class AuthDependencyInjection
             o.DefaultAuthenticateScheme = PolicyScheme;
         });
 
-        authBuilder.AddPolicyScheme(PolicyScheme, "Autofac auth selector", o =>
+        authBuilder.AddPolicyScheme(PolicyScheme, "Agentwerke auth selector", o =>
         {
             o.ForwardDefaultSelector = context =>
             {

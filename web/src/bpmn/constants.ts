@@ -3,17 +3,17 @@
  *
  * The namespace URI and prefix MUST match what the backend
  * `BpmnWorkflowValidator` expects (`https://agentwerke.de/bpmn/extensions/v1`,
- * prefix `autofac`) so extension metadata authored in the designer round-trips
+ * prefix `agentwerke`) so extension metadata authored in the designer round-trips
  * cleanly into the executable workflow definition.
  */
 
-export const AUTOFAC_NS_PREFIX = 'autofac';
-export const AUTOFAC_NS_URI = 'https://agentwerke.de/bpmn/extensions/v1';
+export const AGENTWERKE_NS_PREFIX = 'agentwerke';
+export const AGENTWERKE_NS_URI = 'https://agentwerke.de/bpmn/extensions/v1';
 
 /** Moddle type names (note: serialized lower-camel via the descriptor's tagAlias). */
-export const AGENT_TASK_TYPE = 'autofac:AgentTask';
-export const APPROVAL_TASK_TYPE = 'autofac:ApprovalTask';
-export const EXTERNAL_EVENT_TYPE = 'autofac:ExternalEvent';
+export const AGENT_TASK_TYPE = 'agentwerke:AgentTask';
+export const APPROVAL_TASK_TYPE = 'agentwerke:ApprovalTask';
+export const EXTERNAL_EVENT_TYPE = 'agentwerke:ExternalEvent';
 
 /**
  * A blank, DI-complete BPMN 2.0 document used when the user starts a new
@@ -26,7 +26,7 @@ export function createEmptyDiagram(processId = 'Process_1'): string {
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:${AUTOFAC_NS_PREFIX}="${AUTOFAC_NS_URI}"
+                  xmlns:${AGENTWERKE_NS_PREFIX}="${AGENTWERKE_NS_URI}"
                   id="Definitions_1"
                   targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="${processId}" isExecutable="true">

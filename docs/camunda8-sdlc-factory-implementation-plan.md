@@ -138,7 +138,7 @@ Description: Add a background worker that activates Camunda jobs for the Agentwe
 
 Acceptance criteria:
 
-- Worker subscribes to `autofac.agent` jobs.
+- Worker subscribes to `agentwerke.agent` jobs.
 - Worker resolves BPMN element metadata and process variables.
 - Worker invokes the existing Agent Orchestrator contract.
 - Worker records start, completion, and failure events in Agentwerke.
@@ -338,7 +338,7 @@ After Tasks 10-13:
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Camunda-specific details leak into UI | Users face engine complexity | Keep an SDLC process builder and hide engine fields behind presets |
-| Rich `autofac:*` XML is rejected by Camunda | Publish fails | Project to Zeebe task definitions and store rich metadata in Agentwerke DB |
+| Rich `agentwerke:*` XML is rejected by Camunda | Publish fails | Project to Zeebe task definitions and store rich metadata in Agentwerke DB |
 | Worker failures leave confusing run state | Operators lose trust | Map failures, retries, and incidents into Agentwerke run detail |
 | C# SDK maturity changes | Integration instability | Use Camunda REST API first behind an Agentwerke client abstraction |
 | Scope expands into general workflow product | MVP slips | Ship one issue-to-PR factory line before broad templates |

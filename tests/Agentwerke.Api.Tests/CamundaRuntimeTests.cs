@@ -29,7 +29,7 @@ public sealed class CamundaRuntimeTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=autofac;Username=test;Password=test",
+                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=agentwerke;Username=test;Password=test",
                 ["WorkflowRuntime:Mode"] = "Camunda",
                 ["Camunda:Enabled"] = "true",
                 ["Camunda:BaseUrl"] = "https://camunda.example.test/",

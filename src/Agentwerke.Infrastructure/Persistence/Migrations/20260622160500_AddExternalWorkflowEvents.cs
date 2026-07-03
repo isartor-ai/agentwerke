@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.CreateTable(
                 name: "external_workflow_events",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -28,7 +28,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "ix_external_workflow_events_correlation_hint",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "external_workflow_events",
                 column: "CorrelationHint");
         }
@@ -38,7 +38,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "external_workflow_events",
-                schema: "autofac");
+                schema: "agentwerke");
         }
     }
 }

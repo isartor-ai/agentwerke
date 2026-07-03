@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.CreateTable(
                 name: "agent_interactions",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -39,7 +39,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "IX_agent_interactions_RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "agent_interactions",
                 column: "RunId");
         }
@@ -49,7 +49,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "agent_interactions",
-                schema: "autofac");
+                schema: "agentwerke");
         }
     }
 }

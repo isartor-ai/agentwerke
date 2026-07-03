@@ -20,7 +20,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("autofac")
+                .HasDefaultSchema("agentwerke")
                 .HasAnnotation("ProductVersion", "9.0.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -108,7 +108,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("approval_requests", "autofac");
+                    b.ToTable("approval_requests", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowDefinition", b =>
@@ -164,7 +164,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("workflows", "autofac");
+                    b.ToTable("workflows", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowEvent", b =>
@@ -193,7 +193,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RunId");
 
-                    b.ToTable("workflow_events", "autofac");
+                    b.ToTable("workflow_events", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowRun", b =>
@@ -255,7 +255,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("workflow_runs", "autofac");
+                    b.ToTable("workflow_runs", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowRunStep", b =>
@@ -298,7 +298,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RunId");
 
-                    b.ToTable("workflow_run_steps", "autofac");
+                    b.ToTable("workflow_run_steps", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowEvent", b =>
@@ -361,7 +361,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("WorkflowRunStepId");
 
-                            b1.ToTable("workflow_run_steps", "autofac");
+                            b1.ToTable("workflow_run_steps", "agentwerke");
 
                             b1.WithOwner()
                                 .HasForeignKey("WorkflowRunStepId");

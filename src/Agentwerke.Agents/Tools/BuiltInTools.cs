@@ -495,12 +495,12 @@ public sealed class SandboxExecutionTool : IAgentTool
 
         var diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["autofac.sandboxProfile"] = profileName
+            ["agentwerke.sandboxProfile"] = profileName
         };
         var rationale = ReadOptional(input, "sandbox_profile_rationale");
         if (rationale is not null)
         {
-            diagnostics["autofac.sandboxProfileRationale"] = rationale;
+            diagnostics["agentwerke.sandboxProfileRationale"] = rationale;
         }
 
         var result = await _sandboxExecutor.ExecuteAsync(

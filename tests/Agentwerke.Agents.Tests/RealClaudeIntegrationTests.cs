@@ -6,7 +6,7 @@ namespace Agentwerke.Agents.Tests;
 /// <summary>
 /// Issue #143 acceptance check #4 (automatable portion): proves the *real* Claude client drives a
 /// tool-use loop end-to-end through the configured resilience pipeline. Gated on an API key so it is
-/// a no-op in CI/dev without credentials — set <c>AUTOFAC_E2E_ANTHROPIC_API_KEY</c> to enable.
+/// a no-op in CI/dev without credentials — set <c>AGENTWERKE_E2E_ANTHROPIC_API_KEY</c> to enable.
 ///
 /// The full BPMN-template-to-real-PR proof requires infrastructure this repo does not own
 /// (a disposable GitHub repo, webhook delivery, a reachable host) and is documented as a manual
@@ -14,7 +14,7 @@ namespace Agentwerke.Agents.Tests;
 /// </summary>
 public sealed class RealClaudeIntegrationTests
 {
-    private const string ApiKeyEnvVar = "AUTOFAC_E2E_ANTHROPIC_API_KEY";
+    private const string ApiKeyEnvVar = "AGENTWERKE_E2E_ANTHROPIC_API_KEY";
 
     [Fact]
     public async Task RealModel_DrivesToolUseLoop_AndReturnsFinalText()
@@ -29,7 +29,7 @@ public sealed class RealClaudeIntegrationTests
         var options = Options.Create(new LanguageModelOptions
         {
             ApiKey = apiKey,
-            Model = Environment.GetEnvironmentVariable("AUTOFAC_E2E_ANTHROPIC_MODEL") ?? "claude-sonnet-4-6",
+            Model = Environment.GetEnvironmentVariable("AGENTWERKE_E2E_ANTHROPIC_MODEL") ?? "claude-sonnet-4-6",
             MaxTokens = 512,
             MaxToolIterations = 5
         });

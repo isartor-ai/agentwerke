@@ -12,11 +12,11 @@ namespace Agentwerke.Agents.Models;
 public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 {
     private const string ResultArtifactName = "agent-run-result.json";
-    private const string EnvelopeEnvironmentVariable = "AUTOFAC_AGENT_RUN_ENVELOPE_B64";
-    private const string ModelApiKeyEnvironmentVariable = "AUTOFAC_MODEL_API_KEY";
-    private const string ModelProviderEnvironmentVariable = "AUTOFAC_MODEL_PROVIDER";
-    private const string ModelIdEnvironmentVariable = "AUTOFAC_MODEL_ID";
-    private const string ModelApiBaseUrlEnvironmentVariable = "AUTOFAC_MODEL_API_BASE_URL";
+    private const string EnvelopeEnvironmentVariable = "AGENTWERKE_AGENT_RUN_ENVELOPE_B64";
+    private const string ModelApiKeyEnvironmentVariable = "AGENTWERKE_MODEL_API_KEY";
+    private const string ModelProviderEnvironmentVariable = "AGENTWERKE_MODEL_PROVIDER";
+    private const string ModelIdEnvironmentVariable = "AGENTWERKE_MODEL_ID";
+    private const string ModelApiBaseUrlEnvironmentVariable = "AGENTWERKE_MODEL_API_BASE_URL";
 
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
@@ -122,8 +122,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 Profile: effectiveProfile,
                 Metadata: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["autofac.executionMode"] = AgentExecutionModes.AgentSandboxed,
-                    ["autofac.sandboxProfile"] = sandboxProfileName
+                    ["agentwerke.executionMode"] = AgentExecutionModes.AgentSandboxed,
+                    ["agentwerke.sandboxProfile"] = sandboxProfileName
                 },
                 Command: new SandboxCommandSpec(
                     Arguments: ["dotnet", "Agentwerke.AgentRunner.dll"],

@@ -45,7 +45,7 @@ public sealed class McpClientFactory : IMcpClientFactory
                     ["capabilities"] = new Dictionary<string, object?>(),
                     ["clientInfo"] = new Dictionary<string, object?>
                     {
-                        ["name"] = "Autofac",
+                        ["name"] = "Agentwerke",
                         ["version"] = "1.0"
                     }
                 },

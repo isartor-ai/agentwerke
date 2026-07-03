@@ -12,14 +12,14 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.AddColumn<int>(
                 name: "PolicyDecision_PurposeConfidence",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "integer",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_PurposeRationale",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "text",
                 nullable: true);
@@ -30,12 +30,12 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_PurposeConfidence",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_PurposeRationale",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
         }
     }

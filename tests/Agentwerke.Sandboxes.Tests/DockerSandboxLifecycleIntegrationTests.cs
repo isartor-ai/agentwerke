@@ -8,15 +8,15 @@ namespace Agentwerke.Sandboxes.Tests;
 /// <summary>
 /// Exercises the real local-fallback Docker provider end to end: execution,
 /// artifact capture, cleanup, and failure handling. Gated by
-/// AUTOFAC_DOCKER_SANDBOX_E2E=1 so CI environments without a Docker daemon
+/// AGENTWERKE_DOCKER_SANDBOX_E2E=1 so CI environments without a Docker daemon
 /// stay green — mirrors the gating pattern in OpenSandboxIntegrationTests.
-/// This is the "local fallback" path from issue 128: Autofac talking directly
+/// This is the "local fallback" path from issue 128: Agentwerke talking directly
 /// to Docker, without an OpenSandbox server in front of it.
 /// </summary>
 public sealed class DockerSandboxLifecycleIntegrationTests
 {
     private static bool IsEnabled =>
-        Environment.GetEnvironmentVariable("AUTOFAC_DOCKER_SANDBOX_E2E") == "1";
+        Environment.GetEnvironmentVariable("AGENTWERKE_DOCKER_SANDBOX_E2E") == "1";
 
     [Fact]
     public async Task ExecuteAsync_RealContainer_CapturesArtifactsAndRemovesContainer()
@@ -248,13 +248,13 @@ public sealed class DockerSandboxLifecycleIntegrationTests
 
     private static IDockerClient CreateDockerClient()
     {
-        var endpoint = Environment.GetEnvironmentVariable("AUTOFAC_DOCKER_ENDPOINT") ?? "unix:///var/run/docker.sock";
+        var endpoint = Environment.GetEnvironmentVariable("AGENTWERKE_DOCKER_ENDPOINT") ?? "unix:///var/run/docker.sock";
         return new DockerClientConfiguration(new Uri(endpoint)).CreateClient();
     }
 
     private static string CreateTempArtifactsRoot()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"autofac-sandbox-e2e-{Guid.NewGuid():N}");
+        var dir = Path.Combine(Path.GetTempPath(), $"agentwerke-sandbox-e2e-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         return dir;
     }

@@ -7,7 +7,7 @@
 **Agentwerke by Isartor AI runs autonomous coding agents through enterprise integrations, BPMN workflows, policy gates, approvals, sandboxes, and audit-ready evidence packs.**
 
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](global.json)
-[![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
+[![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md)
 [![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Agentwerke.Agents/Models/AnthropicLanguageModelClient.cs)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
@@ -19,10 +19,7 @@
 
 ## Premise
 
-Agentwerke is the new product name for the platform formerly known as Autofac.
-The origin is still Philip K. Dick's 1955 story [Autofac](https://en.wikipedia.org/wiki/Autofac): a postwar world where automatic factories keep manufacturing after meaningful human control has slipped away.
-
-That warning is the product thesis.
+Picture an automated factory that keeps manufacturing long after meaningful human control has slipped away: fast, tireless, and impossible to interrogate. That warning is the product thesis.
 
 AI agents can now plan, code, test, review, and open pull requests. Left alone, that power becomes another opaque production system: fast, tireless, difficult to interrogate, and too easy to trust because it looks useful.
 
@@ -133,7 +130,7 @@ When a run reaches its `MaxRunCostUsd`/`MaxRunTokens` budget, further model call
 
 Agentwerke is a layered .NET control plane. The domain model stays at the center; model providers, storage, sandboxes, workflow adapters, and external systems sit at the edge.
 
-The solution, projects, and .NET namespaces use the `Agentwerke.*` prefix. Database table names, the `Autofac` runtime-mode alias, and the BPMN `autofac:` extension prefix are intentionally retained as stable compatibility contracts, so existing installs and persisted workflows keep working without migration (see [docs/brand-migration.md](docs/brand-migration.md)).
+The solution, projects, and .NET namespaces use the `Agentwerke.*` prefix, and the BPMN extension prefix is `agentwerke:`.
 
 | Project | Responsibility |
 | --- | --- |
@@ -158,7 +155,7 @@ Agentwerke selects its execution runtime through the `WorkflowRuntime:Mode` sett
 | --- | --- |
 | `Agentwerke` | Default. Uses the bounded, Postgres-backed Agentwerke runtime. Camunda configuration is not read and no Camunda client is constructed. |
 | `Camunda` | Opt-in enterprise adapter. Camunda options, client, health probe, and status are wired. |
-| `Autofac` | Legacy alias for `Agentwerke`. Existing installs keep working, but new configuration should use `Agentwerke`. |
+| `Agentwerke` | Legacy alias for `Agentwerke`. Existing installs keep working, but new configuration should use `Agentwerke`. |
 
 ```jsonc
 // appsettings.json
@@ -225,7 +222,7 @@ Agentwerke selects its execution runtime through the `WorkflowRuntime:Mode` sett
 ## Documentation
 
 - **Architecture decisions**
-  - Default workflow runtime: `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`
+  - Default workflow runtime: `docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md`
   - Superseded Camunda-first decision: `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`
   - OpenSandbox control plane with Kata runtime: `docs/decisions/ADR-003-use-opensandbox-control-plane-with-kata-runtime.md`
 - **Plans and scenarios**

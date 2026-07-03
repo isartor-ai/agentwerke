@@ -53,9 +53,9 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         var bpmnXml = await GetBpmnXmlAsync(run.WorkflowId, ct);
 
         using var span = _tracer.StartSpan("workflow.run.start");
-        span.SetTag("autofac.run_id", runId);
-        span.SetTag("autofac.workflow_id", run.WorkflowId);
-        if (correlationId is not null) span.SetTag("autofac.correlation_id", correlationId);
+        span.SetTag("agentwerke.run_id", runId);
+        span.SetTag("agentwerke.workflow_id", run.WorkflowId);
+        if (correlationId is not null) span.SetTag("agentwerke.correlation_id", correlationId);
 
         using var logScope = _logger.BeginScope(new Dictionary<string, object>
         {
@@ -71,7 +71,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
             var result = await _runner.StartAsync(
                 run.WorkflowId, bpmnXml, run.RequestedBy, ct, correlationId, existingRunId: runId);
 
-            span.SetTag("autofac.result_status", result.Status);
+            span.SetTag("agentwerke.result_status", result.Status);
             await HandleResultAsync(runId, result, ct);
         }
         catch (Exception ex)
@@ -95,8 +95,8 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         var bpmnXml = await GetBpmnXmlAsync(run.WorkflowId, ct);
 
         using var span = _tracer.StartSpan("workflow.run.resume");
-        span.SetTag("autofac.run_id", runId);
-        span.SetTag("autofac.workflow_id", run.WorkflowId);
+        span.SetTag("agentwerke.run_id", runId);
+        span.SetTag("agentwerke.workflow_id", run.WorkflowId);
 
         using var logScope = _logger.BeginScope(new Dictionary<string, object>
         {
@@ -110,7 +110,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         try
         {
             var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, externalPayload, externalCorrelationKey, resumedBy, ct);
-            span.SetTag("autofac.result_status", result.Status);
+            span.SetTag("agentwerke.result_status", result.Status);
             await HandleResultAsync(runId, result, ct);
         }
         catch (Exception ex)
@@ -128,8 +128,8 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         var bpmnXml = await GetBpmnXmlAsync(run.WorkflowId, ct);
 
         using var span = _tracer.StartSpan("workflow.run.recover");
-        span.SetTag("autofac.run_id", runId);
-        span.SetTag("autofac.workflow_id", run.WorkflowId);
+        span.SetTag("agentwerke.run_id", runId);
+        span.SetTag("agentwerke.workflow_id", run.WorkflowId);
 
         using var logScope = _logger.BeginScope(new Dictionary<string, object>
         {
@@ -143,7 +143,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         try
         {
             var result = await _runner.RecoverAsync(runId, bpmnXml, ct);
-            span.SetTag("autofac.result_status", result.Status);
+            span.SetTag("agentwerke.result_status", result.Status);
             await HandleResultAsync(runId, result, ct);
         }
         catch (Exception ex)

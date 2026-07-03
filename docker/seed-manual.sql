@@ -4,7 +4,7 @@
 
 -- ── Workflow definition ────────────────────────────────────────────────────
 
-INSERT INTO autofac.workflows (
+INSERT INTO agentwerke.workflows (
     "Id", "Name", "Description", "Version", "Status", "Owner",
     "CreatedAt", "LastEditedAt", "ValidationState", "Tags", "BpmnXml"
 ) VALUES (
@@ -24,7 +24,7 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="e2e-simple-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="e2e-simple" name="E2E Simple Workflow" isExecutable="true">
@@ -33,14 +33,14 @@ INSERT INTO autofac.workflows (
     </bpmn:startEvent>
     <bpmn:serviceTask id="RunAnalysis" name="Run Analysis">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="security-analyst" action="run-analysis" environment="ci" purposeType="security-scan" policyTag="standard" requiresEvidence="" />
+        <agentwerke:agentTask agent="security-analyst" action="run-analysis" environment="ci" purposeType="security-scan" policyTag="standard" requiresEvidence="" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow1</bpmn:incoming>
       <bpmn:outgoing>Flow2</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:userTask id="ApproveDeployment" name="Approve Deployment">
       <bpmn:extensionElements>
-        <autofac:approvalTask purposeType="human-approval" policyTag="standard-deploy" />
+        <agentwerke:approvalTask purposeType="human-approval" policyTag="standard-deploy" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow2</bpmn:incoming>
       <bpmn:outgoing>Flow3</bpmn:outgoing>
@@ -84,7 +84,7 @@ INSERT INTO autofac.workflows (
 
 -- ── Completed run ──────────────────────────────────────────────────────────
 
-INSERT INTO autofac.workflow_runs (
+INSERT INTO agentwerke.workflow_runs (
     "Id", "WorkflowId", "WorkflowName", "WorkflowVersion", "Status",
     "RiskLevel", "CurrentStep", "RequestedBy", "StartedAt", "CompletedAt",
     "DurationMs", "PendingApprovals", "Tags", "CorrelationId"
@@ -105,7 +105,7 @@ INSERT INTO autofac.workflow_runs (
     NULL
 ) ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_run_steps (
+INSERT INTO agentwerke.workflow_run_steps (
     "Id", "RunId", "Name", "Type", "Status", "StartedAt", "CompletedAt", "AgentName", "Output", "Error"
 ) VALUES
 (
@@ -126,7 +126,7 @@ INSERT INTO autofac.workflow_run_steps (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_events (
+INSERT INTO agentwerke.workflow_events (
     "Id", "RunId", "Type", "Message", "CreatedAt"
 ) VALUES
 (
@@ -158,7 +158,7 @@ ON CONFLICT ("Id") DO NOTHING;
 
 -- ── Awaiting-approval run ──────────────────────────────────────────────────
 
-INSERT INTO autofac.workflow_runs (
+INSERT INTO agentwerke.workflow_runs (
     "Id", "WorkflowId", "WorkflowName", "WorkflowVersion", "Status",
     "RiskLevel", "CurrentStep", "RequestedBy", "StartedAt", "CompletedAt",
     "DurationMs", "PendingApprovals", "Tags", "CorrelationId"
@@ -179,7 +179,7 @@ INSERT INTO autofac.workflow_runs (
     NULL
 ) ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_run_steps (
+INSERT INTO agentwerke.workflow_run_steps (
     "Id", "RunId", "Name", "Type", "Status", "StartedAt", "CompletedAt", "AgentName", "Output", "Error",
     "PolicyDecision_Kind", "PolicyDecision_PolicyId", "PolicyDecision_PolicyName",
     "PolicyDecision_Rationale", "PolicyDecision_RiskScore", "PolicyDecision_RiskLevel",
@@ -209,7 +209,7 @@ INSERT INTO autofac.workflow_run_steps (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_events (
+INSERT INTO agentwerke.workflow_events (
     "Id", "RunId", "Type", "Message", "CreatedAt"
 ) VALUES
 (
@@ -234,7 +234,7 @@ INSERT INTO autofac.workflow_events (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.approval_requests (
+INSERT INTO agentwerke.approval_requests (
     "Id", "RunId", "WorkflowName", "ActionRequested", "Requester", "AgentName",
     "PolicyRationale", "RiskScore", "RiskLevel", "RiskFactors", "AffectedSystems",
     "SlaDeadline", "CreatedAt", "Status", "Priority",

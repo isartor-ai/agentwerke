@@ -1003,7 +1003,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
             return command;
         }
 
-        var marker = $"AUTOFAC_STDIN_{Guid.NewGuid():N}";
+        var marker = $"AGENTWERKE_STDIN_{Guid.NewGuid():N}";
         return $"""
                cat <<'{marker}' | {command}
                {standardInput}
@@ -1100,7 +1100,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
                 Pvc = new LifecyclePersistentVolumeDto(volume.Source)
             },
             SandboxFilesystemMountSourceKind.Ossfs => throw new InvalidOperationException(
-                "OpenSandbox OSSFS mounts are not supported by Autofac yet because the current sandbox contract does not carry the required bucket and credential fields."),
+                "OpenSandbox OSSFS mounts are not supported by Agentwerke yet because the current sandbox contract does not carry the required bucket and credential fields."),
             _ => throw new ArgumentOutOfRangeException(nameof(volume.SourceKind), volume.SourceKind, "Unsupported OpenSandbox volume source.")
         };
     }

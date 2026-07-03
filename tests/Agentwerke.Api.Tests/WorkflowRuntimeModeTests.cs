@@ -19,7 +19,6 @@ public sealed class WorkflowRuntimeModeTests
 
         Assert.Equal(WorkflowRuntimeMode.Agentwerke, options.Mode);
         Assert.False(options.IsCamundaMode);
-        Assert.False(options.LegacyModeAliasUsed);
     }
 
     [Theory]
@@ -34,22 +33,6 @@ public sealed class WorkflowRuntimeModeTests
 
         Assert.Equal(WorkflowRuntimeMode.Agentwerke, options.Mode);
         Assert.False(options.IsCamundaMode);
-        Assert.False(options.LegacyModeAliasUsed);
-    }
-
-    [Theory]
-    [InlineData("Autofac")]
-    [InlineData("autofac")]
-    [InlineData(" AUTOFAC ")]
-    public void Resolve_WithLegacyAutofacValue_MapsToAgentwerkeRuntime(string value)
-    {
-        var configuration = BuildConfiguration(value);
-
-        var options = WorkflowRuntimeOptions.Resolve(configuration);
-
-        Assert.Equal(WorkflowRuntimeMode.Agentwerke, options.Mode);
-        Assert.False(options.IsCamundaMode);
-        Assert.True(options.LegacyModeAliasUsed);
     }
 
     [Theory]
@@ -64,7 +47,6 @@ public sealed class WorkflowRuntimeModeTests
 
         Assert.Equal(WorkflowRuntimeMode.Camunda, options.Mode);
         Assert.True(options.IsCamundaMode);
-        Assert.False(options.LegacyModeAliasUsed);
     }
 
     [Fact]
@@ -78,7 +60,6 @@ public sealed class WorkflowRuntimeModeTests
         Assert.Contains("Temporal", exception.Message);
         Assert.Contains("WorkflowRuntime:Mode", exception.Message);
         Assert.Contains("Agentwerke", exception.Message);
-        Assert.Contains("Autofac", exception.Message);
         Assert.Contains("Camunda", exception.Message);
     }
 
@@ -144,7 +125,7 @@ public sealed class WorkflowRuntimeModeTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=autofac;Username=test;Password=test"
+                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=agentwerke;Username=test;Password=test"
             })
             .Build();
 
@@ -170,7 +151,7 @@ public sealed class WorkflowRuntimeModeTests
     {
         var settings = new Dictionary<string, string?>
         {
-            ["ConnectionStrings:Postgres"] = "Host=localhost;Database=autofac;Username=test;Password=test"
+            ["ConnectionStrings:Postgres"] = "Host=localhost;Database=agentwerke;Username=test;Password=test"
         };
 
         if (mode is not null)

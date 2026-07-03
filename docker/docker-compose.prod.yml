@@ -17,7 +17,7 @@
 #   AGENTWERKE_GITHUB_PAT GitHub PAT (if the GitHub connector is used)
 # Optional: AGENTWERKE_VERSION (image tag, default "latest"), AGENTWERKE_DB,
 #           AGENTWERKE_REGISTRY, OTLP_ENDPOINT
-# Legacy AUTOFAC_VERSION and AUTOFAC_GITHUB_PAT are still read as fallbacks
+# Legacy AGENTWERKE_VERSION and AGENTWERKE_GITHUB_PAT are still read as fallbacks
 # during the rename transition.
 #
 # Start:
@@ -46,7 +46,7 @@ services:
         limits: { cpus: "1.0", memory: 1G }
 
   migrate:
-    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/api:${AGENTWERKE_VERSION:-${AUTOFAC_VERSION:-latest}}"
+    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/api:${AGENTWERKE_VERSION:-${AGENTWERKE_VERSION:-latest}}"
     restart: "no"
     entrypoint: ["dotnet", "ef", "database", "update",
       "--project", "src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj",
@@ -57,7 +57,7 @@ services:
       postgres: { condition: service_healthy }
 
   api:
-    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/api:${AGENTWERKE_VERSION:-${AUTOFAC_VERSION:-latest}}"
+    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/api:${AGENTWERKE_VERSION:-${AGENTWERKE_VERSION:-latest}}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"   # bind to localhost; expose via your TLS proxy
@@ -77,7 +77,7 @@ services:
       Anthropic__ApiKey: "${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}"
       # --- GitHub connector (optional) ---
       Integrations__GitHub__Enabled: "${GITHUB_ENABLED:-false}"
-      Integrations__GitHub__PersonalAccessToken: "${AGENTWERKE_GITHUB_PAT:-${AUTOFAC_GITHUB_PAT:-}}"
+      Integrations__GitHub__PersonalAccessToken: "${AGENTWERKE_GITHUB_PAT:-${AGENTWERKE_GITHUB_PAT:-}}"
       Integrations__GitHub__RepositoryOwner: "${GITHUB_OWNER:-}"
       Integrations__GitHub__RepositoryName: "${GITHUB_REPO:-}"
       # --- Observability (optional OTLP collector) ---
@@ -98,7 +98,7 @@ services:
         limits: { cpus: "1.0", memory: 512M }
 
   web:
-    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/web:${AGENTWERKE_VERSION:-${AUTOFAC_VERSION:-latest}}"
+    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/web:${AGENTWERKE_VERSION:-${AGENTWERKE_VERSION:-latest}}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:80"     # expose via your TLS proxy

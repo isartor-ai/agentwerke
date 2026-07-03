@@ -4,9 +4,9 @@ groups:
       - alert: HighRunFailureRate
         expr: |
           (
-            rate(autofac_workflow_runs_total{status="failed"}[10m])
+            rate(agentwerke_workflow_runs_total{status="failed"}[10m])
             /
-            rate(autofac_workflow_runs_total[10m])
+            rate(agentwerke_workflow_runs_total[10m])
           ) > 0.10
         for: 5m
         labels:
@@ -21,9 +21,9 @@ groups:
       - alert: CriticalRunFailureRate
         expr: |
           (
-            rate(autofac_workflow_runs_total{status="failed"}[10m])
+            rate(agentwerke_workflow_runs_total{status="failed"}[10m])
             /
-            rate(autofac_workflow_runs_total[10m])
+            rate(agentwerke_workflow_runs_total[10m])
           ) > 0.25
         for: 2m
         labels:
@@ -39,7 +39,7 @@ groups:
     rules:
       - alert: ApprovalSLABreach
         expr: |
-          histogram_quantile(0.95, rate(autofac_approval_wait_seconds_bucket[30m])) > 86400
+          histogram_quantile(0.95, rate(agentwerke_approval_wait_seconds_bucket[30m])) > 86400
         for: 5m
         labels:
           severity: warning
@@ -52,7 +52,7 @@ groups:
 
       - alert: ApprovalQueueStuck
         expr: |
-          autofac_workflow_runs_pending_approval > 20
+          agentwerke_workflow_runs_pending_approval > 20
         for: 15m
         labels:
           severity: warning
@@ -66,7 +66,7 @@ groups:
     rules:
       - alert: WorkerBacklogGrowing
         expr: |
-          deriv(autofac_workflow_runs_active[10m]) > 0.5
+          deriv(agentwerke_workflow_runs_active[10m]) > 0.5
         for: 10m
         labels:
           severity: warning
@@ -79,7 +79,7 @@ groups:
 
       - alert: WorkerDown
         expr: |
-          absent(autofac_workflow_runs_active) == 1
+          absent(agentwerke_workflow_runs_active) == 1
         for: 3m
         labels:
           severity: critical
@@ -95,9 +95,9 @@ groups:
       - alert: ConnectorHighErrorRate
         expr: |
           (
-            rate(autofac_connector_invocations_total{status="failed"}[5m])
+            rate(agentwerke_connector_invocations_total{status="failed"}[5m])
             /
-            rate(autofac_connector_invocations_total[5m])
+            rate(agentwerke_connector_invocations_total[5m])
           ) > 0.20
         for: 5m
         labels:

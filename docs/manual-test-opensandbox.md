@@ -61,7 +61,7 @@ This profile builds and starts:
 
 The E2E test uploads a temporary agent through `POST /api/agents/upload`, imports and publishes a BPMN workflow that references that agent, starts a run, and asserts the service task completed through the `sandbox.execute` tool with the `offline` sandbox profile.
 
-Expected result: the `e2e-tests-opensandbox` container exits with code 0 and the run step output contains `autofac-sandbox: task complete`.
+Expected result: the `e2e-tests-opensandbox` container exits with code 0 and the run step output contains `agentwerke-sandbox: task complete`.
 
 The OpenSandbox log line below is expected in this local scenario and is not the failure:
 
@@ -105,23 +105,23 @@ Start a workflow that routes a service task through the `sandbox.execute` tool (
 ### Step 4: Run the gated integration tests against the real server
 
 ```bash
-export AUTOFAC_OPEN_SANDBOX_SERVER_URL="http://localhost:8080/v1"
-export AUTOFAC_OPEN_SANDBOX_API_KEY=""   # if your server requires one
+export AGENTWERKE_OPEN_SANDBOX_SERVER_URL="http://localhost:8080/v1"
+export AGENTWERKE_OPEN_SANDBOX_API_KEY=""   # if your server requires one
 dotnet test tests/Agentwerke.Sandboxes.Tests/Agentwerke.Sandboxes.Tests.csproj \
   --filter "FullyQualifiedName~OpenSandboxIntegrationTests"
 ```
 
-Expected result: all `OpenSandboxIntegrationTests` pass — smoke execution, non-zero exit handling, sandbox cleanup on success, sandbox retention on failure when `RetainSandboxOnFailure` is set, and execution under each named `Agentwerke.Sandboxes.SandboxProfileCatalog` profile. Without `AUTOFAC_OPEN_SANDBOX_SERVER_URL` set, these tests no-op and pass — that's the CI-safe default.
+Expected result: all `OpenSandboxIntegrationTests` pass — smoke execution, non-zero exit handling, sandbox cleanup on success, sandbox retention on failure when `RetainSandboxOnFailure` is set, and execution under each named `Agentwerke.Sandboxes.SandboxProfileCatalog` profile. Without `AGENTWERKE_OPEN_SANDBOX_SERVER_URL` set, these tests no-op and pass — that's the CI-safe default.
 
 ### Step 4b: Local fallback without OpenSandbox at all
 
 If you don't want to run an OpenSandbox server, the legacy direct-Docker path still works (`Sandboxes:Provider: docker`, the chart/compose default for local stacks). Verify it end to end against your local Docker daemon:
 
 ```bash
-export AUTOFAC_DOCKER_SANDBOX_E2E=1
+export AGENTWERKE_DOCKER_SANDBOX_E2E=1
 # Only needed if `docker context ls` shows your active context isn't the
 # default socket (e.g. Rancher Desktop, a remote context):
-export AUTOFAC_DOCKER_ENDPOINT="unix:///path/to/docker.sock"
+export AGENTWERKE_DOCKER_ENDPOINT="unix:///path/to/docker.sock"
 dotnet test tests/Agentwerke.Sandboxes.Tests/Agentwerke.Sandboxes.Tests.csproj \
   --filter "FullyQualifiedName~DockerSandboxLifecycleIntegrationTests"
 ```
@@ -227,6 +227,6 @@ The practical takeaway: only Kata and Kata+Firecracker give a sandboxed task its
 - `docs/decisions/ADR-003-use-opensandbox-control-plane-with-kata-runtime.md`
 - `docs/architecture-design.md` §6.5 (Sandbox Execution Manager, including the Sandbox Profiles subsection)
 - `src/Agentwerke.Sandboxes/SandboxProfileCatalog.cs` — the four named profiles and what each maps to
-- `tests/Agentwerke.Sandboxes.Tests/OpenSandboxIntegrationTests.cs` — gated by `AUTOFAC_OPEN_SANDBOX_SERVER_URL`
-- `tests/Agentwerke.Sandboxes.Tests/DockerSandboxLifecycleIntegrationTests.cs` — gated by `AUTOFAC_DOCKER_SANDBOX_E2E`
+- `tests/Agentwerke.Sandboxes.Tests/OpenSandboxIntegrationTests.cs` — gated by `AGENTWERKE_OPEN_SANDBOX_SERVER_URL`
+- `tests/Agentwerke.Sandboxes.Tests/DockerSandboxLifecycleIntegrationTests.cs` — gated by `AGENTWERKE_DOCKER_SANDBOX_E2E`
 - `deploy/helm/agentwerke/values.yaml` — the `sandbox` block

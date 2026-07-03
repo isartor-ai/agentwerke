@@ -13,7 +13,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.CreateTable(
                 name: "run_outbox",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -36,7 +36,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "ix_run_outbox_claim",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "run_outbox",
                 columns: new[] { "LockedBy", "CompletedAt", "VisibleAfter" });
         }
@@ -46,7 +46,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "run_outbox",
-                schema: "autofac");
+                schema: "agentwerke");
         }
     }
 }

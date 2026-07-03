@@ -149,7 +149,7 @@ public sealed class PolicyEvaluationServiceTests
                 "OpenPr",
                 "Open Pull Request",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: "github.create_pull_request",
                     Environment: null,
@@ -210,7 +210,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "cloud.deploy_artifact",
                     Environment: "staging",
@@ -277,7 +277,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "cloud.deploy_artifact",
                     Environment: "staging",
@@ -345,7 +345,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WriteSpec",
                 "Write Spec",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "spec-agent",
                     Action: "spec.generate",
                     Environment: "dev",
@@ -374,7 +374,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -422,7 +422,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -479,7 +479,7 @@ public sealed class PolicyEvaluationServiceTests
                 "CreateBranch",
                 "Create Branch",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: "github.create_branch",
                     Environment: "github",
@@ -508,7 +508,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -547,7 +547,7 @@ public sealed class PolicyEvaluationServiceTests
                 "OpenPr",
                 "Open Pull Request",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: "github.create_pull_request",
                     Environment: null,
@@ -589,7 +589,7 @@ public sealed class PolicyEvaluationServiceTests
                 "GitHubCollaboration",
                 "GitHub Collaboration",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: action,
                     Environment: "github",
@@ -633,7 +633,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -669,7 +669,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -685,7 +685,7 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.True(outcome.Succeeded);
         Assert.Equal(1, sandbox.ExecuteCalls);
-        Assert.Equal("deployment", sandbox.LastRequest?.Metadata?["autofac.sandboxProfile"]);
+        Assert.Equal("deployment", sandbox.LastRequest?.Metadata?["agentwerke.sandboxProfile"]);
     }
 
     [Fact]
@@ -702,7 +702,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Review",
                 "Review",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "security-agent",
                     Action: "scan",
                     Environment: null,
@@ -738,7 +738,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Analyze",
                 "Analyze",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "not-a-registered-agent",
                     Action: "analyze",
                     Environment: null,
@@ -754,7 +754,7 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.True(outcome.Succeeded);
         Assert.Equal(1, sandbox.ExecuteCalls);
-        Assert.Equal("offline", sandbox.LastRequest?.Metadata?["autofac.sandboxProfile"]);
+        Assert.Equal("offline", sandbox.LastRequest?.Metadata?["agentwerke.sandboxProfile"]);
     }
 
     [Fact]
@@ -791,7 +791,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WriteSpec",
                 "Write Spec",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "spec-writer",
                     Action: "spec.generate",
                     Environment: "ci",
@@ -849,7 +849,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WriteSpec",
                 "Write Spec",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "spec-writer",
                     Action: "spec.generate",
                     Environment: "ci",
@@ -880,7 +880,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -914,7 +914,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Sync",
                 "Sync",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: "github.sync_status",
                     Environment: null,
@@ -948,7 +948,7 @@ public sealed class PolicyEvaluationServiceTests
                 "OpenPr",
                 "Open Pull Request",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: "github.create_pull_request",
                     Environment: null,
@@ -1000,7 +1000,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WeatherLookup",
                 "Weather Lookup",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "ops-agent",
                     Action: "mcp.weather.lookup",
                     Environment: "staging",
@@ -1059,7 +1059,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WeatherLookup",
                 "Weather Lookup",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "ops-agent",
                     Action: "mcp.weather.lookup",
                     Environment: "staging",
@@ -1109,7 +1109,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WeatherLookup",
                 "Weather Lookup",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "ops-agent",
                     Action: "mcp.weather.lookup",
                     Environment: "staging",
@@ -1153,7 +1153,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",
@@ -1210,7 +1210,7 @@ public sealed class PolicyEvaluationServiceTests
                 "OpenPr",
                 "Open Pull Request",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "github-agent",
                     Action: "github.create_pull_request",
                     Environment: null,
@@ -1273,7 +1273,7 @@ public sealed class PolicyEvaluationServiceTests
                 "WeatherLookup",
                 "Weather Lookup",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "ops-agent",
                     Action: "mcp.weather.lookup",
                     Environment: "staging",
@@ -1354,7 +1354,7 @@ public sealed class PolicyEvaluationServiceTests
                 "Deploy",
                 "Deploy",
                 "serviceTask",
-                new AutofacTaskMetadata(
+                new AgentwerkeTaskMetadata(
                     Agent: "deploy-agent",
                     Action: "deploy",
                     Environment: "staging",

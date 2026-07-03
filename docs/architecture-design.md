@@ -51,7 +51,7 @@ Agentwerke sits between human operators, enterprise systems, LLM providers, exec
 ```mermaid
 flowchart LR
     user["Users\nProduct, Engineering, QA, DevOps, Approvers, Admins"]
-    autofac["Agentwerke\nDark software factory platform"]
+    agentwerke["Agentwerke\nDark software factory platform"]
     jira["Jira"]
     github["GitHub"]
     slack["Slack"]
@@ -63,17 +63,17 @@ flowchart LR
     mcp["MCP Tools / External Tooling"]
     obs["Enterprise Observability Stack"]
 
-    user --> autofac
-    jira <--> autofac
-    github <--> autofac
-    slack <--> autofac
-    teams <--> autofac
-    email <--> autofac
-    cicd <--> autofac
-    cloud <--> autofac
-    llm <--> autofac
-    mcp <--> autofac
-    autofac --> obs
+    user --> agentwerke
+    jira <--> agentwerke
+    github <--> agentwerke
+    slack <--> agentwerke
+    teams <--> agentwerke
+    email <--> agentwerke
+    cicd <--> agentwerke
+    cloud <--> agentwerke
+    llm <--> agentwerke
+    mcp <--> agentwerke
+    agentwerke --> obs
 ```
 
 ## 5. Container Architecture
@@ -97,7 +97,7 @@ Agentwerke should be designed as a set of cooperating platform services rather t
 flowchart TB
     user["User"]
 
-    subgraph autofac["Agentwerke Platform"]
+    subgraph agentwerke["Agentwerke Platform"]
         web["Web App\nReact"]
         api["Platform API\nC# ASP.NET Core"]
         workflow["Workflow Runtime Engine\nBPMN execution, run state, scheduling"]
@@ -196,7 +196,7 @@ Responsibilities:
 - Route task execution to agent or integration handlers
 - Handle retries, compensation, and rollback controls
 
-Architecture decision: Agentwerke is BPMN-centric, but the default runtime is the bounded Postgres-backed Agentwerke runtime. Camunda 8 is retained as an optional enterprise adapter, not the production default. See `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
+Architecture decision: Agentwerke is BPMN-centric, but the default runtime is the bounded Postgres-backed Agentwerke runtime. Camunda 8 is retained as an optional enterprise adapter, not the production default. See `docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md`.
 
 ### 6.4 Agent Orchestrator
 
@@ -217,7 +217,7 @@ appended after every completed service task with that task's primary output
 exposes it both as template variables (e.g. `{{input.body}}`,
 `{{output.WriteRequirements}}`) and as a rendered `run_context` prompt section,
 so a later agent (architect, analyst, …) can build on earlier agents' output.
-See issue isartor-ai/autofac-private#89.
+See issue isartor-ai/agentwerke-private#89.
 
 SDLC agent profiles registered in `AgentRegistry`: `business-analyst`,
 `solution-architect`, `technical-analyst`, `implementation-engineer`,
@@ -247,7 +247,7 @@ Agents do not get an open-ended sandbox. Every sandbox-routed action requests on
 
 Credentials are always bound by name from the secret/vault layer at a fixed file path inside the sandbox; they are never inlined as command arguments or written to logs.
 
-**Selection.** Each `AgentProfile` declares the profiles it may request (`AgentProfile.SandboxProfiles`; empty means "offline" only — least privilege by default). A BPMN service task may pin a specific profile with the `autofac:agentTask` `sandboxProfile` attribute; if omitted, the agent's first declared profile is used (or "offline" if it declares none). `Agentwerke.AgentSecOps.ISandboxProfileSelector` checks the requested profile against the agent's declared allow-list and, as defense in depth, rejects the `deployment` profile outright when the action-level policy decision's risk level is `critical` — independent of what the agent declares. Rejections happen in `ToolGateway` before any sandbox is created, are recorded in the run's tool-invocation history with status `profile_rejected`, and carry a diagnostic trail explaining which check failed.
+**Selection.** Each `AgentProfile` declares the profiles it may request (`AgentProfile.SandboxProfiles`; empty means "offline" only — least privilege by default). A BPMN service task may pin a specific profile with the `agentwerke:agentTask` `sandboxProfile` attribute; if omitted, the agent's first declared profile is used (or "offline" if it declares none). `Agentwerke.AgentSecOps.ISandboxProfileSelector` checks the requested profile against the agent's declared allow-list and, as defense in depth, rejects the `deployment` profile outright when the action-level policy decision's risk level is `critical` — independent of what the agent declares. Rejections happen in `ToolGateway` before any sandbox is created, are recorded in the run's tool-invocation history with status `profile_rejected`, and carry a diagnostic trail explaining which check failed.
 
 This is a second, narrower gate than the action-level allow/deny/escalate decision from `IPolicyEvaluationService`: that decision answers "is this action permitted at all"; the sandbox profile answers "what can the sandbox running it touch."
 
@@ -788,11 +788,11 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 | `Agentwerke.Observability` | Prometheus metrics, JSON console logs, correlation middleware, OTel tracing (`WithTracing` + OTLP exporter), `IWorkflowTracer`/`ISpan` abstraction, Jaeger via docker-compose | Metrics + tracing (Phase F) |
 | `Agentwerke.Api` | ASP.NET Core controllers, contract mapping, OpenAPI | Solid; unauthenticated |
 
-Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites. The `WorkflowDesigner` view embeds a full `BpmnModeler` component (bpmn-js v17) with Agentwerke moddle extension (`autofac:AgentTask`, `autofac:ApprovalTask`) — extension metadata is serialized directly into BPMN XML via `modeling.updateModdleProperties`. Custom `additionalModules` add a drag-and-drop palette, CSS canvas markers, and a `bpmn-js-properties-panel` sidebar for editing all Agentwerke-specific fields. A `__mocks__/BpmnModeler.tsx` stub allows Vitest to run without jsdom SVG layout.
+Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites. The `WorkflowDesigner` view embeds a full `BpmnModeler` component (bpmn-js v17) with Agentwerke moddle extension (`agentwerke:AgentTask`, `agentwerke:ApprovalTask`) — extension metadata is serialized directly into BPMN XML via `modeling.updateModdleProperties`. Custom `additionalModules` add a drag-and-drop palette, CSS canvas markers, and a `bpmn-js-properties-panel` sidebar for editing all Agentwerke-specific fields. A `__mocks__/BpmnModeler.tsx` stub allows Vitest to run without jsdom SVG layout.
 
 ### 21.2 What Actually Works End-to-End
 
-- **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer. The designer provides a drag-and-drop canvas with Agentwerke-specific palette entries ("Agent Task", "Approval Gate"), a properties panel sidebar for editing `autofac:agentTask` and `autofac:ApprovalTask` extension elements, canvas accent markers for visual identification, and overlay badges that surface backend validation errors directly on the relevant BPMN elements. Extension metadata round-trips natively through `bpmnXml` — no side-channel JSON.
+- **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer. The designer provides a drag-and-drop canvas with Agentwerke-specific palette entries ("Agent Task", "Approval Gate"), a properties panel sidebar for editing `agentwerke:agentTask` and `agentwerke:ApprovalTask` extension elements, canvas accent markers for visual identification, and overlay badges that surface backend validation errors directly on the relevant BPMN elements. Extension metadata round-trips natively through `bpmnXml` — no side-channel JSON.
 - **Workflow execution today** runs via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`. This is now the default runtime foundation for MVP and pilots, constrained to curated Agentwerke SDLC templates rather than arbitrary BPMN execution.
 - **Policy enforcement** at the Tool Gateway (`ToolGateway`): allow/deny lists, permission-level checks, input validation, and `PolicyEvaluationService` evaluation before every tool call — the single control point envisioned in Decision 3.
 - **Agent runtime assembly**: skill resolution from markdown manifests (`SkillRepository`/`MarkdownSkillLoader`), prompt assembly with full prompt snapshots, hook execution (`HookGateway` with `before/after_agent_run`), MCP tool sessions (`McpToolSessionFactory`), and a complete `AgentRuntimeSnapshot` persisted per step.
@@ -885,7 +885,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 ### Phase D — Default runtime scope and template conformance (High)
 
-1. ADR-001 has been superseded by `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
+1. ADR-001 has been superseded by `docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md`.
 2. The Agentwerke/Postgres runtime is the default production path for MVP and pilots. Camunda 8 remains an optional adapter, not a dependency of the core plan.
 3. **Engine hardened**:
    - `BpmnSequenceFlow` added to `BpmnWorkflowDefinition`; `BpmnWorkflowValidator` now parses `<sequenceFlow>` and `<conditionExpression>` elements and validates source/target references.

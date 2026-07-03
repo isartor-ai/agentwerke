@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.CreateTable(
                 name: "workflow_run_context",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -30,7 +30,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "ix_workflow_run_context_run_key",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_context",
                 columns: new[] { "RunId", "Key" },
                 unique: true);
@@ -41,7 +41,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "workflow_run_context",
-                schema: "autofac");
+                schema: "agentwerke");
         }
     }
 }

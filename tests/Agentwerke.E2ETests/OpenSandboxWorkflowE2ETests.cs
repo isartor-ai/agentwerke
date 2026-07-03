@@ -44,7 +44,7 @@ public sealed class OpenSandboxWorkflowE2ETests : E2ETestBase
             string.Equals(step["status"]!.GetValue<string>(), "completed", StringComparison.OrdinalIgnoreCase),
             $"Expected completed step but got '{step["status"]!.GetValue<string>()}'. Run: {run.ToJsonString()}");
         Assert.Equal(agentId, step["agentName"]!.GetValue<string>());
-        Assert.Contains("autofac-sandbox: task complete", step["output"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("agentwerke-sandbox: task complete", step["output"]!.GetValue<string>(), StringComparison.Ordinal);
 
         var invocation = Assert.Single(step["toolInvocations"]!.AsArray().OfType<JsonObject>());
         Assert.Equal("sandbox.execute", invocation["toolName"]!.GetValue<string>());
@@ -87,14 +87,14 @@ public sealed class OpenSandboxWorkflowE2ETests : E2ETestBase
         $$"""
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                          xmlns:autofac="https://autofac.ai/bpmn"
+                          xmlns:agentwerke="https://agentwerke.ai/bpmn"
                           id="opensandbox-e2e-defs"
                           targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
           <bpmn:process id="opensandbox-e2e" name="OpenSandbox E2E Workflow" isExecutable="true">
             <bpmn:startEvent id="Start" name="Start"/>
             <bpmn:serviceTask id="RunInOpenSandbox" name="Run in OpenSandbox">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="{{agentId}}"
                   action="{{action}}"
                   environment="ci"

@@ -127,7 +127,7 @@ public sealed class WebhooksController : ControllerBase
     /// approval notification (#172). The button value carries "{approvalId}:{runId}", so the
     /// decision is applied without a lookup. The request signature is verified with the Slack
     /// signing secret. Authorization is the shared-secret trust boundary; mapping the Slack
-    /// user to an Autofac role is a follow-up.
+    /// user to an Agentwerke role is a follow-up.
     /// </summary>
     [HttpPost("slack/interactions")]
     public async Task<IActionResult> SlackInteractions(CancellationToken cancellationToken)

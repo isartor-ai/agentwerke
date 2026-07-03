@@ -2927,23 +2927,23 @@ textarea {
 }
 
 /* Agentwerke extension accents on the canvas. */
-.autofac-agent-task .djs-visual > :nth-child(1) {
+.agentwerke-agent-task .djs-visual > :nth-child(1) {
   stroke: #00b3bb !important;
   stroke-width: 2px !important;
 }
 
-.autofac-approval-task .djs-visual > :nth-child(1) {
+.agentwerke-approval-task .djs-visual > :nth-child(1) {
   stroke: #c08a00 !important;
   stroke-width: 2px !important;
 }
 
 /* Backend validation error highlight + overlay badge. */
-.autofac-validation-error .djs-visual > :nth-child(1) {
+.agentwerke-validation-error .djs-visual > :nth-child(1) {
   stroke: #e5484d !important;
   stroke-width: 2px !important;
 }
 
-.autofac-validation-overlay {
+.agentwerke-validation-overlay {
   max-width: 220px;
   padding: 4px 8px;
   font-size: 11px;
@@ -2956,11 +2956,11 @@ textarea {
 }
 
 /* Palette accents for the Agentwerke entries. */
-.autofac-palette-agent::before {
+.agentwerke-palette-agent::before {
   color: #00b3bb;
 }
 
-.autofac-palette-approval::before {
+.agentwerke-palette-approval::before {
   color: #c08a00;
 }
 

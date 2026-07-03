@@ -48,12 +48,12 @@ public sealed record BpmnNodeDefinition(
     string Id,
     string? Name,
     string ElementName,
-    AutofacTaskMetadata? Metadata,
-    AutofacApprovalMetadata? ApprovalMetadata = null,
+    AgentwerkeTaskMetadata? Metadata,
+    AgentwerkeApprovalMetadata? ApprovalMetadata = null,
     string? TimerDuration = null,
-    AutofacExternalEventMetadata? ExternalEventMetadata = null);
+    AgentwerkeExternalEventMetadata? ExternalEventMetadata = null);
 
-public sealed record AutofacTaskMetadata(
+public sealed record AgentwerkeTaskMetadata(
     string Agent,
     string Action,
     string? Environment,
@@ -74,10 +74,10 @@ public sealed record AutofacTaskMetadata(
     /// </summary>
     string? SandboxProfile = null);
 
-public sealed record AutofacApprovalMetadata(
+public sealed record AgentwerkeApprovalMetadata(
     string PurposeType,
     string PolicyTag);
 
-public sealed record AutofacExternalEventMetadata(
+public sealed record AgentwerkeExternalEventMetadata(
     string MessageName,
     string CorrelationKeyTemplate);

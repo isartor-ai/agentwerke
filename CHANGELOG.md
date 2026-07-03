@@ -9,21 +9,21 @@ from the 1.0 release onward.
 ## [Unreleased]
 
 Work toward the first stable open-source release (1.0). See the
-[v1.0 epic](https://github.com/isartor-ai/autofac-private/issues/162).
+[v1.0 epic](https://github.com/isartor-ai/agentwerke-private/issues/162).
 
 ### Added
 - **Agentwerke public rebrand**: README, website, Web UI chrome, deployment
   examples, Helm chart path/metadata, and runtime-mode docs now use
-  Agentwerke by Isartor AI. `WorkflowRuntime:Mode=Autofac` remains a legacy
+  Agentwerke by Isartor AI. `WorkflowRuntime:Mode=Agentwerke` remains a legacy
   alias for the default Agentwerke runtime during the transition.
 - **Required label on the GitHub issue trigger** (`Integrations:GitHub:RequiredLabel`,
   default `agentwerke`): an issue must carry the label for its `issues` webhook to
   start a run, so every issue opened on the configured repo no longer spends
   model budget by default. Set to empty to restore the old behavior
-  (isartor-ai/autofac-private#191).
+  (isartor-ai/agentwerke-private#191).
 - Tokenless **mock model provider** (`Anthropic:Provider=mock`) so full
   workflows run end to end with no API key — for demos and CI.
-- **Per-task prompts** on BPMN `agentTask` (child `<autofac:prompt>` element,
+- **Per-task prompts** on BPMN `agentTask` (child `<agentwerke:prompt>` element,
   `prompt` / `promptFile` attributes) with `{{input.*}}` / `{{output.*}}`
   run-context interpolation.
 - `github.create_pull_request` can **include prior agent output** in the PR

@@ -9,7 +9,7 @@ namespace Agentwerke.Api.Tests;
 
 public sealed class SettingsServiceTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(Path.GetTempPath(), $"autofac-settings-{Guid.NewGuid():N}");
+    private readonly string _tempDirectory = Path.Combine(Path.GetTempPath(), $"agentwerke-settings-{Guid.NewGuid():N}");
 
     [Fact]
     public async Task GetSnapshotAsync_RedactsSecretValues()
@@ -105,7 +105,7 @@ public sealed class SettingsServiceTests : IDisposable
         {
             ["Integrations:GitHub:Enabled"] = "true",
             ["Integrations:GitHub:RepositoryOwner"] = "isartor-ai",
-            ["Integrations:GitHub:RepositoryName"] = "autofac"
+            ["Integrations:GitHub:RepositoryName"] = "agentwerke"
         });
 
         var result = await service.TestTargetAsync("github", AdminPrincipal(), CancellationToken.None);

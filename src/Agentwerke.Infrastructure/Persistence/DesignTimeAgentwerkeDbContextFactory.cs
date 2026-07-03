@@ -10,7 +10,7 @@ public sealed class DesignTimeAgentwerkeDbContextFactory : IDesignTimeDbContextF
     {
         var connectionString =
             Environment.GetEnvironmentVariable("ConnectionStrings__Postgres")
-            ?? "Host=localhost;Port=5432;Database=autofac;Username=postgres;Password=postgres";
+            ?? "Host=localhost;Port=5432;Database=agentwerke;Username=postgres;Password=postgres";
 
         var dataSource = new NpgsqlDataSourceBuilder(connectionString)
             .EnableDynamicJson()

@@ -4,7 +4,7 @@
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-opensandbox-agent-sandboxed-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-opensandbox-agent-sandboxed" name="OpenSandbox Agent Execution (agent_sandboxed)" isExecutable="true">
@@ -13,7 +13,7 @@
     </bpmn:startEvent>
     <bpmn:serviceTask id="GenerateSpec" name="Generate Specification">
       <bpmn:extensionElements>
-        <autofac:agentTask
+        <agentwerke:agentTask
           agent="opensandbox-pilot-agent-sandboxed"
           action="spec.generate"
           environment="ci"

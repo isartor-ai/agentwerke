@@ -91,7 +91,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             return new AgentTaskOutcome(
                 Succeeded: false,
                 Output: null,
-                FailureReason: "Service task is missing autofac:agentTask metadata.");
+                FailureReason: "Service task is missing agentwerke:agentTask metadata.");
         }
 
         // Honour the BPMN test-scenario flags so existing fixtures keep working.
@@ -411,7 +411,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private async Task<AgentTaskOutcome> RunViaToolGatewayAsync(
         ToolGatewayRequest request,
         BpmnNodeDefinition node,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt,
         AgentRuntimeSnapshot runtimeSnapshot,
         CancellationToken cancellationToken)
@@ -487,7 +487,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string runId,
         string stepId,
         BpmnNodeDefinition node,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt)
     {
         var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
@@ -525,9 +525,9 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     ["step_id"] = stepId,
                     ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["head_branch"] = branchName,
-                    ["title"] = node.Name is { Length: > 0 } ? $"Autofac: {node.Name}" : $"Autofac run {runId}",
+                    ["title"] = node.Name is { Length: > 0 } ? $"Agentwerke: {node.Name}" : $"Agentwerke run {runId}",
                     ["body"] = BuildPullRequestBody(runId, stepId, metadata, attempt),
-                    ["commit_message"] = $"Autofac evidence for run {runId}, step {stepId}"
+                    ["commit_message"] = $"Agentwerke evidence for run {runId}, step {stepId}"
                 });
         }
 
@@ -564,7 +564,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private ToolGatewayRequest? BuildSandboxExecutionToolRequest(
         string runId,
         string stepId,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt,
         AgentProfile? profile)
     {
@@ -598,7 +598,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     }
 
     private async Task<McpPreparationResult> PrepareMcpToolsAsync(
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         CancellationToken cancellationToken)
     {
         var servers = metadata.RuntimeContract?.McpServers ?? [];
@@ -620,7 +620,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string runId,
         string stepId,
         BpmnNodeDefinition node,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         string executionMode,
         int attempt,
         SkillManifest? skillManifest,
@@ -727,7 +727,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private static string BuildPullRequestBody(
         string runId,
         string stepId,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt)
     {
         var evidence = metadata.RequiresEvidence.Count == 0
@@ -754,7 +754,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private async Task<HookEvaluationResult> ExecuteHooksAsync(
         string eventName,
         BpmnNodeDefinition node,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt,
         AgentRuntimeSnapshot runtimeSnapshot,
         string? Output,
@@ -790,7 +790,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
     private async Task<AgentTaskOutcome> FinalizeOutcomeAsync(
         BpmnNodeDefinition node,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt,
         AgentTaskOutcome outcome,
         CancellationToken cancellationToken)
@@ -863,7 +863,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
     private static bool TryCreateOutcomeFromHookDecision(
         HookEvaluationResult result,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         AgentRuntimeSnapshot runtimeSnapshot,
         out AgentTaskOutcome outcome)
     {
@@ -903,7 +903,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string runId,
         string stepId,
         BpmnNodeDefinition node,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt,
         string? output,
         string? failureReason,
@@ -1083,7 +1083,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string Action,
         string runId,
         string stepId,
-        AutofacTaskMetadata metadata,
+        AgentwerkeTaskMetadata metadata,
         int attempt,
         AgentPermissionContract permissions,
         IReadOnlyDictionary<string, string> input,
@@ -1138,7 +1138,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             .ToArray();
     }
 
-    private string ResolveExecutionMode(AutofacTaskMetadata metadata, AgentProfile? profile)
+    private string ResolveExecutionMode(AgentwerkeTaskMetadata metadata, AgentProfile? profile)
     {
         if (!string.IsNullOrWhiteSpace(metadata.ExecutionMode))
         {

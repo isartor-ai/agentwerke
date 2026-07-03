@@ -36,7 +36,7 @@ public sealed class AgentsControllerTests
             Category: "engineering",
             Runner: "claude-code",
             Model: "claude-opus-4-8",
-            DockerImage: "autofac/agent-base",
+            DockerImage: "agentwerke/agent-base",
             Network: "bridge",
             Tools: ["web_search"],
             DeniedTools: ["sandbox.execute"],
