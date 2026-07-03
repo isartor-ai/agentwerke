@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agentwerke.AgentSecOps\Agentwerke.AgentSecOps.csproj" />
+    <ProjectReference Include="..\Agentwerke.Agents\Agentwerke.Agents.csproj" />
+    <ProjectReference Include="..\Agentwerke.Application\Agentwerke.Application.csproj" />
+    <ProjectReference Include="..\Agentwerke.Domain\Agentwerke.Domain.csproj" />
+    <ProjectReference Include="..\Agentwerke.Integrations\Agentwerke.Integrations.csproj" />
+    <ProjectReference Include="..\Agentwerke.Sandboxes\Agentwerke.Sandboxes.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

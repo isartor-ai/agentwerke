@@ -5,22 +5,22 @@ WORKDIR /repo
 COPY global.json Directory.Build.props ./
 COPY .config/ .config/
 RUN dotnet tool restore
-COPY src/Autofac.Domain/Autofac.Domain.csproj                         src/Autofac.Domain/
-COPY src/Autofac.Application/Autofac.Application.csproj               src/Autofac.Application/
-COPY src/Autofac.Workflows/Autofac.Workflows.csproj                   src/Autofac.Workflows/
-COPY src/Autofac.Infrastructure/Autofac.Infrastructure.csproj         src/Autofac.Infrastructure/
-COPY src/Autofac.Storage/Autofac.Storage.csproj                       src/Autofac.Storage/
-COPY src/Autofac.Sandboxes/Autofac.Sandboxes.csproj                   src/Autofac.Sandboxes/
-COPY src/Autofac.Agents/Autofac.Agents.csproj                         src/Autofac.Agents/
-COPY src/Autofac.Integrations/Autofac.Integrations.csproj             src/Autofac.Integrations/
-COPY src/Autofac.AgentSecOps/Autofac.AgentSecOps.csproj               src/Autofac.AgentSecOps/
-COPY src/Autofac.Observability/Autofac.Observability.csproj           src/Autofac.Observability/
-COPY src/Autofac.Api/Autofac.Api.csproj                               src/Autofac.Api/
-RUN dotnet restore src/Autofac.Api/Autofac.Api.csproj
+COPY src/Agentwerke.Domain/Agentwerke.Domain.csproj                         src/Agentwerke.Domain/
+COPY src/Agentwerke.Application/Agentwerke.Application.csproj               src/Agentwerke.Application/
+COPY src/Agentwerke.Workflows/Agentwerke.Workflows.csproj                   src/Agentwerke.Workflows/
+COPY src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj         src/Agentwerke.Infrastructure/
+COPY src/Agentwerke.Storage/Agentwerke.Storage.csproj                       src/Agentwerke.Storage/
+COPY src/Agentwerke.Sandboxes/Agentwerke.Sandboxes.csproj                   src/Agentwerke.Sandboxes/
+COPY src/Agentwerke.Agents/Agentwerke.Agents.csproj                         src/Agentwerke.Agents/
+COPY src/Agentwerke.Integrations/Agentwerke.Integrations.csproj             src/Agentwerke.Integrations/
+COPY src/Agentwerke.AgentSecOps/Agentwerke.AgentSecOps.csproj               src/Agentwerke.AgentSecOps/
+COPY src/Agentwerke.Observability/Agentwerke.Observability.csproj           src/Agentwerke.Observability/
+COPY src/Agentwerke.Api/Agentwerke.Api.csproj                               src/Agentwerke.Api/
+RUN dotnet restore src/Agentwerke.Api/Agentwerke.Api.csproj
 
 # Build
 COPY src/ src/
-RUN dotnet publish src/Autofac.Api/Autofac.Api.csproj \
+RUN dotnet publish src/Agentwerke.Api/Agentwerke.Api.csproj \
     -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
@@ -39,4 +39,4 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "Autofac.Api.dll"]
+ENTRYPOINT ["dotnet", "Agentwerke.Api.dll"]
