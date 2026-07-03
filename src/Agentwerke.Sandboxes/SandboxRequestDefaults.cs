@@ -6,14 +6,14 @@ internal static class SandboxRequestDefaults
     {
         return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["AUTOFAC_RUN_ID"] = request.RunId,
-            ["AUTOFAC_STEP_ID"] = request.StepId,
-            ["AUTOFAC_AGENT"] = request.AgentName,
-            ["AUTOFAC_ACTION"] = request.Action,
-            ["AUTOFAC_ENVIRONMENT"] = request.Environment ?? string.Empty,
-            ["AUTOFAC_PURPOSE"] = request.PurposeType,
-            ["AUTOFAC_POLICY"] = request.PolicyTag,
-            ["AUTOFAC_ATTEMPT"] = request.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ["AGENTWERKE_RUN_ID"] = request.RunId,
+            ["AGENTWERKE_STEP_ID"] = request.StepId,
+            ["AGENTWERKE_AGENT"] = request.AgentName,
+            ["AGENTWERKE_ACTION"] = request.Action,
+            ["AGENTWERKE_ENVIRONMENT"] = request.Environment ?? string.Empty,
+            ["AGENTWERKE_PURPOSE"] = request.PurposeType,
+            ["AGENTWERKE_POLICY"] = request.PolicyTag,
+            ["AGENTWERKE_ATTEMPT"] = request.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
     }
 
@@ -44,20 +44,20 @@ internal static class SandboxRequestDefaults
     public static string BuildPlaceholderEntrypointScript() =>
         """
         set -e
-        echo "autofac-sandbox: starting task"
-        echo "agent=$AUTOFAC_AGENT action=$AUTOFAC_ACTION env=$AUTOFAC_ENVIRONMENT attempt=$AUTOFAC_ATTEMPT"
+        echo "agentwerke-sandbox: starting task"
+        echo "agent=$AGENTWERKE_AGENT action=$AGENTWERKE_ACTION env=$AGENTWERKE_ENVIRONMENT attempt=$AGENTWERKE_ATTEMPT"
         mkdir -p /output
         cat > /output/result.json <<EOF
         {
-          "runId": "$AUTOFAC_RUN_ID",
-          "stepId": "$AUTOFAC_STEP_ID",
-          "agent": "$AUTOFAC_AGENT",
-          "action": "$AUTOFAC_ACTION",
-          "environment": "$AUTOFAC_ENVIRONMENT",
+          "runId": "$AGENTWERKE_RUN_ID",
+          "stepId": "$AGENTWERKE_STEP_ID",
+          "agent": "$AGENTWERKE_AGENT",
+          "action": "$AGENTWERKE_ACTION",
+          "environment": "$AGENTWERKE_ENVIRONMENT",
           "status": "completed",
           "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         }
         EOF
-        echo "autofac-sandbox: task complete"
+        echo "agentwerke-sandbox: task complete"
         """;
 }

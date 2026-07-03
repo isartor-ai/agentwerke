@@ -1,7 +1,7 @@
 namespace Agentwerke.Sandboxes;
 
 /// <summary>
-/// Canonical names for the sandbox profiles Autofac exposes to agents and workflows.
+/// Canonical names for the sandbox profiles Agentwerke exposes to agents and workflows.
 /// </summary>
 public static class SandboxProfileNames
 {
@@ -24,7 +24,7 @@ public sealed record SandboxProfileDefinition(
     IReadOnlyList<string> RequiredCredentials);
 
 /// <summary>
-/// Maps named Autofac sandbox profiles (<see cref="SandboxProfileNames"/>) onto concrete,
+/// Maps named Agentwerke sandbox profiles (<see cref="SandboxProfileNames"/>) onto concrete,
 /// OpenSandbox-facing <see cref="SandboxExecutionProfile"/> definitions.
 ///
 /// Definitions describe the *shape* of access (resource limits, egress, mounts, credential
@@ -138,7 +138,7 @@ public static class SandboxProfileCatalog
 
         var profile = definition.Profile;
         var mounts = profile.FilesystemMounts?
-            .Select(mount => mount with { Source = $"autofac-run-{runId}-{mount.Source}" })
+            .Select(mount => mount with { Source = $"agentwerke-run-{runId}-{mount.Source}" })
             .ToArray();
 
         return profile with { FilesystemMounts = mounts };

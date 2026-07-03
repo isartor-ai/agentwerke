@@ -7,7 +7,7 @@ namespace Agentwerke.Application.Workflows;
 
 public static class EvidencePackBuilder
 {
-    public const string SchemaVersion = "autofac.evidence-pack.v1";
+    public const string SchemaVersion = "agentwerke.evidence-pack.v1";
 
     public static EvidencePack Build(
         WorkflowRun run,

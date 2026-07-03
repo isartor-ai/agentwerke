@@ -62,12 +62,12 @@ vi.mock('bpmn-js-properties-panel', () => ({
   BpmnPropertiesProviderModule: {},
 }));
 
-vi.mock('../bpmn/autofacModule', () => ({
-  autofacModules: [],
+vi.mock('../bpmn/agentwerkeModule', () => ({
+  agentwerkeModules: [],
 }));
 
-vi.mock('../bpmn/autofacModdle', () => ({
-  autofacModdleDescriptor: {},
+vi.mock('../bpmn/agentwerkeModdle', () => ({
+  agentwerkeModdleDescriptor: {},
 }));
 
 vi.mock('bpmn-js/lib/NavigatedViewer', () => ({

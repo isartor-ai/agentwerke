@@ -21,7 +21,7 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
 
         sections.Add(new AgentPromptSectionSnapshot(
             Name: "system_preamble",
-            Content: "You are executing an Autofac agent task. Follow the provided task, skill, and runtime context carefully.",
+            Content: "You are executing an Agentwerke agent task. Follow the provided task, skill, and runtime context carefully.",
             Source: "generated:system"));
 
         if (!string.IsNullOrWhiteSpace(request.AgentDescription) || !string.IsNullOrWhiteSpace(request.AgentCategory))
@@ -250,7 +250,7 @@ public sealed partial class AgentPromptAssembler : IAgentPromptAssembler
             : string.Join(", ", request.RequiresEvidence);
 
         return $"""
-            Complete the requested Autofac agent task.
+            Complete the requested Agentwerke agent task.
 
             Task:
             - Node: {request.NodeName ?? request.NodeId}

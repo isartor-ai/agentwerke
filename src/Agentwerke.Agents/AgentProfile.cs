@@ -139,13 +139,13 @@ public static class AgentRegistry
                 new AgentSkillRef(
                     "github-branching",
                     "GitHub Branching",
-                    "Create deterministic Autofac branches for workflow runs",
+                    "Create deterministic Agentwerke branches for workflow runs",
                     ["github.create_branch"],
                     SkillManifestId: "git-workflow-and-versioning"),
                 new AgentSkillRef(
                     "github-pr",
                     "GitHub Pull Request",
-                    "Open draft pull requests with Autofac run evidence",
+                    "Open draft pull requests with Agentwerke run evidence",
                     ["github.create_pull_request", "github.create_pr"],
                     SkillManifestId: "git-workflow-and-versioning")
             ],
@@ -157,7 +157,7 @@ public static class AgentRegistry
         // ── SDLC agents (autonomous software-delivery workflow) ──────────────────
         // Skill manifests are intentionally left unbound (SkillManifestId omitted) so
         // these profiles run in stacks without a populated skills directory. Binding
-        // real manifests is a later step. See issue isartor-ai/autofac-private#89.
+        // real manifests is a later step. See issue isartor-ai/agentwerke-private#89.
         ["business-analyst"] = new AgentProfile
         {
             AgentId = "business-analyst",

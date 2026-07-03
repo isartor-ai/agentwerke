@@ -7,8 +7,8 @@
 **Agentwerke by Isartor AI runs autonomous coding agents through enterprise integrations, BPMN workflows, policy gates, approvals, sandboxes, and audit-ready evidence packs.**
 
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](global.json)
-[![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
-[![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Autofac.Agents/Models/AnthropicLanguageModelClient.cs)
+[![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md)
+[![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Agentwerke.Agents/Models/AnthropicLanguageModelClient.cs)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 [Premise](#premise) | [Factory line](#factory-line) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
@@ -19,10 +19,7 @@
 
 ## Premise
 
-Agentwerke is the new product name for the platform formerly known as Autofac.
-The origin is still Philip K. Dick's 1955 story [Autofac](https://en.wikipedia.org/wiki/Autofac): a postwar world where automatic factories keep manufacturing after meaningful human control has slipped away.
-
-That warning is the product thesis.
+Picture an automated factory that keeps manufacturing long after meaningful human control has slipped away: fast, tireless, and impossible to interrogate. That warning is the product thesis.
 
 AI agents can now plan, code, test, review, and open pull requests. Left alone, that power becomes another opaque production system: fast, tireless, difficult to interrogate, and too easy to trust because it looks useful.
 
@@ -94,15 +91,15 @@ pack.
 ### Build from source
 
 ```bash
-dotnet restore Autofac.sln
-dotnet build Autofac.sln
-dotnet test Autofac.sln --no-build
+dotnet restore Agentwerke.sln
+dotnet build Agentwerke.sln
+dotnet test Agentwerke.sln --no-build
 ```
 
 Run the API locally:
 
 ```bash
-dotnet run --project src/Autofac.Api/Autofac.Api.csproj
+dotnet run --project src/Agentwerke.Api/Agentwerke.Api.csproj
 ```
 
 The OpenAPI document is served at `/openapi/v1.json`.
@@ -133,21 +130,21 @@ When a run reaches its `MaxRunCostUsd`/`MaxRunTokens` budget, further model call
 
 Agentwerke is a layered .NET control plane. The domain model stays at the center; model providers, storage, sandboxes, workflow adapters, and external systems sit at the edge.
 
-The first public rebrand keeps internal solution, project, and namespace names under the legacy `Autofac.*` prefix. That keeps existing builds, migrations, and downstream references stable while the customer-facing product becomes Agentwerke.
+The solution, projects, and .NET namespaces use the `Agentwerke.*` prefix, and the BPMN extension prefix is `agentwerke:`.
 
 | Project | Responsibility |
 | --- | --- |
-| `src/Autofac.Api` | ASP.NET Core API host |
-| `src/Autofac.Application` | Application use cases and orchestration contracts |
-| `src/Autofac.Domain` | Core domain model and rules |
-| `src/Autofac.Infrastructure` | Infrastructure adapters and implementations |
-| `src/Autofac.Workflows` | BPMN runtime concerns |
-| `src/Autofac.Agents` | Agent orchestration, model client, tool and hook gateways |
-| `src/Autofac.AgentSecOps` | Policy enforcement and action governance |
-| `src/Autofac.Sandboxes` | Sandbox lifecycle and controls |
-| `src/Autofac.Integrations` | External platform connectors for GitHub, CI/CD, Jira, Slack, Teams, and more |
-| `src/Autofac.Storage` | Artifact and blob abstractions |
-| `src/Autofac.Observability` | Logging, metrics, and tracing wiring |
+| `src/Agentwerke.Api` | ASP.NET Core API host |
+| `src/Agentwerke.Application` | Application use cases and orchestration contracts |
+| `src/Agentwerke.Domain` | Core domain model and rules |
+| `src/Agentwerke.Infrastructure` | Infrastructure adapters and implementations |
+| `src/Agentwerke.Workflows` | BPMN runtime concerns |
+| `src/Agentwerke.Agents` | Agent orchestration, model client, tool and hook gateways |
+| `src/Agentwerke.AgentSecOps` | Policy enforcement and action governance |
+| `src/Agentwerke.Sandboxes` | Sandbox lifecycle and controls |
+| `src/Agentwerke.Integrations` | External platform connectors for GitHub, CI/CD, Jira, Slack, Teams, and more |
+| `src/Agentwerke.Storage` | Artifact and blob abstractions |
+| `src/Agentwerke.Observability` | Logging, metrics, and tracing wiring |
 | `tests/` | Domain, agent, workflow, integration, and end-to-end tests |
 
 ### Workflow runtime mode
@@ -158,7 +155,7 @@ Agentwerke selects its execution runtime through the `WorkflowRuntime:Mode` sett
 | --- | --- |
 | `Agentwerke` | Default. Uses the bounded, Postgres-backed Agentwerke runtime. Camunda configuration is not read and no Camunda client is constructed. |
 | `Camunda` | Opt-in enterprise adapter. Camunda options, client, health probe, and status are wired. |
-| `Autofac` | Legacy alias for `Agentwerke`. Existing installs keep working, but new configuration should use `Agentwerke`. |
+| `Agentwerke` | Legacy alias for `Agentwerke`. Existing installs keep working, but new configuration should use `Agentwerke`. |
 
 ```jsonc
 // appsettings.json
@@ -225,7 +222,7 @@ Agentwerke selects its execution runtime through the `WorkflowRuntime:Mode` sett
 ## Documentation
 
 - **Architecture decisions**
-  - Default workflow runtime: `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`
+  - Default workflow runtime: `docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md`
   - Superseded Camunda-first decision: `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`
   - OpenSandbox control plane with Kata runtime: `docs/decisions/ADR-003-use-opensandbox-control-plane-with-kata-runtime.md`
 - **Plans and scenarios**

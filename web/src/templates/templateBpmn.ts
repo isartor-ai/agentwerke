@@ -1,6 +1,6 @@
 import type { TemplateDetail, TemplateFactoryConfiguration } from '../types';
 
-const DEFAULT_AUTOFAC_NS = 'https://agentwerke.de/bpmn/extensions/v1';
+const DEFAULT_AGENTWERKE_NS = 'https://agentwerke.de/bpmn/extensions/v1';
 const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
 const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
 const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
@@ -154,32 +154,32 @@ export function buildConfiguredTemplateBpmn(
 ): string {
   const parser = new DOMParser();
   const document = parser.parseFromString(template.bpmnXml, 'application/xml');
-  const autofacNamespace = namespaceFor(document, 'autofac', DEFAULT_AUTOFAC_NS);
+  const agentwerkeNamespace = namespaceFor(document, 'agentwerke', DEFAULT_AGENTWERKE_NS);
   const parserError = getXmlParserError(document);
 
   if (parserError) {
     throw new Error(`Template BPMN XML is invalid: ${parserError}`);
   }
 
-  ensureNamespace(document.documentElement, 'autofac', autofacNamespace);
+  ensureNamespace(document.documentElement, 'agentwerke', agentwerkeNamespace);
 
   const process = document.getElementsByTagNameNS(BPMN_NS, 'process')[0];
   if (process) {
     process.setAttribute('name', configuration.name.trim() || template.name);
-    process.setAttributeNS(autofacNamespace, 'autofac:owner', configuration.owner.trim());
-    process.setAttributeNS(autofacNamespace, 'autofac:description', configuration.description.trim());
-    process.setAttributeNS(autofacNamespace, 'autofac:requiredInputs', template.requiredInputs.join(','));
+    process.setAttributeNS(agentwerkeNamespace, 'agentwerke:owner', configuration.owner.trim());
+    process.setAttributeNS(agentwerkeNamespace, 'agentwerke:description', configuration.description.trim());
+    process.setAttributeNS(agentwerkeNamespace, 'agentwerke:requiredInputs', template.requiredInputs.join(','));
     process.setAttributeNS(
-      autofacNamespace,
-      'autofac:inputDefaults',
+      agentwerkeNamespace,
+      'agentwerke:inputDefaults',
       JSON.stringify(configuration.requiredInputs),
     );
-    process.setAttributeNS(autofacNamespace, 'autofac:connectors', selectedKeys(configuration.connectors).join(','));
-    process.setAttributeNS(autofacNamespace, 'autofac:policyLevel', configuration.policyLevel);
-    process.setAttributeNS(autofacNamespace, 'autofac:evidence', selectedKeys(configuration.evidence).join(','));
+    process.setAttributeNS(agentwerkeNamespace, 'agentwerke:connectors', selectedKeys(configuration.connectors).join(','));
+    process.setAttributeNS(agentwerkeNamespace, 'agentwerke:policyLevel', configuration.policyLevel);
+    process.setAttributeNS(agentwerkeNamespace, 'agentwerke:evidence', selectedKeys(configuration.evidence).join(','));
   }
 
-  for (const agentTask of Array.from(document.getElementsByTagNameNS(autofacNamespace, 'agentTask'))) {
+  for (const agentTask of Array.from(document.getElementsByTagNameNS(agentwerkeNamespace, 'agentTask'))) {
     const currentAgent = agentTask.getAttribute('agent');
     const configuredAgent = currentAgent ? configuration.agentAssignments[currentAgent] : null;
     if (configuredAgent?.trim()) {
@@ -187,7 +187,7 @@ export function buildConfiguredTemplateBpmn(
     }
   }
 
-  const approvalTasks = Array.from(document.getElementsByTagNameNS(autofacNamespace, 'approvalTask'));
+  const approvalTasks = Array.from(document.getElementsByTagNameNS(agentwerkeNamespace, 'approvalTask'));
   approvalTasks.forEach((approvalTask, index) => {
     const role = template.approvalRoles[index] ?? template.approvalRoles[0];
     const assignee = role ? configuration.approvalAssignments[role] : null;

@@ -13,21 +13,21 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.AddColumn<List<string>>(
                 name: "PolicyDecision_Constraints",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "jsonb",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_DecidedAt",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "text",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_Kind",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "character varying(64)",
                 maxLength: 64,
@@ -35,7 +35,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_PolicyId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "character varying(128)",
                 maxLength: 128,
@@ -43,7 +43,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_PolicyName",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "character varying(256)",
                 maxLength: 256,
@@ -51,7 +51,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_Rationale",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "character varying(1024)",
                 maxLength: 1024,
@@ -59,14 +59,14 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddColumn<List<string>>(
                 name: "PolicyDecision_RiskFactors",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "jsonb",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "PolicyDecision_RiskLevel",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "character varying(64)",
                 maxLength: 64,
@@ -74,7 +74,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddColumn<int>(
                 name: "PolicyDecision_RiskScore",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "integer",
                 nullable: true);
@@ -85,47 +85,47 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_Constraints",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_DecidedAt",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_Kind",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_PolicyId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_PolicyName",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_Rationale",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_RiskFactors",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_RiskLevel",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
 
             migrationBuilder.DropColumn(
                 name: "PolicyDecision_RiskScore",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
         }
     }

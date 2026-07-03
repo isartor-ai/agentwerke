@@ -255,7 +255,7 @@ public sealed class WorkflowInstanceEngineTests
                     "Deploy",
                     "Deploy",
                     "serviceTask",
-                    new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [], MaxRetries: 2, RetryBackoffSeconds: 1, FailUntilAttempt: 2)),
+                    new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [], MaxRetries: 2, RetryBackoffSeconds: 1, FailUntilAttempt: 2)),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -291,7 +291,7 @@ public sealed class WorkflowInstanceEngineTests
                     "Ask",
                     "Ask human",
                     "serviceTask",
-                    new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                    new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -327,9 +327,9 @@ public sealed class WorkflowInstanceEngineTests
                     "LongTask",
                     "Long Task",
                     "serviceTask",
-                    new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [], SimulateTimeout: true, TimeoutSeconds: 5)),
+                    new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [], SimulateTimeout: true, TimeoutSeconds: 5)),
                 new BpmnNodeDefinition("TaskTimeoutBoundary", "Task Timeout", "boundaryEvent", null),
-                new BpmnNodeDefinition("RecoveryTask", "Recover", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("RecoveryTask", "Recover", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -355,8 +355,8 @@ public sealed class WorkflowInstanceEngineTests
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
                 new BpmnNodeDefinition("Fork", "Fork", "parallelGateway", null),
-                new BpmnNodeDefinition("BranchA", "Branch A", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
-                new BpmnNodeDefinition("BranchB", "Branch B", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("BranchA", "Branch A", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("BranchB", "Branch B", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("Join", "Join", "parallelGateway", null),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
@@ -383,7 +383,7 @@ public sealed class WorkflowInstanceEngineTests
             Nodes:
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
-                new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AutofacTaskMetadata("deploy-agent", "deploy", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AgentwerkeTaskMetadata("deploy-agent", "deploy", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -409,7 +409,7 @@ public sealed class WorkflowInstanceEngineTests
             Nodes:
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
-                new BpmnNodeDefinition("FailTask", "Fail Task", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("FailTask", "Fail Task", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -436,7 +436,7 @@ public sealed class WorkflowInstanceEngineTests
             Nodes:
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
-                new BpmnNodeDefinition("AgentTask", "Agent Task", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("AgentTask", "Agent Task", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -468,7 +468,7 @@ public sealed class WorkflowInstanceEngineTests
             Nodes:
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
-                new BpmnNodeDefinition("Task", "Task", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("Task", "Task", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
 
@@ -490,14 +490,14 @@ public sealed class WorkflowInstanceEngineTests
             Nodes:
             [
                 new BpmnNodeDefinition("Start", "Start", "startEvent", null),
-                new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition(
                     "HumanApproval",
                     "Approval",
                     "userTask",
                     null,
-                    new AutofacApprovalMetadata("manual_review", "human_approval_required")),
-                new BpmnNodeDefinition("Finalize", "Finalize", "serviceTask", new AutofacTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                    new AgentwerkeApprovalMetadata("manual_review", "human_approval_required")),
+                new BpmnNodeDefinition("Finalize", "Finalize", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
     }
@@ -516,7 +516,7 @@ public sealed class WorkflowInstanceEngineTests
                     "intermediateCatchEvent",
                     null,
                     TimerDuration: null,
-                    ExternalEventMetadata: new AutofacExternalEventMetadata(
+                    ExternalEventMetadata: new AgentwerkeExternalEventMetadata(
                         "github.pull_request.merged",
                         "{{run_context.branch_name}}")),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)

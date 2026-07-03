@@ -12,11 +12,11 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.EnsureSchema(
-                name: "autofac");
+                name: "agentwerke");
 
             migrationBuilder.CreateTable(
                 name: "workflow_definitions",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -34,7 +34,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "workflow_runs",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -50,7 +50,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_workflow_runs_workflow_definitions_WorkflowDefinitionId",
                         column: x => x.WorkflowDefinitionId,
-                        principalSchema: "autofac",
+                        principalSchema: "agentwerke",
                         principalTable: "workflow_definitions",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -58,7 +58,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "agent_sessions",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -74,7 +74,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_agent_sessions_workflow_runs_WorkflowRunId",
                         column: x => x.WorkflowRunId,
-                        principalSchema: "autofac",
+                        principalSchema: "agentwerke",
                         principalTable: "workflow_runs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -82,7 +82,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "approval_requests",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -99,7 +99,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_approval_requests_workflow_runs_WorkflowRunId",
                         column: x => x.WorkflowRunId,
-                        principalSchema: "autofac",
+                        principalSchema: "agentwerke",
                         principalTable: "workflow_runs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -107,7 +107,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "policy_decisions",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -124,7 +124,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_policy_decisions_workflow_runs_WorkflowRunId",
                         column: x => x.WorkflowRunId,
-                        principalSchema: "autofac",
+                        principalSchema: "agentwerke",
                         principalTable: "workflow_runs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
@@ -132,7 +132,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "workflow_events",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -147,7 +147,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_workflow_events_workflow_runs_WorkflowRunId",
                         column: x => x.WorkflowRunId,
-                        principalSchema: "autofac",
+                        principalSchema: "agentwerke",
                         principalTable: "workflow_runs",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -155,68 +155,68 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "IX_agent_sessions_AgentName_Status",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "agent_sessions",
                 columns: new[] { "AgentName", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_agent_sessions_WorkflowRunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "agent_sessions",
                 column: "WorkflowRunId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_approval_requests_Status",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "approval_requests",
                 column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_approval_requests_WorkflowRunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "approval_requests",
                 column: "WorkflowRunId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_policy_decisions_EvaluatedAtUtc",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "policy_decisions",
                 column: "EvaluatedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_policy_decisions_WorkflowRunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "policy_decisions",
                 column: "WorkflowRunId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_workflow_definitions_WorkflowKey_Version",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_definitions",
                 columns: new[] { "WorkflowKey", "Version" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_workflow_events_CreatedAtUtc",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events",
                 column: "CreatedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_workflow_events_WorkflowRunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events",
                 column: "WorkflowRunId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_workflow_runs_Status",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_runs",
                 column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_workflow_runs_WorkflowDefinitionId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_runs",
                 column: "WorkflowDefinitionId");
         }
@@ -226,27 +226,27 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "agent_sessions",
-                schema: "autofac");
+                schema: "agentwerke");
 
             migrationBuilder.DropTable(
                 name: "approval_requests",
-                schema: "autofac");
+                schema: "agentwerke");
 
             migrationBuilder.DropTable(
                 name: "policy_decisions",
-                schema: "autofac");
+                schema: "agentwerke");
 
             migrationBuilder.DropTable(
                 name: "workflow_events",
-                schema: "autofac");
+                schema: "agentwerke");
 
             migrationBuilder.DropTable(
                 name: "workflow_runs",
-                schema: "autofac");
+                schema: "agentwerke");
 
             migrationBuilder.DropTable(
                 name: "workflow_definitions",
-                schema: "autofac");
+                schema: "agentwerke");
         }
     }
 }

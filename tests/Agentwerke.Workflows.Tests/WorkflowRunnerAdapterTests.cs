@@ -16,12 +16,12 @@ public sealed class WorkflowRunnerAdapterTests
             workflowDefinitionId: "wf-123",
             bpmnXml: """
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                                  xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+                                  xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
                   <bpmn:process id="Process_1" name="Adapter Flow">
                     <bpmn:startEvent id="Start" />
                     <bpmn:serviceTask id="ServiceA" name="Do Work">
                       <bpmn:extensionElements>
-                        <autofac:agentTask agent="implementation-agent"
+                        <agentwerke:agentTask agent="implementation-agent"
                                            action="code.generate"
                                            purposeType="implementation"
                                            policyTag="repo-change" />
@@ -56,12 +56,12 @@ public sealed class WorkflowRunnerAdapterTests
             workflowDefinitionId: "wf-456",
             bpmnXml: """
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                                  xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+                                  xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
                   <bpmn:process id="Process_1" name="Adapter Flow">
                     <bpmn:startEvent id="Start" />
                     <bpmn:serviceTask id="ServiceA" name="Do Work">
                       <bpmn:extensionElements>
-                        <autofac:agentTask agent="business-analyst"
+                        <agentwerke:agentTask agent="business-analyst"
                                            action="requirement.design"
                                            purposeType="requirement-design"
                                            policyTag="doc-generation" />
@@ -69,7 +69,7 @@ public sealed class WorkflowRunnerAdapterTests
                     </bpmn:serviceTask>
                     <bpmn:userTask id="ApprovalGate" name="Review Requirements">
                       <bpmn:extensionElements>
-                        <autofac:approvalTask purposeType="requirement-design"
+                        <agentwerke:approvalTask purposeType="requirement-design"
                                               policyTag="doc-generation" />
                       </bpmn:extensionElements>
                     </bpmn:userTask>

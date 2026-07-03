@@ -6,7 +6,7 @@ import { getExtensionProperty, setExtensionProperty } from './extensionUtil';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** Builds a text entry bound to a single `autofac:approvalTask` attribute. */
+/** Builds a text entry bound to a single `agentwerke:approvalTask` attribute. */
 function textField(attribute: string, label: string, placeholder?: string) {
   return function ApprovalTextField(props: any) {
     const { element, id } = props;
@@ -34,11 +34,11 @@ function textField(attribute: string, label: string, placeholder?: string) {
 /**
  * Property entries for the "Approval Gate" group, shown for user tasks.
  * Mirrors the attributes the backend validator requires on
- * `autofac:approvalTask`.
+ * `agentwerke:approvalTask`.
  */
 export function approvalEntries(element: any) {
   return [
-    { id: 'autofac-approval-purposeType', component: textField('purposeType', 'Purpose type', 'e.g. production_deployment'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-approval-policyTag', component: textField('policyTag', 'Policy tag', 'e.g. deploy_approval'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-approval-purposeType', component: textField('purposeType', 'Purpose type', 'e.g. production_deployment'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-approval-policyTag', component: textField('policyTag', 'Policy tag', 'e.g. deploy_approval'), isEdited: isTextFieldEntryEdited, element },
   ];
 }

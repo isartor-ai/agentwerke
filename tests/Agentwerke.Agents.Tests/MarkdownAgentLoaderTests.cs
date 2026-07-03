@@ -14,7 +14,7 @@ public sealed class MarkdownAgentLoaderTests
             description: Turns an idea into a spec.
             runner: claude-code
             model: claude-opus-4-8
-            dockerImage: autofac/agent-base
+            dockerImage: agentwerke/agent-base
             network: bridge
             skills: [requirement-design, spec-authoring]
             tools: [web_search, web_fetch]
@@ -38,7 +38,7 @@ public sealed class MarkdownAgentLoaderTests
         Assert.Equal("analysis", profile.Category);
         Assert.Equal("claude-code", profile.Runner);
         Assert.Equal("claude-opus-4-8", profile.Model);
-        Assert.Equal("autofac/agent-base", profile.DockerImage);
+        Assert.Equal("agentwerke/agent-base", profile.DockerImage);
         Assert.Equal("bridge", profile.Network);
         Assert.Equal(["web_search", "web_fetch"], profile.Tools);
         Assert.Equal(["sandbox.execute"], profile.DeniedTools);

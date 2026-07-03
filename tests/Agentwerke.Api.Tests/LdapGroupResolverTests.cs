@@ -7,20 +7,20 @@ namespace Agentwerke.Api.Tests;
 public sealed class LdapGroupResolverTests
 {
     [Fact]
-    public void RoleMappings_MapLdapGroupDnsToAutofacRoles()
+    public void RoleMappings_MapLdapGroupDnsToAgentwerkeRoles()
     {
         var opts = new JwtOptions
         {
             RoleMappings =
             {
-                ["cn=Autofac-Approvers,ou=Groups,dc=corp,dc=example"] = [AgentwerkeRoles.Approver],
-                ["cn=Autofac-Admins,ou=Groups,dc=corp,dc=example"] = [AgentwerkeRoles.Admin],
+                ["cn=Agentwerke-Approvers,ou=Groups,dc=corp,dc=example"] = [AgentwerkeRoles.Approver],
+                ["cn=Agentwerke-Admins,ou=Groups,dc=corp,dc=example"] = [AgentwerkeRoles.Admin],
             },
         };
 
         var roles = AgentwerkeRoleMapper.ResolveRoles(
             [
-                "cn=Autofac-Approvers,ou=Groups,dc=corp,dc=example",
+                "cn=Agentwerke-Approvers,ou=Groups,dc=corp,dc=example",
                 "cn=Some-Other-Group,ou=Groups,dc=corp,dc=example",
             ],
             opts);

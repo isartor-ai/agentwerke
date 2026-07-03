@@ -6,11 +6,11 @@
 
 ## Local Setup
 1. Restore dependencies:
-   - `dotnet restore Autofac.sln`
+   - `dotnet restore Agentwerke.sln`
 2. Build solution:
-   - `dotnet build Autofac.sln`
+   - `dotnet build Agentwerke.sln`
 3. Run tests:
-   - `dotnet test Autofac.sln --no-build`
+   - `dotnet test Agentwerke.sln --no-build`
 
 ## Coding Guidelines
 - Follow clean architecture boundaries:

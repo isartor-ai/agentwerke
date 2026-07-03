@@ -12,12 +12,12 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropForeignKey(
                 name: "FK_workflow_events_workflow_runs_RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events");
 
             migrationBuilder.AlterColumn<string>(
                 name: "RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events",
                 type: "character varying(128)",
                 maxLength: 128,
@@ -29,10 +29,10 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddForeignKey(
                 name: "FK_workflow_events_workflow_runs_RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events",
                 column: "RunId",
-                principalSchema: "autofac",
+                principalSchema: "agentwerke",
                 principalTable: "workflow_runs",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Cascade);
@@ -43,12 +43,12 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropForeignKey(
                 name: "FK_workflow_events_workflow_runs_RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events");
 
             migrationBuilder.AlterColumn<string>(
                 name: "RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events",
                 type: "text",
                 nullable: true,
@@ -58,10 +58,10 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.AddForeignKey(
                 name: "FK_workflow_events_workflow_runs_RunId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_events",
                 column: "RunId",
-                principalSchema: "autofac",
+                principalSchema: "agentwerke",
                 principalTable: "workflow_runs",
                 principalColumn: "Id");
         }

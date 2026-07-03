@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.AddColumn<string>(
                 name: "Error",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps",
                 type: "text",
                 nullable: true);
@@ -23,7 +23,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "Error",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
         }
     }

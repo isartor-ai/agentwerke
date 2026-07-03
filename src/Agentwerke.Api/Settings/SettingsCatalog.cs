@@ -81,7 +81,7 @@ public sealed class SettingsCatalog
             "Runtime",
             "Workflow runtime, policy store, and optional Camunda adapter settings.",
             [
-                Field("WorkflowRuntime:Mode", "Workflow runtime", "Runtime adapter used for workflow execution. Agentwerke is the default; Autofac remains a legacy alias for existing installs.", SettingsValueKind.Enum, "Agentwerke", ["Agentwerke", "Camunda", "Autofac"]),
+                Field("WorkflowRuntime:Mode", "Workflow runtime", "Runtime adapter used for workflow execution. Agentwerke is the default; Camunda is an opt-in enterprise adapter.", SettingsValueKind.Enum, "Agentwerke", ["Agentwerke", "Camunda"]),
                 Field("Policies:FilePath", "Policy file", "Policy rule file path.", SettingsValueKind.String, "./config/policies.yaml"),
                 Field("Camunda:Enabled", "Camunda enabled", "Enable the optional Camunda runtime adapter.", SettingsValueKind.Boolean, false),
                 Field("Camunda:BaseUrl", "Camunda base URL", "Camunda REST API endpoint.", SettingsValueKind.Url, "http://localhost:8088/"),

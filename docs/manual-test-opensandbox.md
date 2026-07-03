@@ -13,7 +13,7 @@ This scenario covers the OpenSandbox-first sandbox rollout described in `docs/de
 - the security differences between the runtimes a sandbox can sit on
 - how to verify each path, automated where practical and manual where it requires infrastructure this repo doesn't own
 
-Agentwerke is a *client* of OpenSandbox's REST API (`Autofac.Sandboxes.OpenSandboxApiClient`/`OpenSandboxSandboxExecutor`). It does not deploy OpenSandbox itself, and it does not create sandbox pods directly when `Sandboxes:Provider` is `opensandbox`. The reserved `kubernetes-kata` provider (`Autofac.Sandboxes.KubernetesKataSandboxExecutor`) is a stub — it is the fallback architecture only if the OpenSandbox spike fails, per ADR-003, and is not used by either path below.
+Agentwerke is a *client* of OpenSandbox's REST API (`Agentwerke.Sandboxes.OpenSandboxApiClient`/`OpenSandboxSandboxExecutor`). It does not deploy OpenSandbox itself, and it does not create sandbox pods directly when `Sandboxes:Provider` is `opensandbox`. The reserved `kubernetes-kata` provider (`Agentwerke.Sandboxes.KubernetesKataSandboxExecutor`) is a stub — it is the fallback architecture only if the OpenSandbox spike fails, per ADR-003, and is not used by either path below.
 
 ## Prerequisites
 
@@ -61,7 +61,7 @@ This profile builds and starts:
 
 The E2E test uploads a temporary agent through `POST /api/agents/upload`, imports and publishes a BPMN workflow that references that agent, starts a run, and asserts the service task completed through the `sandbox.execute` tool with the `offline` sandbox profile.
 
-Expected result: the `e2e-tests-opensandbox` container exits with code 0 and the run step output contains `autofac-sandbox: task complete`.
+Expected result: the `e2e-tests-opensandbox` container exits with code 0 and the run step output contains `agentwerke-sandbox: task complete`.
 
 The OpenSandbox log line below is expected in this local scenario and is not the failure:
 
@@ -79,7 +79,7 @@ Expected result: the server's health/readiness endpoint responds, and you can cr
 
 ### Step 2: Point Agentwerke at the local server
 
-Set in `src/Autofac.Api/appsettings.Development.json` (or environment variables):
+Set in `src/Agentwerke.Api/appsettings.Development.json` (or environment variables):
 
 ```json
 {
@@ -100,29 +100,29 @@ Set in `src/Autofac.Api/appsettings.Development.json` (or environment variables)
 
 ### Step 3: Run a sandboxed workflow step
 
-Start a workflow that routes a service task through the `sandbox.execute` tool (e.g. `wf-pilot-004` or any agent task with `Sandboxes:Provider` enabled — see `Autofac.Agents.Tools.SandboxExecutionTool`). Confirm in the run's tool-invocation history that the step completed and artifacts were captured.
+Start a workflow that routes a service task through the `sandbox.execute` tool (e.g. `wf-pilot-004` or any agent task with `Sandboxes:Provider` enabled — see `Agentwerke.Agents.Tools.SandboxExecutionTool`). Confirm in the run's tool-invocation history that the step completed and artifacts were captured.
 
 ### Step 4: Run the gated integration tests against the real server
 
 ```bash
-export AUTOFAC_OPEN_SANDBOX_SERVER_URL="http://localhost:8080/v1"
-export AUTOFAC_OPEN_SANDBOX_API_KEY=""   # if your server requires one
-dotnet test tests/Autofac.Sandboxes.Tests/Autofac.Sandboxes.Tests.csproj \
+export AGENTWERKE_OPEN_SANDBOX_SERVER_URL="http://localhost:8080/v1"
+export AGENTWERKE_OPEN_SANDBOX_API_KEY=""   # if your server requires one
+dotnet test tests/Agentwerke.Sandboxes.Tests/Agentwerke.Sandboxes.Tests.csproj \
   --filter "FullyQualifiedName~OpenSandboxIntegrationTests"
 ```
 
-Expected result: all `OpenSandboxIntegrationTests` pass — smoke execution, non-zero exit handling, sandbox cleanup on success, sandbox retention on failure when `RetainSandboxOnFailure` is set, and execution under each named `Autofac.Sandboxes.SandboxProfileCatalog` profile. Without `AUTOFAC_OPEN_SANDBOX_SERVER_URL` set, these tests no-op and pass — that's the CI-safe default.
+Expected result: all `OpenSandboxIntegrationTests` pass — smoke execution, non-zero exit handling, sandbox cleanup on success, sandbox retention on failure when `RetainSandboxOnFailure` is set, and execution under each named `Agentwerke.Sandboxes.SandboxProfileCatalog` profile. Without `AGENTWERKE_OPEN_SANDBOX_SERVER_URL` set, these tests no-op and pass — that's the CI-safe default.
 
 ### Step 4b: Local fallback without OpenSandbox at all
 
 If you don't want to run an OpenSandbox server, the legacy direct-Docker path still works (`Sandboxes:Provider: docker`, the chart/compose default for local stacks). Verify it end to end against your local Docker daemon:
 
 ```bash
-export AUTOFAC_DOCKER_SANDBOX_E2E=1
+export AGENTWERKE_DOCKER_SANDBOX_E2E=1
 # Only needed if `docker context ls` shows your active context isn't the
 # default socket (e.g. Rancher Desktop, a remote context):
-export AUTOFAC_DOCKER_ENDPOINT="unix:///path/to/docker.sock"
-dotnet test tests/Autofac.Sandboxes.Tests/Autofac.Sandboxes.Tests.csproj \
+export AGENTWERKE_DOCKER_ENDPOINT="unix:///path/to/docker.sock"
+dotnet test tests/Agentwerke.Sandboxes.Tests/Agentwerke.Sandboxes.Tests.csproj \
   --filter "FullyQualifiedName~DockerSandboxLifecycleIntegrationTests"
 ```
 
@@ -130,7 +130,7 @@ Expected result: real container execution, artifact capture, cleanup-on-success,
 
 ### Step 5: Validate `agent_sandboxed`
 
-`agent_sandboxed` is a different execution mode than the `sandbox.execute` tool path above: instead of an in-process agent calling a generic "run this in a sandbox" tool, the *entire* agent — model call, tool loop, the works — runs inside the sandbox container, via `OpenSandboxedAgentRunner` invoking `Autofac.AgentRunner.dll`. It's selected by an explicit `executionMode="agent_sandboxed"` BPMN attribute, or implicitly when the agent's `runner` is `claude-code` (see `AgentOrchestrator.ResolveExecutionMode`).
+`agent_sandboxed` is a different execution mode than the `sandbox.execute` tool path above: instead of an in-process agent calling a generic "run this in a sandbox" tool, the *entire* agent — model call, tool loop, the works — runs inside the sandbox container, via `OpenSandboxedAgentRunner` invoking `Agentwerke.AgentRunner.dll`. It's selected by an explicit `executionMode="agent_sandboxed"` BPMN attribute, or implicitly when the agent's `runner` is `claude-code` (see `AgentOrchestrator.ResolveExecutionMode`).
 
 Because the agent needs to reach a model endpoint, `agent_sandboxed` always upgrades its effective network policy to `Restricted` with the model host allow-listed (`OpenSandboxedAgentRunner.BuildEffectiveSandboxProfile`), even when the BPMN task asks for the `offline` profile. That makes network policy enforcement load-bearing for this mode in a way it isn't for `sandbox.execute`.
 
@@ -140,7 +140,7 @@ Because the agent needs to reach a model endpoint, `agent_sandboxed` always upgr
 scripts/run-agent-sandboxed-e2e.sh
 ```
 
-This brings up an isolated Postgres, the shared WireMock instance (now also stubbing the Anthropic Messages API — see `tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json`), and an Agentwerke API instance with `Sandboxes:Provider=docker` (the legacy local-fallback provider — chosen here purely so the test doesn't need a real Anthropic API key; `agent_sandboxed` works the same way against a real OpenSandbox server, see "Validating against the pilot OpenSandbox stack" below). It builds and tags the `Autofac.AgentRunner` image the sandbox container runs, uploads a `runner: claude-code` agent and an `executionMode="agent_sandboxed"` workflow, starts a run, and asserts on `AgentSandboxedWorkflowE2ETests`: the run completes, `runtimeSnapshot.sandboxExecution.provider` is `docker`, and `runtimeSnapshot.tokenUsage` reflects the (stubbed) model response.
+This brings up an isolated Postgres, the shared WireMock instance (now also stubbing the Anthropic Messages API — see `tests/Agentwerke.E2ETests/Fixtures/wiremock-anthropic-stub.json`), and an Agentwerke API instance with `Sandboxes:Provider=docker` (the legacy local-fallback provider — chosen here purely so the test doesn't need a real Anthropic API key; `agent_sandboxed` works the same way against a real OpenSandbox server, see "Validating against the pilot OpenSandbox stack" below). It builds and tags the `Agentwerke.AgentRunner` image the sandbox container runs, uploads a `runner: claude-code` agent and an `executionMode="agent_sandboxed"` workflow, starts a run, and asserts on `AgentSandboxedWorkflowE2ETests`: the run completes, `runtimeSnapshot.sandboxExecution.provider` is `docker`, and `runtimeSnapshot.tokenUsage` reflects the (stubbed) model response.
 
 Expected result: `e2e-tests-agent-sandboxed` exits 0 and the test passes.
 
@@ -161,9 +161,9 @@ docker compose -f docker/docker-compose.e2e.yml --profile agent-sandboxed run --
 This path only became possible after four fixes made while building this scenario, all worth knowing about if you're debugging it:
 
 - `DockerSandboxExecutor` used to hard-code `NetworkMode = "none"` regardless of the requested `SandboxNetworkPolicy`, which meant *no* sandboxed task that needed network access (deployment profiles, `agent_sandboxed`, anything beyond `offline`) could ever work through the local Docker fallback. It now maps anything other than `SandboxNetworkAccessMode.None` to Docker's plain `bridge` network. Plain bridge can't enforce the per-host allow-listing `SandboxNetworkPolicy.AllowedHosts` implies — there's no egress proxy in this provider — so this is "the sandbox can reach the network" parity with OpenSandbox's Restricted mode, not allow-list enforcement; treat it as a local development convenience, not a security boundary.
-- `AnthropicLanguageModelClient` used to only set `HttpClient.BaseAddress` from `Anthropic:ApiBaseUrl`. The `Anthropic.SDK` package builds its request URLs from its own `AnthropicClient.ApiUrlFormat` property instead, which ignores `HttpClient.BaseAddress` entirely — so a configured `ApiBaseUrl` silently had no effect, and every call went to the real `api.anthropic.com` regardless of configuration. It now also sets `ApiUrlFormat`, which is what actually controls where requests go. `tests/Autofac.Agents.Tests/AnthropicLanguageModelClientTests.cs` pins this with a fake `HttpListener`-based server.
+- `AnthropicLanguageModelClient` used to only set `HttpClient.BaseAddress` from `Anthropic:ApiBaseUrl`. The `Anthropic.SDK` package builds its request URLs from its own `AnthropicClient.ApiUrlFormat` property instead, which ignores `HttpClient.BaseAddress` entirely — so a configured `ApiBaseUrl` silently had no effect, and every call went to the real `api.anthropic.com` regardless of configuration. It now also sets `ApiUrlFormat`, which is what actually controls where requests go. `tests/Agentwerke.Agents.Tests/AnthropicLanguageModelClientTests.cs` pins this with a fake `HttpListener`-based server.
 - `OpenSandboxApiClient.TryDecodeArtifactContent` rejected anything outside a `text/*`/`application/json`/`application/xml` content-type allowlist — but the deployed execd build (`opensandbox/execd:v1.0.18`) serves every `files/download` response as `application/octet-stream` regardless of the real file content, so this silently dropped every artifact, every time, against a real OpenSandbox server. Since `OpenSandboxedAgentRunner` depends on reading back `agent-run-result.json` to surface the real agent failure reason, every `agent_sandboxed` failure against OpenSandbox instead surfaced as a generic `"OpenSandbox command failed with exit code N: exit status N"` with no further detail. The content-type check is gone; the existing null-byte check is what actually distinguishes binary from text content.
-- `Autofac.AgentRunner`'s `Program.cs` wrote `agent-run-result.json` via `Encoding.UTF8`, which (unlike the parameterless `File.WriteAllTextAsync` overload) emits a byte-order mark. `OpenSandboxedAgentRunner`'s `JsonSerializer.Deserialize` of that same file rejects a leading BOM as invalid JSON. Switched to a BOM-less UTF-8 encoding.
+- `Agentwerke.AgentRunner`'s `Program.cs` wrote `agent-run-result.json` via `Encoding.UTF8`, which (unlike the parameterless `File.WriteAllTextAsync` overload) emits a byte-order mark. `OpenSandboxedAgentRunner`'s `JsonSerializer.Deserialize` of that same file rejects a leading BOM as invalid JSON. Switched to a BOM-less UTF-8 encoding.
 
 The combination of the last two bugs is why `agent_sandboxed` looked broken against OpenSandbox specifically: network egress, the egress sidecar, and execd were all working correctly the whole time (verified directly via the OpenSandbox API and `docker exec`, independent of Agentwerke) — the actual agent failure reason was just never reaching the surface.
 
@@ -205,7 +205,7 @@ This is out of scope for Agentwerke's chart — deploy OpenSandbox's server in K
 - [ ] `kubectl get runtimeclass` shows the Kata runtime class the OpenSandbox server is configured to use.
 - [ ] A sandbox created through OpenSandbox's own API/CLI shows `spec.runtimeClassName: kata` (or your Kata+Firecracker class name) on `kubectl get pod -n <opensandbox-namespace> <sandbox-pod> -o yaml`.
 - [ ] `kubectl exec` into a sandbox pod and confirm the kernel is the Kata guest kernel, not the host kernel (e.g. `uname -r` differs from a host node's kernel version) — this is the concrete evidence the workload is in a microVM, not a shared-kernel container.
-- [ ] The OpenSandbox server's network policy for sandbox pods matches what `Autofac.Sandboxes.SandboxProfileCatalog`'s profiles expect (e.g. the `repo-write` profile's `AllowedHosts` for GitHub).
+- [ ] The OpenSandbox server's network policy for sandbox pods matches what `Agentwerke.Sandboxes.SandboxProfileCatalog`'s profiles expect (e.g. the `repo-write` profile's `AllowedHosts` for GitHub).
 - [ ] Deploy `deploy/helm/agentwerke` with `sandbox.openSandbox.serverUrl` pointing at the in-cluster OpenSandbox service, then run a real workflow through to completion and confirm the run's evidence pack records `Provider: OpenSandbox` (see `SandboxExecutionResult.Provider`).
 - [ ] Kill a sandbox pod mid-execution and confirm Agentwerke surfaces a clean failure (not a hang) — exercises the same failure path covered by `OpenSandboxIntegrationTests.ExecuteAsync_NonZeroExit_ReturnsFailureWithExitCode`, but against a real disruption instead of a non-zero exit.
 
@@ -226,7 +226,7 @@ The practical takeaway: only Kata and Kata+Firecracker give a sandboxed task its
 
 - `docs/decisions/ADR-003-use-opensandbox-control-plane-with-kata-runtime.md`
 - `docs/architecture-design.md` §6.5 (Sandbox Execution Manager, including the Sandbox Profiles subsection)
-- `src/Autofac.Sandboxes/SandboxProfileCatalog.cs` — the four named profiles and what each maps to
-- `tests/Autofac.Sandboxes.Tests/OpenSandboxIntegrationTests.cs` — gated by `AUTOFAC_OPEN_SANDBOX_SERVER_URL`
-- `tests/Autofac.Sandboxes.Tests/DockerSandboxLifecycleIntegrationTests.cs` — gated by `AUTOFAC_DOCKER_SANDBOX_E2E`
+- `src/Agentwerke.Sandboxes/SandboxProfileCatalog.cs` — the four named profiles and what each maps to
+- `tests/Agentwerke.Sandboxes.Tests/OpenSandboxIntegrationTests.cs` — gated by `AGENTWERKE_OPEN_SANDBOX_SERVER_URL`
+- `tests/Agentwerke.Sandboxes.Tests/DockerSandboxLifecycleIntegrationTests.cs` — gated by `AGENTWERKE_DOCKER_SANDBOX_E2E`
 - `deploy/helm/agentwerke/values.yaml` — the `sandbox` block

@@ -23,7 +23,7 @@ Publishing should make a workflow executable in the real BPMN engine, not just p
 - API publish endpoint returns structured errors on invalid Camunda BPMN.
 
 ## Suggested Files
-- `src/Autofac.Application/Workflows`
-- `src/Autofac.Infrastructure/Workflows`
-- `src/Autofac.Api/Controllers/WorkflowsController.cs`
-- `tests/Autofac.Application.Tests`
+- `src/Agentwerke.Application/Workflows`
+- `src/Agentwerke.Infrastructure/Workflows`
+- `src/Agentwerke.Api/Controllers/WorkflowsController.cs`
+- `tests/Agentwerke.Application.Tests`

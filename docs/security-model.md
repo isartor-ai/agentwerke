@@ -39,7 +39,7 @@ Sandbox profiles map to a network policy. With the Docker provider:
 
 - Model API keys and the GitHub PAT are read via an `ISecretStore` (configuration
   or environment) and injected only where needed (e.g. forwarded to a sandbox as
-  `AUTOFAC_MODEL_API_KEY`).
+  `AGENTWERKE_MODEL_API_KEY`).
 - The Admin-only Settings API returns only secret status, source, and fingerprint.
   Secret rotations are write-only from the browser and are audited without raw
   values. See [settings.md](settings.md).

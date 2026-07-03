@@ -35,7 +35,7 @@ turn the plan into working, tested code on the run's branch.
 ## Workflow
 
 1. Use `sandbox.git` with `operation: clone` to check out the run's branch (it defaults to
-   `autofac/run-<run_id>`; pass `branch` explicitly only if the plan says otherwise).
+   `agentwerke/run-<run_id>`; pass `branch` explicitly only if the plan says otherwise).
 2. Read the relevant files with `sandbox.file_read` before changing anything.
 3. Make changes with `sandbox.file_edit` (preferred — it fails loudly on an ambiguous match
    instead of silently editing the wrong spot) or `sandbox.file_write` for new files.

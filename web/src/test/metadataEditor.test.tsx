@@ -214,7 +214,7 @@ describe('Metadata Editor localStorage Integration', () => {
       policyTag: 'test_policy',
     };
 
-    const key = 'autofac_draft_node_metadata';
+    const key = 'agentwerke_draft_node_metadata';
     mockLocalStorage.setItem(key, JSON.stringify(metadata));
 
     const retrieved = JSON.parse(mockLocalStorage.getItem(key) || '{}');
@@ -222,7 +222,7 @@ describe('Metadata Editor localStorage Integration', () => {
   });
 
   it('should recover metadata from localStorage', () => {
-    const key = 'autofac_draft_node_metadata';
+    const key = 'agentwerke_draft_node_metadata';
     const original: NodeMetadataDraft = {
       agent: 'RecoveryAgent',
       action: 'recovery.action',
@@ -239,7 +239,7 @@ describe('Metadata Editor localStorage Integration', () => {
   });
 
   it('should handle corrupted JSON in localStorage gracefully', () => {
-    const key = 'autofac_draft_node_metadata';
+    const key = 'agentwerke_draft_node_metadata';
     mockLocalStorage.setItem(key, 'invalid json {');
 
     try {
@@ -252,8 +252,8 @@ describe('Metadata Editor localStorage Integration', () => {
   });
 
   it('should remove draft from localStorage after publish', () => {
-    const xmlKey = 'autofac_draft_bpmn_xml';
-    const metadataKey = 'autofac_draft_node_metadata';
+    const xmlKey = 'agentwerke_draft_bpmn_xml';
+    const metadataKey = 'agentwerke_draft_node_metadata';
 
     mockLocalStorage.setItem(xmlKey, 'draft xml');
     mockLocalStorage.setItem(metadataKey, 'draft metadata');

@@ -20,7 +20,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("autofac")
+                .HasDefaultSchema("agentwerke")
                 .HasAnnotation("ProductVersion", "9.0.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -57,7 +57,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AgentName", "Status");
 
-                    b.ToTable("agent_sessions", "autofac");
+                    b.ToTable("agent_sessions", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.ApprovalRequest", b =>
@@ -96,7 +96,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WorkflowRunId");
 
-                    b.ToTable("approval_requests", "autofac");
+                    b.ToTable("approval_requests", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.PolicyDecision", b =>
@@ -136,7 +136,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WorkflowRunId");
 
-                    b.ToTable("policy_decisions", "autofac");
+                    b.ToTable("policy_decisions", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowDefinition", b =>
@@ -174,7 +174,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     b.HasIndex("WorkflowKey", "Version")
                         .IsUnique();
 
-                    b.ToTable("workflow_definitions", "autofac");
+                    b.ToTable("workflow_definitions", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowEvent", b =>
@@ -204,7 +204,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WorkflowRunId");
 
-                    b.ToTable("workflow_events", "autofac");
+                    b.ToTable("workflow_events", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.WorkflowRun", b =>
@@ -237,7 +237,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WorkflowDefinitionId");
 
-                    b.ToTable("workflow_runs", "autofac");
+                    b.ToTable("workflow_runs", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.AgentSession", b =>

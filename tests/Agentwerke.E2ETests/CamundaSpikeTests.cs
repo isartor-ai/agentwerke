@@ -9,10 +9,10 @@ namespace Agentwerke.E2ETests;
 ///
 /// Spike goals (issue #69):
 ///   1. Prove the Zeebe REST gateway responds (topology endpoint).
-///   2. Prove a BPMN process can be submitted — autofac extension elements are expected
+///   2. Prove a BPMN process can be submitted — agentwerke extension elements are expected
 ///      to be rejected by Zeebe with 400, which is also an acceptable outcome: it shows
 ///      the gateway is reachable and confirms that a translation layer will be needed
-///      before the autofac:agentTask extensions can be used with Zeebe.
+///      before the agentwerke:agentTask extensions can be used with Zeebe.
 ///
 /// Run with:
 ///   docker compose -f docker/docker-compose.e2e.yml --profile camunda up --build
@@ -44,11 +44,11 @@ public sealed class CamundaSpikeTests : E2ETestBase
     [CamundaFact]
     public async Task Zeebe_DeployBpmn_ReturnsSuccessOrRejection()
     {
-        // The e2e-simple.bpmn uses autofac:agentTask extension elements that Zeebe
+        // The e2e-simple.bpmn uses agentwerke:agentTask extension elements that Zeebe
         // does not understand. A 200 means Zeebe accepted the process; a 400 means
         // Zeebe rejected the custom extensions. Both outcomes are valid for the spike:
         // they prove Zeebe is reachable. A production integration would strip/translate
-        // the autofac extensions into Zeebe-native job worker task types before deploying.
+        // the agentwerke extensions into Zeebe-native job worker task types before deploying.
         var bpmn = LoadFixture("e2e-simple.bpmn");
 
         using var http = new HttpClient { BaseAddress = new Uri(ZeebeRestUrl) };
@@ -69,7 +69,7 @@ public sealed class CamundaSpikeTests : E2ETestBase
     [CamundaFact]
     public async Task Zeebe_DeployMinimalBpmn_Succeeds()
     {
-        // A Zeebe-native BPMN (no autofac extensions, no service task) must deploy cleanly.
+        // A Zeebe-native BPMN (no agentwerke extensions, no service task) must deploy cleanly.
         // This proves Zeebe is functional end-to-end, not just reachable.
         const string minimalBpmn = """
             <?xml version="1.0" encoding="UTF-8"?>

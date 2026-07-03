@@ -5,8 +5,8 @@
 - Closes #
 
 ## Validation
-- [ ] `dotnet build Autofac.sln`
-- [ ] `dotnet test Autofac.sln --no-build`
+- [ ] `dotnet build Agentwerke.sln`
+- [ ] `dotnet test Agentwerke.sln --no-build`
 - [ ] Security/policy impact reviewed
 
 ## Risk and Rollout

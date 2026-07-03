@@ -16,6 +16,9 @@ packages/
 *.nupkg
 .nuget/
 
+# Node
+node_modules/
+
 # Coverage
 coverage/
 coverage.*

@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Agentwerke.Observability;
 
 /// <summary>
-/// Shared ActivitySource for all Autofac workflow spans.
+/// Shared ActivitySource for all Agentwerke workflow spans.
 /// Consume via DI: <c>services.AddSingleton(WorkflowActivitySource.Instance)</c>
 /// or resolve <see cref="ActivitySource"/> from the container.
 /// </summary>

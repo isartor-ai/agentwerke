@@ -18,7 +18,7 @@ public sealed class NullLdapGroupResolver : ILdapGroupResolver
 
 /// <summary>
 /// Binds to LDAP/AD and reads the user's group memberships. The group values
-/// (typically group DNs) are mapped to Autofac roles by <see cref="JwtOptions.RoleMappings"/>.
+/// (typically group DNs) are mapped to Agentwerke roles by <see cref="JwtOptions.RoleMappings"/>.
 ///
 /// Short-circuits to an empty result when disabled/misconfigured, and never throws —
 /// a directory outage must not block authentication. The bind/search path is

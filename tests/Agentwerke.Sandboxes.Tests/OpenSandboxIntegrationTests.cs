@@ -6,13 +6,13 @@ namespace Agentwerke.Sandboxes.Tests;
 /// <summary>
 /// Exercises a real OpenSandbox server end to end: execution, artifact capture,
 /// cleanup, failure handling, and profile-driven resource/network mapping
-/// (see SandboxProfileCatalog). Gated by AUTOFAC_OPEN_SANDBOX_SERVER_URL so CI
+/// (see SandboxProfileCatalog). Gated by AGENTWERKE_OPEN_SANDBOX_SERVER_URL so CI
 /// environments without a running server stay green — this is the
 /// "production-style" path from issue 128, as opposed to the local Docker
 /// fallback covered by DockerSandboxLifecycleIntegrationTests.
 ///
 /// To run locally: start an OpenSandbox server in Docker mode (see
-/// docs/manual-test-opensandbox.md) and set AUTOFAC_OPEN_SANDBOX_SERVER_URL.
+/// docs/manual-test-opensandbox.md) and set AGENTWERKE_OPEN_SANDBOX_SERVER_URL.
 /// </summary>
 public sealed class OpenSandboxIntegrationTests
 {
@@ -164,7 +164,7 @@ public sealed class OpenSandboxIntegrationTests
 
     private static bool TryCreateExecutor(out OpenSandboxSandboxExecutor? executor, out IOpenSandboxClient? client)
     {
-        var serverUrl = Environment.GetEnvironmentVariable("AUTOFAC_OPEN_SANDBOX_SERVER_URL");
+        var serverUrl = Environment.GetEnvironmentVariable("AGENTWERKE_OPEN_SANDBOX_SERVER_URL");
         if (string.IsNullOrWhiteSpace(serverUrl))
         {
             executor = null;
@@ -178,8 +178,8 @@ public sealed class OpenSandboxIntegrationTests
             {
                 Enabled = true,
                 ServerUrl = serverUrl,
-                ApiKey = Environment.GetEnvironmentVariable("AUTOFAC_OPEN_SANDBOX_API_KEY") ?? string.Empty,
-                DefaultImage = Environment.GetEnvironmentVariable("AUTOFAC_OPEN_SANDBOX_IMAGE") ?? "alpine:3.19",
+                ApiKey = Environment.GetEnvironmentVariable("AGENTWERKE_OPEN_SANDBOX_API_KEY") ?? string.Empty,
+                DefaultImage = Environment.GetEnvironmentVariable("AGENTWERKE_OPEN_SANDBOX_IMAGE") ?? "alpine:3.19",
                 DefaultTimeoutSeconds = 60,
                 ReadinessTimeoutSeconds = 30,
                 WorkingDirectory = "/workspace",

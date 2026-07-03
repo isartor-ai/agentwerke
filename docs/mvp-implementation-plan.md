@@ -75,23 +75,23 @@ The repository already gives us a useful starting point.
 
 ### What Already Exists
 
-- API host in `src/Autofac.Api`
-- workflow validation and runtime scaffolding in `src/Autofac.Workflows`
-- EF Core persistence in `src/Autofac.Infrastructure`
-- workflow, run, approval, and event entities in `src/Autofac.Domain`
-- artifact storage abstraction in `src/Autofac.Storage`
+- API host in `src/Agentwerke.Api`
+- workflow validation and runtime scaffolding in `src/Agentwerke.Workflows`
+- EF Core persistence in `src/Agentwerke.Infrastructure`
+- workflow, run, approval, and event entities in `src/Agentwerke.Domain`
+- artifact storage abstraction in `src/Agentwerke.Storage`
 - React shell and key UI views in `web/`
 - workflow designer, run board, run detail, and approvals dashboard
 - tests for workflow runtime and frontend integration flows
 
 ### What Is Still Mostly Scaffold
 
-- `src/Autofac.Agents`
-- `src/Autofac.Integrations`
-- `src/Autofac.Sandboxes`
-- `src/Autofac.AgentSecOps`
-- `src/Autofac.Observability`
-- `src/Autofac.Application`
+- `src/Agentwerke.Agents`
+- `src/Agentwerke.Integrations`
+- `src/Agentwerke.Sandboxes`
+- `src/Agentwerke.AgentSecOps`
+- `src/Agentwerke.Observability`
+- `src/Agentwerke.Application`
 
 ### Key Gaps Between Product Vision and Current Implementation
 
@@ -161,15 +161,15 @@ Objective: make the current scaffold trustworthy before adding major features.
    - Make the API contracts authoritative.
 
 3. Establish module ownership.
-   - `Autofac.Api` for transport
-   - `Autofac.Application` for orchestration use cases
-   - `Autofac.Domain` for core entities and rules
-   - `Autofac.Infrastructure` for persistence and adapters
-   - `Autofac.Workflows` for workflow runtime abstraction
-   - `Autofac.Agents` for agent execution
-   - `Autofac.Integrations` for connectors
-   - `Autofac.Sandboxes` for sandbox runtime
-   - `Autofac.AgentSecOps` for policy and approvals
+   - `Agentwerke.Api` for transport
+   - `Agentwerke.Application` for orchestration use cases
+   - `Agentwerke.Domain` for core entities and rules
+   - `Agentwerke.Infrastructure` for persistence and adapters
+   - `Agentwerke.Workflows` for workflow runtime abstraction
+   - `Agentwerke.Agents` for agent execution
+   - `Agentwerke.Integrations` for connectors
+   - `Agentwerke.Sandboxes` for sandbox runtime
+   - `Agentwerke.AgentSecOps` for policy and approvals
 
 4. Add missing solution-level test projects where needed.
    - application tests
@@ -216,9 +216,9 @@ Objective: make workflow definition and publishing real end-to-end.
 
 ### Repo Areas
 
-- `src/Autofac.Api/Controllers/WorkflowsController.cs`
-- `src/Autofac.Workflows/Bpmn/*`
-- `src/Autofac.Application`
+- `src/Agentwerke.Api/Controllers/WorkflowsController.cs`
+- `src/Agentwerke.Workflows/Bpmn/*`
+- `src/Agentwerke.Application`
 - `web/src/views/WorkflowDesigner.tsx`
 - `web/src/api/client.ts`
 
@@ -263,10 +263,10 @@ Objective: make workflow execution and approval pause/resume real.
 
 ### Repo Areas
 
-- `src/Autofac.Workflows/Runtime/*`
-- `src/Autofac.Api/Controllers/RunsController.cs`
-- `src/Autofac.Api/Controllers/ApprovalsController.cs`
-- `src/Autofac.Infrastructure/Persistence/*`
+- `src/Agentwerke.Workflows/Runtime/*`
+- `src/Agentwerke.Api/Controllers/RunsController.cs`
+- `src/Agentwerke.Api/Controllers/ApprovalsController.cs`
+- `src/Agentwerke.Infrastructure/Persistence/*`
 - `web/src/views/RunBoard.tsx`
 - `web/src/views/RunDetail.tsx`
 - `web/src/views/ApprovalsDashboard.tsx`
@@ -284,7 +284,7 @@ Objective: make Agentwerke agent tasks execute through a controlled runtime.
 
 ### Steps
 
-1. Define the agent execution contract in `Autofac.Agents`.
+1. Define the agent execution contract in `Agentwerke.Agents`.
    - agent definition
    - skill manifest reference
    - tool permission set
@@ -312,10 +312,10 @@ Objective: make Agentwerke agent tasks execute through a controlled runtime.
 
 ### Repo Areas
 
-- `src/Autofac.Agents`
-- `src/Autofac.Application`
-- `src/Autofac.Workflows/Runtime`
-- `src/Autofac.AgentSecOps`
+- `src/Agentwerke.Agents`
+- `src/Agentwerke.Application`
+- `src/Agentwerke.Workflows/Runtime`
+- `src/Agentwerke.AgentSecOps`
 
 ### Exit Criteria
 
@@ -329,7 +329,7 @@ Objective: make agent execution safe enough for MVP.
 
 ### Steps
 
-1. Implement the first sandbox manager in `Autofac.Sandboxes`.
+1. Implement the first sandbox manager in `Agentwerke.Sandboxes`.
    - create sandbox request model
    - define local Docker execution profile
    - mount workspace and artifact paths safely
@@ -360,7 +360,7 @@ Objective: deliver the first meaningful external workflow.
 
 ### Step 5A: Jira Inbound Trigger
 
-1. Implement webhook endpoint in `Autofac.Integrations`.
+1. Implement webhook endpoint in `Agentwerke.Integrations`.
 2. Validate Jira event payload.
 3. Map payload to workflow trigger input.
 4. Start workflow run from inbound event.
@@ -392,7 +392,7 @@ Objective: add the minimum governance Agentwerke needs to be trusted.
 
 ### Steps
 
-1. Build policy evaluation service in `Autofac.AgentSecOps`.
+1. Build policy evaluation service in `Agentwerke.AgentSecOps`.
    - evaluate risky tool actions
    - decide allow, escalate, or reject
 
@@ -445,7 +445,7 @@ Objective: make Agentwerke usable as an operations product, not just an API demo
    - SLA status
    - decision history
 
-5. Add operational telemetry hooks in `Autofac.Observability`.
+5. Add operational telemetry hooks in `Agentwerke.Observability`.
    - structured logs
    - traces
    - metrics counters and histograms
@@ -471,7 +471,7 @@ Use Camunda 8 from the beginning of the next execution phase. The in-process run
 3. Project Agentwerke task metadata to Camunda-compatible BPMN.
 4. Deploy workflows to Camunda during publish.
 5. Start Camunda process instances from Agentwerke run APIs.
-6. Execute `autofac.agent` service tasks with Agentwerke job workers.
+6. Execute `agentwerke.agent` service tasks with Agentwerke job workers.
 7. Bridge Camunda user tasks to Agentwerke approval requests.
 8. Surface retries, incidents, evidence, and artifacts in Agentwerke run views.
 

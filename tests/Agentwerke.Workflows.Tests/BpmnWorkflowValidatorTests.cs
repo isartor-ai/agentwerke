@@ -13,12 +13,12 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
                 <bpmn:startEvent id="Start" />
                 <bpmn:serviceTask id="DeployTask" name="Deploy">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="DeploymentAgent"
                       action="cloud.deploy_artifact"
                       environment="production"
@@ -29,7 +29,7 @@ public sealed class BpmnWorkflowValidatorTests
                 </bpmn:serviceTask>
                 <bpmn:userTask id="ApprovalTask" name="Human Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="production_deployment"
                       policyTag="human_approval_required" />
                   </bpmn:extensionElements>
@@ -70,12 +70,12 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="ExternalWorkflow" name="External Workflow">
                 <bpmn:startEvent id="Start" />
                 <bpmn:intermediateCatchEvent id="WaitForMerge" name="Wait For Merge">
                   <bpmn:extensionElements>
-                    <autofac:externalEvent
+                    <agentwerke:externalEvent
                       messageName="github.pull_request.merged"
                       correlationKeyTemplate="{{run_context.branch_name}}" />
                   </bpmn:extensionElements>
@@ -83,7 +83,7 @@ public sealed class BpmnWorkflowValidatorTests
                 </bpmn:intermediateCatchEvent>
                 <bpmn:receiveTask id="ReceiveWebhook" name="Receive Webhook">
                   <bpmn:extensionElements>
-                    <autofac:externalEvent
+                    <agentwerke:externalEvent
                       messageName="github.webhook.received"
                       correlationKeyTemplate="{{run_context.workflow_ref}}" />
                   </bpmn:extensionElements>
@@ -113,12 +113,12 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="ExternalWorkflow" name="External Workflow">
                 <bpmn:startEvent id="Start" />
                 <bpmn:intermediateCatchEvent id="WaitForMerge">
                   <bpmn:extensionElements>
-                    <autofac:externalEvent
+                    <agentwerke:externalEvent
                       messageName="github.pull_request.merged" />
                   </bpmn:extensionElements>
                   <bpmn:messageEventDefinition />
@@ -141,11 +141,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
                 <bpmn:serviceTask id="DeployTask" name="Deploy">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="deploy-agent"
                       action="deploy"
                       environment="production"
@@ -171,11 +171,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
                 <bpmn:serviceTask id="DeployTask" name="Deploy">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="spec-writer"
                       action="spec.generate"
                       environment="staging"
@@ -201,11 +201,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="DeployWorkflow" name="Deploy Workflow">
                 <bpmn:serviceTask id="DeployTask" name="Deploy">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="deploy-agent"
                       action="deploy"
                       environment="production"
@@ -229,11 +229,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="SandboxWorkflow" name="Sandbox Workflow">
                 <bpmn:serviceTask id="SandboxTask" name="Run sandbox">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="sandbox-e2e-agent"
                       action="run-open-sandbox"
                       environment="ci"
@@ -266,11 +266,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="W" name="W">
                 <bpmn:serviceTask id="Analyze" name="Analyze">
                   <bpmn:extensionElements>
-                    <autofac:agentTask agent="analyst" action="analyze"
+                    <agentwerke:agentTask agent="analyst" action="analyze"
                       purposeType="analysis" policyTag="standard"
                       prompt="Summarize {{input.title}} in one sentence." />
                   </bpmn:extensionElements>
@@ -297,18 +297,18 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="W" name="W">
                 <bpmn:serviceTask id="Impl" name="Impl">
                   <bpmn:extensionElements>
-                    <autofac:agentTask agent="impl" action="implement"
+                    <agentwerke:agentTask agent="impl" action="implement"
                       purposeType="implementation" policyTag="repo-change"
                       permissionLevel="read-write">
-                      <autofac:prompt>
+                      <agentwerke:prompt>
                         Implement the change described in {{input.body}}.
                         Keep it minimal.
-                      </autofac:prompt>
-                    </autofac:agentTask>
+                      </agentwerke:prompt>
+                    </agentwerke:agentTask>
                   </bpmn:extensionElements>
                 </bpmn:serviceTask>
               </bpmn:process>
@@ -332,11 +332,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="W" name="W">
                 <bpmn:serviceTask id="Plain" name="Plain">
                   <bpmn:extensionElements>
-                    <autofac:agentTask agent="a" action="act"
+                    <agentwerke:agentTask agent="a" action="act"
                       purposeType="p" policyTag="t" />
                   </bpmn:extensionElements>
                 </bpmn:serviceTask>
@@ -357,11 +357,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="SandboxWorkflow" name="Sandbox Workflow">
                 <bpmn:serviceTask id="SandboxTask" name="Run sandbox">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="sandbox-e2e-agent"
                       action="run-open-sandbox"
                       environment="ci"
@@ -387,11 +387,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="SandboxWorkflow" name="Sandbox Workflow">
                 <bpmn:serviceTask id="SandboxTask" name="Run sandbox">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="sandbox-e2e-agent"
                       action="run-open-sandbox"
                       environment="ci"
@@ -439,11 +439,11 @@ public sealed class BpmnWorkflowValidatorTests
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="MetadataFlow">
                 <bpmn:serviceTask id="Task1">
                   <bpmn:extensionElements>
-                    <autofac:agentTask action="cloud.deploy_artifact" />
+                    <agentwerke:agentTask action="cloud.deploy_artifact" />
                   </bpmn:extensionElements>
                 </bpmn:serviceTask>
               </bpmn:process>
@@ -486,16 +486,16 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
-    public void Validate_WhenAutofacMetadataHasNonBlockingIssues_ReturnsActionableWarnings()
+    public void Validate_WhenAgentwerkeMetadataHasNonBlockingIssues_ReturnsActionableWarnings()
     {
         var xml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://autofac.dev/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
               <bpmn:process id="WarnFlow">
                 <bpmn:serviceTask id="DeployTask">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="DeploymentAgent"
                       action="cloud.deploy_artifact"
                       purposeType="production_deployment"
@@ -503,15 +503,15 @@ public sealed class BpmnWorkflowValidatorTests
                       requiresEvidence="ci_passed,ci_passed"
                       maxRetries="2"
                       simulateTimeout="true" />
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="production_deployment"
                       policyTag="human_approval_required" />
-                    <autofac:notify channel="slack" />
+                    <agentwerke:notify channel="slack" />
                   </bpmn:extensionElements>
                 </bpmn:serviceTask>
                 <bpmn:userTask id="ApprovalTask">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="production_deployment"
                       policyTag="human_approval_required" />
                   </bpmn:extensionElements>
@@ -530,7 +530,7 @@ public sealed class BpmnWorkflowValidatorTests
             warning.Message.Contains("missing a human-readable 'name' attribute", StringComparison.Ordinal));
         Assert.Contains(result.Warnings, warning =>
             warning.ElementId == "DeployTask" &&
-            warning.Message.Contains("autofac:approvalTask metadata", StringComparison.Ordinal));
+            warning.Message.Contains("agentwerke:approvalTask metadata", StringComparison.Ordinal));
         Assert.Contains(result.Warnings, warning =>
             warning.ElementId == "DeployTask" &&
             warning.Message.Contains("duplicate entries", StringComparison.Ordinal));
@@ -539,6 +539,6 @@ public sealed class BpmnWorkflowValidatorTests
             warning.Message.Contains("simulateTimeout='true' without timeoutSeconds", StringComparison.Ordinal));
         Assert.Contains(result.Warnings, warning =>
             warning.ElementId == "DeployTask" &&
-            warning.Message.Contains("Unexpected Autofac extension element 'notify'", StringComparison.Ordinal));
+            warning.Message.Contains("Unexpected Agentwerke extension element 'notify'", StringComparison.Ordinal));
     }
 }

@@ -15,7 +15,7 @@ public sealed class AgentMarkdownSerializerTests
             Category = "analysis",
             Runner = "claude-code",
             Model = "claude-opus-4-8",
-            DockerImage = "autofac/agent-base",
+            DockerImage = "agentwerke/agent-base",
             Network = "bridge",
             Skills =
             [
@@ -45,7 +45,7 @@ public sealed class AgentMarkdownSerializerTests
                 "category: analysis",
                 "runner: claude-code",
                 "model: claude-opus-4-8",
-                "dockerImage: autofac/agent-base",
+                "dockerImage: agentwerke/agent-base",
                 "network: bridge",
                 "skills:",
                 "  - requirement-design",
@@ -91,7 +91,7 @@ public sealed class AgentMarkdownSerializerTests
                 new AgentSkillRef(
                     "github-branching",
                     "GitHub Branching",
-                    "Create deterministic Autofac branches",
+                    "Create deterministic Agentwerke branches",
                     ["github.create_branch"],
                     SkillManifestId: "git-workflow-and-versioning"),
                 new AgentSkillRef(

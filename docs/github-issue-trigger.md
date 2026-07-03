@@ -51,7 +51,7 @@ Integrations__GitHub__RequiredLabel=agentwerke
 ```
 
 - Matching is case-insensitive (`agentwerke`, `Agentwerke`, `AGENTWERKE` all match).
-- Existing installs may keep a legacy label such as `autofac` by setting
+- Existing installs may keep a legacy label such as `agentwerke` by setting
   `Integrations:GitHub:RequiredLabel` explicitly.
 - Set it to an empty string to disable the check — every issue matching
   `TriggerActions` will start a run again, restoring pre-#191 behavior.
@@ -72,9 +72,9 @@ Integrations__GitHub__RequiredLabel=agentwerke
 
 ## Reference
 
-- `src/Autofac.Api/Controllers/WebhooksController.cs` —
+- `src/Agentwerke.Api/Controllers/WebhooksController.cs` —
   `HandleIssuesEventAsync` / `HasRequiredLabel`
-- `src/Autofac.Integrations/IntegrationOptions.cs` — `GitHubOptions`
-- `tests/Autofac.Api.Tests/WebhooksControllerTests.cs` — trigger/skip/opt-out
+- `src/Agentwerke.Integrations/IntegrationOptions.cs` — `GitHubOptions`
+- `tests/Agentwerke.Api.Tests/WebhooksControllerTests.cs` — trigger/skip/opt-out
   coverage
-- isartor-ai/autofac-private#191 — the issue that introduced this gate
+- isartor-ai/agentwerke-private#191 — the issue that introduced this gate

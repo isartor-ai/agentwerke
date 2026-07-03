@@ -5,19 +5,19 @@ namespace Agentwerke.Api.Tests;
 public sealed class AgentwerkeRoleMapperTests
 {
     [Fact]
-    public void ResolveRoles_MapsEnterpriseGroupClaimsToAutofacRoles()
+    public void ResolveRoles_MapsEnterpriseGroupClaimsToAgentwerkeRoles()
     {
         var opts = new JwtOptions
         {
             RoleMappings =
             {
-                ["entra-autofac-admins"] = [AgentwerkeRoles.Admin],
+                ["entra-agentwerke-admins"] = [AgentwerkeRoles.Admin],
                 ["sg-approval-board"] = [AgentwerkeRoles.Approver, AgentwerkeRoles.Viewer]
             }
         };
 
         var roles = AgentwerkeRoleMapper.ResolveRoles(
-            ["[\"entra-autofac-admins\",\"sg-approval-board\",\"unmapped-group\"]"],
+            ["[\"entra-agentwerke-admins\",\"sg-approval-board\",\"unmapped-group\"]"],
             opts);
 
         Assert.Contains(AgentwerkeRoles.Admin, roles);

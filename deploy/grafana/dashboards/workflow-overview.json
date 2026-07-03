@@ -51,12 +51,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "rate(autofac_workflow_runs_total{status=\"completed\"}[5m]) / rate(autofac_workflow_runs_total[5m])",
+          "expr": "rate(agentwerke_workflow_runs_total{status=\"completed\"}[5m]) / rate(agentwerke_workflow_runs_total[5m])",
           "legendFormat": "success_rate"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "rate(autofac_workflow_runs_total{status=\"failed\"}[5m]) / rate(autofac_workflow_runs_total[5m])",
+          "expr": "rate(agentwerke_workflow_runs_total{status=\"failed\"}[5m]) / rate(agentwerke_workflow_runs_total[5m])",
           "legendFormat": "failure_rate"
         }
       ],
@@ -80,7 +80,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "autofac_workflow_runs_active",
+          "expr": "agentwerke_workflow_runs_active",
           "legendFormat": "active runs"
         }
       ],
@@ -104,7 +104,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "autofac_workflow_runs_pending_approval",
+          "expr": "agentwerke_workflow_runs_pending_approval",
           "legendFormat": "pending approval"
         }
       ],
@@ -129,12 +129,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, rate(autofac_approval_wait_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, rate(agentwerke_approval_wait_seconds_bucket[5m]))",
           "legendFormat": "p50"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.95, rate(autofac_approval_wait_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(agentwerke_approval_wait_seconds_bucket[5m]))",
           "legendFormat": "p95"
         }
       ],
@@ -159,12 +159,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, rate(autofac_step_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, rate(agentwerke_step_duration_seconds_bucket[5m]))",
           "legendFormat": "step p50"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.95, rate(autofac_step_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(agentwerke_step_duration_seconds_bucket[5m]))",
           "legendFormat": "step p95"
         }
       ],
@@ -182,12 +182,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, rate(autofac_connector_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, rate(agentwerke_connector_duration_seconds_bucket[5m]))",
           "legendFormat": "connector p50"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.95, rate(autofac_connector_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(agentwerke_connector_duration_seconds_bucket[5m]))",
           "legendFormat": "connector p95"
         }
       ],
@@ -212,12 +212,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, sum by (category, le) (rate(autofac_tool_call_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (category, le) (rate(agentwerke_tool_call_duration_seconds_bucket[5m])))",
           "legendFormat": "{{category}} p50"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.95, sum by (category, le) (rate(autofac_tool_call_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (category, le) (rate(agentwerke_tool_call_duration_seconds_bucket[5m])))",
           "legendFormat": "{{category}} p95"
         }
       ],
@@ -242,7 +242,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "rate(autofac_connector_invocations_total[5m])",
+          "expr": "rate(agentwerke_connector_invocations_total[5m])",
           "legendFormat": "{{connector_id}} ({{status}})"
         }
       ],

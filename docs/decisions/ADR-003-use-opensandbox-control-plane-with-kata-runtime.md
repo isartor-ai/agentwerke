@@ -9,7 +9,7 @@ Accepted
 ## Context
 Agentwerke's sandbox layer is the safety boundary for agent execution. It is responsible for isolating code generation, repository changes, shell access, external calls, file access, and artifact capture away from the core workflow and API processes.
 
-The current `Autofac.Sandboxes` implementation is intentionally narrow. It talks directly to the local Docker daemon through `Docker.DotNet`, launches a single ephemeral container, bind-mounts an output directory, and returns logs plus text artifacts. That has been useful for validating the interface and proving lifecycle basics, but it creates four strategic gaps:
+The current `Agentwerke.Sandboxes` implementation is intentionally narrow. It talks directly to the local Docker daemon through `Docker.DotNet`, launches a single ephemeral container, bind-mounts an output directory, and returns logs plus text artifacts. That has been useful for validating the interface and proving lifecycle basics, but it creates four strategic gaps:
 
 - It is Docker-daemon-specific rather than provider-neutral.
 - It does not give Agentwerke a strong production isolation boundary for untrusted or LLM-generated code.
@@ -152,7 +152,7 @@ Rejected as the long-term production answer.
 
 ## References
 
-- Existing implementation: `src/Autofac.Sandboxes`
+- Existing implementation: `src/Agentwerke.Sandboxes`
 - OpenSandbox: https://github.com/opensandbox-group/OpenSandbox
 - OpenSandbox architecture: https://github.com/opensandbox-group/OpenSandbox/blob/main/docs/architecture.md
 - OpenSandbox secure runtime guide: https://github.com/opensandbox-group/OpenSandbox/blob/main/docs/secure-container.md

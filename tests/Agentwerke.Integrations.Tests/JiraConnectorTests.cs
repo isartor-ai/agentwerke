@@ -37,7 +37,7 @@ public sealed class JiraConnectorTests
             new NoOpWorkflowTracer());
 
         var result = await connector.UpdateIssueStatusAsync(
-            new UpdateJiraIssueStatusCommand("PROJ-123", "31", "Started by Autofac"),
+            new UpdateJiraIssueStatusCommand("PROJ-123", "31", "Started by Agentwerke"),
             CancellationToken.None);
 
         Assert.True(result.TransitionApplied);
@@ -50,7 +50,7 @@ public sealed class JiraConnectorTests
 
         var commentBody = await requests[1].Content!.ReadAsStringAsync();
         Assert.Contains("\"type\":\"doc\"", commentBody, StringComparison.Ordinal);
-        Assert.Contains("Started by Autofac", commentBody, StringComparison.Ordinal);
+        Assert.Contains("Started by Agentwerke", commentBody, StringComparison.Ordinal);
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

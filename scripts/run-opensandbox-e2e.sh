@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$repo_root/docker/docker-compose.e2e.yml"
 
 cleanup() {
-  if [[ "${AUTOFAC_OPEN_SANDBOX_KEEP_STACK:-0}" == "1" ]]; then
+  if [[ "${AGENTWERKE_OPEN_SANDBOX_KEEP_STACK:-0}" == "1" ]]; then
     return
   fi
 
@@ -34,8 +34,8 @@ attach_to_bridge_network() {
 
 wait_for_api() {
   local attempt
-  local max_attempts="${AUTOFAC_OPEN_SANDBOX_WAIT_ATTEMPTS:-60}"
-  local sleep_seconds="${AUTOFAC_OPEN_SANDBOX_WAIT_SECONDS:-2}"
+  local max_attempts="${AGENTWERKE_OPEN_SANDBOX_WAIT_ATTEMPTS:-60}"
+  local sleep_seconds="${AGENTWERKE_OPEN_SANDBOX_WAIT_SECONDS:-2}"
 
   for ((attempt = 1; attempt <= max_attempts; attempt++)); do
     if curl -fsS "http://localhost:8083/api/health/live" >/dev/null; then

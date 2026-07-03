@@ -19,11 +19,11 @@ The team should stop adding production features to the local runtime path.
 - Existing tests pass or are intentionally split by runtime.
 
 ## Verification
-- `dotnet test Autofac.sln`
+- `dotnet test Agentwerke.sln`
 - Manual Camunda scenario confirms no in-process runtime path is used.
 
 ## Suggested Files
-- `src/Autofac.Workflows/DependencyInjection.cs`
-- `src/Autofac.Infrastructure/DependencyInjection.cs`
-- `src/Autofac.Api/appsettings*.json`
-- `tests/Autofac.Workflows.Tests`
+- `src/Agentwerke.Workflows/DependencyInjection.cs`
+- `src/Agentwerke.Infrastructure/DependencyInjection.cs`
+- `src/Agentwerke.Api/appsettings*.json`
+- `tests/Agentwerke.Workflows.Tests`

@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.AddColumn<string>(
                 name: "ArtifactName",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "approval_requests",
                 type: "character varying(512)",
                 maxLength: 512,
@@ -24,7 +24,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "ArtifactName",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "approval_requests");
         }
     }

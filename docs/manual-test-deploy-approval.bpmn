@@ -20,7 +20,7 @@
 -->
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="manual-test-deploy-approval-defs"
     targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
 
@@ -34,7 +34,7 @@
     <!-- 2. Pre-flight: check target environment is healthy and ready -->
     <bpmn:serviceTask id="PreflightCheck" name="Pre-flight Environment Check">
       <bpmn:extensionElements>
-        <autofac:agentTask
+        <agentwerke:agentTask
           agent="infra-agent"
           action="check-environment"
           environment="production"
@@ -47,7 +47,7 @@
     <!-- 3. SAST scan: runs static analysis before any deployment proceeds -->
     <bpmn:serviceTask id="SastScan" name="SAST Security Scan">
       <bpmn:extensionElements>
-        <autofac:agentTask
+        <agentwerke:agentTask
           agent="security-analyst"
           action="run-sast"
           environment="ci"
@@ -60,7 +60,7 @@
     <!-- 4. Human approval gate — high-risk production change -->
     <bpmn:userTask id="ApproveDeployment" name="Approve Production Deployment">
       <bpmn:extensionElements>
-        <autofac:approvalTask
+        <agentwerke:approvalTask
           purposeType="human-approval"
           policyTag="critical-prod-deploy"/>
       </bpmn:extensionElements>
@@ -69,7 +69,7 @@
     <!-- 5. Execute: runs only after approval -->
     <bpmn:serviceTask id="ExecuteDeployment" name="Execute Deployment">
       <bpmn:extensionElements>
-        <autofac:agentTask
+        <agentwerke:agentTask
           agent="deploy-agent"
           action="deploy"
           environment="production"

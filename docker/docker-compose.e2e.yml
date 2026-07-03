@@ -26,11 +26,11 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: autofac_e2e
+      POSTGRES_DB: agentwerke_e2e
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_e2e"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_e2e"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -46,7 +46,7 @@ services:
       --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
       --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_e2e;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_e2e;Username=postgres;Password=postgres"
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,13 +81,13 @@ services:
     profiles: [opensandbox]
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: autofac_e2e_opensandbox
+      POSTGRES_DB: agentwerke_e2e_opensandbox
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_opensandbox_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_e2e_opensandbox"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_e2e_opensandbox"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -104,7 +104,7 @@ services:
       --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
       --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=autofac_e2e_opensandbox;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=agentwerke_e2e_opensandbox;Username=postgres;Password=postgres"
     depends_on:
       postgres-opensandbox:
         condition: service_healthy
@@ -147,7 +147,7 @@ services:
       dockerfile: docker/api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_e2e;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_e2e;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: ""
       Sandboxes__Docker__Enabled: "false"
@@ -187,7 +187,7 @@ services:
       - "8083:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=autofac_e2e_opensandbox;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres-opensandbox;Port=5432;Database=agentwerke_e2e_opensandbox;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       Agents__Registry__AgentsDirectory: /app/agents
       Agents__Skills__SkillsDirectory: ""
@@ -246,7 +246,7 @@ services:
       context: ..
       dockerfile: docker/e2e/Dockerfile
     environment:
-      AUTOFAC_API_URL: "http://api:8080"
+      AGENTWERKE_API_URL: "http://api:8080"
       CAMUNDA_ENABLED: "false"
     depends_on:
       api:
@@ -261,8 +261,8 @@ services:
       dockerfile: docker/e2e/Dockerfile
     command: ["--filter", "FullyQualifiedName~OpenSandboxWorkflowE2ETests"]
     environment:
-      AUTOFAC_API_URL: "http://api-opensandbox:8080"
-      AUTOFAC_OPEN_SANDBOX_E2E: "true"
+      AGENTWERKE_API_URL: "http://api-opensandbox:8080"
+      AGENTWERKE_OPEN_SANDBOX_E2E: "true"
       CAMUNDA_ENABLED: "false"
     depends_on:
       api-opensandbox:
@@ -280,13 +280,13 @@ services:
     profiles: [agent-sandboxed]
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: autofac_e2e_agent_sandboxed
+      POSTGRES_DB: agentwerke_e2e_agent_sandboxed
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_agent_sandboxed_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_e2e_agent_sandboxed"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_e2e_agent_sandboxed"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -303,7 +303,7 @@ services:
       --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
       --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres-agent-sandboxed;Port=5432;Database=autofac_e2e_agent_sandboxed;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres-agent-sandboxed;Port=5432;Database=agentwerke_e2e_agent_sandboxed;Username=postgres;Password=postgres"
     depends_on:
       postgres-agent-sandboxed:
         condition: service_healthy
@@ -329,7 +329,7 @@ services:
       - "8085:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres-agent-sandboxed;Port=5432;Database=autofac_e2e_agent_sandboxed;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres-agent-sandboxed;Port=5432;Database=agentwerke_e2e_agent_sandboxed;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: ""
       Sandboxes__Enabled: "true"
@@ -350,7 +350,7 @@ services:
       # tests/Agentwerke.E2ETests/Fixtures/wiremock-anthropic-stub.json) — ApiKey just
       # needs to be non-empty for the runner's "is a credential configured" check.
       # This value is forwarded verbatim into the sandbox container as
-      # AUTOFAC_MODEL_API_BASE_URL, so it must resolve from there too — hence
+      # AGENTWERKE_MODEL_API_BASE_URL, so it must resolve from there too — hence
       # host.docker.internal:9093 (wiremock's published port), not the
       # compose-network service name "wiremock" (see the wiremock service comment).
       Anthropic__ApiKey: "test-key"
@@ -388,8 +388,8 @@ services:
       dockerfile: docker/e2e/Dockerfile
     command: ["--filter", "FullyQualifiedName~AgentSandboxedWorkflowE2ETests"]
     environment:
-      AUTOFAC_API_URL: "http://api-agent-sandboxed:8080"
-      AUTOFAC_AGENT_SANDBOXED_E2E: "true"
+      AGENTWERKE_API_URL: "http://api-agent-sandboxed:8080"
+      AGENTWERKE_AGENT_SANDBOXED_E2E: "true"
       CAMUNDA_ENABLED: "false"
     depends_on:
       api-agent-sandboxed:
@@ -402,10 +402,10 @@ services:
   #   1. The topology endpoint responds → Zeebe is reachable
   #   2. A BPMN process can be submitted for deployment
   #
-  # The autofac-specific extension elements in e2e-simple.bpmn are expected to
+  # The agentwerke-specific extension elements in e2e-simple.bpmn are expected to
   # be rejected by Zeebe (400) — that is an acceptable spike result and proves
   # the gateway is reachable. A real integration would strip/translate the
-  # autofac:agentTask extensions before deploying to Zeebe.
+  # agentwerke:agentTask extensions before deploying to Zeebe.
   #
   # Memory: Zeebe needs ~1 GB; set Docker Desktop to ≥ 3 GB.
 
@@ -439,7 +439,7 @@ services:
       context: ..
       dockerfile: docker/e2e/Dockerfile
     environment:
-      AUTOFAC_API_URL: "http://api:8080"
+      AGENTWERKE_API_URL: "http://api:8080"
       CAMUNDA_ENABLED: "true"
       ZEEBE_REST_URL: "http://zeebe:8080"
     depends_on:
@@ -461,4 +461,4 @@ networks:
   # network name across checkouts; service-to-service DNS (e.g. api-opensandbox ->
   # opensandbox) works the same as compose's auto-named default network.
   default:
-    name: autofac-e2e-default
+    name: agentwerke-e2e-default

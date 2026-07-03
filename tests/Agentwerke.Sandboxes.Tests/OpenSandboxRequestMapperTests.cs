@@ -63,10 +63,10 @@ public sealed class OpenSandboxRequestMapperTests
         Assert.Equal(1, mapped.ResourceLimits.GpuCount);
         Assert.Equal("/repo", mapped.WorkingDirectory);
         Assert.Equal(SandboxCommandExecutionMode.Session, mapped.CommandExecutionMode);
-        Assert.Equal("run-125", mapped.Metadata["autofac.run"]);
+        Assert.Equal("run-125", mapped.Metadata["agentwerke.run"]);
         Assert.Equal("125", mapped.Metadata["ticket"]);
         Assert.Equal("true", mapped.EnvironmentVariables["TRACE"]);
-        Assert.Equal("staging", mapped.EnvironmentVariables["AUTOFAC_ENVIRONMENT"]);
+        Assert.Equal("staging", mapped.EnvironmentVariables["AGENTWERKE_ENVIRONMENT"]);
         Assert.Equal(SandboxNetworkAccessMode.Restricted, mapped.NetworkPolicy?.Mode);
         Assert.Equal("/workspace", Assert.Single(mapped.Volumes).MountPath);
         Assert.Equal("github-token", Assert.Single(mapped.CredentialBindings).Name);
@@ -119,12 +119,12 @@ public sealed class OpenSandboxRequestMapperTests
             Attempt: 1,
             Metadata: new Dictionary<string, string>
             {
-                ["autofac.sandboxProfileRationale"] =
+                ["agentwerke.sandboxProfileRationale"] =
                     "Sandbox profile 'offline' is authorized for agent 'opensandbox-e2e-688c0bf7d7b748de84497646bf317f20'."
             });
 
         var mapped = mapper.MapCreateRequest(request);
-        var value = mapped.Metadata["autofac.sandboxProfileRationale"];
+        var value = mapped.Metadata["agentwerke.sandboxProfileRationale"];
 
         Assert.True(value.Length <= 63);
         Assert.All(value, ch => Assert.True(
@@ -155,8 +155,8 @@ public sealed class OpenSandboxRequestMapperTests
         Assert.Equal("sh", mapped.Arguments[0]);
         Assert.Equal("-c", mapped.Arguments[1]);
         Assert.Equal("/", mapped.WorkingDirectory);
-        Assert.Contains("autofac-sandbox: starting task", mapped.Arguments[2]);
-        Assert.Equal("deploy", mapped.EnvironmentVariables["AUTOFAC_ACTION"]);
+        Assert.Contains("agentwerke-sandbox: starting task", mapped.Arguments[2]);
+        Assert.Equal("deploy", mapped.EnvironmentVariables["AGENTWERKE_ACTION"]);
     }
 
     [Fact]

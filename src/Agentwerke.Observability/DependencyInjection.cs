@@ -56,7 +56,7 @@ public static class DependencyInjection
                         {
                             if (request.Headers.TryGetValue(CorrelationMiddleware.HeaderName, out var corrId))
                             {
-                                activity.SetTag("autofac.correlation_id", corrId.ToString());
+                                activity.SetTag("agentwerke.correlation_id", corrId.ToString());
                             }
                         };
                     })

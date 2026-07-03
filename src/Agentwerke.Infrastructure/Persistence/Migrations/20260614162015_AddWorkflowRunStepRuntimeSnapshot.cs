@@ -13,7 +13,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
             // Use IF NOT EXISTS because a later migration (20260615063250) adds the same
             // column; either one may have already run on an existing database.
             migrationBuilder.Sql(
-                @"ALTER TABLE autofac.workflow_run_steps ADD COLUMN IF NOT EXISTS ""RuntimeSnapshot"" jsonb;");
+                @"ALTER TABLE agentwerke.workflow_run_steps ADD COLUMN IF NOT EXISTS ""RuntimeSnapshot"" jsonb;");
         }
 
         /// <inheritdoc />
@@ -21,7 +21,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "RuntimeSnapshot",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_run_steps");
         }
     }

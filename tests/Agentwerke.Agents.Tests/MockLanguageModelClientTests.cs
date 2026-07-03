@@ -23,7 +23,7 @@ public sealed class MockLanguageModelClientTests
         Assert.Equal(0, response.Usage.InputTokens);
         Assert.Equal(0, response.Usage.OutputTokens);
         Assert.Empty(response.AllToolCalls);
-        Assert.Equal("autofac-mock-1", response.ModelId);
+        Assert.Equal("agentwerke-mock-1", response.ModelId);
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class MockLanguageModelClientTests
         Assert.True(response.Succeeded);
         var call = Assert.Single(calls);
         Assert.Equal("sandbox.file_write", call.Name);
-        Assert.Equal("AUTOFAC_MOCK.md", call.Input["path"]);
+        Assert.Equal("AGENTWERKE_MOCK.md", call.Input["path"]);
         Assert.False(string.IsNullOrWhiteSpace(call.Input["content"]));
     }
 }

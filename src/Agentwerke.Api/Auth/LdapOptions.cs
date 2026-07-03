@@ -2,7 +2,7 @@ namespace Agentwerke.Api.Auth;
 
 /// <summary>
 /// LDAP / Active Directory directory-group integration (#178). When enabled, an
-/// authenticated user's directory groups are resolved and mapped to Autofac roles
+/// authenticated user's directory groups are resolved and mapped to Agentwerke roles
 /// via the existing <see cref="JwtOptions.RoleMappings"/> (group DN/name → role).
 /// </summary>
 public sealed class LdapOptions

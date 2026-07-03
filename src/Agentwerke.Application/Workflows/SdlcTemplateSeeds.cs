@@ -3,7 +3,7 @@ using Agentwerke.Domain.Persistence;
 namespace Agentwerke.Application.Workflows;
 
 /// <summary>
-/// The built-in SDLC template catalog. All templates use only the Autofac runtime's governed
+/// The built-in SDLC template catalog. All templates use only the Agentwerke runtime's governed
 /// BPMN subset, so they run without Camunda and validate cleanly out of the box.
 /// </summary>
 public static class SdlcTemplateSeeds
@@ -23,12 +23,12 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="IssueToPr" name="Issue to PR">
                 <bpmn:startEvent id="Start" name="Issue Received" />
                 <bpmn:serviceTask id="Specify" name="Specify Requirements">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="specification-agent"
                       action="spec.generate"
                       purposeType="specification"
@@ -37,7 +37,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="Plan" name="Plan Implementation">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="planning-agent"
                       action="plan.generate"
                       purposeType="planning"
@@ -46,7 +46,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="Implement" name="Implement Changes">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="implementation-agent"
                       action="code.generate"
                       purposeType="implementation"
@@ -55,14 +55,14 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="CodeReview" name="Code Review Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="code_review"
                       policyTag="human-code-review" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:serviceTask id="OpenPR" name="Open Pull Request">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="github-agent"
                       action="github.open_pr"
                       purposeType="pull_request"
@@ -96,12 +96,12 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="Bugfix" name="Bugfix">
                 <bpmn:startEvent id="Start" name="Bug Reported" />
                 <bpmn:serviceTask id="Diagnose" name="Diagnose Root Cause">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="analysis-agent"
                       action="bug.diagnose"
                       purposeType="diagnosis"
@@ -112,7 +112,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="Fix" name="Implement Fix">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="implementation-agent"
                       action="code.fix"
                       purposeType="bugfix"
@@ -121,7 +121,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="TestApproval" name="Test and Merge Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="bugfix_merge"
                       policyTag="human-merge-approval" />
                   </bpmn:extensionElements>
@@ -151,12 +151,12 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="Hotfix" name="Hotfix (Emergency)">
                 <bpmn:startEvent id="Start" name="Incident Declared" />
                 <bpmn:serviceTask id="EmergencyFix" name="Implement Emergency Fix">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="implementation-agent"
                       action="code.fix"
                       purposeType="hotfix"
@@ -165,14 +165,14 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="ExpeditedApproval" name="Expedited Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="emergency_deployment"
                       policyTag="human-emergency-approval" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:serviceTask id="EmergencyDeploy" name="Deploy Emergency Fix">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="deployment-agent"
                       action="cloud.deploy"
                       purposeType="hotfix_deployment"
@@ -205,13 +205,13 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="ParallelBuildAndTest" name="Parallel Build and Test">
                 <bpmn:startEvent id="Start" name="Build Triggered" />
                 <bpmn:parallelGateway id="Fork" name="Quality Gate Fork" />
                 <bpmn:serviceTask id="RunTests" name="Run Test Suite">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="testing-agent"
                       action="tests.run"
                       purposeType="quality_assurance"
@@ -220,7 +220,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="SecurityScan" name="Run Security Scan">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="security-agent"
                       action="security.scan"
                       purposeType="security_review"
@@ -230,14 +230,14 @@ public static class SdlcTemplateSeeds
                 <bpmn:parallelGateway id="Join" name="Quality Gate Join" />
                 <bpmn:userTask id="DeployApproval" name="Deploy Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="production_deployment"
                       policyTag="human-deploy-approval" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:serviceTask id="Deploy" name="Deploy to Production">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="deployment-agent"
                       action="cloud.deploy"
                       purposeType="production_deployment"
@@ -274,12 +274,12 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="SecurityReview" name="Security Review">
                 <bpmn:startEvent id="Start" name="Review Requested" />
                 <bpmn:serviceTask id="Scan" name="Run Security Scan">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="security-agent"
                       action="security.scan"
                       purposeType="security_review"
@@ -294,7 +294,7 @@ public static class SdlcTemplateSeeds
                 <bpmn:exclusiveGateway id="SeverityGate" name="Findings Severity Gate" />
                 <bpmn:serviceTask id="Remediate" name="Remediate Findings">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="security-agent"
                       action="security.remediate"
                       purposeType="remediation"
@@ -303,7 +303,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="VerifyApproval" name="Security Sign-Off">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="security_sign_off"
                       policyTag="human-security-approval" />
                   </bpmn:extensionElements>
@@ -338,12 +338,12 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="ReleaseApproval" name="Release Approval">
                 <bpmn:startEvent id="Start" name="Release Initiated" />
                 <bpmn:serviceTask id="Package" name="Package Release Artifact">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="build-agent"
                       action="build.package"
                       purposeType="release_packaging"
@@ -352,7 +352,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="Notes" name="Generate Release Notes">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="documentation-agent"
                       action="docs.release_notes"
                       purposeType="documentation"
@@ -361,21 +361,21 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="QAApproval" name="QA Sign-Off">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="qa_sign_off"
                       policyTag="human-qa-approval" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:userTask id="ExecApproval" name="Executive Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="executive_sign_off"
                       policyTag="human-exec-approval" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:serviceTask id="DeployRelease" name="Deploy Release">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="deployment-agent"
                       action="cloud.deploy"
                       purposeType="release_deployment"
@@ -435,12 +435,12 @@ public static class SdlcTemplateSeeds
         BpmnXml = """
             <bpmn:definitions
                 xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
               <bpmn:process id="AutonomousSdlc" name="Autonomous SDLC">
                 <bpmn:startEvent id="Start" name="Issue Filed" />
                 <bpmn:serviceTask id="RequirementDesign" name="Design Requirements">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="business-analyst"
                       action="requirement-design"
                       environment="sdlc"
@@ -450,14 +450,14 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="RequirementApproval" name="Requirements Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="requirement_design"
                       policyTag="human-requirement-approval" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:serviceTask id="ArchitectureDesign" name="Design Architecture">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="solution-architect"
                       action="architecture-design"
                       environment="sdlc"
@@ -467,14 +467,14 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:userTask id="ArchitectureApproval" name="Architecture Approval">
                   <bpmn:extensionElements>
-                    <autofac:approvalTask
+                    <agentwerke:approvalTask
                       purposeType="architecture_design"
                       policyTag="human-architecture-approval" />
                   </bpmn:extensionElements>
                 </bpmn:userTask>
                 <bpmn:serviceTask id="TechnicalAnalysis" name="Technical Analysis">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="technical-analyst"
                       action="technical-analysis"
                       environment="sdlc"
@@ -484,7 +484,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="Implementation" name="Implement">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="implementation-engineer"
                       action="implement"
                       environment="sandbox"
@@ -496,7 +496,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:serviceTask id="SeniorReview" name="Senior Code Review">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="senior-code-reviewer"
                       action="review-code"
                       environment="sandbox"
@@ -508,7 +508,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:intermediateCatchEvent id="WaitForMerge" name="Wait for PR Merge">
                   <bpmn:extensionElements>
-                    <autofac:externalEvent
+                    <agentwerke:externalEvent
                       messageName="github.pull_request.merged"
                       correlationKeyTemplate="{{input.branch_name}}" />
                   </bpmn:extensionElements>
@@ -516,7 +516,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:intermediateCatchEvent>
                 <bpmn:serviceTask id="TriggerDeploy" name="Trigger Deploy">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="deploy-agent"
                       action="cicd.trigger_deploy"
                       environment="ci"
@@ -526,7 +526,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:serviceTask>
                 <bpmn:intermediateCatchEvent id="WaitForCiGreen" name="Wait for CI Green">
                   <bpmn:extensionElements>
-                    <autofac:externalEvent
+                    <agentwerke:externalEvent
                       messageName="github.workflow_run.completed"
                       correlationKeyTemplate="{{input.branch_name}}" />
                   </bpmn:extensionElements>
@@ -534,7 +534,7 @@ public static class SdlcTemplateSeeds
                 </bpmn:intermediateCatchEvent>
                 <bpmn:serviceTask id="Test" name="Run Tests">
                   <bpmn:extensionElements>
-                    <autofac:agentTask
+                    <agentwerke:agentTask
                       agent="tester"
                       action="run-tests"
                       environment="sandbox"

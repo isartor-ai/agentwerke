@@ -102,6 +102,9 @@ public static class DependencyInjection
         }
         services.AddSingleton<IModelRunBudget, ModelRunBudget>();
         services.AddScoped<IAgentModelRunner, AgentModelRunner>();
+        // Lazy indirection so AgentRequestTool can depend on the model runner without forming a
+        // construction-time DI cycle (the runner transitively depends on the tool set).
+        services.AddScoped(sp => new Lazy<IAgentModelRunner>(sp.GetRequiredService<IAgentModelRunner>));
         services.AddScoped<ISandboxedAgentRunner, OpenSandboxedAgentRunner>();
 
         services.AddScoped<IServiceTaskExecutor, AgentOrchestrator>();

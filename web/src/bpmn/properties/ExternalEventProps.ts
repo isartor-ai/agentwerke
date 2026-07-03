@@ -33,13 +33,13 @@ function textField(attribute: string, label: string, placeholder?: string) {
 export function externalEventEntries(element: any) {
   return [
     {
-      id: 'autofac-external-messageName',
+      id: 'agentwerke-external-messageName',
       component: textField('messageName', 'Message name', 'e.g. github.pull_request.merged'),
       isEdited: isTextFieldEntryEdited,
       element,
     },
     {
-      id: 'autofac-external-correlationKeyTemplate',
+      id: 'agentwerke-external-correlationKeyTemplate',
       component: textField('correlationKeyTemplate', 'Correlation key template', 'e.g. {{run_context.branch_name}}'),
       isEdited: isTextFieldEntryEdited,
       element,

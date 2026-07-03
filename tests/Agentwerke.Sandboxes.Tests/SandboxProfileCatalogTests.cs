@@ -90,7 +90,7 @@ public sealed class SandboxProfileCatalogTests
         var profile = SandboxProfileCatalog.Resolve(SandboxProfileNames.RepoWrite, "run-42");
 
         var mount = Assert.Single(profile.FilesystemMounts!);
-        Assert.Equal("autofac-run-run-42-workspace", mount.Source);
+        Assert.Equal("agentwerke-run-run-42-workspace", mount.Source);
     }
 
     [Fact]

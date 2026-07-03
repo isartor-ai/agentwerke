@@ -16,7 +16,7 @@
 | 2.4.3 — Publishing + Monitoring | ✅ Done | `arc/workflow-designer-bpmn-js` | Design/Monitor tab toggle, 10s poll, BpmnViewer with raf-* token markers, Start Run |
 | 2.4.4 — Diff + Approvals + Polish | ✅ Done | `arc/workflow-designer-bpmn-js` | RunDiffModal (client-side diff, deviation badges), inline Approve/Reject/Escalate, cancel run |
 
-> **Architecture decision (Phase 1–3, 2026-06):** Agentwerke extension metadata (`autofac:agentTask`, `autofac:ApprovalTask`) is serialized **directly into BPMN XML** via moddle extension elements using `modeling.updateModdleProperties`. This eliminates the side-channel metadata editor planned in Phases 2.4.1–2 (no separate form syncing required). The bpmn-js properties panel sidebar (via `bpmn-js-properties-panel` + `@bpmn-io/properties-panel`) renders the same property entries that write back into the XML, so the design artifact and the metadata are always in sync.
+> **Architecture decision (Phase 1–3, 2026-06):** Agentwerke extension metadata (`agentwerke:agentTask`, `agentwerke:ApprovalTask`) is serialized **directly into BPMN XML** via moddle extension elements using `modeling.updateModdleProperties`. This eliminates the side-channel metadata editor planned in Phases 2.4.1–2 (no separate form syncing required). The bpmn-js properties panel sidebar (via `bpmn-js-properties-panel` + `@bpmn-io/properties-panel`) renders the same property entries that write back into the XML, so the design artifact and the metadata are always in sync.
 
 ---
 
@@ -85,7 +85,7 @@ A single-page React application that combines three core panels:
 |-------|---------|----------------------|-------|
 | **Frontend UI** | React 18, TypeScript, Tailwind CSS | React 18, TypeScript, CSS modules | CSS variables + custom classes; no Tailwind |
 | **BPMN Editor** | BPMN.js v14+ | bpmn-js v17 + bpmn-js-properties-panel v5 | bpmn-js upgraded to v17 for stability |
-| **Moddle Extension** | — | `autofacModdle` descriptor (custom) | Registers `autofac:` namespace; elements serialize to/from XML natively |
+| **Moddle Extension** | — | `agentwerkeModdle` descriptor (custom) | Registers `agentwerke:` namespace; elements serialize to/from XML natively |
 | **Properties Panel** | Custom side panel | `@bpmn-io/properties-panel` v3 + `htm/preact` | Entries use `TextFieldEntry`/`NumberFieldEntry` via htm/preact (not React) |
 | **State Management** | TanStack Query | React `useState`/`useEffect` | API calls via `apiClient`; no external query library |
 | **Real-time Events** | SignalR / WebSocket | Not yet (Phase 2.4.3) | Live run timeline deferred |
@@ -126,8 +126,8 @@ A single-page React application that combines three core panels:
 2. **BPMN Canvas integration** (read-only + design mode toggle)
    - Embed BPMN.js viewer/modeler
    - Implement Agentwerke extension plugins:
-     - `autofac:agentTask` visual indicator (colored icon on serviceTask/scriptTask)
-     - `autofac:approvalTask` indicator on userTask
+     - `agentwerke:agentTask` visual indicator (colored icon on serviceTask/scriptTask)
+     - `agentwerke:approvalTask` indicator on userTask
    - Load BPMN XML from backend and display
    - Export BPMN to file (download as .bpmn2.xml)
 
@@ -341,17 +341,17 @@ src/
 ```
 src/
 ├── bpmn/                               # Agentwerke bpmn-js extension modules
-│   ├── autofacModdle.ts                # Moddle extension descriptor (namespace, types, attrs)
-│   ├── autofacModule.ts                # Aggregates all additionalModules for the Modeler
-│   ├── autofacPaletteProvider.ts       # Custom palette: "Agent Task", "Approval Gate"
-│   ├── autofacMarkers.ts               # CSS markers on import.done + commandStack.changed
-│   ├── constants.ts                    # AUTOFAC_NS_URI, element type constants, createEmptyDiagram()
+│   ├── agentwerkeModdle.ts                # Moddle extension descriptor (namespace, types, attrs)
+│   ├── agentwerkeModule.ts                # Aggregates all additionalModules for the Modeler
+│   ├── agentwerkePaletteProvider.ts       # Custom palette: "Agent Task", "Approval Gate"
+│   ├── agentwerkeMarkers.ts               # CSS markers on import.done + commandStack.changed
+│   ├── constants.ts                    # AGENTWERKE_NS_URI, element type constants, createEmptyDiagram()
 │   ├── vendor.d.ts                     # TypeScript module declarations for bpmn-js packages
 │   └── properties/
-│       ├── autofacPropertiesProvider.ts # Registers groups in bpmn-js-properties-panel
+│       ├── agentwerkePropertiesProvider.ts # Registers groups in bpmn-js-properties-panel
 │       ├── extensionUtil.ts             # getExtension / setExtensionProperty helpers
-│       ├── AgentTaskProps.ts            # 9 property entries for autofac:AgentTask
-│       └── ApprovalProps.ts             # 2 property entries for autofac:ApprovalTask
+│       ├── AgentTaskProps.ts            # 9 property entries for agentwerke:AgentTask
+│       └── ApprovalProps.ts             # 2 property entries for agentwerke:ApprovalTask
 ├── components/
 │   ├── BpmnModeler.tsx                 # React wrapper: forwardRef handle (getXML, importXML)
 │   ├── __mocks__/
@@ -365,7 +365,7 @@ src/
 ```
 
 **Key design notes:**
-- `BpmnModeler` mounts a `BpmnJS.Modeler` with `additionalModules` (Agentwerke palette, markers, properties provider) and `moddleExtensions: { autofac: autofacModdleDescriptor }`.
+- `BpmnModeler` mounts a `BpmnJS.Modeler` with `additionalModules` (Agentwerke palette, markers, properties provider) and `moddleExtensions: { agentwerke: agentwerkeModdleDescriptor }`.
 - The properties panel renders in a dedicated `div.bpmn-modeler-panel` container alongside the canvas, giving a split-pane view without a separate modal/form.
 - `setExtensionProperty` calls `modeling.updateModdleProperties` — the standard undoable API — so Ctrl+Z works across metadata edits.
 - The `__mocks__/BpmnModeler.tsx` auto-hoists via `vi.mock('../components/BpmnModeler')` in test files; the real component cannot render in jsdom.
@@ -536,7 +536,7 @@ WebSocket /ws/runs/:runId
 ### Type Definitions (Shared with Frontend via OpenAPI schema or TypeScript)
 
 ```typescript
-// backend/Autofac.Application/Contracts/WorkflowContracts.cs
+// backend/Agentwerke.Application/Contracts/WorkflowContracts.cs
 interface ValidationError {
   nodeId: string;
   elementName: string;
@@ -729,7 +729,7 @@ By end of Phase 2.4, the following should be demonstrable:
 ## Next Steps
 
 1. **Validate BPMN.js plugin approach** (spike, 3–5 days)
-   - Create minimal test: load BPMN with autofac:agentTask; verify extensionElements parse
+   - Create minimal test: load BPMN with agentwerke:agentTask; verify extensionElements parse
    - Demo to team; confirm architecture is sound
 
 2. **Finalize API contract** with backend team

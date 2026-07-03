@@ -12,7 +12,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.AddColumn<string>(
                 name: "CorrelationId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_runs",
                 type: "character varying(128)",
                 maxLength: 128,
@@ -20,7 +20,7 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "audit_records",
-                schema: "autofac",
+                schema: "agentwerke",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "text", nullable: false),
@@ -46,11 +46,11 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "audit_records",
-                schema: "autofac");
+                schema: "agentwerke");
 
             migrationBuilder.DropColumn(
                 name: "CorrelationId",
-                schema: "autofac",
+                schema: "agentwerke",
                 table: "workflow_runs");
         }
     }

@@ -148,14 +148,14 @@ public sealed class AgentSandboxedWorkflowE2ETests : E2ETestBase
         $$"""
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                          xmlns:autofac="https://autofac.ai/bpmn"
+                          xmlns:agentwerke="https://agentwerke.ai/bpmn"
                           id="agent-sandboxed-tool-use-e2e-defs"
                           targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
           <bpmn:process id="agent-sandboxed-tool-use-e2e" name="Agent Sandboxed Tool Use E2E Workflow" isExecutable="true">
             <bpmn:startEvent id="Start" name="Start"/>
             <bpmn:serviceTask id="WriteFile" name="Write File">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="{{agentId}}"
                   action="{{action}}"
                   environment="ci"
@@ -195,14 +195,14 @@ public sealed class AgentSandboxedWorkflowE2ETests : E2ETestBase
         $$"""
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                          xmlns:autofac="https://autofac.ai/bpmn"
+                          xmlns:agentwerke="https://agentwerke.ai/bpmn"
                           id="agent-sandboxed-e2e-defs"
                           targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
           <bpmn:process id="agent-sandboxed-e2e" name="Agent Sandboxed E2E Workflow" isExecutable="true">
             <bpmn:startEvent id="Start" name="Start"/>
             <bpmn:serviceTask id="GenerateSpec" name="Generate Specification">
               <bpmn:extensionElements>
-                <autofac:agentTask
+                <agentwerke:agentTask
                   agent="{{agentId}}"
                   action="{{action}}"
                   environment="ci"
