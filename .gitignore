@@ -20,6 +20,12 @@ packages/
 coverage/
 coverage.*
 
+# Node / static site
+node_modules/
+web/dist/
+docs.autofac.de/.vitepress/cache/
+docs.autofac.de/.vitepress/dist/
+
 # OS
 .DS_Store
 Thumbs.db
