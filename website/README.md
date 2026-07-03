@@ -110,9 +110,8 @@ source for `REVIEW:` comments. Currently:
   an access/demo form.
 - **Docs link target** — "Read the docs" points at `/tree/main/docs` in GitHub.
   Repoint to `docs.agentwerke.de` once a hosted docs site exists.
-- **GitHub repo link** — the visible product brand is Agentwerke, but repository
-  links still point to `isartor-ai/autofac` until the repo rename in
-  isartor-ai/autofac-private#196 is completed.
+- **GitHub repo link** — repository links point to `isartor-ai/agentwerke`.
+  Keep them aligned if the organization changes the public repo location again.
 - **OG image** — `og-image.svg` is vector. Some social scrapers prefer a
   1200×630 raster; export a PNG and update the `og:image` / `twitter:image`
   URLs if broader preview coverage is needed.

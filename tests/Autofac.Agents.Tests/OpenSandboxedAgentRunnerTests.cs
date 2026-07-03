@@ -85,7 +85,7 @@ public sealed class OpenSandboxedAgentRunnerTests
                     RepositoryName = "autofac",
                     PersonalAccessToken = "gh-test",
                     DefaultBaseBranch = "main",
-                    BranchPrefix = "autofac/run-",
+                    BranchPrefix = "agentwerke/run-",
                     CreateDraftPullRequests = true
                 }
             });

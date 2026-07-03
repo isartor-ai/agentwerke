@@ -36,7 +36,7 @@ public sealed class WorkflowRunOrchestrationServiceTests
             Inputs: new Dictionary<string, string>
             {
                 ["branch_name"] = "feature/issue-142",
-                ["input.repository"] = "isartor-ai/autofac"
+                ["input.repository"] = "isartor-ai/agentwerke"
             }));
 
         Assert.Equal("pending", result.Status);
@@ -48,7 +48,7 @@ public sealed class WorkflowRunOrchestrationServiceTests
         Assert.Contains(runContext.Writes, write =>
             write.RunId == result.RunId &&
             write.Key == "input.repository" &&
-            write.Value == "isartor-ai/autofac" &&
+            write.Value == "isartor-ai/agentwerke" &&
             write.Kind == RunContextKinds.Input);
         Assert.DoesNotContain(runContext.Writes, static write => write.Key == "input.input.repository");
         Assert.Single(outbox.Enqueued);
@@ -83,14 +83,14 @@ public sealed class WorkflowRunOrchestrationServiceTests
             Trigger: new TriggerMetadata(
                 Source: "github",
                 EventType: "issues.opened",
-                ExternalId: "isartor-ai/autofac#142",
-                ExternalUrl: "https://github.com/isartor-ai/autofac/issues/142",
+                ExternalId: "isartor-ai/agentwerke#142",
+                ExternalUrl: "https://github.com/isartor-ai/agentwerke/issues/142",
                 Title: "Seed custom inputs",
                 Body: "Issue body",
                 Inputs: new Dictionary<string, string>
                 {
-                    ["repository"] = "isartor-ai/autofac",
-                    ["issue_url"] = "https://github.com/isartor-ai/autofac/issues/142"
+                    ["repository"] = "isartor-ai/agentwerke",
+                    ["issue_url"] = "https://github.com/isartor-ai/agentwerke/issues/142"
                 })));
 
         Assert.Contains(runContext.Writes, write =>
@@ -100,11 +100,11 @@ public sealed class WorkflowRunOrchestrationServiceTests
         Assert.Contains(runContext.Writes, write =>
             write.RunId == result.RunId &&
             write.Key == "input.repository" &&
-            write.Value == "isartor-ai/autofac");
+            write.Value == "isartor-ai/agentwerke");
         Assert.Contains(runContext.Writes, write =>
             write.RunId == result.RunId &&
             write.Key == "input.issue_url" &&
-            write.Value == "https://github.com/isartor-ai/autofac/issues/142");
+            write.Value == "https://github.com/isartor-ai/agentwerke/issues/142");
     }
 
     [Fact]

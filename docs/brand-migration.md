@@ -27,6 +27,12 @@ current database names, schema names, branch prefixes, issue labels, and image
 paths until you schedule an operational cutover. The only renamed runtime value
 with built-in aliasing is `WorkflowRuntime:Mode`.
 
-The GitHub repository rename from `isartor-ai/autofac` to
-`isartor-ai/agentwerke` is not performed by this code change. Update remotes and
-official links only after the organization-level repository rename is complete.
+The public GitHub repository now resolves at `isartor-ai/agentwerke`; update
+local remotes with:
+
+```bash
+git remote set-url origin https://github.com/isartor-ai/agentwerke.git
+```
+
+The private planning repository still resolves at `isartor-ai/autofac-private`
+until a separate organization-level rename is scheduled.

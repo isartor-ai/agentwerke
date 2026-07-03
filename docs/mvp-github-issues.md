@@ -386,6 +386,6 @@ The architecture design selects Camunda 8 as the strategic BPMN engine, but MVP 
 These issue drafts were prepared locally because GitHub write access could not be completed from the current environment.
 
 Observed blockers:
-- local checkout remote is `isartor-ai/autofac`
+- local checkout remote is `isartor-ai/agentwerke`
 - requested issue target is `isartor-ai/autofac-private`
 - local `gh` authentication is currently invalid for `github.com`

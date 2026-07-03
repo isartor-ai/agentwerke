@@ -65,4 +65,4 @@ Work toward the first stable open-source release (1.0). See the
   step (only a skill required by the runtime contract does).
 - Web UI renders BPMN diagrams that lack embedded layout.
 
-[Unreleased]: https://github.com/isartor-ai/autofac/commits/main
+[Unreleased]: https://github.com/isartor-ai/agentwerke/commits/main

@@ -25,13 +25,13 @@ public sealed class WebhooksControllerTests
               "action": "closed",
               "pull_request": {
                 "number": 42,
-                "html_url": "https://github.com/octo/autofac/pull/42",
+                "html_url": "https://github.com/octo/agentwerke/pull/42",
                 "merged": true,
                 "merge_commit_sha": "feedface1234",
-                "head": { "ref": "autofac/run-123", "sha": "abc123" },
+                "head": { "ref": "agentwerke/run-123", "sha": "abc123" },
                 "base": { "ref": "main", "sha": "def456" }
               },
-              "repository": { "full_name": "octo/autofac" }
+              "repository": { "full_name": "octo/agentwerke" }
             }
             """;
         SetBody(controller, body);
@@ -44,7 +44,7 @@ public sealed class WebhooksControllerTests
 
         var recorded = Assert.Single(eventRepository.Added);
         Assert.Equal("github.pull_request.merged", recorded.Kind);
-        Assert.Equal("autofac/run-123", recorded.CorrelationHint);
+        Assert.Equal("agentwerke/run-123", recorded.CorrelationHint);
         Assert.Contains("\"merged\":true", recorded.Payload, StringComparison.Ordinal);
         Assert.Contains("\"mergeCommitSha\":\"feedface1234\"", recorded.Payload, StringComparison.Ordinal);
     }
@@ -68,7 +68,7 @@ public sealed class WebhooksControllerTests
                 "number": 42,
                 "merged": true,
                 "merge_commit_sha": "feedface1234",
-                "head": { "ref": "autofac/run-waiting-123", "sha": "abc123" },
+                "head": { "ref": "agentwerke/run-waiting-123", "sha": "abc123" },
                 "base": { "ref": "main", "sha": "def456" }
               }
             }
@@ -80,7 +80,7 @@ public sealed class WebhooksControllerTests
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(orchestration.ResumeExternalCommand);
         Assert.Equal("run_waiting_123", orchestration.ResumeExternalCommand!.RunId);
-        Assert.Equal("autofac/run-waiting-123", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("agentwerke/run-waiting-123", orchestration.ResumeExternalCommand.CorrelationKey);
         Assert.Equal("github-webhook", orchestration.ResumeExternalCommand.ResumedBy);
         Assert.Equal("42", orchestration.ResumeExternalCommand.Payload["pr_number"]);
         Assert.Equal("feedface1234", orchestration.ResumeExternalCommand.Payload["merge_commit_sha"]);
@@ -105,7 +105,7 @@ public sealed class WebhooksControllerTests
                 "status": "completed",
                 "conclusion": "success",
                 "head_sha": "abc123",
-                "head_branch": "autofac/run-waiting-456"
+                "head_branch": "agentwerke/run-waiting-456"
               }
             }
             """;
@@ -116,7 +116,7 @@ public sealed class WebhooksControllerTests
         Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(orchestration.ResumeExternalCommand);
         Assert.Equal("run_waiting_456", orchestration.ResumeExternalCommand!.RunId);
-        Assert.Equal("autofac/run-waiting-456", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("agentwerke/run-waiting-456", orchestration.ResumeExternalCommand.CorrelationKey);
         Assert.Equal("success", orchestration.ResumeExternalCommand.Payload["conclusion"]);
     }
 
@@ -191,9 +191,9 @@ public sealed class WebhooksControllerTests
                 "status": "completed",
                 "conclusion": "success",
                 "head_sha": "abc123",
-                "head_branch": "autofac/run-123"
+                "head_branch": "agentwerke/run-123"
               },
-              "repository": { "full_name": "octo/autofac" }
+              "repository": { "full_name": "octo/agentwerke" }
             }
             """;
         SetBody(controller, body);
@@ -204,7 +204,7 @@ public sealed class WebhooksControllerTests
 
         var recorded = Assert.Single(eventRepository.Added);
         Assert.Equal("github.workflow_run.completed", recorded.Kind);
-        Assert.Equal("autofac/run-123", recorded.CorrelationHint);
+        Assert.Equal("agentwerke/run-123", recorded.CorrelationHint);
         Assert.Contains("\"conclusion\":\"success\"", recorded.Payload, StringComparison.Ordinal);
     }
 
@@ -221,7 +221,7 @@ public sealed class WebhooksControllerTests
                 "status": "completed",
                 "conclusion": "failure",
                 "head_sha": "abc123",
-                "head_branch": "autofac/run-123"
+                "head_branch": "agentwerke/run-123"
               }
             }
             """;
@@ -263,8 +263,8 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 5, "html_url": "https://github.com/octo/autofac/issues/5", "title": "Idea", "body": "Do the thing", "state": "open", "labels": [ { "name": "autofac" } ] },
-              "repository": { "full_name": "octo/autofac" },
+              "issue": { "number": 5, "html_url": "https://github.com/octo/agentwerke/issues/5", "title": "Idea", "body": "Do the thing", "state": "open", "labels": [ { "name": "agentwerke" } ] },
+              "repository": { "full_name": "octo/agentwerke" },
               "sender": { "login": "alice" }
             }
             """;
@@ -292,8 +292,8 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 6, "html_url": "https://github.com/octo/autofac/issues/6", "title": "Unrelated", "body": "Not for Autofac", "state": "open", "labels": [ { "name": "bug" } ] },
-              "repository": { "full_name": "octo/autofac" },
+              "issue": { "number": 6, "html_url": "https://github.com/octo/agentwerke/issues/6", "title": "Unrelated", "body": "Not for Agentwerke", "state": "open", "labels": [ { "name": "bug" } ] },
+              "repository": { "full_name": "octo/agentwerke" },
               "sender": { "login": "alice" }
             }
             """;
@@ -319,8 +319,8 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 7, "html_url": "https://github.com/octo/autofac/issues/7", "title": "No labels", "body": "Do the thing", "state": "open" },
-              "repository": { "full_name": "octo/autofac" },
+              "issue": { "number": 7, "html_url": "https://github.com/octo/agentwerke/issues/7", "title": "No labels", "body": "Do the thing", "state": "open" },
+              "repository": { "full_name": "octo/agentwerke" },
               "sender": { "login": "alice" }
             }
             """;
@@ -345,8 +345,8 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 8, "html_url": "https://github.com/octo/autofac/issues/8", "title": "Casing", "body": "Do the thing", "state": "open", "labels": [ { "name": "AutoFac" } ] },
-              "repository": { "full_name": "octo/autofac" },
+              "issue": { "number": 8, "html_url": "https://github.com/octo/agentwerke/issues/8", "title": "Casing", "body": "Do the thing", "state": "open", "labels": [ { "name": "AgentWerke" } ] },
+              "repository": { "full_name": "octo/agentwerke" },
               "sender": { "login": "alice" }
             }
             """;
@@ -372,8 +372,8 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 9, "html_url": "https://github.com/octo/autofac/issues/9", "title": "Opt out", "body": "Do the thing", "state": "open" },
-              "repository": { "full_name": "octo/autofac" },
+              "issue": { "number": 9, "html_url": "https://github.com/octo/agentwerke/issues/9", "title": "Opt out", "body": "Do the thing", "state": "open" },
+              "repository": { "full_name": "octo/agentwerke" },
               "sender": { "login": "alice" }
             }
             """;
@@ -398,8 +398,8 @@ public sealed class WebhooksControllerTests
         var body = """
             {
               "action": "opened",
-              "issue": { "number": 142, "html_url": "https://github.com/isartor-ai/autofac/issues/142", "title": "Seed inputs", "body": "Do the thing", "state": "open", "labels": [ { "name": "autofac" } ] },
-              "repository": { "full_name": "isartor-ai/autofac" },
+              "issue": { "number": 142, "html_url": "https://github.com/isartor-ai/agentwerke/issues/142", "title": "Seed inputs", "body": "Do the thing", "state": "open", "labels": [ { "name": "agentwerke" } ] },
+              "repository": { "full_name": "isartor-ai/agentwerke" },
               "sender": { "login": "alice" }
             }
             """;
@@ -409,9 +409,9 @@ public sealed class WebhooksControllerTests
 
         Assert.IsType<AcceptedResult>(result);
         Assert.NotNull(orchestration.StartCommand?.Trigger?.Inputs);
-        Assert.Equal("isartor-ai/autofac", orchestration.StartCommand!.Trigger!.Inputs!["repository"]);
+        Assert.Equal("isartor-ai/agentwerke", orchestration.StartCommand!.Trigger!.Inputs!["repository"]);
         Assert.Equal(
-            "https://github.com/isartor-ai/autofac/issues/142",
+            "https://github.com/isartor-ai/agentwerke/issues/142",
             orchestration.StartCommand.Trigger.Inputs["issue_url"]);
     }
 
@@ -564,7 +564,7 @@ public sealed class WebhooksControllerTests
         ITriggerRouter? triggerRouter = null,
         IWaitingExternalCorrelationRepository? waitingExternalCorrelationRepository = null,
         string? slackSigningSecret = null,
-        string requiredLabel = "autofac")
+        string requiredLabel = "agentwerke")
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-GitHub-Event"] = eventHeader;

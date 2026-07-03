@@ -87,9 +87,9 @@ public sealed class GitHubOptions
     public string DefaultBaseBranch { get; set; } = "main";
 
     /// <summary>
-    /// Prefix for deterministic Autofac-created branch names.
+    /// Prefix for deterministic Agentwerke-created branch names.
     /// </summary>
-    public string BranchPrefix { get; set; } = "autofac/run-";
+    public string BranchPrefix { get; set; } = "agentwerke/run-";
 
     /// <summary>
     /// Create pull requests as drafts by default for MVP safety.

@@ -36,7 +36,7 @@ Created GitHub issues:
 
 Camunda-first triage performed:
 
-- Public PR [#43](https://github.com/isartor-ai/autofac/pull/43) was renamed and reframed as optional Camunda projection groundwork.
-- Public PR [#44](https://github.com/isartor-ai/autofac/pull/44) was closed because it moved Camunda deployment/start behavior into the run path before ADR-002 and runtime-mode gating.
+- Public PR [#43](https://github.com/isartor-ai/agentwerke/pull/43) was renamed and reframed as optional Camunda projection groundwork.
+- Public PR [#44](https://github.com/isartor-ai/agentwerke/pull/44) was closed because it moved Camunda deployment/start behavior into the run path before ADR-002 and runtime-mode gating.
 - Private issue [#93](https://github.com/isartor-ai/autofac-private/issues/93) was renamed as optional compatibility projection.
 - Private issues [#94](https://github.com/isartor-ai/autofac-private/issues/94), [#95](https://github.com/isartor-ai/autofac-private/issues/95), and [#96](https://github.com/isartor-ai/autofac-private/issues/96) were parked and closed as not planned until explicit Camunda adapter mode is justified.

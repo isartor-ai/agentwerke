@@ -198,12 +198,12 @@ public sealed class SandboxCodeToolsTests
 
         var result = await tool.ExecuteAsync(
             Context(runId: "run_push"),
-            new Dictionary<string, string> { ["operation"] = "push", ["branch"] = "autofac/run-run_push" },
+            new Dictionary<string, string> { ["operation"] = "push", ["branch"] = "agentwerke/run-run_push" },
             CancellationToken.None);
 
         Assert.True(result.Succeeded);
-        var branches = await SandboxTestProcess.RunAsync("git", ["branch", "--list", "autofac/run-run_push"], remote.Path);
-        Assert.Contains("autofac/run-run_push", branches.StandardOutput);
+        var branches = await SandboxTestProcess.RunAsync("git", ["branch", "--list", "agentwerke/run-run_push"], remote.Path);
+        Assert.Contains("agentwerke/run-run_push", branches.StandardOutput);
     }
 
     [Fact]

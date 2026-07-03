@@ -58,14 +58,14 @@ public sealed class RunsControllerTests
             new Dictionary<string, string>
             {
                 ["branch_name"] = "feature/issue-142",
-                ["repository"] = "isartor-ai/autofac"
+                ["repository"] = "isartor-ai/agentwerke"
             }));
 
         Assert.IsType<AcceptedResult>(result);
         Assert.NotNull(orchestration.StartCommand);
         Assert.NotNull(orchestration.StartCommand!.Inputs);
         Assert.Equal("feature/issue-142", orchestration.StartCommand.Inputs["branch_name"]);
-        Assert.Equal("isartor-ai/autofac", orchestration.StartCommand.Inputs["repository"]);
+        Assert.Equal("isartor-ai/agentwerke", orchestration.StartCommand.Inputs["repository"]);
     }
 
     [Fact]

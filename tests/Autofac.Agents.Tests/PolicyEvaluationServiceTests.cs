@@ -138,7 +138,7 @@ public sealed class PolicyEvaluationServiceTests
             {
                 GitHub = new GitHubOptions
                 {
-                    BranchPrefix = "autofac/run-"
+                    BranchPrefix = "agentwerke/run-"
                 }
             }));
 
@@ -199,7 +199,7 @@ public sealed class PolicyEvaluationServiceTests
             {
                 GitHub = new GitHubOptions
                 {
-                    BranchPrefix = "autofac/run-"
+                    BranchPrefix = "agentwerke/run-"
                 }
             }));
 
@@ -266,7 +266,7 @@ public sealed class PolicyEvaluationServiceTests
             {
                 GitHub = new GitHubOptions
                 {
-                    BranchPrefix = "autofac/run-"
+                    BranchPrefix = "agentwerke/run-"
                 }
             }));
 
@@ -334,7 +334,7 @@ public sealed class PolicyEvaluationServiceTests
             {
                 GitHub = new GitHubOptions
                 {
-                    BranchPrefix = "autofac/run-"
+                    BranchPrefix = "agentwerke/run-"
                 }
             }));
 
@@ -1432,7 +1432,7 @@ public sealed class PolicyEvaluationServiceTests
             {
                 GitHub = new GitHubOptions
                 {
-                    BranchPrefix = "autofac/run-"
+                    BranchPrefix = "agentwerke/run-"
                 }
             }));
     }
@@ -1613,7 +1613,7 @@ public sealed class PolicyEvaluationServiceTests
         public Task<GitHubPullRequestResult> CreatePullRequestAsync(CreateGitHubPullRequestCommand command, CancellationToken cancellationToken = default)
         {
             CreatePullRequestCalls++;
-            return Task.FromResult(new GitHubPullRequestResult(42, "https://example.test/pr/42", command.HeadBranch, "main", "sha", ".autofac/test.md", false));
+            return Task.FromResult(new GitHubPullRequestResult(42, "https://example.test/pr/42", command.HeadBranch, "main", "sha", ".agentwerke/test.md", false));
         }
 
         public Task<GitHubPullRequestStatusResult> GetPullRequestAsync(int pullNumber, CancellationToken cancellationToken = default) =>

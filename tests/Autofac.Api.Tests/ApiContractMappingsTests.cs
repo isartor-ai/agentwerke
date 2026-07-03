@@ -77,9 +77,9 @@ public sealed class ApiContractMappingsTests
                                 Status = "completed",
                                 PolicyDecisionId = "test-policy",
                                 PolicyDecisionKind = "allow",
-                                InputSummary = "{\"head_branch\":\"autofac/run-1\"}",
+                                InputSummary = "{\"head_branch\":\"agentwerke/run-1\"}",
                                 OutputSummary = "created pull request",
-                                ArtifactNames = [".autofac/runs/run-1/step-1.md"],
+                                ArtifactNames = [".agentwerke/runs/run-1/step-1.md"],
                                 DurationMs = 125
                             }
                         ],

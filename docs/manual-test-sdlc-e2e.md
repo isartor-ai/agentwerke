@@ -102,8 +102,8 @@ curl -X POST http://localhost:8080/api/runs \
   -d '{
         "workflowId": "<workflowId from step 1>",
         "inputs": {
-          "issue_url": "https://github.com/isartor-ai/autofac/issues/<issue-number>",
-          "repository": "isartor-ai/autofac",
+          "issue_url": "https://github.com/isartor-ai/agentwerke/issues/<issue-number>",
+          "repository": "isartor-ai/agentwerke",
           "branch_name": "feature/autonomous-sdlc-e2e"
         }
       }'

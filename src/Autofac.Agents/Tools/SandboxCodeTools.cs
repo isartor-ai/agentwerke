@@ -306,7 +306,7 @@ public sealed class SandboxGitTool(
     public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
     [
         new("operation", "string", $"One of: {string.Join(", ", SupportedOperations)}.", Required: true),
-        new("branch", "string", "Branch name for clone/checkout/push. Defaults to autofac/run-<run_id>.", Required: false),
+        new("branch", "string", "Branch name for clone/checkout/push. Defaults to agentwerke/run-<run_id>.", Required: false),
         new("message", "string", "Commit message (required for commit).", Required: false),
         new("path", "string", "Path to stage for add. Defaults to '.' (everything).", Required: false)
     ];
@@ -334,7 +334,7 @@ public sealed class SandboxGitTool(
     {
         Directory.CreateDirectory(workspaceRoot);
         var operation = input["operation"].Trim().ToLowerInvariant();
-        var defaultBranch = $"autofac/run-{context.RunId}";
+        var defaultBranch = $"agentwerke/run-{context.RunId}";
         var branch = SandboxWorkspace.ReadOptional(input, "branch") ?? defaultBranch;
 
         return operation switch

@@ -294,7 +294,7 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         EnsureConfigured();
 
         var baseBranch = ResolveBaseBranch(command.BaseBranch);
-        var markerPath = $".autofac/runs/{SanitizePathSegment(command.RunId)}/{SanitizePathSegment(command.StepId)}-attempt-{command.Attempt}.md";
+        var markerPath = $".agentwerke/runs/{SanitizePathSegment(command.RunId)}/{SanitizePathSegment(command.StepId)}-attempt-{command.Attempt}.md";
         var commitSha = await CommitMarkerFileAsync(command, markerPath, cancellationToken);
 
         var existingPullRequest = await FindExistingPullRequestAsync(command.HeadBranch, baseBranch, cancellationToken);
