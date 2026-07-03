@@ -12,6 +12,8 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { ToastRegion } from '../components/ToastRegion';
 import { Toolbar } from '../components/Toolbar';
+import { WorkflowDiffModal } from '../components/WorkflowDiffModal';
+import { buildBpmnDiff, formatXml } from '../bpmn/xmlDiff';
 import { useToastQueue } from '../components/useToastQueue';
 import { buildConfiguredTemplateBpmn } from '../templates/templateBpmn';
 import type {
@@ -24,12 +26,6 @@ import type {
   WorkflowRun,
   WorkflowValidationResult,
 } from '../types';
-
-interface DiffLine {
-  lineNumber: number;
-  kind: 'added' | 'removed' | 'unchanged';
-  text: string;
-}
 
 type WorkspaceMode = 'factory' | 'advanced' | 'monitor';
 type ConfigurationMapSection = 'requiredInputs' | 'agentAssignments' | 'approvalAssignments' | 'connectors' | 'evidence';
@@ -69,31 +65,6 @@ function formatToken(value: string): string {
   return value
     .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
-function buildBpmnDiff(previousXml: string, currentXml: string): DiffLine[] {
-  const previousLines = previousXml.split('\n');
-  const currentLines = currentXml.split('\n');
-  const maxLength = Math.max(previousLines.length, currentLines.length);
-  const result: DiffLine[] = [];
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const previousLine = previousLines[index] ?? null;
-    const currentLine = currentLines[index] ?? null;
-
-    if (previousLine === currentLine && currentLine !== null) {
-      result.push({ lineNumber: index + 1, kind: 'unchanged', text: currentLine });
-      continue;
-    }
-    if (previousLine !== null) {
-      result.push({ lineNumber: index + 1, kind: 'removed', text: previousLine });
-    }
-    if (currentLine !== null) {
-      result.push({ lineNumber: index + 1, kind: 'added', text: currentLine });
-    }
-  }
-
-  return result;
 }
 
 function createTemplateConfiguration(template: TemplateDetail): TemplateFactoryConfiguration {
@@ -151,6 +122,7 @@ export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
   const [monitorLoading, setMonitorLoading] = useState(false);
   const [monitorError, setMonitorError] = useState<string | null>(null);
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Agentwerke', camundaEnabled: false });
+  const [diffModalOpen, setDiffModalOpen] = useState(false);
   const { toasts, pushToast, dismissToast } = useToastQueue();
   const canAuthorWorkflows = canOperate(auth);
   const canPublishWorkflows = canAdmin(auth);
@@ -329,11 +301,12 @@ export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
 
   const selectedWorkflow = workflows.find((workflow) => workflow.id === selectedId) ?? null;
 
-  const bpmnDiff = useMemo(() => {
+  const changedLineCount = useMemo(() => {
     if (!lastPublishedXml.trim() || !currentXml.trim()) {
-      return [] as DiffLine[];
+      return 0;
     }
-    return buildBpmnDiff(lastPublishedXml, currentXml);
+    const diff = buildBpmnDiff(formatXml(lastPublishedXml), formatXml(currentXml));
+    return diff.filter((line) => line.kind !== 'unchanged').length;
   }, [currentXml, lastPublishedXml]);
 
   const getModelerXml = async (): Promise<string> => {
@@ -1123,22 +1096,18 @@ export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
                 </section>
               ) : null}
 
-              {bpmnDiff.length > 0 ? (
-                <section className="panel diff-panel" aria-label="BPMN diff view">
+              {changedLineCount > 0 ? (
+                <section className="panel diff-panel" aria-label="Workflow diff summary">
                   <h3>Workflow Diff</h3>
-                  <ul className="diff-list" role="list">
-                    {bpmnDiff.map((entry, index) => (
-                      <li
-                        key={`${entry.lineNumber}-${entry.kind}-${index}`}
-                        className={`diff-line diff-line-${entry.kind}`}
-                      >
-                        <span className="diff-glyph" aria-hidden="true">
-                          {entry.kind === 'added' ? '+' : entry.kind === 'removed' ? '-' : ' '}
-                        </span>
-                        <code>{entry.text || ' '}</code>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="diff-summary-row">
+                    <p className="diff-summary-text">
+                      Unpublished changes — {changedLineCount} line{changedLineCount === 1 ? '' : 's'} differ from the
+                      published version.
+                    </p>
+                    <button type="button" className="btn btn-secondary" onClick={() => setDiffModalOpen(true)}>
+                      View changes
+                    </button>
+                  </div>
                 </section>
               ) : null}
             </>
@@ -1225,6 +1194,17 @@ export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
           ) : null}
         </article>
       </section>
+
+      {diffModalOpen ? (
+        <WorkflowDiffModal
+          currentXml={currentXml}
+          publishedXml={lastPublishedXml}
+          fileName={normalizeFileName(
+            selectedWorkflow?.name ?? templateConfiguration?.name ?? selectedTemplateId ?? 'workflow',
+          )}
+          onClose={() => setDiffModalOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

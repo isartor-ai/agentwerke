@@ -1,5 +1,5 @@
 groups:
-  - name: autofac.workflow
+  - name: agentwerke.workflow
     rules:
       - alert: HighRunFailureRate
         expr: |
@@ -35,7 +35,7 @@ groups:
             {{ $value | humanizePercentage }} of workflow runs are failing over the last 10 minutes.
             Immediate investigation required.
 
-  - name: autofac.approval
+  - name: agentwerke.approval
     rules:
       - alert: ApprovalSLABreach
         expr: |
@@ -62,7 +62,7 @@ groups:
           description: >
             {{ $value }} runs are pending approval. Reviewer capacity may be saturated.
 
-  - name: autofac.worker
+  - name: agentwerke.worker
     rules:
       - alert: WorkerBacklogGrowing
         expr: |
@@ -87,10 +87,10 @@ groups:
         annotations:
           summary: "No worker metrics received"
           description: >
-            The autofac_workflow_runs_active metric has not been received for 3 minutes.
+            The Agentwerke workflow activity metric has not been received for 3 minutes.
             The worker may be down.
 
-  - name: autofac.connector
+  - name: agentwerke.connector
     rules:
       - alert: ConnectorHighErrorRate
         expr: |

@@ -391,8 +391,17 @@ Every tool invocation must be subject to logging, tracing, policy checks, and au
 
 ### 10.11 Inter-Agent Collaboration
 
-- The system should allow agents to communicate through a message bus.
-- The system should support structured task delegation between agents.
+- The system must allow agents to communicate through a run-scoped message bus
+  (`agent.post_message` / `agent.read_messages`).
+- The system must support task delegation between agents: an agent can hand a sub-task
+  to another agent (`agent.request`), which runs inline and returns its result. Delegation
+  is depth-guarded (the callee runs read-only and cannot delegate further or pause the run).
+- The system must let an agent pause mid-task to ask a human a question (`human.ask`) and
+  resume automatically once the human answers, and to send a non-blocking notification
+  (`human.notify`).
+- The system must persist all inter-agent and agent-to-human interactions as a single
+  run-scoped store and surface them as a per-run **conversation**, with pending human
+  questions answerable inline.
 - The system must record inter-agent communication events for observability and audit.
 
 ### 10.12 Self-Improvement Controls

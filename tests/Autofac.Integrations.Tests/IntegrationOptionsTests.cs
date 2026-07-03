@@ -25,6 +25,7 @@ public sealed class IntegrationOptionsTests
         Assert.Equal("https://api.github.com/", opts.ApiBaseUrl);
         Assert.Equal("main", opts.DefaultBaseBranch);
         Assert.Equal("agentwerke/run-", opts.BranchPrefix);
+        Assert.Equal("agentwerke", opts.RequiredLabel);
         Assert.True(opts.CreateDraftPullRequests);
         Assert.Equal(string.Empty, opts.WebhookSecret);
     }

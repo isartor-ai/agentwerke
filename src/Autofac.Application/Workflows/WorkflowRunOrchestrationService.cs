@@ -15,6 +15,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     private readonly IWorkflowRunRepository _runRepository;
     private readonly IRunContextRepository _runContextRepository;
     private readonly IApprovalRepository _approvalRepository;
+    private readonly IAgentInteractionRepository _interactionRepository;
     private readonly IAuditRepository _auditRepository;
     private readonly IRunOutbox _outbox;
     private readonly ICorrelationContext _correlationContext;
@@ -27,6 +28,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         IWorkflowRunRepository runRepository,
         IRunContextRepository runContextRepository,
         IApprovalRepository approvalRepository,
+        IAgentInteractionRepository interactionRepository,
         IAuditRepository auditRepository,
         IRunOutbox outbox,
         ICorrelationContext correlationContext,
@@ -38,6 +40,7 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         _runRepository = runRepository;
         _runContextRepository = runContextRepository;
         _approvalRepository = approvalRepository;
+        _interactionRepository = interactionRepository;
         _auditRepository = auditRepository;
         _outbox = outbox;
         _correlationContext = correlationContext;
@@ -191,6 +194,62 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
         await _outbox.EnqueueAsync(OutboxOperations.Resume, command.RunId, payload, ct: cancellationToken);
 
         return new ResumeRunResult(command.RunId, PendingStatus, WaitingApproval: null);
+    }
+
+    public async Task<AnswerInteractionResult> AnswerInteractionAsync(
+        AnswerInteractionCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var correlationId = _correlationContext.CorrelationId;
+
+        var interaction = await _interactionRepository.GetByIdAsync(command.InteractionId, cancellationToken)
+            ?? throw new InteractionNotFoundException(command.InteractionId);
+
+        // Scope the interaction to its run so a mismatched runId can't answer someone else's question.
+        if (!string.Equals(interaction.RunId, command.RunId, StringComparison.Ordinal))
+        {
+            throw new InteractionNotFoundException(command.InteractionId);
+        }
+
+        if (!string.Equals(interaction.Status, AgentInteractionStatuses.Pending, StringComparison.Ordinal))
+        {
+            throw new InteractionNotPendingException(command.InteractionId, interaction.Status);
+        }
+
+        _ = await _runRepository.GetRunAsync(command.RunId, cancellationToken)
+            ?? throw new WorkflowRunNotFoundException(command.RunId);
+
+        var answeredBy = command.AnsweredBy ?? "api-user";
+        interaction.Status = AgentInteractionStatuses.Answered;
+        interaction.Response = command.Answer;
+        interaction.RespondedBy = answeredBy;
+        interaction.RespondedAt = DateTimeOffset.UtcNow.ToString("o");
+
+        await _interactionRepository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Interaction answered. RunId={RunId} InteractionId={InteractionId} AnsweredBy={AnsweredBy} CorrelationId={CorrelationId}",
+            command.RunId, command.InteractionId, answeredBy, correlationId);
+
+        await WriteAuditAsync(
+            runId: command.RunId,
+            correlationId: correlationId,
+            actorType: "user",
+            actor: answeredBy,
+            action: "interaction.answer",
+            resourceType: "interaction",
+            resourceId: command.InteractionId,
+            outcome: "answered",
+            details: command.Answer,
+            cancellationToken);
+
+        // Re-run the suspended step (Phase 2 strategy); on re-run human.ask finds this answer.
+        var payload = new OutboxResumePayload(answeredBy).Serialize();
+        await _outbox.EnqueueAsync(OutboxOperations.Resume, command.RunId, payload, ct: cancellationToken);
+
+        return new AnswerInteractionResult(command.RunId, command.InteractionId, PendingStatus);
     }
 
     public async Task<ResumeExternalRunResult> ResumeExternalRunAsync(

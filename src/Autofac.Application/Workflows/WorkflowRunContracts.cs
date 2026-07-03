@@ -39,6 +39,14 @@ public sealed record ResumeRunCommand(
 
 public sealed record ResumeRunResult(string RunId, string Status, WaitingApprovalInfo? WaitingApproval);
 
+public sealed record AnswerInteractionCommand(
+    string RunId,
+    string InteractionId,
+    string Answer,
+    string? AnsweredBy);
+
+public sealed record AnswerInteractionResult(string RunId, string InteractionId, string Status);
+
 public sealed record ResumeExternalRunCommand(
     string RunId,
     string CorrelationKey,
@@ -69,6 +77,8 @@ public interface IWorkflowRunOrchestrationService
     Task<StartRunResult> StartRunAsync(StartRunCommand command, CancellationToken cancellationToken = default);
 
     Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default);
+
+    Task<AnswerInteractionResult> AnswerInteractionAsync(AnswerInteractionCommand command, CancellationToken cancellationToken = default);
 
     Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default);
 
@@ -195,6 +205,30 @@ public sealed class WorkflowRunNotFoundException : Exception
     }
 
     public string RunId { get; }
+}
+
+public sealed class InteractionNotFoundException : Exception
+{
+    public InteractionNotFoundException(string interactionId)
+        : base($"Agent interaction '{interactionId}' was not found.")
+    {
+        InteractionId = interactionId;
+    }
+
+    public string InteractionId { get; }
+}
+
+public sealed class InteractionNotPendingException : Exception
+{
+    public InteractionNotPendingException(string interactionId, string status)
+        : base($"Agent interaction '{interactionId}' cannot be answered because its status is '{status}'.")
+    {
+        InteractionId = interactionId;
+        Status = status;
+    }
+
+    public string InteractionId { get; }
+    public string Status { get; }
 }
 
 public sealed class WorkflowNotPublishedException : Exception

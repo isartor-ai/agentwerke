@@ -169,6 +169,25 @@ export interface RunEvent {
   createdAt: string;
 }
 
+/** One entry in a run's agent conversation (#192): a coordination post, delegation, or human ask. */
+export interface RunInteraction {
+  id: string;
+  runId: string;
+  stepId?: string | null;
+  from: string;
+  kind: 'post' | 'question' | 'choice' | 'notify' | 'agent_request' | 'approval';
+  addresseeType: 'human' | 'agent';
+  addressee?: string | null;
+  blocking: boolean;
+  prompt: string;
+  options: string[];
+  status: 'pending' | 'answered' | 'posted' | 'expired';
+  response?: string | null;
+  respondedBy?: string | null;
+  respondedAt?: string | null;
+  createdAt: string;
+}
+
 export interface RunArtifact {
   name: string;
   sizeBytes: number;

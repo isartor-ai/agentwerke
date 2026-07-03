@@ -294,6 +294,75 @@ describe('WorkflowDesigner integration', () => {
     }
   });
 
+  it('does not render a raw inline XML diff and only surfaces changes after an edit', async () => {
+    renderDesigner();
+    await switchToAdvancedTab();
+
+    // No unpublished changes yet: no diff summary, and crucially no inline
+    // per-line dump (the old `diff-list` render path is gone).
+    expect(screen.queryByText('Workflow Diff')).not.toBeInTheDocument();
+    expect(document.querySelector('.diff-list')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('bpmn-mock-edit'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Workflow Diff')).toBeInTheDocument();
+      expect(screen.getByText(/line.* differ from the published version/i)).toBeInTheDocument();
+    });
+    // Still no inline per-line cards — the diff is behind the modal trigger.
+    expect(document.querySelector('.diff-list')).toBeNull();
+    expect(screen.getByRole('button', { name: 'View changes' })).toBeInTheDocument();
+  });
+
+  it('opens the bounded diff modal and can view, copy, and download the XML', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    renderDesigner();
+    await switchToAdvancedTab();
+    fireEvent.click(screen.getByTestId('bpmn-mock-edit'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View changes' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Workflow changes' });
+    expect(dialog).toBeInTheDocument();
+    // Diff tab shows the added line inside a bounded scroll container.
+    expect(dialog.querySelector('.workflow-diff-scroll')).not.toBeNull();
+    expect(screen.getAllByText(/MockEdit/).length).toBeGreaterThan(0);
+
+    // Current XML preview tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Current XML' }));
+    expect(dialog.querySelector('.workflow-xml-preview')).not.toBeNull();
+
+    // Copy.
+    fireEvent.click(screen.getByRole('button', { name: 'Copy XML' }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('PersistedFlow'));
+      expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    });
+
+    // Download as .bpmn.
+    const appendSpy = vi.spyOn(document.body, 'appendChild');
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Download .bpmn' }));
+      await waitFor(() => {
+        expect(createObjectUrlSpy).toHaveBeenCalled();
+        expect(appendSpy).toHaveBeenCalled();
+      });
+    } finally {
+      appendSpy.mockRestore();
+    }
+
+    // Close.
+    fireEvent.click(screen.getByRole('button', { name: 'Close changes' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Workflow changes' })).not.toBeInTheDocument();
+    });
+  });
+
   it('publishes the selected workflow and offers to start a run', async () => {
     renderDesigner();
     await switchToAdvancedTab();

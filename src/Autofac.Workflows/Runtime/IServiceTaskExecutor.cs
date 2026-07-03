@@ -20,6 +20,12 @@ public static class AgentTaskOutcomeStatuses
 
     /// <summary>The run reached its configured model cost/token budget (#175).</summary>
     public const string BudgetExceeded = "budget_exceeded";
+
+    /// <summary>
+    /// The agent paused mid-step to ask a human and is waiting for an answer (#192).
+    /// The engine suspends the run (waiting_user) and re-runs this step on resume.
+    /// </summary>
+    public const string WaitingUser = "waiting_user";
 }
 
 public sealed record AgentTaskOutcome(

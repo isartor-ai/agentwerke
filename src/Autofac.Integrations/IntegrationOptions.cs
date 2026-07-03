@@ -82,7 +82,7 @@ public sealed class GitHubOptions
     public string PersonalAccessToken { get; set; } = string.Empty;
 
     /// <summary>
-    /// Default base branch for Autofac-created branches and pull requests.
+    /// Default base branch for Agentwerke-created branches and pull requests.
     /// </summary>
     public string DefaultBaseBranch { get; set; } = "main";
 
@@ -107,7 +107,7 @@ public sealed class GitHubOptions
     /// Prevents every issue opened on the configured repo from spending model budget.
     /// Set to empty/whitespace to disable the check and trigger on any matching action.
     /// </summary>
-    public string RequiredLabel { get; set; } = "autofac";
+    public string RequiredLabel { get; set; } = "agentwerke";
 
     /// <summary>
     /// Workflow file name (or numeric workflow id) dispatched by the SDLC "deploy to test" gate

@@ -1236,7 +1236,6 @@ th {
   margin: 0 0 0.5rem;
 }
 
-.diff-list,
 .metadata-issues {
   margin: 0.5rem 0 0;
   padding: 0;
@@ -1245,36 +1244,109 @@ th {
   gap: 0.3rem;
 }
 
-.diff-line {
-  display: grid;
-  grid-template-columns: 1.2rem 1fr;
-  gap: 0.5rem;
-  align-items: start;
+/* ─── Workflow diff summary (opens the bounded modal) ───────────────────── */
+
+.diff-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.diff-summary-text {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+/* ─── Workflow diff modal (bounded diff + XML preview) ──────────────────── */
+
+.workflow-diff-modal {
+  width: min(960px, 100%);
+}
+
+.workflow-diff-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.workflow-diff-body {
+  padding: 1rem 1.25rem;
+}
+
+.workflow-diff-scroll,
+.workflow-xml-preview {
+  max-height: min(56vh, 480px);
+  overflow: auto;
   border: 1px solid var(--color-border);
-  border-radius: 0.35rem;
-  padding: 0.3rem 0.45rem;
+  border-radius: 0.4rem;
   background: var(--color-surface-container);
-}
-
-.diff-line code {
-  white-space: pre-wrap;
-  word-break: break-word;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   font-size: 0.76rem;
+  line-height: 1.5;
 }
 
-.diff-line-added {
-  border-color: rgb(195 244 0 / 0.45);
+.workflow-diff-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+  white-space: pre;
+}
+
+.workflow-diff-row code {
+  white-space: pre;
+}
+
+.workflow-diff-lineno {
+  flex: none;
+  width: 3rem;
+  text-align: right;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.workflow-diff-glyph {
+  flex: none;
+  width: 1rem;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.workflow-diff-row-added {
   background: rgb(195 244 0 / 0.08);
 }
 
-.diff-line-removed {
-  border-color: rgb(255 180 171 / 0.45);
+.workflow-diff-row-removed {
   background: rgb(255 180 171 / 0.08);
 }
 
-.diff-glyph {
-  font-weight: 700;
+.workflow-diff-empty {
+  margin: 0;
   color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.workflow-xml-preview pre {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  white-space: pre;
+}
+
+.workflow-diff-footer {
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.workflow-diff-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .metadata-editor {
@@ -3298,4 +3370,65 @@ textarea {
 .btn-escalate:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Agent conversation thread (#192) */
+.conversation-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.conversation-entry {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--color-surface-container);
+}
+.conversation-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+.conversation-from {
+  color: var(--color-text-strong);
+}
+.conversation-prompt {
+  margin: 6px 0 4px;
+  color: var(--color-text);
+}
+.conversation-response {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+}
+.conversation-answer {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.conversation-answer-row {
+  display: flex;
+  gap: 8px;
+}
+.conversation-answer-row input {
+  flex: 1;
+}
+.timeline-interaction-badge {
+  margin-left: auto;
+}
+.conversation-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
 }

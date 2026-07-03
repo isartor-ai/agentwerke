@@ -136,6 +136,45 @@ public sealed class RunsControllerTests
         Assert.NotNull(accepted.Value);
     }
 
+    [Fact]
+    public async Task AnswerInteraction_ForwardsCommandWithAuthenticatedPrincipal()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService();
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "operator-9")], "test"))
+                }
+            }
+        };
+
+        var result = await controller.AnswerInteraction(
+            "run_1", "int_1", new AnswerInteractionRequest("add tests"), CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.NotNull(orchestration.AnswerCommand);
+        Assert.Equal("run_1", orchestration.AnswerCommand!.RunId);
+        Assert.Equal("int_1", orchestration.AnswerCommand.InteractionId);
+        Assert.Equal("add tests", orchestration.AnswerCommand.Answer);
+        Assert.Equal("operator-9", orchestration.AnswerCommand.AnsweredBy);
+    }
+
+    [Fact]
+    public async Task AnswerInteraction_WithEmptyAnswer_ReturnsBadRequestWithoutForwarding()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService();
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService());
+
+        var result = await controller.AnswerInteraction(
+            "run_1", "int_1", new AnswerInteractionRequest("   "), CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Null(orchestration.AnswerCommand);
+    }
+
     private static RunsController BuildEvidenceController(IEvidencePackService evidencePackService)
     {
         return new RunsController(
@@ -194,6 +233,7 @@ public sealed class RunsControllerTests
     {
         public StartRunCommand? StartCommand { get; private set; }
         public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
+        public AnswerInteractionCommand? AnswerCommand { get; private set; }
 
         public Task<StartRunResult> StartRunAsync(
             StartRunCommand command,
@@ -223,6 +263,14 @@ public sealed class RunsControllerTests
         {
             ResumeExternalCommand = command;
             return Task.FromResult(new ResumeExternalRunResult(command.RunId, "pending"));
+        }
+
+        public Task<AnswerInteractionResult> AnswerInteractionAsync(
+            AnswerInteractionCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            AnswerCommand = command;
+            return Task.FromResult(new AnswerInteractionResult(command.RunId, command.InteractionId, "pending"));
         }
     }
 
