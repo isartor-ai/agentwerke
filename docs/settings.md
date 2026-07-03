@@ -1,6 +1,6 @@
 # Settings
 
-Autofac now has an Admin-only Settings control plane at `/settings` and
+Agentwerke has an Admin-only Settings control plane at `/settings` and
 `/api/settings`. It centralizes the configuration operators need most often:
 model provider, integrations, authentication, runtime mode, storage, sandboxing,
 observability, and Settings storage itself.
@@ -14,7 +14,7 @@ observability, and Settings storage itself.
 
 ## Configuration precedence
 
-Autofac still boots from normal .NET configuration: `appsettings*.json`,
+Agentwerke still boots from normal .NET configuration: `appsettings*.json`,
 environment variables, user-secrets, Helm values, Compose env files, and any
 deployment-provided secret source. The Settings layer adds two local files that
 are loaded after bootstrap configuration:

@@ -15,7 +15,7 @@ Easy use is the key product constraint. Users should start from proven SDLC flow
 ## Acceptance Criteria
 - User can choose a template before editing BPMN.
 - Template preview shows practical SDLC information.
-- Selected template opens with valid Autofac metadata.
+- Selected template opens with valid Agentwerke metadata.
 - Mobile and desktop layouts remain usable.
 
 ## Verification

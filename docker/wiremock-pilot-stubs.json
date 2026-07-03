@@ -35,11 +35,11 @@
         "jsonBody": {
           "content": {
             "name": "stub.md",
-            "path": ".autofac/stub.md"
+            "path": ".agentwerke/stub.md"
           },
           "commit": {
             "sha": "def456abc123def456abc123def456abc123def4",
-            "message": "Autofac stub commit"
+            "message": "Agentwerke stub commit"
           }
         }
       }

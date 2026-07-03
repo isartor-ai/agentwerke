@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "autofac.fullname" . }}-web
+  name: {{ include "agentwerke.fullname" . }}-web
   labels:
-    {{- include "autofac.labels" . | nindent 4 }}
+    {{- include "agentwerke.labels" . | nindent 4 }}
     app.kubernetes.io/component: web
 spec:
   replicas: {{ .Values.web.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "autofac.name" . }}
+      app.kubernetes.io/name: {{ include "agentwerke.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
       app.kubernetes.io/component: web
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "autofac.name" . }}
+        app.kubernetes.io/name: {{ include "agentwerke.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: web
     spec:

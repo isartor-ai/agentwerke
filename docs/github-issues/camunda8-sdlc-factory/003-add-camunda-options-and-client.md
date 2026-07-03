@@ -4,7 +4,7 @@
 Add typed Camunda options and a small HTTP client abstraction for Camunda REST API calls.
 
 ## Why
-Autofac should integrate with Camunda through infrastructure adapters, not scattered HTTP calls or SDK-specific code in application services.
+Agentwerke should integrate with Camunda through infrastructure adapters, not scattered HTTP calls or SDK-specific code in application services.
 
 ## Scope
 - Add Camunda options for base URL, auth mode, timeout, and runtime enablement.

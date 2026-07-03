@@ -1,6 +1,6 @@
 # Open-core model
 
-Autofac is **open core**. The core platform is free and open source under
+Agentwerke is **open core**. The core platform is free and open source under
 [Apache-2.0](../LICENSE); a separately-licensed commercial tier adds the
 enterprise governance, scale, and operations features that regulated
 organizations need.

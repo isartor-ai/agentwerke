@@ -121,7 +121,7 @@ export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
   const [monitorRuns, setMonitorRuns] = useState<WorkflowRun[]>([]);
   const [monitorLoading, setMonitorLoading] = useState(false);
   const [monitorError, setMonitorError] = useState<string | null>(null);
-  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Autofac', camundaEnabled: false });
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>({ mode: 'Agentwerke', camundaEnabled: false });
   const [diffModalOpen, setDiffModalOpen] = useState(false);
   const { toasts, pushToast, dismissToast } = useToastQueue();
   const canAuthorWorkflows = canOperate(auth);
@@ -223,7 +223,7 @@ export function WorkflowDesigner({ auth }: WorkflowDesignerProps) {
         pushToast({
           tone: 'error',
           title: 'Runtime mode unavailable',
-          message: runtimeError instanceof Error ? runtimeError.message : 'Using the default Autofac runtime mode.',
+          message: runtimeError instanceof Error ? runtimeError.message : 'Using the default Agentwerke runtime mode.',
         });
       });
   }, [pushToast]);

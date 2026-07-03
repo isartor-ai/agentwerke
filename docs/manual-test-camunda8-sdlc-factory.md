@@ -20,12 +20,12 @@ Manual issue input
   -> Complete
 ```
 
-The scenario should use controlled no-op or simulated agents until real agent execution is enabled. The important proof is that Camunda owns workflow execution while Autofac owns agent execution, approval, evidence, and run visibility.
+The scenario should use controlled no-op or simulated agents until real agent execution is enabled. The important proof is that Camunda owns workflow execution while Agentwerke owns agent execution, approval, evidence, and run visibility.
 
 ## Prerequisites
 
 - Docker and Docker Compose are installed.
-- Autofac API, web UI, database, and Camunda profile can run locally.
+- Agentwerke API, web UI, database, and Camunda profile can run locally.
 - Tickets after `#91` are required before the full Camunda-backed workflow path works end to end.
 
 ## Current Scope
@@ -48,8 +48,8 @@ docker compose -f docker/docker-compose.manual.yml --profile camunda up --build
 
 Expected result:
 
-- Autofac API is healthy.
-- Autofac web UI is reachable.
+- Agentwerke API is healthy.
+- Agentwerke web UI is reachable.
 - Camunda runtime is reachable.
 - The existing manual stack still works whether the `camunda` profile is enabled or not.
 
@@ -78,7 +78,7 @@ curl -sf http://localhost:9600/ready
 
 Expected result:
 
-- Autofac reports `enabled: true`, `configured: true`, and `reachable: true` when the local Camunda profile is up.
+- Agentwerke reports `enabled: true`, `configured: true`, and `reachable: true` when the local Camunda profile is up.
 - Camunda Zeebe reports a healthy single-node topology.
 - Zeebe readiness responds successfully.
 - The stack is ready for later adapter/worker tickets.
@@ -106,13 +106,13 @@ Expected result:
 In the web UI:
 
 1. Click Validate.
-2. Review Autofac validation results.
+2. Review Agentwerke validation results.
 3. Click Publish.
 4. Confirm Camunda deployment success.
 
 Expected result:
 
-- Autofac validation passes.
+- Agentwerke validation passes.
 - Camunda deployment succeeds.
 - Workflow status becomes published.
 - Publish details include deployment/process identifiers for operator diagnostics.
@@ -127,7 +127,7 @@ Start the workflow manually with input:
 
 Expected result:
 
-- Run is created in Autofac.
+- Run is created in Agentwerke.
 - Camunda process instance starts.
 - Run detail shows the first stage as active or completed.
 
@@ -137,7 +137,7 @@ Open Run Detail.
 
 Expected result:
 
-- Analyze requirement step runs through the Autofac agent worker.
+- Analyze requirement step runs through the Agentwerke agent worker.
 - Worker records job activation and completion events.
 - Agent output is visible as a spec or analysis artifact.
 - Evidence produced is visible.
@@ -167,13 +167,13 @@ Expected result:
 - Implementation agent task completes.
 - Test agent task completes.
 - Evidence includes implementation summary and test result references.
-- Camunda and Autofac states remain consistent.
+- Camunda and Agentwerke states remain consistent.
 
 ## Step 9: Observe PR creation task
 
 Expected result:
 
-- PR creation task runs through an Autofac job worker.
+- PR creation task runs through an Agentwerke job worker.
 - If GitHub is simulated, the artifact records a fake PR URL.
 - If GitHub credentials are configured, a real branch and PR are created.
 - Run detail shows PR evidence.
@@ -204,7 +204,7 @@ Start another run with a worker setting or input that causes the implementation 
 Expected result:
 
 - Camunda retries according to configured retries.
-- Autofac run detail shows retry attempts.
+- Agentwerke run detail shows retry attempts.
 - If retries are exhausted, run shows incident or blocked state.
 - Operator can see failure reason and affected step.
 
@@ -214,7 +214,7 @@ Edit the template to remove required agent metadata from one service task.
 
 Expected result:
 
-- Autofac validation blocks publish.
+- Agentwerke validation blocks publish.
 - Error identifies the affected step.
 - Camunda deployment is not attempted.
 
@@ -224,8 +224,8 @@ The manual test passes when:
 
 - Camunda is the active execution runtime.
 - Workflow publish deploys to Camunda.
-- Agent service tasks execute through Autofac workers.
-- User tasks create Autofac approvals.
+- Agent service tasks execute through Agentwerke workers.
+- User tasks create Agentwerke approvals.
 - Approval decisions advance the Camunda process.
 - Evidence and artifact references are visible.
 - Failure and retry state are visible to the operator.

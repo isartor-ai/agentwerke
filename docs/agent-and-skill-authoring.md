@@ -7,7 +7,7 @@ configured directories (`Agents:Registry:AgentsDirectory` and
 
 When the bundled agents directory is mounted read-only, set
 `Agents:Registry:WritableAgentsDirectory` to a writable overlay directory.
-Autofac loads `AgentsDirectory` first and then `WritableAgentsDirectory`, so
+Agentwerke loads `AgentsDirectory` first and then `WritableAgentsDirectory`, so
 admin UI saves can customize or add agents without mutating the shipped files.
 If `WritableAgentsDirectory` is omitted, saves use `AgentsDirectory` for
 backward compatibility.
@@ -41,7 +41,7 @@ sandboxProfiles: [repo-write]
 #     skillManifestId: git-workflow-and-versioning
 ---
 
-You are the GitHub integration agent for Autofac. ...
+You are the GitHub integration agent for Agentwerke. ...
 ```
 
 | Field | Notes |

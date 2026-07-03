@@ -1,4 +1,4 @@
-# Autofac MVP Implementation Plan
+# Agentwerke MVP Implementation Plan
 
 Version: Draft v0.1
 Status: Working Draft
@@ -8,12 +8,12 @@ Related Documents:
 
 ## 1. Purpose
 
-This document defines the recommended MVP implementation plan for Autofac based on:
+This document defines the recommended MVP implementation plan for Agentwerke based on:
 - the current Functional Specification
 - the current Architecture Design
 - the current repository baseline
 
-The goal is to move from the current scaffold to a usable first product release with the smallest coherent slice of Autofac's value:
+The goal is to move from the current scaffold to a usable first product release with the smallest coherent slice of Agentwerke's value:
 
 - design a BPMN workflow
 - publish it
@@ -27,10 +27,10 @@ The goal is to move from the current scaffold to a usable first product release 
 At MVP completion, a user should be able to:
 
 1. Create or import a BPMN workflow in the React UI.
-2. Configure Autofac task metadata for agent tasks and approval tasks.
+2. Configure Agentwerke task metadata for agent tasks and approval tasks.
 3. Publish the workflow to the backend.
 4. Trigger the workflow manually or from Jira webhook input.
-5. Execute the workflow through the Autofac runtime.
+5. Execute the workflow through the Agentwerke runtime.
 6. Pause on human approval and resume after decision.
 7. Run one agent-driven engineering flow:
    - generate technical specification
@@ -113,23 +113,23 @@ The right MVP is "finish one trustworthy SDLC flow end-to-end."
 That MVP flow should be:
 
 1. Jira requirement created
-2. Autofac workflow triggered
+2. Agentwerke workflow triggered
 3. analysis agent generates technical specification
 4. human approves specification
 5. implementation agent prepares code change and PR
 6. human reviews PR
 7. tester agent runs verification
 8. DevOps step is triggered as a controlled deployment action
-9. operator monitors the full run in Autofac
+9. operator monitors the full run in Agentwerke
 
-This gives Autofac a strong narrative and a meaningful proof of product value.
+This gives Agentwerke a strong narrative and a meaningful proof of product value.
 
 ## 6. Delivery Principles
 
 - Finish vertical slices, not disconnected modules.
 - Keep workflow execution observable from day one.
 - Avoid building a full plugin framework before the first real connectors work.
-- Keep Camunda-specific concerns behind an Autofac workflow adapter boundary.
+- Keep Camunda-specific concerns behind an Agentwerke workflow adapter boundary.
 - Convert mocked frontend flows to real APIs incrementally, one screen at a time.
 - Use Docker sandboxing in a constrained but real form rather than a purely conceptual abstraction.
 
@@ -200,7 +200,7 @@ Objective: make workflow definition and publishing real end-to-end.
    - list workflow versions
 
 3. Strengthen BPMN validation.
-   - validate required Autofac extension metadata
+   - validate required Agentwerke extension metadata
    - validate supported node types
    - validate approval tasks and agent tasks
 
@@ -280,7 +280,7 @@ Objective: make workflow execution and approval pause/resume real.
 
 ## Phase 3: Agent Execution Framework
 
-Objective: make Autofac agent tasks execute through a controlled runtime.
+Objective: make Agentwerke agent tasks execute through a controlled runtime.
 
 ### Steps
 
@@ -292,7 +292,7 @@ Objective: make Autofac agent tasks execute through a controlled runtime.
    - execution result
 
 2. Build the first `Agent Orchestrator` service.
-   - map BPMN agent task to an Autofac agent
+   - map BPMN agent task to an Agentwerke agent
    - build task context
    - invoke LLM-backed execution adapter
    - emit logs and artifacts
@@ -319,7 +319,7 @@ Objective: make Autofac agent tasks execute through a controlled runtime.
 
 ### Exit Criteria
 
-- service task execution calls Autofac agent runtime
+- service task execution calls Agentwerke agent runtime
 - task output and result are persisted
 - run events show agent execution lifecycle
 
@@ -388,7 +388,7 @@ Objective: deliver the first meaningful external workflow.
 
 ## Phase 6: Policy, Approval, and Audit Hardening
 
-Objective: add the minimum governance Autofac needs to be trusted.
+Objective: add the minimum governance Agentwerke needs to be trusted.
 
 ### Steps
 
@@ -422,7 +422,7 @@ Objective: add the minimum governance Autofac needs to be trusted.
 
 ## Phase 7: Monitoring and Operational UX
 
-Objective: make Autofac usable as an operations product, not just an API demo.
+Objective: make Agentwerke usable as an operations product, not just an API demo.
 
 ### Steps
 
@@ -468,19 +468,19 @@ Use Camunda 8 from the beginning of the next execution phase. The in-process run
 
 1. Add a Camunda 8 local runtime profile.
 2. Add Camunda configuration and REST client infrastructure.
-3. Project Autofac task metadata to Camunda-compatible BPMN.
+3. Project Agentwerke task metadata to Camunda-compatible BPMN.
 4. Deploy workflows to Camunda during publish.
-5. Start Camunda process instances from Autofac run APIs.
-6. Execute `autofac.agent` service tasks with Autofac job workers.
-7. Bridge Camunda user tasks to Autofac approval requests.
-8. Surface retries, incidents, evidence, and artifacts in Autofac run views.
+5. Start Camunda process instances from Agentwerke run APIs.
+6. Execute `autofac.agent` service tasks with Agentwerke job workers.
+7. Bridge Camunda user tasks to Agentwerke approval requests.
+8. Surface retries, incidents, evidence, and artifacts in Agentwerke run views.
 
 ### Exit Criteria
 
 - Camunda 8 is the default production workflow runtime
-- agent service tasks execute through Autofac workers
-- Camunda user tasks create and resolve Autofac approvals
-- operators can inspect Camunda-backed run state, evidence, failures, and approvals in Autofac
+- agent service tasks execute through Agentwerke workers
+- Camunda user tasks create and resolve Agentwerke approvals
+- operators can inspect Camunda-backed run state, evidence, failures, and approvals in Agentwerke
 
 ## 9. Recommended Delivery Order
 
@@ -509,7 +509,7 @@ User can start a workflow, see it pause for approval, approve it, and resume it.
 
 ### Milestone 3: Agent Task Execution
 
-Workflow service tasks run through Autofac agent execution and persist outputs.
+Workflow service tasks run through Agentwerke agent execution and persist outputs.
 
 ### Milestone 4: Real SDLC Flow
 
@@ -539,12 +539,12 @@ If the team is smaller, prioritize in this order:
 
 ## 12. Definition of Done for MVP
 
-Autofac MVP is done when all of the following are true:
+Agentwerke MVP is done when all of the following are true:
 
 - a workflow can be authored and published in the UI
 - a workflow can be triggered manually and from Jira
 - workflow execution supports service tasks and approval tasks
-- at least one agent task runs through Autofac runtime
+- at least one agent task runs through Agentwerke runtime
 - human approval gates block and resume execution correctly
 - GitHub PR creation works from workflow execution
 - run monitoring is live and usable
@@ -567,4 +567,4 @@ The right MVP implementation strategy is:
 - keep the platform architecture modular
 - postpone breadth until the first execution loop is trustworthy
 
-From a product and engineering perspective, Autofac should win first by being credible, observable, and governable in one concrete workflow before it tries to be a general automation universe.
+From a product and engineering perspective, Agentwerke should win first by being credible, observable, and governable in one concrete workflow before it tries to be a general automation universe.

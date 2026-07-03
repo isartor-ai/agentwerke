@@ -1,6 +1,6 @@
 # Security model
 
-Autofac's premise is **autonomy without blind trust**: agents can act, but every
+Agentwerke's premise is **autonomy without blind trust**: agents can act, but every
 action crosses a governance boundary and leaves evidence. This document explains
 those boundaries. For vulnerability reporting see [SECURITY.md](../SECURITY.md).
 

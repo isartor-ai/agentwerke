@@ -1,6 +1,6 @@
-# Copilot Instructions for Autofac
+# Copilot Instructions for Agentwerke
 
-Autofac is a secure, BPMN-native, Docker-sandboxed autonomous software factory.
+Agentwerke by Isartor AI is a secure, BPMN-native, Docker-sandboxed governed lights-out software factory.
 Prioritize security, governance, and auditability over convenience in all generated code.
 
 ## Primary Architecture Rules
@@ -37,7 +37,7 @@ Prioritize security, governance, and auditability over convenience in all genera
 - Emit OpenTelemetry traces and key metrics for runtime, policy, and sandbox operations.
 
 ## Workflow Runtime Guidance
-- Validate BPMN models and Autofac extension metadata before run start.
+- Validate BPMN models and Agentwerke extension metadata before run start.
 - Persist workflow state transitions and replay-safe event logs.
 - Keep task execution idempotent where retries are possible.
 - Distinguish retriable vs non-retriable failures explicitly.

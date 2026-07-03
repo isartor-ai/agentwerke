@@ -122,7 +122,7 @@ Description: Show validation and publish state clearly when a workflow is deploy
 
 Acceptance criteria:
 
-- Validation panel shows Autofac validation and Camunda deployment result separately.
+- Validation panel shows Agentwerke validation and Camunda deployment result separately.
 - Publish button is disabled when blocking validation errors exist.
 - Deployment failure shows actionable reason and affected element when available.
 

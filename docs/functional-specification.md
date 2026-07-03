@@ -1,24 +1,24 @@
-# Autofac Functional Specification Document
+# Agentwerke Functional Specification Document
 
 Version: Draft v0.1
 Status: Working Draft
-Product: Autofac
-Positioning: Dark software factory for autonomous, human-governed SDLC orchestration
+Product: Agentwerke
+Positioning: Governed Lights-Out Software Factory for enterprise software teams
 
 ## 1. Purpose
 
-This Functional Specification Document defines the business goals, product scope, functional requirements, and technical direction for Autofac.
+This Functional Specification Document defines the business goals, product scope, functional requirements, and technical direction for Agentwerke.
 
-Autofac is intended to help organizations design, automate, govern, and observe software delivery workflows across the software development lifecycle using BPMN workflows, AI agents, enterprise integrations, and human approval gates.
+Agentwerke is intended to help organizations design, automate, govern, and observe software delivery workflows across the software development lifecycle using BPMN workflows, AI agents, enterprise integrations, and human approval gates.
 
 ## 2. Product Vision
 
-Autofac is a dark software factory: a secure, observable, cloud-native platform where software delivery workflows are modeled visually and executed by specialized agents under human control.
+Agentwerke is a governed lights-out software factory: a secure, observable, cloud-native platform where software delivery workflows are modeled visually and executed by specialized agents under human control.
 
 The platform allows users to:
 - Define their own SDLC process
 - Build workflows with BPMN
-- Assign work to Autofac agent tasks
+- Assign work to Agentwerke agent tasks
 - Integrate with collaboration, planning, source control, and deployment tools
 - Keep humans in the loop for approval and governance
 - Observe every workflow run, tool action, and agent decision in real time
@@ -34,12 +34,12 @@ This creates several problems:
 - AI-assisted engineering actions lack clear approval and policy control
 - Operational observability across end-to-end delivery is incomplete
 
-Autofac addresses this by providing a single orchestration layer for SDLC automation with strong governance, extensibility, and observability.
+Agentwerke addresses this by providing a single orchestration layer for SDLC automation with strong governance, extensibility, and observability.
 
 ## 4. Product Goals
 
 1. Enable users to define custom SDLC workflows aligned to their organizational process.
-2. Provide a visual BPMN workflow designer with Autofac-specific execution components.
+2. Provide a visual BPMN workflow designer with Agentwerke-specific execution components.
 3. Treat AI agents as first-class execution units within workflows.
 4. Support human-in-the-loop review and approval before sensitive or consequential actions.
 5. Integrate with enterprise systems such as Jira, GitHub, Slack, Teams, email, and CI/CD platforms.
@@ -54,7 +54,7 @@ Autofac addresses this by providing a single orchestration layer for SDLC automa
 
 - SDLC definition and workflow modeling
 - BPMN workflow authoring and execution
-- Custom Autofac workflow components
+- Custom Agentwerke workflow components
 - Agent task orchestration
 - Human approval gates
 - Triggering via messages, events, webhooks, email, and schedules
@@ -93,7 +93,7 @@ Autofac addresses this by providing a single orchestration layer for SDLC automa
 
 ### 7.1 SDLC Definition
 
-Autofac allows each organization to define its own SDLC stages, rules, approval steps, and automation flow.
+Agentwerke allows each organization to define its own SDLC stages, rules, approval steps, and automation flow.
 
 Examples:
 - Requirement -> Design -> Build -> Review -> Test -> Deploy
@@ -103,11 +103,11 @@ Examples:
 
 ### 7.2 BPMN Workflow
 
-A workflow is a BPMN-based executable process designed in the Autofac UI. It models how work moves through triggers, approvals, agent tasks, integrations, testing, and deployments.
+A workflow is a BPMN-based executable process designed in the Agentwerke UI. It models how work moves through triggers, approvals, agent tasks, integrations, testing, and deployments.
 
-### 7.3 Autofac Custom Components
+### 7.3 Agentwerke Custom Components
 
-Autofac extends open source BPMN with custom workflow components such as:
+Agentwerke extends open source BPMN with custom workflow components such as:
 - Agent Task
 - Human Approval Task
 - Integration Trigger
@@ -148,13 +148,13 @@ The system must provide a React-based visual UI for defining BPMN workflows.
 
 Capabilities include:
 - Drag-and-drop BPMN editor
-- Autofac custom component palette
+- Agentwerke custom component palette
 - Workflow validation
 - Save draft, publish, archive, and version workflow
 - Configure task properties, triggers, approvers, tools, and policies
 - Reusable templates
 
-The BPMN editor should be based on an open source BPMN framework extended with Autofac custom components.
+The BPMN editor should be based on an open source BPMN framework extended with Agentwerke custom components.
 
 ### 8.3 Workflow Triggers
 
@@ -169,7 +169,7 @@ Workflows must support activation from:
 
 ### 8.4 Agent Task Execution
 
-Task nodes in a workflow can be assigned to Autofac agents. Each agent execution is an LLM task that operates within defined tools, skills, and policy constraints.
+Task nodes in a workflow can be assigned to Agentwerke agents. Each agent execution is an LLM task that operates within defined tools, skills, and policy constraints.
 
 Agent responsibilities may include:
 - Requirements analysis
@@ -183,7 +183,7 @@ Agent responsibilities may include:
 
 ### 8.5 Human-in-the-Loop Control
 
-Autofac must ensure that humans remain in the loop before sensitive actions or major workflow transitions.
+Agentwerke must ensure that humans remain in the loop before sensitive actions or major workflow transitions.
 
 Typical approval points include:
 - Generated technical specification approval
@@ -203,7 +203,7 @@ Approval features must include:
 
 ### 8.6 External Integrations
 
-Autofac can integrate with external systems including:
+Agentwerke can integrate with external systems including:
 - Jira
 - GitHub
 - Slack
@@ -223,7 +223,7 @@ Integration functions include:
 
 ### 8.7 CI/CD and Deployment Orchestration
 
-Autofac must support interaction with CI/CD pipelines to automate deployment processes.
+Agentwerke must support interaction with CI/CD pipelines to automate deployment processes.
 
 Capabilities include:
 - Trigger build pipelines
@@ -235,7 +235,7 @@ Capabilities include:
 
 ### 8.8 Observability
 
-Autofac must provide full observability over workflow runs and agent actions.
+Agentwerke must provide full observability over workflow runs and agent actions.
 
 Observability must include:
 - Logging
@@ -251,7 +251,7 @@ Observability must include:
 
 ### 8.9 Security and Access Control
 
-Autofac must support role-based access control for workflow security and platform governance.
+Agentwerke must support role-based access control for workflow security and platform governance.
 
 Roles may include:
 - Platform Admin
@@ -273,7 +273,7 @@ Security capabilities must include:
 
 ### 8.10 Plugin Extensibility
 
-Autofac must support custom plugins that extend core platform functionality.
+Agentwerke must support custom plugins that extend core platform functionality.
 
 Plugins may add:
 - New workflow nodes
@@ -289,7 +289,7 @@ Plugins may add:
 ### Jira to Deployment Workflow
 
 1. A user creates or updates a draft requirement in Jira.
-2. A Jira event triggers an Autofac workflow.
+2. A Jira event triggers an Agentwerke workflow.
 3. An analysis agent reads the requirement and generates a technical specification.
 4. A human reviews and approves the technical specification before execution continues.
 5. A planning or orchestration agent generates engineering tasks and assigns them to engineering agents.
@@ -298,14 +298,14 @@ Plugins may add:
 8. After review approval, a tester agent executes validation and testing tasks.
 9. A DevOps agent coordinates CI/CD and deployment.
 10. Production deployment proceeds only when the required human approval and policy conditions are satisfied.
-11. All actions, approvals, logs, traces, and outcomes are captured in Autofac observability views.
+11. All actions, approvals, logs, traces, and outcomes are captured in Agentwerke observability views.
 
 ## 10. Functional Requirements
 
 ### 10.1 Workflow Management
 
 - The system must allow users to create, edit, version, publish, disable, and archive workflows.
-- The system must support BPMN-based workflow modeling with Autofac custom components.
+- The system must support BPMN-based workflow modeling with Agentwerke custom components.
 - The system must validate workflows before activation.
 - The system must support reusable workflow templates.
 - The system must maintain workflow version history.
@@ -313,7 +313,7 @@ Plugins may add:
 ### 10.2 BPMN Designer
 
 - The system must provide a browser-based visual BPMN editor.
-- The system must provide an Autofac-specific component palette.
+- The system must provide an Agentwerke-specific component palette.
 - The system must allow configuration of task properties, triggers, approvals, tools, and outputs.
 - The system must support importing and exporting workflow definitions.
 - The system should support diagram annotations and documentation fields.
@@ -455,7 +455,7 @@ Primary frontend surfaces:
 
 - Backend: C#
 - Frontend: React
-- BPMN: Open source BPMN engine and modeler extended with Autofac custom components
+- BPMN: Open source BPMN engine and modeler extended with Agentwerke custom components
 - Execution isolation: Docker sandboxes
 - Orchestration: Kubernetes
 - Messaging: Internal message bus for agent coordination
@@ -479,7 +479,7 @@ Primary frontend surfaces:
 
 ## 15. Risks and Design Considerations
 
-- The BPMN platform must be extensible enough to support Autofac custom nodes cleanly.
+- The BPMN platform must be extensible enough to support Agentwerke custom nodes cleanly.
 - Human approval design must balance governance with execution speed.
 - Agent tool permissions must be tightly controlled to avoid unsafe actions.
 - Sandbox strategy must support both security and acceptable task performance.
@@ -499,7 +499,7 @@ Primary frontend surfaces:
 ## 17. Recommended MVP Scope
 
 Recommended MVP capabilities:
-- BPMN workflow designer with Autofac custom task components
+- BPMN workflow designer with Agentwerke custom task components
 - Jira-triggered workflow support
 - GitHub integration
 - Human approval gates
@@ -515,6 +515,6 @@ Recommended MVP capabilities:
 
 ## 18. Summary
 
-Autofac is positioned as a dark software factory that brings together SDLC modeling, BPMN orchestration, AI agents, human approvals, enterprise integrations, observability, and secure cloud-native execution.
+Agentwerke is positioned as a dark software factory that brings together SDLC modeling, BPMN orchestration, AI agents, human approvals, enterprise integrations, observability, and secure cloud-native execution.
 
 Its core differentiator is not only workflow automation, but governed autonomous execution across the software delivery lifecycle with humans retained as decision-makers at critical control points.

@@ -7,47 +7,47 @@ Accepted
 2026-06-18
 
 ## Context
-Autofac's sandbox layer is the safety boundary for agent execution. It is responsible for isolating code generation, repository changes, shell access, external calls, file access, and artifact capture away from the core workflow and API processes.
+Agentwerke's sandbox layer is the safety boundary for agent execution. It is responsible for isolating code generation, repository changes, shell access, external calls, file access, and artifact capture away from the core workflow and API processes.
 
 The current `Autofac.Sandboxes` implementation is intentionally narrow. It talks directly to the local Docker daemon through `Docker.DotNet`, launches a single ephemeral container, bind-mounts an output directory, and returns logs plus text artifacts. That has been useful for validating the interface and proving lifecycle basics, but it creates four strategic gaps:
 
 - It is Docker-daemon-specific rather than provider-neutral.
-- It does not give Autofac a strong production isolation boundary for untrusted or LLM-generated code.
-- It leaves Autofac to own more sandbox lifecycle, network, credential, and artifact plumbing than necessary.
-- It does not map cleanly to the Kubernetes-oriented deployment direction already documented for Autofac.
+- It does not give Agentwerke a strong production isolation boundary for untrusted or LLM-generated code.
+- It leaves Agentwerke to own more sandbox lifecycle, network, credential, and artifact plumbing than necessary.
+- It does not map cleanly to the Kubernetes-oriented deployment direction already documented for Agentwerke.
 
-Autofac needs a sandbox approach that keeps local development straightforward while improving production isolation and preserving the existing `ISandboxExecutor` boundary inside the application code.
+Agentwerke needs a sandbox approach that keeps local development straightforward while improving production isolation and preserving the existing `ISandboxExecutor` boundary inside the application code.
 
 ## Decision
-Autofac will treat OpenSandbox as the preferred sandbox control plane candidate, with Kata Containers or Kata plus Firecracker as the default production isolation runtime underneath it.
+Agentwerke will treat OpenSandbox as the preferred sandbox control plane candidate, with Kata Containers or Kata plus Firecracker as the default production isolation runtime underneath it.
 
 The control plane choice and the isolation runtime choice are separate decisions:
 
 - **Control plane**: OpenSandbox is the preferred lifecycle and execution layer because it offers sandbox creation, lifecycle management, command execution, file operations, endpoint management, resource limits, network policy, credential proxy or vault integration, and multiple runtime backends behind a consistent API.
-- **Production secure runtime**: Kata Containers is the default target for production isolation because it gives Autofac a stronger boundary than ordinary containers while fitting OCI, CRI, and Kubernetes deployment patterns. Kata plus Firecracker may be used when a platform owner wants that tighter microVM posture and can operate it.
-- **Local and test fallback**: Docker remains acceptable for local development and narrow integration testing through the same Autofac sandbox interface. It is not the desired long-term production control plane or isolation boundary.
+- **Production secure runtime**: Kata Containers is the default target for production isolation because it gives Agentwerke a stronger boundary than ordinary containers while fitting OCI, CRI, and Kubernetes deployment patterns. Kata plus Firecracker may be used when a platform owner wants that tighter microVM posture and can operate it.
+- **Local and test fallback**: Docker remains acceptable for local development and narrow integration testing through the same Agentwerke sandbox interface. It is not the desired long-term production control plane or isolation boundary.
 - **Secondary production option**: gVisor remains a valid lower-overhead production option when a customer prioritizes operational simplicity over the stronger isolation boundary of Kata.
 
-Autofac keeps ownership of the application boundary:
+Agentwerke keeps ownership of the application boundary:
 
-- `ISandboxExecutor` remains the internal Autofac contract.
-- Autofac should add a provider-neutral sandbox abstraction that can route to Docker today, OpenSandbox next, and a direct Kubernetes or Kata executor only if the OpenSandbox spike fails.
-- Autofac should prefer wrapping the OpenSandbox REST or OpenAPI API behind an Autofac-owned client interface. The C# SDK is useful, but it should remain an implementation detail rather than a dependency leaked into the rest of Autofac.
+- `ISandboxExecutor` remains the internal Agentwerke contract.
+- Agentwerke should add a provider-neutral sandbox abstraction that can route to Docker today, OpenSandbox next, and a direct Kubernetes or Kata executor only if the OpenSandbox spike fails.
+- Agentwerke should prefer wrapping the OpenSandbox REST or OpenAPI API behind an Agentwerke-owned client interface. The C# SDK is useful, but it should remain an implementation detail rather than a dependency leaked into the rest of Agentwerke.
 
 ## Target Topology
 The target production topology is:
 
-`Autofac worker or agent orchestrator -> ISandboxExecutor -> OpenSandbox-backed provider -> OpenSandbox server -> Kubernetes runtime -> Kata RuntimeClass -> artifact storage, observability, and approved external endpoints`
+`Agentwerke worker or agent orchestrator -> ISandboxExecutor -> OpenSandbox-backed provider -> OpenSandbox server -> Kubernetes runtime -> Kata RuntimeClass -> artifact storage, observability, and approved external endpoints`
 
 The target local topology is:
 
-`Autofac worker or agent orchestrator -> ISandboxExecutor -> OpenSandbox-backed provider or Docker fallback -> local Docker runtime`
+`Agentwerke worker or agent orchestrator -> ISandboxExecutor -> OpenSandbox-backed provider or Docker fallback -> local Docker runtime`
 
 ## Why This Decision
 
 ### OpenSandbox as control plane
 
-OpenSandbox is a better fit for Autofac than a hand-built direct Kata integration because it already models the operational concerns Autofac needs:
+OpenSandbox is a better fit for Agentwerke than a hand-built direct Kata integration because it already models the operational concerns Agentwerke needs:
 
 - sandbox lifecycle and status
 - command execution and output streaming
@@ -58,11 +58,11 @@ OpenSandbox is a better fit for Autofac than a hand-built direct Kata integratio
 - multiple secure runtime backends
 - local Docker mode and Kubernetes mode
 
-That lets Autofac focus on policy, workflow, approvals, evidence, and agent behavior instead of rebuilding a full sandbox management layer.
+That lets Agentwerke focus on policy, workflow, approvals, evidence, and agent behavior instead of rebuilding a full sandbox management layer.
 
 ### Kata as default production runtime
 
-Kata is still the recommended production runtime because the key missing property in the current Docker-based path is isolation strength, not just container ergonomics. Autofac needs a production boundary that is suitable for untrusted or LLM-generated code while remaining compatible with Kubernetes and the existing self-hosted direction.
+Kata is still the recommended production runtime because the key missing property in the current Docker-based path is isolation strength, not just container ergonomics. Agentwerke needs a production boundary that is suitable for untrusted or LLM-generated code while remaining compatible with Kubernetes and the existing self-hosted direction.
 
 ### Docker as local fallback only
 
@@ -79,9 +79,9 @@ Pros:
 
 Cons:
 
-- daemon-specific and weakly isolated for Autofac's long-term agent model
+- daemon-specific and weakly isolated for Agentwerke's long-term agent model
 - poor fit for production execution of untrusted or LLM-generated code
-- leaves Autofac to hand-build more lifecycle, network, and credential behavior than necessary
+- leaves Agentwerke to hand-build more lifecycle, network, and credential behavior than necessary
 
 Rejected as the long-term default.
 
@@ -94,7 +94,7 @@ Pros:
 
 Cons:
 
-- Autofac would own lifecycle orchestration, command execution, file movement, network policy mapping, and cleanup directly
+- Agentwerke would own lifecycle orchestration, command execution, file movement, network policy mapping, and cleanup directly
 - higher engineering cost before proving the OpenSandbox integration path
 
 Kept as the fallback architecture if the OpenSandbox spike fails or reveals unacceptable product risk.
@@ -122,7 +122,7 @@ Pros:
 
 Cons:
 
-- pushes Autofac too far into runtime ownership too early
+- pushes Agentwerke too far into runtime ownership too early
 - higher platform complexity than needed for the first secure-runtime rollout
 
 Rejected as the first implementation path.
@@ -137,7 +137,7 @@ Pros:
 Cons:
 
 - improves engine posture more than isolation posture
-- does not solve the main production concern Autofac has
+- does not solve the main production concern Agentwerke has
 
 Rejected as the long-term production answer.
 
@@ -145,10 +145,10 @@ Rejected as the long-term production answer.
 
 - Architecture and product docs should stop presenting Docker as the future production sandbox architecture.
 - The next sandbox implementation work should be an OpenSandbox spike and provider-neutral refactor, not a direct production-only Kata executor.
-- Future sandbox work should keep `ISandboxExecutor` as the Autofac-owned boundary and avoid leaking OpenSandbox SDK types into the rest of the codebase.
+- Future sandbox work should keep `ISandboxExecutor` as the Agentwerke-owned boundary and avoid leaking OpenSandbox SDK types into the rest of the codebase.
 - Local development documentation should keep Docker as an acceptable fallback path.
 - Production deployment planning should assume Kubernetes plus OpenSandbox plus a secure runtime, with Kata as the default target.
-- If the OpenSandbox spike fails because of security review, API gaps, operational burden, or maturity risk, Autofac should fall back to a direct Kubernetes plus Kata executor behind the same refactored interface.
+- If the OpenSandbox spike fails because of security review, API gaps, operational burden, or maturity risk, Agentwerke should fall back to a direct Kubernetes plus Kata executor behind the same refactored interface.
 
 ## References
 

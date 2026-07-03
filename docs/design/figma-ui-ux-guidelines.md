@@ -1,4 +1,4 @@
-# Autofac UI/UX and Figma Handoff
+# Agentwerke UI/UX and Figma Handoff
 
 ## Source Inputs
 
@@ -41,7 +41,7 @@ The application should feel like an operational cockpit, not a marketing dashboa
 
 The refined screen is organized as:
 
-- App shell with Autofac branding and deployment CTA.
+- App shell with Agentwerke branding and deployment CTA.
 - Top command bar with search, live environment state, and operator profile.
 - Performance Metrics panel for throughput, success rate, and deployment frequency.
 - System Health panel for runtime fabric state.

@@ -1,6 +1,6 @@
 apiVersion: v2
-name: autofac
-description: Autofac — AI-native workflow orchestration platform
+name: agentwerke
+description: Agentwerke — Governed Lights-Out Software Factory
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
@@ -9,4 +9,4 @@ keywords:
   - ai
   - orchestration
 maintainers:
-  - name: Autofac Team
+  - name: Isartor AI

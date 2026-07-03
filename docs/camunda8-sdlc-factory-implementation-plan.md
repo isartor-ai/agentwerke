@@ -6,26 +6,26 @@ Date: 2026-06-16
 Decision: `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md`
 
 ## Objective
-Move Autofac from a local BPMN subset runtime to a real Camunda 8-backed dark software factory execution path.
+Move Agentwerke from a local BPMN subset runtime to a real Camunda 8-backed dark software factory execution path.
 
 The target user journey is:
 
 1. User selects an SDLC workflow template.
 2. User configures agent tasks, approval gates, evidence requirements, and policy tags.
-3. Autofac generates and validates Camunda-compatible BPMN.
+3. Agentwerke generates and validates Camunda-compatible BPMN.
 4. User publishes the workflow to Camunda.
 5. User starts a run manually or from an inbound event.
 6. Camunda schedules agent service-task jobs.
-7. Autofac workers execute jobs through policy, sandbox, tools, and evidence capture.
+7. Agentwerke workers execute jobs through policy, sandbox, tools, and evidence capture.
 8. Camunda pauses at user tasks.
-9. Autofac approval UI completes the user task.
+9. Agentwerke approval UI completes the user task.
 10. User monitors the full run, artifacts, decisions, and exceptions.
 
 ## Architecture Rules
 
 - Camunda 8 is the production workflow engine.
 - The current in-process runtime is not expanded except for tests or temporary compatibility.
-- Autofac owns SDLC semantics, agent execution, evidence, policy, artifacts, and UI.
+- Agentwerke owns SDLC semantics, agent execution, evidence, policy, artifacts, and UI.
 - BPMN shown to users should be template-first and SDLC-oriented, not raw-engine-first.
 - Camunda-specific details stay behind `IWorkflowEngineAdapter` and infrastructure adapters.
 
@@ -74,12 +74,12 @@ Estimated scope: Small
 
 #### Task 3: Implement Camunda-compatible BPMN projection
 
-Description: Convert Autofac agent and approval metadata into Camunda-deployable BPMN.
+Description: Convert Agentwerke agent and approval metadata into Camunda-deployable BPMN.
 
 Acceptance criteria:
 
 - Agent tasks become `bpmn:serviceTask` elements with `zeebe:taskDefinition`.
-- Static Autofac metadata needed by workers is available as Zeebe task headers or persisted metadata keyed by BPMN element id.
+- Static Agentwerke metadata needed by workers is available as Zeebe task headers or persisted metadata keyed by BPMN element id.
 - User approval tasks remain BPMN user tasks.
 - Invalid or unsupported metadata returns actionable validation errors.
 
@@ -99,7 +99,7 @@ Description: Replace publish-time production execution registration with Camunda
 Acceptance criteria:
 
 - Publishing a workflow deploys Camunda-compatible BPMN.
-- Autofac stores Camunda deployment/process identifiers.
+- Agentwerke stores Camunda deployment/process identifiers.
 - Publish failure returns actionable API errors and does not mark the workflow active.
 
 Verification:
@@ -113,12 +113,12 @@ Estimated scope: Medium
 
 #### Task 5: Implement Camunda process start adapter
 
-Description: Start Camunda process instances from Autofac run APIs and map Camunda process instance keys to Autofac run records.
+Description: Start Camunda process instances from Agentwerke run APIs and map Camunda process instance keys to Agentwerke run records.
 
 Acceptance criteria:
 
 - `POST /api/runs` starts a Camunda process instance for a published workflow.
-- Autofac run record stores Camunda process instance key and correlation id.
+- Agentwerke run record stores Camunda process instance key and correlation id.
 - Initial process variables include initiator and workflow input context.
 
 Verification:
@@ -132,16 +132,16 @@ Estimated scope: Medium
 
 ### Phase 2: Agent Jobs and Approval Gates
 
-#### Task 6: Implement Autofac agent job worker
+#### Task 6: Implement Agentwerke agent job worker
 
-Description: Add a background worker that activates Camunda jobs for the Autofac agent task type.
+Description: Add a background worker that activates Camunda jobs for the Agentwerke agent task type.
 
 Acceptance criteria:
 
 - Worker subscribes to `autofac.agent` jobs.
 - Worker resolves BPMN element metadata and process variables.
 - Worker invokes the existing Agent Orchestrator contract.
-- Worker records start, completion, and failure events in Autofac.
+- Worker records start, completion, and failure events in Agentwerke.
 
 Verification:
 
@@ -165,7 +165,7 @@ Acceptance criteria:
 Verification:
 
 - Tests cover success, retryable failure, exhausted retries, and policy rejection.
-- Camunda state and Autofac run events agree.
+- Camunda state and Agentwerke run events agree.
 
 Dependencies: Task 6
 
@@ -173,13 +173,13 @@ Estimated scope: Medium
 
 #### Task 8: Implement Camunda user task approval bridge
 
-Description: Sync Camunda user tasks into Autofac approval requests and complete user tasks from approval decisions.
+Description: Sync Camunda user tasks into Agentwerke approval requests and complete user tasks from approval decisions.
 
 Acceptance criteria:
 
-- When Camunda reaches a user task, Autofac creates a pending approval.
+- When Camunda reaches a user task, Agentwerke creates a pending approval.
 - Approval decision completes or rejects the Camunda user task.
-- Approval metadata and comments are recorded in Autofac audit records.
+- Approval metadata and comments are recorded in Agentwerke audit records.
 
 Verification:
 
@@ -192,7 +192,7 @@ Estimated scope: Medium
 
 #### Task 9: Persist evidence and artifacts from Camunda-backed runs
 
-Description: Store agent evidence and artifact references in Autofac while passing only durable references through Camunda variables.
+Description: Store agent evidence and artifact references in Agentwerke while passing only durable references through Camunda variables.
 
 Acceptance criteria:
 
@@ -218,7 +218,7 @@ Description: Normalize manual run input and inbound event payloads into process 
 Acceptance criteria:
 
 - Manual start supports title, body, external URL, and arbitrary typed input fields.
-- Trigger metadata is written to Autofac run context and Camunda variables.
+- Trigger metadata is written to Agentwerke run context and Camunda variables.
 - Invalid input returns structured validation errors.
 
 Verification:
@@ -238,7 +238,7 @@ Acceptance criteria:
 
 - Template includes intake, spec agent, approval, implementation agent, test agent, PR creation, and final approval.
 - Template deploys to local Camunda.
-- Template metadata uses the supported Autofac agent task contract.
+- Template metadata uses the supported Agentwerke agent task contract.
 
 Verification:
 
@@ -291,7 +291,7 @@ Estimated scope: Medium
 
 #### Task 14: Add operator-visible incident and retry state
 
-Description: Surface Camunda job failures, incidents, and retry exhaustion in Autofac run detail.
+Description: Surface Camunda job failures, incidents, and retry exhaustion in Agentwerke run detail.
 
 Acceptance criteria:
 
@@ -315,15 +315,15 @@ Estimated scope: Medium
 After Tasks 1-5:
 
 - Camunda starts locally.
-- Autofac can deploy and start a process instance.
-- Camunda identifiers are stored in Autofac records.
+- Agentwerke can deploy and start a process instance.
+- Camunda identifiers are stored in Agentwerke records.
 
 ### Checkpoint B: Execution Loop
 
 After Tasks 6-9:
 
-- Camunda service tasks execute through Autofac workers.
-- User tasks produce Autofac approvals.
+- Camunda service tasks execute through Agentwerke workers.
+- User tasks produce Agentwerke approvals.
 - Evidence and artifacts are visible.
 
 ### Checkpoint C: Factory Slice
@@ -338,16 +338,16 @@ After Tasks 10-13:
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Camunda-specific details leak into UI | Users face engine complexity | Keep an SDLC process builder and hide engine fields behind presets |
-| Rich `autofac:*` XML is rejected by Camunda | Publish fails | Project to Zeebe task definitions and store rich metadata in Autofac DB |
-| Worker failures leave confusing run state | Operators lose trust | Map failures, retries, and incidents into Autofac run detail |
-| C# SDK maturity changes | Integration instability | Use Camunda REST API first behind an Autofac client abstraction |
+| Rich `autofac:*` XML is rejected by Camunda | Publish fails | Project to Zeebe task definitions and store rich metadata in Agentwerke DB |
+| Worker failures leave confusing run state | Operators lose trust | Map failures, retries, and incidents into Agentwerke run detail |
+| C# SDK maturity changes | Integration instability | Use Camunda REST API first behind an Agentwerke client abstraction |
 | Scope expands into general workflow product | MVP slips | Ship one issue-to-PR factory line before broad templates |
 
 ## Definition of Done
 
 - Camunda 8 is the default production runtime.
 - A published workflow deploys to Camunda.
-- Agent tasks execute through Autofac workers.
-- User tasks create and resolve Autofac approval requests.
+- Agent tasks execute through Agentwerke workers.
+- User tasks create and resolve Agentwerke approval requests.
 - Evidence and artifacts are persisted outside Camunda and referenced from run variables.
 - A manual test scenario proves the first dark software factory flow.

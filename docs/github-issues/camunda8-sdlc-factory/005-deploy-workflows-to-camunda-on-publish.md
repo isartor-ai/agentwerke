@@ -4,7 +4,7 @@
 Change workflow publish so the production path deploys projected BPMN to Camunda and records Camunda deployment metadata.
 
 ## Why
-Publishing should make a workflow executable in the real BPMN engine, not just persist XML inside Autofac.
+Publishing should make a workflow executable in the real BPMN engine, not just persist XML inside Agentwerke.
 
 ## Scope
 - Add Camunda deployment through `IWorkflowEngineAdapter` or infrastructure adapter.

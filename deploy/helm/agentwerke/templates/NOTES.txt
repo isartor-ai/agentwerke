@@ -1,4 +1,4 @@
-Autofac has been deployed to namespace: {{ .Release.Namespace }}
+Agentwerke has been deployed to namespace: {{ .Release.Namespace }}
 
 1. Ensure the shared secret exists (referenced as {{ .Values.secretName }}):
      kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.secretName }} \
@@ -18,7 +18,7 @@ Autofac has been deployed to namespace: {{ .Release.Namespace }}
    TLS secret: {{ .Values.api.ingress.tlsSecretName }}
 {{- else }}
 3. Ingress is disabled. Enable it (api.ingress.enabled=true) or port-forward:
-     kubectl -n {{ .Release.Namespace }} port-forward svc/autofac-web 8080:{{ .Values.web.service.port }}
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "agentwerke.fullname" . }}-web 8080:{{ .Values.web.service.port }}
 {{- end }}
 
 {{- if eq .Values.sandbox.provider "docker" }}

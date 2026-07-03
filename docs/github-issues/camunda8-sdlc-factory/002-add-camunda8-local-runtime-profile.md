@@ -1,10 +1,10 @@
 # Add Camunda 8 local runtime profile
 
 ## Summary
-Add a local Docker Compose profile that runs Camunda 8 with the Autofac stack for development and manual testing.
+Add a local Docker Compose profile that runs Camunda 8 with the Agentwerke stack for development and manual testing.
 
 ## Why
-Autofac needs Camunda available locally before adapters, workers, publish flow, and manual tests can be implemented reliably.
+Agentwerke needs Camunda available locally before adapters, workers, publish flow, and manual tests can be implemented reliably.
 
 ## Scope
 - Add Camunda services to the manual or e2e compose setup behind a `camunda` profile.
@@ -12,9 +12,9 @@ Autofac needs Camunda available locally before adapters, workers, publish flow, 
 - Keep the existing non-Camunda manual stack working.
 
 ## Acceptance Criteria
-- Developers can start Autofac with Camunda using one documented command.
+- Developers can start Agentwerke with Camunda using one documented command.
 - Camunda health or topology check succeeds.
-- Autofac API health endpoint still succeeds.
+- Agentwerke API health endpoint still succeeds.
 - Existing manual compose path remains usable.
 
 ## Verification

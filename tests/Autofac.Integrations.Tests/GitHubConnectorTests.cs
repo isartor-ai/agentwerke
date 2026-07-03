@@ -16,7 +16,7 @@ public sealed class GitHubConnectorTests
             requests.Add(await CloneAsync(request));
 
             if (request.Method == HttpMethod.Get &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/issues/135")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/issues/135")
             {
                 return Json(HttpStatusCode.OK, """
                     {
@@ -24,7 +24,7 @@ public sealed class GitHubConnectorTests
                       "title": "Implement PR collaboration ops",
                       "body": "Need reviewer and review support.",
                       "state": "open",
-                      "html_url": "https://github.com/octo/autofac/issues/135",
+                      "html_url": "https://github.com/octo/agentwerke/issues/135",
                       "labels": [
                         { "name": "enhancement" },
                         { "name": "sdlc" }
@@ -34,7 +34,7 @@ public sealed class GitHubConnectorTests
             }
 
             if (request.Method == HttpMethod.Get &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/issues/135/comments")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/issues/135/comments")
             {
                 return Json(HttpStatusCode.OK, """
                     [
@@ -59,14 +59,14 @@ public sealed class GitHubConnectorTests
         Assert.Equal("Need reviewer and review support.", result.Body);
         Assert.Equal(["enhancement", "sdlc"], result.Labels);
         Assert.Equal("open", result.State);
-        Assert.Equal("https://github.com/octo/autofac/issues/135", result.IssueUrl);
+        Assert.Equal("https://github.com/octo/agentwerke/issues/135", result.IssueUrl);
         var comment = Assert.Single(result.Comments);
         Assert.Equal("reviewer-a", comment.Author);
         Assert.Equal("Please include comments.", comment.Body);
 
         Assert.Equal(2, requests.Count);
-        Assert.Equal("/repos/octo/autofac/issues/135", requests[0].RequestUri?.AbsolutePath);
-        Assert.Equal("/repos/octo/autofac/issues/135/comments", requests[1].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/agentwerke/issues/135", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/agentwerke/issues/135/comments", requests[1].RequestUri?.AbsolutePath);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class GitHubConnectorTests
             requests.Add(await CloneAsync(request));
 
             if (request.Method == HttpMethod.Get &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/git/ref/heads/main")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/git/ref/heads/main")
             {
                 return Json(HttpStatusCode.OK, """
                     {
@@ -89,11 +89,11 @@ public sealed class GitHubConnectorTests
             }
 
             if (request.Method == HttpMethod.Post &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/git/refs")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/git/refs")
             {
                 return Json(HttpStatusCode.Created, """
                     {
-                      "ref": "refs/heads/autofac/run-123",
+                      "ref": "refs/heads/agentwerke/run-123",
                       "object": { "sha": "abc123def456" }
                     }
                     """);
@@ -106,23 +106,23 @@ public sealed class GitHubConnectorTests
 
         var result = await connector.CreateBranchAsync(
             new CreateGitHubBranchCommand(
-                BranchName: "autofac/run-123",
+                BranchName: "agentwerke/run-123",
                 BaseBranch: null),
             CancellationToken.None);
 
-        Assert.Equal("autofac/run-123", result.BranchName);
+        Assert.Equal("agentwerke/run-123", result.BranchName);
         Assert.Equal("main", result.BaseBranch);
         Assert.Equal("abc123def456", result.CommitSha);
         Assert.False(result.AlreadyExisted);
-        Assert.Equal("https://github.com/octo/autofac/tree/autofac/run-123", result.BranchUrl);
+        Assert.Equal("https://github.com/octo/agentwerke/tree/agentwerke/run-123", result.BranchUrl);
 
         Assert.Equal(2, requests.Count);
         Assert.Equal("Bearer", requests[0].Headers.Authorization?.Scheme);
         Assert.Equal("token-value", requests[0].Headers.Authorization?.Parameter);
-        Assert.Contains("Autofac/1.0", requests[0].Headers.UserAgent.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Agentwerke/1.0", requests[0].Headers.UserAgent.ToString(), StringComparison.Ordinal);
 
         var createBranchPayload = await requests[1].Content!.ReadAsStringAsync();
-        Assert.Contains("\"ref\":\"refs/heads/autofac/run-123\"", createBranchPayload, StringComparison.Ordinal);
+        Assert.Contains("\"ref\":\"refs/heads/agentwerke/run-123\"", createBranchPayload, StringComparison.Ordinal);
         Assert.Contains("\"sha\":\"abc123def456\"", createBranchPayload, StringComparison.Ordinal);
     }
 
@@ -135,13 +135,13 @@ public sealed class GitHubConnectorTests
             requests.Add(await CloneAsync(request));
 
             if (request.Method == HttpMethod.Put &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/contents/.autofac/runs/run-123/step-456-attempt-2.md")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/contents/.agentwerke/runs/run-123/step-456-attempt-2.md")
             {
                 return Json(HttpStatusCode.Created, """
                     {
                       "content": {
-                        "path": ".autofac/runs/run-123/step-456-attempt-2.md",
-                        "html_url": "https://github.com/octo/autofac/blob/autofac/run-123/.autofac/runs/run-123/step-456-attempt-2.md"
+                        "path": ".agentwerke/runs/run-123/step-456-attempt-2.md",
+                        "html_url": "https://github.com/octo/agentwerke/blob/agentwerke/run-123/.agentwerke/runs/run-123/step-456-attempt-2.md"
                       },
                       "commit": {
                         "sha": "feedface1234"
@@ -151,18 +151,18 @@ public sealed class GitHubConnectorTests
             }
 
             if (request.Method == HttpMethod.Get &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/pulls")
             {
                 return Json(HttpStatusCode.OK, "[]");
             }
 
             if (request.Method == HttpMethod.Post &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/pulls")
             {
                 return Json(HttpStatusCode.Created, """
                     {
                       "number": 42,
-                      "html_url": "https://github.com/octo/autofac/pull/42",
+                      "html_url": "https://github.com/octo/agentwerke/pull/42",
                       "state": "open"
                     }
                     """);
@@ -178,35 +178,35 @@ public sealed class GitHubConnectorTests
                 RunId: "run-123",
                 StepId: "step-456",
                 Attempt: 2,
-                HeadBranch: "autofac/run-123",
+                HeadBranch: "agentwerke/run-123",
                 BaseBranch: null,
-                Title: "Autofac generated change",
+                Title: "Agentwerke generated change",
                 Body: "Generated from workflow execution.",
-                CommitMessage: "Autofac marker commit"),
+                CommitMessage: "Agentwerke marker commit"),
             CancellationToken.None);
 
         Assert.Equal(42, result.Number);
-        Assert.Equal("https://github.com/octo/autofac/pull/42", result.PullRequestUrl);
-        Assert.Equal("autofac/run-123", result.HeadBranch);
+        Assert.Equal("https://github.com/octo/agentwerke/pull/42", result.PullRequestUrl);
+        Assert.Equal("agentwerke/run-123", result.HeadBranch);
         Assert.Equal("main", result.BaseBranch);
         Assert.False(result.AlreadyExisted);
         Assert.Equal("feedface1234", result.CommitSha);
-        Assert.Equal(".autofac/runs/run-123/step-456-attempt-2.md", result.MarkerPath);
+        Assert.Equal(".agentwerke/runs/run-123/step-456-attempt-2.md", result.MarkerPath);
 
         Assert.Equal(3, requests.Count);
-        Assert.Equal("/repos/octo/autofac/contents/.autofac/runs/run-123/step-456-attempt-2.md", requests[0].RequestUri?.AbsolutePath);
-        Assert.Equal("/repos/octo/autofac/pulls", requests[1].RequestUri?.AbsolutePath);
-        Assert.Contains("head=octo%3Aautofac%2Frun-123", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal("/repos/octo/agentwerke/contents/.agentwerke/runs/run-123/step-456-attempt-2.md", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/agentwerke/pulls", requests[1].RequestUri?.AbsolutePath);
+        Assert.Contains("head=octo%3Aagentwerke%2Frun-123", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("base=main", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
 
         var commitPayload = await requests[0].Content!.ReadAsStringAsync();
-        Assert.Contains("\"message\":\"Autofac marker commit\"", commitPayload, StringComparison.Ordinal);
-        Assert.Contains("\"branch\":\"autofac/run-123\"", commitPayload, StringComparison.Ordinal);
+        Assert.Contains("\"message\":\"Agentwerke marker commit\"", commitPayload, StringComparison.Ordinal);
+        Assert.Contains("\"branch\":\"agentwerke/run-123\"", commitPayload, StringComparison.Ordinal);
         Assert.Contains("\"content\":\"R2VuZXJhdGVkIGZyb20gd29ya2Zsb3cgZXhlY3V0aW9uLg==\"", commitPayload, StringComparison.Ordinal);
 
         var pullPayload = await requests[2].Content!.ReadAsStringAsync();
-        Assert.Contains("\"title\":\"Autofac generated change\"", pullPayload, StringComparison.Ordinal);
-        Assert.Contains("\"head\":\"autofac/run-123\"", pullPayload, StringComparison.Ordinal);
+        Assert.Contains("\"title\":\"Agentwerke generated change\"", pullPayload, StringComparison.Ordinal);
+        Assert.Contains("\"head\":\"agentwerke/run-123\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"base\":\"main\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"draft\":true", pullPayload, StringComparison.Ordinal);
     }
@@ -217,7 +217,7 @@ public sealed class GitHubConnectorTests
         var handler = new StubHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Get &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls/42")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/pulls/42")
             {
                 return Task.FromResult(Json(HttpStatusCode.OK, """
                     {
@@ -225,7 +225,7 @@ public sealed class GitHubConnectorTests
                       "state": "closed",
                       "merged": true,
                       "merge_commit_sha": "feedface1234",
-                      "head": { "ref": "autofac/run-123", "sha": "abc123" },
+                      "head": { "ref": "agentwerke/run-123", "sha": "abc123" },
                       "base": { "ref": "main", "sha": "def456" }
                     }
                     """));
@@ -242,7 +242,7 @@ public sealed class GitHubConnectorTests
         Assert.Equal("closed", result.State);
         Assert.True(result.Merged);
         Assert.Equal("feedface1234", result.MergeCommitSha);
-        Assert.Equal("autofac/run-123", result.HeadBranch);
+        Assert.Equal("agentwerke/run-123", result.HeadBranch);
         Assert.Equal("abc123", result.HeadSha);
         Assert.Equal("main", result.BaseBranch);
     }
@@ -253,7 +253,7 @@ public sealed class GitHubConnectorTests
         var handler = new StubHttpMessageHandler(request =>
         {
             if (request.Method == HttpMethod.Get &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/commits/abc123/check-runs")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/commits/abc123/check-runs")
             {
                 return Task.FromResult(Json(HttpStatusCode.OK, """
                     {
@@ -331,11 +331,11 @@ public sealed class GitHubConnectorTests
             requests.Add(await CloneAsync(request));
 
             if (request.Method == HttpMethod.Post &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls/42/requested_reviewers")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/pulls/42/requested_reviewers")
             {
                 return Json(HttpStatusCode.Created, """
                     {
-                      "html_url": "https://github.com/octo/autofac/pull/42",
+                      "html_url": "https://github.com/octo/agentwerke/pull/42",
                       "requested_reviewers": [
                         { "login": "alice" },
                         { "login": "bob" }
@@ -354,7 +354,7 @@ public sealed class GitHubConnectorTests
             CancellationToken.None);
 
         Assert.Equal(42, result.PullNumber);
-        Assert.Equal("https://github.com/octo/autofac/pull/42", result.PullRequestUrl);
+        Assert.Equal("https://github.com/octo/agentwerke/pull/42", result.PullRequestUrl);
         Assert.Equal(["alice", "bob"], result.RequestedReviewers);
 
         var payload = await requests[0].Content!.ReadAsStringAsync();
@@ -370,13 +370,13 @@ public sealed class GitHubConnectorTests
             requests.Add(await CloneAsync(request));
 
             if (request.Method == HttpMethod.Post &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/pulls/42/reviews")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/pulls/42/reviews")
             {
                 return Json(HttpStatusCode.Created, """
                     {
                       "id": 9001,
                       "state": "COMMENTED",
-                      "html_url": "https://github.com/octo/autofac/pull/42#pullrequestreview-9001"
+                      "html_url": "https://github.com/octo/agentwerke/pull/42#pullrequestreview-9001"
                     }
                     """);
             }
@@ -394,7 +394,7 @@ public sealed class GitHubConnectorTests
         Assert.Equal(42, result.PullNumber);
         Assert.Equal("COMMENTED", result.State);
         Assert.Equal("COMMENT", result.Event);
-        Assert.Equal("https://github.com/octo/autofac/pull/42#pullrequestreview-9001", result.ReviewUrl);
+        Assert.Equal("https://github.com/octo/agentwerke/pull/42#pullrequestreview-9001", result.ReviewUrl);
 
         var payload = await requests[0].Content!.ReadAsStringAsync();
         Assert.Contains("\"body\":\"Looks good overall.\"", payload, StringComparison.Ordinal);
@@ -410,7 +410,7 @@ public sealed class GitHubConnectorTests
             requests.Add(await CloneAsync(request));
 
             if (request.Method == HttpMethod.Post &&
-                request.RequestUri?.AbsolutePath == "/repos/octo/autofac/actions/workflows/deploy-to-test.yml/dispatches")
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/actions/workflows/deploy-to-test.yml/dispatches")
             {
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             }
@@ -452,7 +452,7 @@ public sealed class GitHubConnectorTests
 
         Assert.Equal("deploy-to-test.yml", result.WorkflowFileName);
         Assert.Equal("main", result.Ref);
-        Assert.Equal("/repos/octo/autofac/actions/workflows/deploy-to-test.yml/dispatches", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/agentwerke/actions/workflows/deploy-to-test.yml/dispatches", requests[0].RequestUri?.AbsolutePath);
 
         var payload = await requests[0].Content!.ReadAsStringAsync();
         Assert.Contains("\"ref\":\"main\"", payload, StringComparison.Ordinal);
@@ -474,10 +474,10 @@ public sealed class GitHubConnectorTests
                     Enabled = true,
                     ApiBaseUrl = "https://api.github.test/",
                     RepositoryOwner = "octo",
-                    RepositoryName = "autofac",
+                    RepositoryName = "agentwerke",
                     PersonalAccessToken = "token-value",
                     DefaultBaseBranch = "main",
-                    BranchPrefix = "autofac/run-",
+                    BranchPrefix = "agentwerke/run-",
                     CreateDraftPullRequests = true
                 }
             }),

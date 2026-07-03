@@ -45,7 +45,7 @@ export function AppShell({ auth }: AppShellProps) {
       <aside className="sidebar" aria-label="Sidebar">
         <div className="sidebar-brand">
           <div>
-            <strong>Autofac</strong>
+            <strong>Agentwerke</strong>
             <span>v2.4.0-stable</span>
           </div>
         </div>

@@ -2926,7 +2926,7 @@ textarea {
   }
 }
 
-/* Autofac extension accents on the canvas. */
+/* Agentwerke extension accents on the canvas. */
 .autofac-agent-task .djs-visual > :nth-child(1) {
   stroke: #00b3bb !important;
   stroke-width: 2px !important;
@@ -2955,7 +2955,7 @@ textarea {
   pointer-events: none;
 }
 
-/* Palette accents for the Autofac entries. */
+/* Palette accents for the Agentwerke entries. */
 .autofac-palette-agent::before {
   color: #00b3bb;
 }

@@ -1,6 +1,6 @@
 # Deployment
 
-Autofac is self-hostable: Postgres + the API (+ optional Web UI), configured via
+Agentwerke is self-hostable: Postgres + the API (+ optional Web UI), configured via
 environment variables. This guide covers the shipped stacks, key configuration,
 and production hardening. For auth/data-residency specifics see
 [deployment-auth-data-residency.md](deployment-auth-data-residency.md).
@@ -18,7 +18,7 @@ Quickest path: see [getting-started.md](getting-started.md).
 
 ## Configuration
 
-Autofac can be bootstrapped with environment variables and then operated through
+Agentwerke can be bootstrapped with environment variables and then operated through
 the Admin-only Settings page. See [settings.md](settings.md) for the Settings UI,
 redaction rules, local override files, and configuration precedence.
 
@@ -30,7 +30,7 @@ Settings use the standard .NET `Section__Key` env mapping.
 - `ConnectionStrings__Postgres` — Postgres connection string.
 
 **Workflow runtime**
-- `WorkflowRuntime__Mode` — `Autofac` (default) or `Camunda`.
+- `WorkflowRuntime__Mode` — `Agentwerke` (default), `Camunda`, or the legacy `Autofac` alias.
 
 **Model provider**
 - `Anthropic__Provider` — `anthropic` | `mock` | (empty = auto).
@@ -57,7 +57,7 @@ Settings use the standard .NET `Section__Key` env mapping.
 
 ### Settings override files
 
-When an Admin saves supported values in `/settings`, Autofac writes non-secret
+When an Admin saves supported values in `/settings`, Agentwerke writes non-secret
 overrides to `config/settings.overrides.json` and local secret rotations to
 `config/settings.secrets.json` by default. These files are loaded after
 appsettings/env configuration and take effect after API restart. Use
@@ -85,7 +85,7 @@ Do **not** ship the dev defaults. Before production:
 Two production paths, both with real auth (no dev tokens), env/secret-store
 config, and resource limits — see [`deploy/README.md`](../deploy/README.md):
 
-- **Kubernetes (Helm):** [`deploy/helm/autofac`](../deploy/helm/autofac) — API +
+- **Kubernetes (Helm):** [`deploy/helm/agentwerke`](../deploy/helm/agentwerke) — API +
   dispatch worker + Web (+ optional Postgres), HPA, RBAC, ingress with TLS,
   and an OpenSandbox sandbox provider.
 - **Docker Compose (single host):** [`docker/docker-compose.prod.yml`](../docker/docker-compose.prod.yml)

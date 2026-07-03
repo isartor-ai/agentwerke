@@ -1,4 +1,4 @@
--- Autofac manual-test seed data
+-- Agentwerke manual-test seed data
 -- Idempotent: all inserts use ON CONFLICT DO NOTHING.
 -- Run after EF Core migrations have created the schema.
 
@@ -24,9 +24,9 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="e2e-simple-defs"
-    targetNamespace="https://autofac.ai/bpmn">
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="e2e-simple" name="E2E Simple Workflow" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
       <bpmn:outgoing>Flow1</bpmn:outgoing>

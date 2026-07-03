@@ -7,7 +7,7 @@ const AGENT_MARKER = 'autofac-agent-task';
 const APPROVAL_MARKER = 'autofac-approval-task';
 
 /**
- * Tags shapes that carry Autofac extension metadata with marker CSS classes
+ * Tags shapes that carry Agentwerke extension metadata with marker CSS classes
  * (`autofac-agent-task` / `autofac-approval-task`) so the canvas can render a
  * distinguishing accent. Re-evaluated after import and on every model change.
  */

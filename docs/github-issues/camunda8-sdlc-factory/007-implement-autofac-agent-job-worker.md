@@ -1,16 +1,16 @@
-# Implement Autofac agent job worker for Camunda service tasks
+# Implement Agentwerke agent job worker for Camunda service tasks
 
 ## Summary
-Add a background worker that activates Camunda jobs of type `autofac.agent` and executes them through the Autofac Agent Orchestrator.
+Add a background worker that activates Camunda jobs of type `autofac.agent` and executes them through the Agentwerke Agent Orchestrator.
 
 ## Why
-Camunda service tasks are the correct extension point for custom Autofac agent work.
+Camunda service tasks are the correct extension point for custom Agentwerke agent work.
 
 ## Scope
 - Activate jobs for `autofac.agent`.
 - Resolve BPMN element metadata, task headers, and process variables.
 - Call the Agent Orchestrator.
-- Record job start, output, failure, and completion events in Autofac.
+- Record job start, output, failure, and completion events in Agentwerke.
 
 ## Acceptance Criteria
 - Worker receives a Camunda service task job.

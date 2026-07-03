@@ -16,7 +16,7 @@
     { "type": "panel", "id": "stat", "name": "Stat", "version": "" }
   ],
   "annotations": { "list": [] },
-  "description": "Autofac workflow run health, approval SLA, and connector performance",
+  "description": "Agentwerke workflow run health, approval SLA, and connector performance",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -252,12 +252,12 @@
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "tags": ["autofac", "workflows"],
+  "tags": ["agentwerke", "workflows"],
   "templating": { "list": [] },
   "time": { "from": "now-3h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Autofac — Workflow Overview",
-  "uid": "autofac-workflows-v1",
+  "title": "Agentwerke — Workflow Overview",
+  "uid": "agentwerke-workflows-v1",
   "version": 1
 }

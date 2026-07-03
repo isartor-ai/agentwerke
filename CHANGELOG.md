@@ -12,8 +12,12 @@ Work toward the first stable open-source release (1.0). See the
 [v1.0 epic](https://github.com/isartor-ai/autofac-private/issues/162).
 
 ### Added
+- **Agentwerke public rebrand**: README, website, Web UI chrome, deployment
+  examples, Helm chart path/metadata, and runtime-mode docs now use
+  Agentwerke by Isartor AI. `WorkflowRuntime:Mode=Autofac` remains a legacy
+  alias for the default Agentwerke runtime during the transition.
 - **Required label on the GitHub issue trigger** (`Integrations:GitHub:RequiredLabel`,
-  default `autofac`): an issue must carry the label for its `issues` webhook to
+  default `agentwerke`): an issue must carry the label for its `issues` webhook to
   start a run, so every issue opened on the configured repo no longer spends
   model budget by default. Set to empty to restore the old behavior
   (isartor-ai/autofac-private#191).
@@ -61,4 +65,4 @@ Work toward the first stable open-source release (1.0). See the
   step (only a skill required by the runtime contract does).
 - Web UI renders BPMN diagrams that lack embedded layout.
 
-[Unreleased]: https://github.com/isartor-ai/autofac/commits/main
+[Unreleased]: https://github.com/isartor-ai/agentwerke/commits/main

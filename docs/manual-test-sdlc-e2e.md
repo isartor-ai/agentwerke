@@ -21,7 +21,7 @@ prompt quality across the BA→Architect→Analyst handoff, approval-card UX acr
 back to back, and timing/correctness of the webhook-resume path. Unlike the other
 `docs/manual-test-*.md` scenarios, this one is **not fully automatable without real
 infrastructure this repo doesn't own**: a real (or disposable) GitHub repository, a real GitHub
-App/PAT with webhook delivery configured, and a publicly reachable Autofac instance for GitHub to
+App/PAT with webhook delivery configured, and a publicly reachable Agentwerke instance for GitHub to
 call back into. Sections below are explicit about what you can verify locally vs. what requires
 that infrastructure.
 
@@ -35,13 +35,13 @@ external wait gates authored with `correlationKeyTemplate="{{input.branch_name}}
 
 ## Prerequisites
 
-- A running Autofac API + Postgres (the standard `docker/docker-compose.yml` dev stack, or
+- A running Agentwerke API + Postgres (the standard `docker/docker-compose.yml` dev stack, or
   `docker/docker-compose.e2e.yml`).
 - An operator account (`AutofacPolicies.Operator`/`Approver`) to start runs, decide approvals, and
   call the manual resume endpoint.
 - For Part B only: a disposable GitHub repository you control, a GitHub PAT with `repo` scope and
   `workflow_dispatch` permission on a deploy-to-test Actions workflow, and a way to receive GitHub
-  webhooks at the Autofac instance (a public URL, or `smee.io`/`ngrok` tunnel to a local instance).
+  webhooks at the Agentwerke instance (a public URL, or `smee.io`/`ngrok` tunnel to a local instance).
 
 ## Part 0 — Automated agent-layer proof (gated, no infrastructure)
 
@@ -102,8 +102,8 @@ curl -X POST http://localhost:8080/api/runs \
   -d '{
         "workflowId": "<workflowId from step 1>",
         "inputs": {
-          "issue_url": "https://github.com/isartor-ai/autofac/issues/<issue-number>",
-          "repository": "isartor-ai/autofac",
+          "issue_url": "https://github.com/isartor-ai/agentwerke/issues/<issue-number>",
+          "repository": "isartor-ai/agentwerke",
           "branch_name": "feature/autonomous-sdlc-e2e"
         }
       }'
@@ -209,7 +209,7 @@ Repeat steps 6 through 10 above, but:
 - Configure a real deploy-to-test GitHub Actions workflow in that repo (matching
   `GitHubOptions.DeployWorkflowFileName`, default `deploy-to-test.yml`).
 - Configure the repo's webhook deliveries (`pull_request`, `workflow_run`) to point at your
-  Autofac instance's `POST /webhooks/github`, with the shared secret matching
+  Agentwerke instance's `POST /webhooks/github`, with the shared secret matching
   `Integrations:GitHub:WebhookSecret`.
 - Confirm the implementation stage creates or uses the same branch name you seeded as
   `inputs.branch_name`. When it does, the real `pull_request.merged` and

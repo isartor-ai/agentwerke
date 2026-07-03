@@ -1,14 +1,14 @@
 # Add manual start input mapping for Camunda process variables
 
 ## Summary
-Normalize manual run input and inbound event payloads into Autofac run context and Camunda process variables.
+Normalize manual run input and inbound event payloads into Agentwerke run context and Camunda process variables.
 
 ## Why
 Agents need clear input context, and runs need traceable trigger metadata.
 
 ## Scope
 - Extend start run request with title, body, external URL, and typed input fields.
-- Seed Autofac run context from start input.
+- Seed Agentwerke run context from start input.
 - Pass normalized variables into Camunda process start.
 - Validate malformed input.
 

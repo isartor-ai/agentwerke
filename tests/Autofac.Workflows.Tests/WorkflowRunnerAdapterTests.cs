@@ -92,7 +92,7 @@ public sealed class WorkflowRunnerAdapterTests
         {
             NextResult = new WorkflowExecutionState(
                 "run-789", "waiting_external", "End", "WaitForMerge", null,
-                WaitingExternalCorrelationKey: "autofac/run-789",
+                WaitingExternalCorrelationKey: "agentwerke/run-789",
                 WaitingExternalMessageName: "github.pull_request.merged"),
         };
         var runner = new WorkflowRunnerAdapter(new PassThroughValidator(), engine);
@@ -110,7 +110,7 @@ public sealed class WorkflowRunnerAdapterTests
             cancellationToken: CancellationToken.None);
 
         Assert.Equal("waiting_external", result.Status);
-        Assert.Equal("autofac/run-789", result.WaitingExternalCorrelationKey);
+        Assert.Equal("agentwerke/run-789", result.WaitingExternalCorrelationKey);
         Assert.Equal("github.pull_request.merged", result.WaitingExternalMessageName);
     }
 

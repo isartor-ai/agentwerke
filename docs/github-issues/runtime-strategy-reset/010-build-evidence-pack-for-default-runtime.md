@@ -2,7 +2,7 @@
 
 ## Context
 
-Autofac should make SDLC automation auditable. Evidence must be first-class in the default runtime, not a Camunda-only variable mapping concern.
+Agentwerke should make SDLC automation auditable. Evidence must be first-class in the default runtime, not a Camunda-only variable mapping concern.
 
 ## Scope
 

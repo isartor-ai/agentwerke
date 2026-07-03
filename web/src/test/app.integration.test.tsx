@@ -34,7 +34,7 @@ describe('App integration', () => {
     vi.mocked(apiClient.getApprovals).mockResolvedValue(approvalsFixture);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     vi.mocked(apiClient.getAgents).mockResolvedValue([]);
-    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Agentwerke', camundaEnabled: false });
     vi.mocked(apiClient.getTemplates).mockResolvedValue([]);
     vi.mocked(apiClient.getCurrentUser).mockResolvedValue(adminAuthFixture.user!);
     window.history.pushState({}, '', '/runs');

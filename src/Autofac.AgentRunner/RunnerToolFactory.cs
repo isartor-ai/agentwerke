@@ -107,7 +107,7 @@ internal static class RunnerToolFactory
                     RepositoryName = Environment.GetEnvironmentVariable("Integrations__GitHub__RepositoryName") ?? string.Empty,
                     PersonalAccessToken = Environment.GetEnvironmentVariable("Integrations__GitHub__PersonalAccessToken") ?? string.Empty,
                     DefaultBaseBranch = Environment.GetEnvironmentVariable("Integrations__GitHub__DefaultBaseBranch") ?? "main",
-                    BranchPrefix = Environment.GetEnvironmentVariable("Integrations__GitHub__BranchPrefix") ?? "autofac/run-",
+                    BranchPrefix = Environment.GetEnvironmentVariable("Integrations__GitHub__BranchPrefix") ?? "agentwerke/run-",
                     CreateDraftPullRequests = ReadBool("Integrations__GitHub__CreateDraftPullRequests", defaultValue: true)
                 }
             }),

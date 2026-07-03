@@ -60,7 +60,7 @@ public static class DependencyInjection
         services.AddSingleton<ISecretStore, ConfigurationSecretStore>();
 
         // Camunda services are only wired when the runtime is explicitly opted into
-        // Camunda mode. The default Autofac runtime keeps those dependencies inactive.
+        // Camunda mode. The default Agentwerke runtime keeps those dependencies inactive.
         if (runtimeOptions.Mode == WorkflowRuntimeMode.Camunda)
         {
             services.Configure<CamundaOptions>(o =>

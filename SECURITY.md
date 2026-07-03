@@ -1,7 +1,7 @@
 # Security Policy
 
-Autofac runs autonomous agents against real repositories and infrastructure, so
-we take security seriously. Thank you for helping keep Autofac and its users safe.
+Agentwerke runs autonomous agents against real repositories and infrastructure, so
+we take security seriously. Thank you for helping keep Agentwerke and its users safe.
 
 ## Reporting a vulnerability
 
@@ -12,7 +12,7 @@ Report privately via either:
 - **GitHub** — open a private advisory at
   **Security → Advisories → Report a vulnerability** on this repository
   (preferred), or
-- **Email** — security@autofac.de
+- **Email** — security@agentwerke.de
 
 Please include:
 
@@ -28,7 +28,7 @@ anonymous.
 
 ## Supported versions
 
-Autofac is pre-1.0 and under active development. Security fixes are applied to
+Agentwerke is pre-1.0 and under active development. Security fixes are applied to
 the `main` branch; once 1.0 ships, this section will list supported release lines.
 
 | Version | Supported |
@@ -38,7 +38,7 @@ the `main` branch; once 1.0 ships, this section will list supported release line
 
 ## Scope & hardening notes
 
-Autofac's threat model centers on giving AI agents *bounded* access. Areas of
+Agentwerke's threat model centers on giving AI agents *bounded* access. Areas of
 particular interest for reports:
 
 - Tool Gateway / policy bypass (an agent performing an action outside its

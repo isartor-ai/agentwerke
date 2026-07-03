@@ -1,7 +1,7 @@
 import { AUTOFAC_NS_PREFIX, AUTOFAC_NS_URI } from './constants';
 
 /**
- * Moddle descriptor for the Autofac BPMN extension namespace.
+ * Moddle descriptor for the Agentwerke BPMN extension namespace.
  *
  * Registering this with the modeler (`moddleExtensions: { autofac: ... }`) lets
  * bpmn-js read and write `autofac:agentTask` / `autofac:approvalTask` extension
@@ -13,7 +13,7 @@ import { AUTOFAC_NS_PREFIX, AUTOFAC_NS_URI } from './constants';
  * validator looks for.
  */
 export const autofacModdleDescriptor = {
-  name: 'Autofac',
+  name: 'Agentwerke',
   uri: AUTOFAC_NS_URI,
   prefix: AUTOFAC_NS_PREFIX,
   xml: {

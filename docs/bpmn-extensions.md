@@ -1,14 +1,15 @@
-# Autofac BPMN extensions reference
+# Agentwerke BPMN extensions reference
 
-Autofac runs standard BPMN 2.0, augmented with a small set of `autofac:`
-extension elements (namespace `https://autofac.de/bpmn/extensions/v1`) that make
-a task executable by the agent runtime. The engine executes nodes in document
-order; sequence flows are honored for layout and gateways.
+Agentwerke runs standard BPMN 2.0, augmented with a small set of `autofac:`
+extension elements that make a task executable by the agent runtime. The
+`autofac:` prefix is intentionally retained as the stable workflow XML contract
+for existing definitions during the product rename. The engine executes nodes in
+document order; sequence flows are honored for layout and gateways.
 
 ```xml
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:autofac="https://autofac.de/bpmn/extensions/v1">
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1">
   ...
 </bpmn:definitions>
 ```

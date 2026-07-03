@@ -1,4 +1,4 @@
-# Autofac MVP GitHub Issue Drafts
+# Agentwerke MVP GitHub Issue Drafts
 
 Target repository: `isartor-ai/autofac-private`
 Prepared from:
@@ -56,19 +56,19 @@ The workflow designer is one of the core MVP surfaces, but backend behavior is s
 ### Acceptance Criteria
 
 - user can import BPMN definition
-- backend validates BPMN and Autofac metadata
+- backend validates BPMN and Agentwerke metadata
 - publish updates workflow state and version
 - workflow list and detail endpoints return persisted data
 
-## Issue 3: Extend BPMN validation for Autofac custom nodes
+## Issue 3: Extend BPMN validation for Agentwerke custom nodes
 
 ### Summary
 
-Enhance BPMN validation so Autofac-specific metadata is enforced at publish time, not just raw XML structure.
+Enhance BPMN validation so Agentwerke-specific metadata is enforced at publish time, not just raw XML structure.
 
 ### Why
 
-Autofac workflows depend on agent tasks, approval tasks, and policy metadata. MVP needs strong design-time validation.
+Agentwerke workflows depend on agent tasks, approval tasks, and policy metadata. MVP needs strong design-time validation.
 
 ### Scope
 
@@ -79,7 +79,7 @@ Autofac workflows depend on agent tasks, approval tasks, and policy metadata. MV
 
 ### Acceptance Criteria
 
-- missing required Autofac metadata blocks publish
+- missing required Agentwerke metadata blocks publish
 - validation responses include element references and clear messages
 - automated tests cover valid and invalid BPMN examples
 
@@ -139,7 +139,7 @@ Connect approval records directly to workflow runtime behavior so approval tasks
 
 ### Why
 
-Human-in-the-loop approval is central to the Autofac MVP.
+Human-in-the-loop approval is central to the Agentwerke MVP.
 
 ### Scope
 
@@ -160,7 +160,7 @@ Human-in-the-loop approval is central to the Autofac MVP.
 
 ### Summary
 
-Build the first real Autofac agent execution layer for BPMN service tasks.
+Build the first real Agentwerke agent execution layer for BPMN service tasks.
 
 ### Why
 
@@ -175,7 +175,7 @@ Without this, workflows cannot do meaningful SDLC automation.
 
 ### Acceptance Criteria
 
-- BPMN service tasks invoke Autofac agent execution
+- BPMN service tasks invoke Agentwerke agent execution
 - agent output is stored and visible in run details
 - task failures and completions are reflected in run state
 
@@ -279,7 +279,7 @@ Create the MVP policy layer for risky actions such as PR merge, deployment, and 
 
 ### Why
 
-Autofac must be governable, not just automated.
+Agentwerke must be governable, not just automated.
 
 ### Scope
 
@@ -321,7 +321,7 @@ MVP needs real monitoring, not static demos.
 
 ### Summary
 
-Implement the minimum logging, tracing, metrics, and audit model needed to operate and debug Autofac.
+Implement the minimum logging, tracing, metrics, and audit model needed to operate and debug Agentwerke.
 
 ### Why
 
@@ -386,6 +386,6 @@ The architecture design selects Camunda 8 as the strategic BPMN engine, but MVP 
 These issue drafts were prepared locally because GitHub write access could not be completed from the current environment.
 
 Observed blockers:
-- local checkout remote is `isartor-ai/autofac`
+- local checkout remote is `isartor-ai/agentwerke`
 - requested issue target is `isartor-ai/autofac-private`
 - local `gh` authentication is currently invalid for `github.com`

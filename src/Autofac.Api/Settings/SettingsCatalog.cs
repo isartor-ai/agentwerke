@@ -44,11 +44,11 @@ public sealed class SettingsCatalog
                 Field("Integrations:GitHub:RepositoryName", "Repository name", "Default repository name for outbound actions.", SettingsValueKind.String, string.Empty),
                 Secret("Integrations:GitHub:PersonalAccessToken", "GitHub token", "Personal access token or GitHub App token."),
                 Secret("Integrations:GitHub:WebhookSecret", "GitHub webhook secret", "Shared secret for GitHub webhook validation."),
-                Field("Integrations:GitHub:DefaultBaseBranch", "Default base branch", "Base branch for Autofac-created pull requests.", SettingsValueKind.String, "main"),
-                Field("Integrations:GitHub:BranchPrefix", "Branch prefix", "Prefix for Autofac-created branch names.", SettingsValueKind.String, "autofac/run-"),
+                Field("Integrations:GitHub:DefaultBaseBranch", "Default base branch", "Base branch for Agentwerke-created pull requests.", SettingsValueKind.String, "main"),
+                Field("Integrations:GitHub:BranchPrefix", "Branch prefix", "Prefix for Agentwerke-created branch names.", SettingsValueKind.String, "agentwerke/run-"),
                 Field("Integrations:GitHub:CreateDraftPullRequests", "Draft pull requests", "Create pull requests as drafts by default.", SettingsValueKind.Boolean, true),
                 Field("Integrations:GitHub:TriggerActions", "GitHub trigger actions", "GitHub issue actions that start workflows.", SettingsValueKind.StringArray, new[] { "opened" }),
-                Field("Integrations:GitHub:RequiredLabel", "GitHub required label", "Label an issue must carry to start a run. Empty disables the check.", SettingsValueKind.String, "autofac"),
+                Field("Integrations:GitHub:RequiredLabel", "GitHub required label", "Label an issue must carry to start a run. Empty disables the check.", SettingsValueKind.String, "agentwerke"),
                 Field("Integrations:GitHub:DeployWorkflowFileName", "Deploy workflow file", "Default GitHub Actions workflow dispatched for deploy gates.", SettingsValueKind.String, "deploy-to-test.yml")
             ]),
 
@@ -81,7 +81,7 @@ public sealed class SettingsCatalog
             "Runtime",
             "Workflow runtime, policy store, and optional Camunda adapter settings.",
             [
-                Field("WorkflowRuntime:Mode", "Workflow runtime", "Runtime adapter used for workflow execution.", SettingsValueKind.Enum, "Autofac", ["Autofac", "Camunda"]),
+                Field("WorkflowRuntime:Mode", "Workflow runtime", "Runtime adapter used for workflow execution. Agentwerke is the default; Autofac remains a legacy alias for existing installs.", SettingsValueKind.Enum, "Agentwerke", ["Agentwerke", "Camunda", "Autofac"]),
                 Field("Policies:FilePath", "Policy file", "Policy rule file path.", SettingsValueKind.String, "./config/policies.yaml"),
                 Field("Camunda:Enabled", "Camunda enabled", "Enable the optional Camunda runtime adapter.", SettingsValueKind.Boolean, false),
                 Field("Camunda:BaseUrl", "Camunda base URL", "Camunda REST API endpoint.", SettingsValueKind.Url, "http://localhost:8088/"),
@@ -139,7 +139,7 @@ public sealed class SettingsCatalog
             "Tracing and settings-control-plane storage.",
             [
                 Field("Tracing:OtlpEndpoint", "OTLP endpoint", "OTLP exporter endpoint. Empty disables tracing export.", SettingsValueKind.Url, string.Empty),
-                Field("Tracing:ServiceName", "Service name", "Service name reported to tracing backends.", SettingsValueKind.String, "autofac-api"),
+                Field("Tracing:ServiceName", "Service name", "Service name reported to tracing backends.", SettingsValueKind.String, "agentwerke-api"),
                 Field("Tracing:ServiceVersion", "Service version", "Service version reported to tracing backends.", SettingsValueKind.String, "1.0.0"),
                 Field("Settings:OverridesPath", "Overrides path", "File path for persisted non-secret settings overrides.", SettingsValueKind.String, "config/settings.overrides.json", isEditable: false),
                 Field("Settings:SecretsPath", "Secrets path", "File path for local secret material. Prefer external secret stores in production.", SettingsValueKind.String, "config/settings.secrets.json", isEditable: false),

@@ -2,15 +2,15 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "autofac.fullname" . }}-api
+  name: {{ include "agentwerke.fullname" . }}-api
   labels:
-    {{- include "autofac.labels" . | nindent 4 }}
+    {{- include "agentwerke.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "autofac.fullname" . }}-api
+    name: {{ include "agentwerke.fullname" . }}-api
   minReplicas: {{ .Values.api.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
   metrics:

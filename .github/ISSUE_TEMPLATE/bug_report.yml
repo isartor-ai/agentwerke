@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in Autofac
+description: Report a defect in Agentwerke
 labels: ["bug"]
 body:
   - type: markdown
@@ -35,10 +35,10 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Autofac version/commit, runtime mode, model provider, OS, Docker version.
+      description: Agentwerke version/commit, runtime mode, model provider, OS, Docker version.
       placeholder: |
-        - Autofac: commit abc1234
-        - Runtime: Autofac (default) / Camunda
+        - Agentwerke: commit abc1234
+        - Runtime: Agentwerke (default) / Camunda
         - Model provider: mock / anthropic
         - OS / Docker: macOS 15, Docker 27
     validations:

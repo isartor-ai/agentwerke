@@ -1,6 +1,6 @@
-# Autofac Web UI
+# Agentwerke Web UI
 
-React + TypeScript frontend for the Autofac operations cockpit.
+React + TypeScript frontend for the Agentwerke operations cockpit.
 
 ## Prerequisites
 

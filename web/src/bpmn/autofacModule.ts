@@ -3,7 +3,7 @@ import { AutofacMarkersModule } from './autofacMarkers';
 import { AutofacPropertiesProviderModule } from './properties/autofacPropertiesProvider';
 
 /**
- * The full set of Autofac diagram-js modules: custom palette entries, extension
+ * The full set of Agentwerke diagram-js modules: custom palette entries, extension
  * markers, and the properties-panel provider. Passed to the modeler via
  * `additionalModules`.
  */

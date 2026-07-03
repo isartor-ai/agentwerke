@@ -1,14 +1,14 @@
 /**
- * Shared constants for the Autofac BPMN editor.
+ * Shared constants for the Agentwerke BPMN editor.
  *
  * The namespace URI and prefix MUST match what the backend
- * `BpmnWorkflowValidator` expects (`https://autofac.ai/bpmn`,
+ * `BpmnWorkflowValidator` expects (`https://agentwerke.de/bpmn/extensions/v1`,
  * prefix `autofac`) so extension metadata authored in the designer round-trips
  * cleanly into the executable workflow definition.
  */
 
 export const AUTOFAC_NS_PREFIX = 'autofac';
-export const AUTOFAC_NS_URI = 'https://autofac.ai/bpmn';
+export const AUTOFAC_NS_URI = 'https://agentwerke.de/bpmn/extensions/v1';
 
 /** Moddle type names (note: serialized lower-camel via the descriptor's tagAlias). */
 export const AGENT_TASK_TYPE = 'autofac:AgentTask';

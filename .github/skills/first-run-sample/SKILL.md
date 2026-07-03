@@ -1,6 +1,6 @@
 ---
 name: First Run Sample
-description: Guides the seeded onboarding workflow for fresh Autofac installs.
+description: Guides the seeded onboarding workflow for fresh Agentwerke installs.
 version: 1.0.0
 invocationRules:
   - Use for the seeded first-run sample workflow.
@@ -10,7 +10,7 @@ optionalTools: []
 
 # First Run Sample
 
-Produce a short implementation note for a new Autofac user. Include:
+Produce a short implementation note for a new Agentwerke user. Include:
 
 - what the sample workflow just proved
 - what evidence the run should contain

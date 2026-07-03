@@ -18,7 +18,7 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                         "github.create_pull_request",
                         new Dictionary<string, string>
                         {
-                            ["head_branch"] = "autofac/run-1",
+                            ["head_branch"] = "agentwerke/run-1",
                             ["title"] = "Autofac PR",
                             ["body"] = "Body",
                             ["commit_message"] = "Commit"

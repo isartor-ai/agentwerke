@@ -74,7 +74,7 @@ export const workflowsFixture: Workflow[] = [
 export const firstRunWorkflowFixture: Workflow = {
   id: 'wf-first-run-sample',
   name: 'First Run Sample',
-  description: 'Seeded workflow for fresh Autofac installs',
+  description: 'Seeded workflow for fresh Agentwerke installs',
   version: 'v1.0.0',
   status: 'active',
   owner: 'autofac',
@@ -245,7 +245,7 @@ export const evidencePackFixture: EvidencePack = {
     hashAlgorithm: 'SHA-256',
   },
   runtime: {
-    mode: 'Autofac',
+    mode: 'Agentwerke',
     camundaEnabled: false,
   },
   run: {

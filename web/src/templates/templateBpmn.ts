@@ -1,6 +1,6 @@
 import type { TemplateDetail, TemplateFactoryConfiguration } from '../types';
 
-const DEFAULT_AUTOFAC_NS = 'https://autofac.de/bpmn/extensions/v1';
+const DEFAULT_AUTOFAC_NS = 'https://agentwerke.de/bpmn/extensions/v1';
 const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
 const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
 const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
@@ -110,7 +110,7 @@ function ensureDiagramInterchange(document: Document, process: Element | undefin
   ensureNamespace(root, 'dc', DC_NS);
   ensureNamespace(root, 'di', DI_NS);
   if (!root.getAttribute('targetNamespace')) {
-    root.setAttribute('targetNamespace', 'https://autofac.de/bpmn');
+    root.setAttribute('targetNamespace', 'https://agentwerke.de/bpmn');
   }
 
   const diagram = createNamespacedElement(document, BPMNDI_NS, 'bpmndi:BPMNDiagram');

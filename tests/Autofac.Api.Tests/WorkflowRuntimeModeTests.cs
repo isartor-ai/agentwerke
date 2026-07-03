@@ -11,14 +11,45 @@ namespace Autofac.Api.Tests;
 public sealed class WorkflowRuntimeModeTests
 {
     [Fact]
-    public void Resolve_WithoutConfiguration_DefaultsToAutofac()
+    public void Resolve_WithoutConfiguration_DefaultsToAgentwerke()
     {
         var configuration = new ConfigurationBuilder().Build();
 
         var options = WorkflowRuntimeOptions.Resolve(configuration);
 
-        Assert.Equal(WorkflowRuntimeMode.Autofac, options.Mode);
+        Assert.Equal(WorkflowRuntimeMode.Agentwerke, options.Mode);
         Assert.False(options.IsCamundaMode);
+        Assert.False(options.LegacyModeAliasUsed);
+    }
+
+    [Theory]
+    [InlineData("Agentwerke")]
+    [InlineData("agentwerke")]
+    [InlineData(" AGENTWERKE ")]
+    public void Resolve_WithAgentwerkeValue_IsCaseInsensitiveAndTrimmed(string value)
+    {
+        var configuration = BuildConfiguration(value);
+
+        var options = WorkflowRuntimeOptions.Resolve(configuration);
+
+        Assert.Equal(WorkflowRuntimeMode.Agentwerke, options.Mode);
+        Assert.False(options.IsCamundaMode);
+        Assert.False(options.LegacyModeAliasUsed);
+    }
+
+    [Theory]
+    [InlineData("Autofac")]
+    [InlineData("autofac")]
+    [InlineData(" AUTOFAC ")]
+    public void Resolve_WithLegacyAutofacValue_MapsToAgentwerkeRuntime(string value)
+    {
+        var configuration = BuildConfiguration(value);
+
+        var options = WorkflowRuntimeOptions.Resolve(configuration);
+
+        Assert.Equal(WorkflowRuntimeMode.Agentwerke, options.Mode);
+        Assert.False(options.IsCamundaMode);
+        Assert.True(options.LegacyModeAliasUsed);
     }
 
     [Theory]
@@ -33,6 +64,7 @@ public sealed class WorkflowRuntimeModeTests
 
         Assert.Equal(WorkflowRuntimeMode.Camunda, options.Mode);
         Assert.True(options.IsCamundaMode);
+        Assert.False(options.LegacyModeAliasUsed);
     }
 
     [Fact]
@@ -45,6 +77,7 @@ public sealed class WorkflowRuntimeModeTests
 
         Assert.Contains("Temporal", exception.Message);
         Assert.Contains("WorkflowRuntime:Mode", exception.Message);
+        Assert.Contains("Agentwerke", exception.Message);
         Assert.Contains("Autofac", exception.Message);
         Assert.Contains("Camunda", exception.Message);
     }
@@ -54,12 +87,12 @@ public sealed class WorkflowRuntimeModeTests
     {
         using var provider = BuildProvider(mode: null);
 
-        // No Camunda client or configuration is registered in the default Autofac runtime.
+        // No Camunda client or configuration is registered in the default Agentwerke runtime.
         Assert.Null(provider.GetService<ICamundaClient>());
         Assert.Null(provider.GetService<CamundaClient>());
 
         var runtimeOptions = provider.GetRequiredService<WorkflowRuntimeOptions>();
-        Assert.Equal(WorkflowRuntimeMode.Autofac, runtimeOptions.Mode);
+        Assert.Equal(WorkflowRuntimeMode.Agentwerke, runtimeOptions.Mode);
 
         var statusService = provider.GetRequiredService<ICamundaRuntimeStatusService>();
         Assert.IsType<DisabledCamundaRuntimeStatusService>(statusService);
@@ -94,14 +127,14 @@ public sealed class WorkflowRuntimeModeTests
     {
         var controller = new HealthController(
             new DisabledCamundaRuntimeStatusService(),
-            new WorkflowRuntimeOptions { Mode = WorkflowRuntimeMode.Autofac });
+            new WorkflowRuntimeOptions { Mode = WorkflowRuntimeMode.Agentwerke });
 
         var ok = Assert.IsType<OkObjectResult>(controller.Runtime());
         var payload = ok.Value!;
         var mode = payload.GetType().GetProperty("mode")!.GetValue(payload);
         var camundaEnabled = payload.GetType().GetProperty("camundaEnabled")!.GetValue(payload);
 
-        Assert.Equal("Autofac", mode);
+        Assert.Equal("Agentwerke", mode);
         Assert.Equal(false, camundaEnabled);
     }
 

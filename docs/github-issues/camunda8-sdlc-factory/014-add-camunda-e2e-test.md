@@ -8,7 +8,7 @@ The architecture decision is not real until it is covered by an executable end-t
 
 ## Scope
 - Gate test behind `CAMUNDA_ENABLED=true` or a compose profile.
-- Deploy a minimal Autofac agent workflow.
+- Deploy a minimal Agentwerke agent workflow.
 - Start process, complete a no-op agent job, complete approval, and assert completion.
 - Include useful failure diagnostics from Camunda responses.
 

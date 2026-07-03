@@ -27,7 +27,7 @@ public sealed class WorkflowExternalActionTests
             e.Type == "external_action_recorded" &&
             e.Message.Contains("\"provider\":\"github\"", StringComparison.Ordinal) &&
             e.Message.Contains("\"action\":\"create_pull_request\"", StringComparison.Ordinal) &&
-            e.Message.Contains("\"resourceUrl\":\"https://github.com/octo/autofac/pull/42\"", StringComparison.Ordinal));
+            e.Message.Contains("\"resourceUrl\":\"https://github.com/octo/agentwerke/pull/42\"", StringComparison.Ordinal));
     }
 
     private static BpmnWorkflowDefinition CreateDefinition()
@@ -68,7 +68,7 @@ public sealed class WorkflowExternalActionTests
                         Action: "create_pull_request",
                         Status: "completed",
                         ResourceId: "42",
-                        ResourceUrl: "https://github.com/octo/autofac/pull/42",
+                        ResourceUrl: "https://github.com/octo/agentwerke/pull/42",
                         Summary: "Opened pull request #42")
                 ]));
         }

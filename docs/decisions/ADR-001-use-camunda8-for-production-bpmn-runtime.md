@@ -1,7 +1,7 @@
 # ADR-001: Use Camunda 8 as the Production BPMN Runtime
 
 ## Status
-Superseded by [ADR-002: Use BPMN-Centric Autofac Runtime by Default](ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
+Superseded by [ADR-002: Use BPMN-Centric Agentwerke Runtime by Default](ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
 
 This ADR is retained for historical context only. Do not use the implementation guidance below for new work unless ADR-002's re-decision triggers are met.
 
@@ -9,7 +9,7 @@ This ADR is retained for historical context only. Do not use the implementation 
 2026-06-16
 
 ## Context
-Autofac is intended to become a dark software factory: a straightforward SDLC automation product where users configure their delivery process, assign agent work, set policy gates, and observe execution.
+Agentwerke is intended to become a dark software factory: a straightforward SDLC automation product where users configure their delivery process, assign agent work, set policy gates, and observe execution.
 
 The current architecture and MVP plan describe BPMN as the primary workflow format, but they also include a custom in-process C# BPMN runtime. That custom runtime has been useful for early validation, but continuing to expand it would move engineering effort away from the product differentiators:
 
@@ -25,11 +25,11 @@ Dark software factory workflows are long-running and durable. They wait on agent
 ## Decision
 Use Camunda 8 as the production BPMN execution runtime from the start of the next implementation phase.
 
-Autofac will own:
+Agentwerke will own:
 
 - SDLC process builder UX
-- Autofac task metadata and agent assignment semantics
-- BPMN generation and validation for Autofac-supported patterns
+- Agentwerke task metadata and agent assignment semantics
+- BPMN generation and validation for Agentwerke-supported patterns
 - agent worker execution
 - sandboxing, policy, evidence, audit, and artifacts
 - the operational UI and API surface
@@ -47,16 +47,16 @@ The current in-process runtime should stop growing as a product runtime. It may 
 
 ## Mapping
 
-| Autofac concept | Camunda 8 construct |
+| Agentwerke concept | Camunda 8 construct |
 | --- | --- |
-| Agent task | BPMN service task with `zeebe:taskDefinition` and an Autofac job worker |
+| Agent task | BPMN service task with `zeebe:taskDefinition` and an Agentwerke job worker |
 | Human approval or review | BPMN user task |
 | Manual start | Process instance start API |
-| Jira or GitHub event trigger | Message start event, webhook connector, or Autofac inbound integration that starts a process |
-| Agent output | Camunda process variables plus Autofac artifact store records |
-| Evidence | Autofac artifact store and audit records, referenced by process variables |
+| Jira or GitHub event trigger | Message start event, webhook connector, or Agentwerke inbound integration that starts a process |
+| Agent output | Camunda process variables plus Agentwerke artifact store records |
+| Evidence | Agentwerke artifact store and audit records, referenced by process variables |
 | Policy block | Failed job, incident, boundary flow, or explicit user task depending on policy decision |
-| Run monitoring | Autofac read model joined with Camunda process, job, and user task state |
+| Run monitoring | Agentwerke read model joined with Camunda process, job, and user task state |
 
 ## Alternatives Considered
 
@@ -71,7 +71,7 @@ Pros:
 Cons:
 
 - High risk of building a BPMN-shaped subset rather than a trustworthy process engine.
-- Durable waits, timers, retries, user tasks, recovery, incidents, and parallel semantics become Autofac-owned maintenance burden.
+- Durable waits, timers, retries, user tasks, recovery, incidents, and parallel semantics become Agentwerke-owned maintenance burden.
 - Delays the real product work: agents, evidence, integrations, policy, and UI.
 
 Rejected for production runtime.
@@ -86,8 +86,8 @@ Pros:
 
 Cons:
 
-- Camunda 8 has a better fit for the job-worker pattern Autofac needs for external agent execution.
-- Autofac is a .NET application, so either option is external; Camunda 8's REST APIs and operational model fit the adapter boundary well.
+- Camunda 8 has a better fit for the job-worker pattern Agentwerke needs for external agent execution.
+- Agentwerke is a .NET application, so either option is external; Camunda 8's REST APIs and operational model fit the adapter boundary well.
 
 Kept as a fallback if Camunda licensing or operational constraints block adoption.
 
@@ -110,7 +110,7 @@ Rejected for the core product direction.
 ## Consequences
 
 - The next implementation plan should prioritize a Camunda adapter and job worker path.
-- Autofac BPMN XML must be deployable to Camunda. Rich `autofac:*` metadata should either be translated to Zeebe task definitions and task headers or stored in Autofac's database keyed by BPMN element id.
+- Agentwerke BPMN XML must be deployable to Camunda. Rich `autofac:*` metadata should either be translated to Zeebe task definitions and task headers or stored in Agentwerke's database keyed by BPMN element id.
 - UI should present simple SDLC concepts, while generating Camunda-compatible BPMN underneath.
 - The in-process runtime should be treated as legacy/test support and not expanded for production features.
 - Manual testing and E2E testing must include a real Camunda-backed workflow run.

@@ -74,7 +74,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         _agentRegistry = agentRegistry;
         _sandboxOptions = sandboxOptions.Value;
         _gitHubBranchPrefix = string.IsNullOrWhiteSpace(integrationOptions.Value.GitHub.BranchPrefix)
-            ? "autofac/run-"
+            ? "agentwerke/run-"
             : integrationOptions.Value.GitHub.BranchPrefix;
     }
 

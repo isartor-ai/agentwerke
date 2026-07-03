@@ -1,5 +1,5 @@
 ###############################################################################
-# Autofac — Pilot test stack (4 scenarios)
+# Agentwerke — Pilot test stack (4 scenarios)
 #
 # Scenario A — GitHub Branch + PR    (wf-pilot-001) — no API key needed
 # Scenario B — Approval Gate         (wf-pilot-002) — no API key needed
@@ -31,7 +31,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: autofac_pilot
+      POSTGRES_DB: agentwerke_pilot
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -39,7 +39,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_pilot"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_pilot"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -55,7 +55,7 @@ services:
       --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
       --startup-project src/Autofac.Api/Autofac.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_pilot;Username=postgres;Password=postgres"
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,7 +87,7 @@ services:
       - "8082:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_pilot;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       # Empty skills directory — agent tasks go straight to the model runner.
       Agents__Skills__SkillsDirectory: ""
@@ -101,9 +101,9 @@ services:
       Integrations__Jira__WebhookSecret: ""
       Integrations__GitHub__WebhookSecret: ""
       # Same signing key as the manual stack so the same pre-signed admin token works.
-      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
-      Jwt__Issuer: "autofac-dev"
-      Jwt__Audience: "autofac-dev"
+      Jwt__SecretKey: "agentwerke-dev-manual-testing-key-2026"
+      Jwt__Issuer: "agentwerke-dev"
+      Jwt__Audience: "agentwerke-dev"
       Jwt__DevTokensEnabled: "true"
       # ── Scenario D: set this to enable real Anthropic API calls ──────────
       # Leave blank or unset to use NullLanguageModelClient (graceful failure).
@@ -128,7 +128,7 @@ services:
     image: postgres:16-alpine
     command: >
       psql --set ON_ERROR_STOP=1
-      "host=postgres port=5432 dbname=autofac_pilot user=postgres password=postgres"
+      "host=postgres port=5432 dbname=agentwerke_pilot user=postgres password=postgres"
       -f /seed/seed-pilot.sql
     volumes:
       - ./seed-pilot.sql:/seed/seed-pilot.sql:ro
@@ -144,8 +144,8 @@ services:
       args:
         VITE_API_BASE_URL: ""
         # Same pre-signed HS256 admin token as docker-compose.manual.yml.
-        # Signed with "autofac-dev-manual-testing-key-2026". DO NOT use in production.
-        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+        # Signed with "agentwerke-dev-manual-testing-key-2026". DO NOT use in production.
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhZ2VudHdlcmtlLWRldiIsImF1ZCI6ImFnZW50d2Vya2UtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.ICCK9WVptCdU81iugfkBGyW5yPM9QAyxOYVtYStnjb0"
     restart: unless-stopped
     ports:
       - "3003:80"

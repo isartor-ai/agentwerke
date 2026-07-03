@@ -1,4 +1,4 @@
-# ADR-002: Use BPMN-Centric Autofac Runtime by Default
+# ADR-002: Use BPMN-Centric Agentwerke Runtime by Default
 
 ## Status
 Accepted
@@ -10,24 +10,24 @@ Accepted
 [ADR-001: Use Camunda 8 as the Production BPMN Runtime](ADR-001-use-camunda8-for-production-bpmn-runtime.md)
 
 ## Context
-Autofac's product strategy is to be straightforward to use, extensible at the SDLC/agent/tool layer, immediately usable by German companies, and capable of growing into a governed dark software factory.
+Agentwerke's product strategy is to be straightforward to use, extensible at the SDLC/agent/tool layer, immediately usable by German companies, and capable of growing into a governed dark software factory.
 
-Earlier planning selected Camunda 8 as the production BPMN runtime. That decision correctly identified the value of BPMN, service tasks, user tasks, timers, retries, and job workers. It also created a risk: Camunda-first execution adds a separate production runtime, licensing and operations questions, and a larger installation burden before Autofac has proven the core product value with real agents, enterprise auth, evidence, and template-first SDLC flows.
+Earlier planning selected Camunda 8 as the production BPMN runtime. That decision correctly identified the value of BPMN, service tasks, user tasks, timers, retries, and job workers. It also created a risk: Camunda-first execution adds a separate production runtime, licensing and operations questions, and a larger installation burden before Agentwerke has proven the core product value with real agents, enterprise auth, evidence, and template-first SDLC flows.
 
-The key product insight is that company SDLC processes are configurable but usually stable. Autofac does not need to execute arbitrary BPMN models as a general-purpose process engine. It needs to execute a governed catalog of SDLC templates and customer-tuned variants.
+The key product insight is that company SDLC processes are configurable but usually stable. Agentwerke does not need to execute arbitrary BPMN models as a general-purpose process engine. It needs to execute a governed catalog of SDLC templates and customer-tuned variants.
 
 ## Decision
-Autofac remains BPMN-centric, but Camunda 8 is no longer the default production runtime.
+Agentwerke remains BPMN-centric, but Camunda 8 is no longer the default production runtime.
 
-Autofac will use its bounded, Postgres-backed workflow runtime as the default runtime for MVP, pilot, and first self-hosted deployments. BPMN XML remains the product workflow artifact and governance language. The runtime supports only the BPMN subset required by Autofac's curated SDLC templates.
+Agentwerke will use its bounded, Postgres-backed workflow runtime as the default runtime for MVP, pilot, and first self-hosted deployments. BPMN XML remains the product workflow artifact and governance language. The runtime supports only the BPMN subset required by Agentwerke's curated SDLC templates.
 
-Camunda 8 remains an optional enterprise adapter. It should be used only when a customer already requires Camunda, already operates it, or when measured production requirements exceed the Autofac runtime's bounded scope.
+Camunda 8 remains an optional enterprise adapter. It should be used only when a customer already requires Camunda, already operates it, or when measured production requirements exceed the Agentwerke runtime's bounded scope.
 
 ## Runtime Scope
-The default Autofac runtime is not a general BPMN engine. It supports the governed subset needed by the built-in SDLC template catalog:
+The default Agentwerke runtime is not a general BPMN engine. It supports the governed subset needed by the built-in SDLC template catalog:
 
 - start and end events
-- service tasks backed by Autofac agent/tool/connector handlers
+- service tasks backed by Agentwerke agent/tool/connector handlers
 - user tasks for approval gates
 - exclusive gateways for simple branch selection
 - parallel gateways for bounded fan-out/fan-in
@@ -37,7 +37,7 @@ The default Autofac runtime is not a general BPMN engine. It supports the govern
 Unsupported BPMN features must fail validation for default-runtime deployment instead of being partially interpreted.
 
 ## Product Implications
-Autofac should optimize authoring around SDLC templates rather than a blank BPMN canvas.
+Agentwerke should optimize authoring around SDLC templates rather than a blank BPMN canvas.
 
 Users should start from validated golden paths such as issue-to-PR, bugfix, hotfix, security review, and deployment approval. The BPMN designer remains available as an advanced governance and editing surface, but normal users configure agents, approvals, policies, repositories, environments, and evidence requirements through SDLC-first UI.
 
@@ -65,9 +65,9 @@ Camunda work is allowed as an optional adapter behind the workflow runtime bound
 Revisit the default runtime decision only when one or more of these conditions is true:
 
 - a signed customer contractually requires Camunda execution
-- a target customer already operates Camunda and wants Autofac to attach workers to that estate
+- a target customer already operates Camunda and wants Agentwerke to attach workers to that estate
 - measured pilot load exceeds what the Postgres-backed runtime can safely support
-- required BPMN semantics exceed the supported Autofac subset and cannot be expressed as SDLC templates
+- required BPMN semantics exceed the supported Agentwerke subset and cannot be expressed as SDLC templates
 - operating the default runtime becomes more expensive than adopting an external engine
 
 ## Alternatives Considered
@@ -97,10 +97,10 @@ Pros:
 
 Cons:
 
-- Too broad for Autofac's strategy.
-- Would force Autofac to own arbitrary BPMN semantics, compatibility, and edge cases.
+- Too broad for Agentwerke's strategy.
+- Would force Agentwerke to own arbitrary BPMN semantics, compatibility, and edge cases.
 
-Rejected. Autofac owns a bounded SDLC runtime, not a general BPMN engine.
+Rejected. Agentwerke owns a bounded SDLC runtime, not a general BPMN engine.
 
 ### Embedded third-party workflow engine
 
@@ -111,7 +111,7 @@ Pros:
 
 Cons:
 
-- No current option clearly beats the existing Autofac runtime for .NET, PostgreSQL, BPMN artifact continuity, and template-first strategy.
+- No current option clearly beats the existing Agentwerke runtime for .NET, PostgreSQL, BPMN artifact continuity, and template-first strategy.
 - Migration would still distract from pilot-critical product work.
 
 Deferred. Keep the runtime boundary clean enough to evaluate later.
@@ -122,7 +122,7 @@ Deferred. Keep the runtime boundary clean enough to evaluate later.
 - Existing Camunda PRs should be reframed as optional adapter groundwork or closed if they force the default path.
 - The next implementation plan should prioritize runtime-mode clarity, template-first authoring, default-runtime conformance tests, real agents, auth/SSO, and evidence packs.
 - The Camunda issue chain should be marked deferred unless a re-decision trigger fires.
-- Manual testing should prove the default Autofac/Postgres runtime first; Camunda manual testing is optional adapter validation.
+- Manual testing should prove the default Agentwerke/Postgres runtime first; Camunda manual testing is optional adapter validation.
 
 ## References
 

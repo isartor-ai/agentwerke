@@ -1,12 +1,12 @@
 # Architecture (as-built)
 
-This is the current architecture of Autofac. (The older
+This is the current architecture of Agentwerke. (The older
 [`architecture-design.md`](architecture-design.md) captures the longer-term
 target design; this document reflects what's actually built.)
 
 ## Overview
 
-Autofac is a layered .NET control plane that runs AI agents inside a governed,
+Agentwerke is a layered .NET control plane that runs AI agents inside a governed,
 BPMN-defined software factory. A run walks the nodes of a BPMN model; agent
 service tasks are dispatched to the agent layer, which calls a model and brokers
 every tool call through a policy-enforced gateway, optionally inside a sandbox.
@@ -22,6 +22,10 @@ Trigger (API / GitHub webhook)
 ```
 
 ## Components (by project)
+
+Internal .NET projects still use the legacy `Autofac.*` prefix during the staged
+public rebrand. Treat those names as implementation details until the optional
+namespace/project rename is approved.
 
 | Project | Responsibility |
 | --- | --- |
@@ -40,9 +44,11 @@ Trigger (API / GitHub webhook)
 
 ## Execution runtime
 
-- **Default (`WorkflowRuntime:Mode=Autofac`):** a bounded, Postgres-backed
+- **Default (`WorkflowRuntime:Mode=Agentwerke`):** a bounded, Postgres-backed
   in-process engine (`EngineId = "in-process"`) with event-sourced checkpoints.
   This is the default ([ADR-002](decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)).
+- **Legacy alias (`Mode=Agentwerke`):** accepted for existing installs and mapped to
+  the Agentwerke runtime with a startup deprecation warning.
 - **Opt-in (`Mode=Camunda`):** an enterprise Camunda 8 adapter.
 
 Runs are dispatched asynchronously via a transactional **outbox** drained by a

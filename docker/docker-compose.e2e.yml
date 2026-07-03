@@ -1,5 +1,5 @@
 ###############################################################################
-# Autofac E2E test stack
+# Agentwerke E2E test stack
 #
 # The profiles include one-shot migration services. Avoid `up
 # --abort-on-container-exit` for the full stack because Compose will stop when
@@ -318,7 +318,7 @@ services:
     build:
       context: ..
       dockerfile: docker/agent-runner/Dockerfile
-    image: autofac-agent-runner:e2e
+    image: agentwerke-agent-runner:e2e
 
   api-agent-sandboxed:
     profiles: [agent-sandboxed]
@@ -345,7 +345,7 @@ services:
       # that's bind-mounted here under that exact same absolute path (see volumes
       # below) makes both sides agree on one real directory.
       Sandboxes__Docker__ArtifactsHostPath: "${PWD}/docker/.agent-sandboxed-artifacts"
-      Sandboxes__OpenSandbox__AgentRunnerImage: "autofac-agent-runner:e2e"
+      Sandboxes__OpenSandbox__AgentRunnerImage: "agentwerke-agent-runner:e2e"
       # The Anthropic Messages API is stubbed by the shared wiremock service (see
       # tests/Autofac.E2ETests/Fixtures/wiremock-anthropic-stub.json) — ApiKey just
       # needs to be non-empty for the runner's "is a credential configured" check.

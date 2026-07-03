@@ -8,12 +8,12 @@ The product needs one real factory line before broad workflow features.
 
 ## Scope
 - Add a template with requirement analysis, spec approval, implementation, test, PR creation, and final review.
-- Use supported Autofac agent task metadata.
+- Use supported Agentwerke agent task metadata.
 - Ensure generated BPMN deploys to Camunda.
 - Include realistic default agents and evidence requirements.
 
 ## Acceptance Criteria
-- Template validates through Autofac validation.
+- Template validates through Agentwerke validation.
 - Template deploys to Camunda.
 - Template can start and reach the first `autofac.agent` job.
 - Template is selectable from the UI.

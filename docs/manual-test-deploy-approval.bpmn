@@ -20,7 +20,7 @@
 -->
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="manual-test-deploy-approval-defs"
     targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
 

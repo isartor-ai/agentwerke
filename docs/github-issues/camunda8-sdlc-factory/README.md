@@ -6,8 +6,8 @@ As of 2026-06-17, `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runti
 
 The current strategy is:
 
-- Keep Autofac BPMN-centric.
-- Use the bounded Postgres-backed Autofac runtime as the default runtime for MVP, pilots, and first self-hosted deployments.
+- Keep Agentwerke BPMN-centric.
+- Use the bounded Postgres-backed Agentwerke runtime as the default runtime for MVP, pilots, and first self-hosted deployments.
 - Treat Camunda 8 as an optional enterprise adapter, enabled only through explicit configuration and customer need.
 - Prioritize template-first SDLC authoring, real agent execution, authentication/RBAC, evidence, and default-runtime conformance before any Camunda expansion.
 
@@ -52,7 +52,7 @@ The issue bodies are intentionally small enough for autonomous code agents to im
 | `009-bridge-camunda-user-tasks-to-approvals.md` | Park as adapter spike/reference |
 | `010-persist-camunda-evidence-references.md` | Reframe as default-runtime evidence and optional Camunda variable mapping |
 | `011-manual-start-input-mapping.md` | Reframe as runtime-neutral workflow start input mapping |
-| `012-camunda-issue-to-pr-template.md` | Reframe as default Autofac template with optional Camunda compatibility |
+| `012-camunda-issue-to-pr-template.md` | Reframe as default Agentwerke template with optional Camunda compatibility |
 | `013-make-camunda-default-runtime.md` | Superseded; should not be implemented |
 | `014-camunda-e2e-workflow-test.md` | Park; replace with default-runtime template conformance tests |
 | `015-camunda-incidents-run-detail.md` | Park; replace with runtime-neutral run operations UI |

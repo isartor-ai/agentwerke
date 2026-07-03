@@ -1,4 +1,4 @@
--- Autofac first-run seed data
+-- Agentwerke first-run seed data
 -- Idempotent: the sample workflow is inserted only when it does not already exist.
 -- Run after EF Core migrations have created the schema.
 
@@ -8,10 +8,10 @@ INSERT INTO autofac.workflows (
 ) VALUES (
     'wf-first-run-sample',
     'First Run Sample',
-    'Seeded workflow for fresh Autofac installs: a sample agent task followed by a review approval.',
+    'Seeded workflow for fresh Agentwerke installs: a sample agent task followed by a review approval.',
     'v1.0.0',
     'active',
-    'autofac',
+    'agentwerke',
     '2026-06-29T00:00:00.000Z',
     '2026-06-29T00:00:00.000Z',
     'valid',
@@ -22,9 +22,9 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="first-run-sample-defs"
-    targetNamespace="https://autofac.ai/bpmn">
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="FirstRunSample" name="First Run Sample" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
       <bpmn:outgoing>Flow1</bpmn:outgoing>
@@ -41,7 +41,7 @@ INSERT INTO autofac.workflows (
           executionMode="local"
           permissionLevel="read-only">
           <autofac:prompt>
-            Write a concise implementation note for a first Autofac run. Mention that the BPMN runtime, policy decision, sample agent, and evidence capture path are working.
+            Write a concise implementation note for a first Agentwerke run. Mention that the BPMN runtime, policy decision, sample agent, and evidence capture path are working.
           </autofac:prompt>
         </autofac:agentTask>
       </bpmn:extensionElements>

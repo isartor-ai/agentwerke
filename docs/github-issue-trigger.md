@@ -1,13 +1,13 @@
 # GitHub issue trigger
 
-Autofac can start a workflow run directly from a GitHub issue: someone opens
+Agentwerke can start a workflow run directly from a GitHub issue: someone opens
 (or labels) an issue describing a feature or bug, and — if the issue opts in —
 an agent reads it, plans a change, and opens a branch/PR against the
 configured repository.
 
 ## How it works
 
-1. GitHub sends an `issues` webhook to `POST /webhooks/github` on your Autofac
+1. GitHub sends an `issues` webhook to `POST /webhooks/github` on your Agentwerke
    instance (signed with `X-Hub-Signature-256`).
 2. `WebhooksController` validates the signature against
    `Integrations:GitHub:WebhookSecret`, then checks the issue `action`
@@ -15,7 +15,7 @@ configured repository.
 3. **The issue must also carry the required label** (see below). Issues
    without it are acknowledged (`200 OK`, `{ "skipped": true }`) but do not
    start a run.
-4. Autofac resolves the active workflow tagged `github-trigger` and starts a
+4. Agentwerke resolves the active workflow tagged `github-trigger` and starts a
    run, seeding the trigger context from the issue's title, body, and URL.
 5. The workflow's agent task reads that context, and any
    `github.create_branch` / `github.create_pull_request` tool calls run
@@ -26,11 +26,11 @@ through the workflow engine after this point.
 
 ## Required label
 
-By default, an issue must carry the label **`autofac`** for its webhook to
+By default, an issue must carry the label **`agentwerke`** for its webhook to
 start a run. This exists because `TriggerActions` alone (default: `opened`)
 would otherwise fire on **every** issue opened on the configured repository —
 spending model budget and potentially opening PRs for issues that were never
-meant for Autofac. A label is the native, discoverable GitHub mechanism for
+meant for Agentwerke. A label is the native, discoverable GitHub mechanism for
 opting an issue in (as opposed to, say, a text convention in the title, which
 is fragile and invisible in the GitHub UI).
 
@@ -39,7 +39,7 @@ Configure it via `Integrations:GitHub:RequiredLabel`:
 ```json
 "Integrations": {
   "GitHub": {
-    "RequiredLabel": "autofac"
+    "RequiredLabel": "agentwerke"
   }
 }
 ```
@@ -47,25 +47,27 @@ Configure it via `Integrations:GitHub:RequiredLabel`:
 or as an environment variable:
 
 ```bash
-Integrations__GitHub__RequiredLabel=autofac
+Integrations__GitHub__RequiredLabel=agentwerke
 ```
 
-- Matching is case-insensitive (`autofac`, `AutoFac`, `AUTOFAC` all match).
+- Matching is case-insensitive (`agentwerke`, `Agentwerke`, `AGENTWERKE` all match).
+- Existing installs may keep a legacy label such as `autofac` by setting
+  `Integrations:GitHub:RequiredLabel` explicitly.
 - Set it to an empty string to disable the check — every issue matching
   `TriggerActions` will start a run again, restoring pre-#191 behavior.
 
 ## Setup checklist
 
-1. Create the `autofac` label on your repository (or pick your own value for
+1. Create the `agentwerke` label on your repository (or pick your own value for
    `RequiredLabel`).
 2. Tag the workflow you want issues to start with `github-trigger`.
 3. Configure `Integrations:GitHub:WebhookSecret`, `RepositoryOwner`,
    `RepositoryName`, and `PersonalAccessToken` (see
    [getting started](getting-started.md#next-steps)).
 4. Point the repository's webhook deliveries (`issues` event) at
-   `POST /webhooks/github` on your Autofac instance, using the same shared
+   `POST /webhooks/github` on your Agentwerke instance, using the same shared
    secret as `WebhookSecret`.
-5. File an issue, apply the `autofac` label (or open it with the label
+5. File an issue, apply the `agentwerke` label (or open it with the label
    already applied via an issue template), and confirm a run starts.
 
 ## Reference
