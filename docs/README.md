@@ -24,3 +24,23 @@ Start here.
 
 ## Contributing
 - [CONTRIBUTING](../CONTRIBUTING.md) · [Code of Conduct](../CODE_OF_CONDUCT.md) · [Security policy](../SECURITY.md) · [Changelog](../CHANGELOG.md)
+
+## Docs site (docs.agentwerke.de)
+
+This folder is also the source for the user-manual site, built with
+[VitePress](https://vitepress.dev) (config in [`.vitepress/config.ts`](.vitepress/config.ts)).
+Only the curated user-facing pages are published; internal planning docs, ADR
+spikes, and the `github-issues/` archive are excluded via `srcExclude`.
+
+```bash
+cd docs
+npm install
+npm run docs:dev      # local dev server with hot reload
+npm run docs:build    # production build → .vitepress/dist
+```
+
+Pushes to `main` touching `docs/**` deploy to GitHub Pages via
+[`.github/workflows/docs-site.yml`](../.github/workflows/docs-site.yml); the
+custom domain comes from [`public/CNAME`](public/CNAME). One-time setup: repo
+**Settings → Pages → Source: GitHub Actions**, and a `docs.agentwerke.de` DNS
+`CNAME` → `isartor-ai.github.io`.
