@@ -1,6 +1,7 @@
-# autofac.de — marketing website
+# Agentwerke marketing website
 
-The public marketing site for **Autofac**, the governed AI software factory.
+The public marketing site for **Agentwerke by Isartor AI**, the
+**Governed Lights-Out Software Factory**.
 All product copy is derived from the repository documentation
 ([README](../README.md), [architecture](../docs/architecture.md),
 [security-model](../docs/security-model.md),
@@ -14,7 +15,7 @@ progressive-enhancement script. No build step, no toolchain, no runtime — the
 site is ultra-fast and trivially cacheable on any static/CDN host.
 
 **Brand.** Colors, typography, the `[]` logo mark, and the sharp-cornered
-industrial styling mirror the Autofac product UI (`web/src/index.css`): cyan
+industrial styling mirror the Agentwerke product UI (`web/src/index.css`): cyan
 `#00dce5` brand + lime `#c3f400` accent on a near-black `#0e0e0f` canvas, with
 **Inter** (body) and **JetBrains Mono** (marks, labels, chips). Those two fonts
 are loaded from Google Fonts — the only external request. Self-host them under
@@ -77,13 +78,13 @@ the official Actions pipeline (`configure-pages` → `upload-pages-artifact` →
 One-time setup:
 
 1. **Repo Settings → Pages → Build and deployment → Source = "GitHub Actions".**
-2. **Custom domain.** `website/CNAME` pins `autofac.de`, so it ships in every
+2. **Custom domain.** `website/CNAME` pins `agentwerke.de`, so it ships in every
    deploy. Configure DNS at your registrar:
-   - Apex `autofac.de` → four `A` records to GitHub Pages:
+   - Apex `agentwerke.de` → four `A` records to GitHub Pages:
      `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
      (add the matching `AAAA` records for IPv6 if desired, or an `ALIAS`/`ANAME`
      if your DNS supports it at the apex).
-   - `www.autofac.de` → `CNAME` to `<org-or-user>.github.io`.
+   - `www.agentwerke.de` → `CNAME` to `<org-or-user>.github.io`.
 3. In Settings → Pages, tick **Enforce HTTPS** once the certificate is issued.
 
 Until DNS resolves to GitHub Pages, the custom domain won't serve — that's
@@ -95,7 +96,7 @@ expected for a pinned custom domain.
   `website` and leave the build command empty.
 - **S3 + CloudFront / nginx** — copy the folder to the web root.
 
-For any non-Pages host, point the `autofac.de` apex (and `www`) DNS at that host
+For any non-Pages host, point the `agentwerke.de` apex (and `www`) DNS at that host
 and enable HTTPS. (`website/CNAME` is GitHub-Pages-specific and is ignored by
 other static hosts.)
 
@@ -104,11 +105,14 @@ other static hosts.)
 Copy is grounded in the repo docs; a few items need a human decision. Search the
 source for `REVIEW:` comments. Currently:
 
-- **Contact / access address** — `mailto:hello@autofac.de` is a placeholder used
+- **Contact / access address** — `mailto:hello@agentwerke.de` is a placeholder used
   by the "Request access" and "Contact" links. Replace with the real address or
   an access/demo form.
 - **Docs link target** — "Read the docs" points at `/tree/main/docs` in GitHub.
-  Repoint to `docs.autofac.de` once a hosted docs site exists.
+  Repoint to `docs.agentwerke.de` once a hosted docs site exists.
+- **GitHub repo link** — the visible product brand is Agentwerke, but repository
+  links still point to `isartor-ai/autofac` until the repo rename in
+  isartor-ai/autofac-private#196 is completed.
 - **OG image** — `og-image.svg` is vector. Some social scrapers prefer a
   1200×630 raster; export a PNG and update the `og:image` / `twitter:image`
   URLs if broader preview coverage is needed.

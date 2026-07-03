@@ -1,11 +1,11 @@
-/* Autofac — autofac.de
+/* Agentwerke — agentwerke.de
    Minimal, dependency-free progressive enhancement:
    theme toggle (persisted + system default), mobile menu, scroll reveal, year. */
 (function () {
   "use strict";
 
   var root = document.documentElement;
-  var STORAGE_KEY = "autofac-theme";
+  var STORAGE_KEY = "agentwerke-theme";
 
   /* ---- theme ---- */
   function systemPrefersLight() {

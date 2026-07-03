@@ -2,7 +2,7 @@ name: Deploy marketing site (GitHub Pages)
 
 # Publishes the static site in `website/` to GitHub Pages.
 # One-time setup: repo Settings → Pages → "Build and deployment" → Source = "GitHub Actions".
-# Custom domain (autofac.de) is pinned via website/CNAME; see website/README.md for DNS.
+# Custom domain (agentwerke.de) is pinned via website/CNAME; see website/README.md for DNS.
 
 on:
   push:
