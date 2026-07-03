@@ -19,7 +19,7 @@ public static class DependencyInjection
         {
             var options = sp.GetRequiredService<IOptions<IntegrationOptions>>().Value.GitHub;
             client.BaseAddress = new Uri(options.ApiBaseUrl);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Autofac/1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Agentwerke/1.0");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         });
         services.AddScoped<IGitHubConnector>(sp => sp.GetRequiredService<GitHubConnector>());

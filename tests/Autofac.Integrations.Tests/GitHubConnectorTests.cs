@@ -119,7 +119,7 @@ public sealed class GitHubConnectorTests
         Assert.Equal(2, requests.Count);
         Assert.Equal("Bearer", requests[0].Headers.Authorization?.Scheme);
         Assert.Equal("token-value", requests[0].Headers.Authorization?.Parameter);
-        Assert.Contains("Autofac/1.0", requests[0].Headers.UserAgent.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Agentwerke/1.0", requests[0].Headers.UserAgent.ToString(), StringComparison.Ordinal);
 
         var createBranchPayload = await requests[1].Content!.ReadAsStringAsync();
         Assert.Contains("\"ref\":\"refs/heads/agentwerke/run-123\"", createBranchPayload, StringComparison.Ordinal);
@@ -180,9 +180,9 @@ public sealed class GitHubConnectorTests
                 Attempt: 2,
                 HeadBranch: "agentwerke/run-123",
                 BaseBranch: null,
-                Title: "Autofac generated change",
+                Title: "Agentwerke generated change",
                 Body: "Generated from workflow execution.",
-                CommitMessage: "Autofac marker commit"),
+                CommitMessage: "Agentwerke marker commit"),
             CancellationToken.None);
 
         Assert.Equal(42, result.Number);
@@ -196,16 +196,16 @@ public sealed class GitHubConnectorTests
         Assert.Equal(3, requests.Count);
         Assert.Equal("/repos/octo/agentwerke/contents/.agentwerke/runs/run-123/step-456-attempt-2.md", requests[0].RequestUri?.AbsolutePath);
         Assert.Equal("/repos/octo/agentwerke/pulls", requests[1].RequestUri?.AbsolutePath);
-        Assert.Contains("head=octo%3Aautofac%2Frun-123", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("head=octo%3Aagentwerke%2Frun-123", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("base=main", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
 
         var commitPayload = await requests[0].Content!.ReadAsStringAsync();
-        Assert.Contains("\"message\":\"Autofac marker commit\"", commitPayload, StringComparison.Ordinal);
+        Assert.Contains("\"message\":\"Agentwerke marker commit\"", commitPayload, StringComparison.Ordinal);
         Assert.Contains("\"branch\":\"agentwerke/run-123\"", commitPayload, StringComparison.Ordinal);
         Assert.Contains("\"content\":\"R2VuZXJhdGVkIGZyb20gd29ya2Zsb3cgZXhlY3V0aW9uLg==\"", commitPayload, StringComparison.Ordinal);
 
         var pullPayload = await requests[2].Content!.ReadAsStringAsync();
-        Assert.Contains("\"title\":\"Autofac generated change\"", pullPayload, StringComparison.Ordinal);
+        Assert.Contains("\"title\":\"Agentwerke generated change\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"head\":\"agentwerke/run-123\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"base\":\"main\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"draft\":true", pullPayload, StringComparison.Ordinal);
@@ -474,7 +474,7 @@ public sealed class GitHubConnectorTests
                     Enabled = true,
                     ApiBaseUrl = "https://api.github.test/",
                     RepositoryOwner = "octo",
-                    RepositoryName = "autofac",
+                    RepositoryName = "agentwerke",
                     PersonalAccessToken = "token-value",
                     DefaultBaseBranch = "main",
                     BranchPrefix = "agentwerke/run-",

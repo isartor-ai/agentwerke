@@ -186,7 +186,7 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
 
         if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Autofac/1.0");
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Agentwerke/1.0");
         }
 
         if (_httpClient.DefaultRequestHeaders.Accept.Count == 0)
