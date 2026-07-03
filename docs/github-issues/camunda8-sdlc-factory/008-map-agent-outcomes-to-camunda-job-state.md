@@ -23,7 +23,7 @@ Operators need Camunda state and Agentwerke run state to agree, especially when 
 - Manual failure path shows consistent Camunda and Agentwerke state.
 
 ## Suggested Files
-- `src/Autofac.Infrastructure/Workers`
-- `src/Autofac.AgentSecOps`
-- `src/Autofac.Application/Workflows`
-- `tests/Autofac.E2ETests`
+- `src/Agentwerke.Infrastructure/Workers`
+- `src/Agentwerke.AgentSecOps`
+- `src/Agentwerke.Application/Workflows`
+- `tests/Agentwerke.E2ETests`

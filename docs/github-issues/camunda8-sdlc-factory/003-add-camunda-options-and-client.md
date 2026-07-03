@@ -19,10 +19,10 @@ Agentwerke should integrate with Camunda through infrastructure adapters, not sc
 - Unit tests cover configuration binding.
 
 ## Verification
-- `dotnet test Autofac.sln --filter Camunda`
+- `dotnet test Agentwerke.sln --filter Camunda`
 - Manual runtime health check reaches Camunda.
 
 ## Suggested Files
-- `src/Autofac.Infrastructure`
-- `src/Autofac.Api/appsettings*.json`
-- `tests/Autofac.Infrastructure.Tests` or existing infrastructure test project
+- `src/Agentwerke.Infrastructure`
+- `src/Agentwerke.Api/appsettings*.json`
+- `tests/Agentwerke.Infrastructure.Tests` or existing infrastructure test project

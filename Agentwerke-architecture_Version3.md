@@ -1,12 +1,12 @@
-# Autofac Architecture Design
+# Agentwerke Architecture Design
 
 ## 1. Overview
 
-**Autofac** is a secure, BPMN-native, Docker-sandboxed, C#/.NET autonomous software factory for AI-assisted software delivery.
+**Agentwerke** is a secure, BPMN-native, Docker-sandboxed, C#/.NET autonomous software factory for AI-assisted software delivery.
 
-Autofac orchestrates specialized LLM-powered agents through **BPMN 2.0 workflows**, executes work inside isolated **Docker sandboxes**, and enforces real-time security and compliance policies through an integrated **AgentSecOps Policy Enforcement Plane**.
+Agentwerke orchestrates specialized LLM-powered agents through **BPMN 2.0 workflows**, executes work inside isolated **Docker sandboxes**, and enforces real-time security and compliance policies through an integrated **AgentSecOps Policy Enforcement Plane**.
 
-Autofac is designed for teams that want autonomous software delivery while retaining strong governance, human oversight, auditability, and enterprise-grade security.
+Agentwerke is designed for teams that want autonomous software delivery while retaining strong governance, human oversight, auditability, and enterprise-grade security.
 
 ---
 
@@ -27,7 +27,7 @@ Autofac is designed for teams that want autonomous software delivery while retai
 
 ## 3. Key Architectural Principle
 
-Autofac agents are **not trusted to execute actions directly**.
+Agentwerke agents are **not trusted to execute actions directly**.
 
 Every sensitive agent action must flow through a controlled path:
 
@@ -152,26 +152,26 @@ Responsibilities:
 Suggested projects:
 
 ```text
-Autofac.Api
-Autofac.Application
-Autofac.Domain
-Autofac.Infrastructure
-Autofac.Workflows
-Autofac.Agents
-Autofac.AgentSecOps
-Autofac.Sandboxes
-Autofac.Integrations
-Autofac.Storage
-Autofac.Observability
+Agentwerke.Api
+Agentwerke.Application
+Agentwerke.Domain
+Agentwerke.Infrastructure
+Agentwerke.Workflows
+Agentwerke.Agents
+Agentwerke.AgentSecOps
+Agentwerke.Sandboxes
+Agentwerke.Integrations
+Agentwerke.Storage
+Agentwerke.Observability
 ```
 
 ---
 
 ## 5.3 BPMN Workflow Runtime
 
-**Technology:** C#, BPMN 2.0 XML, custom Autofac BPMN extensions
+**Technology:** C#, BPMN 2.0 XML, custom Agentwerke BPMN extensions
 
-Autofac uses BPMN as the primary workflow model.
+Agentwerke uses BPMN as the primary workflow model.
 
 The runtime executes BPMN workflow instances and coordinates task dispatch.
 
@@ -179,7 +179,7 @@ Responsibilities:
 
 - Parse BPMN XML.
 - Validate supported BPMN elements.
-- Interpret Autofac BPMN extension elements.
+- Interpret Agentwerke BPMN extension elements.
 - Create workflow instances.
 - Move tokens through BPMN process graphs.
 - Execute service tasks.
@@ -190,7 +190,7 @@ Responsibilities:
 
 Supported BPMN concepts:
 
-| BPMN Element | Autofac Meaning |
+| BPMN Element | Agentwerke Meaning |
 |---|---|
 | Start Event | Begin workflow run |
 | End Event | Complete workflow run |
@@ -203,7 +203,7 @@ Supported BPMN concepts:
 | Timer Event | Delay or scheduled retry |
 | Subprocess | Reusable workflow block |
 
-Example Autofac BPMN extension:
+Example Agentwerke BPMN extension:
 
 ```xml
 <bpmn:serviceTask id="DeployProduction" name="Deploy to Production">
@@ -254,7 +254,7 @@ AgentActionRequest
 
 Important rule:
 
-> Agents do not execute tools directly. Agents propose actions. Autofac evaluates and authorizes those actions before execution.
+> Agents do not execute tools directly. Agents propose actions. Agentwerke evaluates and authorizes those actions before execution.
 
 ---
 
@@ -305,7 +305,7 @@ Example action request:
 
 ## 5.6 AgentSecOps Policy Enforcement Plane
 
-The **AgentSecOps Policy Enforcement Plane** is a first-class Autofac subsystem that evaluates every sensitive AI agent action before execution.
+The **AgentSecOps Policy Enforcement Plane** is a first-class Agentwerke subsystem that evaluates every sensitive AI agent action before execution.
 
 It provides real-time, purpose-aware, context-aware policy enforcement.
 
@@ -354,7 +354,7 @@ QUARANTINE_AGENT_SESSION
 
 ## 5.7 Verified Purpose-Based Access Control
 
-Autofac uses **Verified Purpose-Based Access Control**, or Verified PBAC.
+Agentwerke uses **Verified Purpose-Based Access Control**, or Verified PBAC.
 
 Traditional access control evaluates:
 
@@ -362,7 +362,7 @@ Traditional access control evaluates:
 who + what + where
 ```
 
-Autofac evaluates:
+Agentwerke evaluates:
 
 ```text
 who + what + where + when + why + evidence + risk + workflow context
@@ -370,7 +370,7 @@ who + what + where + when + why + evidence + risk + workflow context
 
 The agent-declared purpose is useful but not trusted by itself.
 
-Autofac verifies purpose using:
+Agentwerke verifies purpose using:
 
 ```text
 Verified Purpose =
@@ -420,7 +420,7 @@ Preferred policy model:
 
 ## 5.8 Risk-Based Enforcement
 
-Not every action should require human approval. Autofac uses risk-based enforcement to reduce alert fatigue.
+Not every action should require human approval. Agentwerke uses risk-based enforcement to reduce alert fatigue.
 
 | Risk Level | Example | Decision Style |
 |---|---|---|
@@ -450,7 +450,7 @@ Required evidence:
 
 **Recommended technologies:** OPA/Rego, Cedar, or pluggable policy engine abstraction
 
-Autofac should provide a policy abstraction:
+Agentwerke should provide a policy abstraction:
 
 ```csharp
 public interface IPolicyDecisionPoint
@@ -464,9 +464,9 @@ public interface IPolicyDecisionPoint
 Suggested implementations:
 
 ```text
-Autofac.Policy.Opa
-Autofac.Policy.Cedar
-Autofac.Policy.InMemory
+Agentwerke.Policy.Opa
+Agentwerke.Policy.Cedar
+Agentwerke.Policy.InMemory
 ```
 
 Recommended initial choice:
@@ -630,7 +630,7 @@ Responsibilities:
 
 The Docker Sandbox Guard extends the sandbox manager with policy enforcement.
 
-It ensures agents cannot bypass Autofac policy controls from inside a container.
+It ensures agents cannot bypass Agentwerke policy controls from inside a container.
 
 Controls:
 
@@ -706,7 +706,7 @@ public interface IModelProvider
 
 ## 5.16 Integration Layer
 
-The Integration Layer connects Autofac to external systems.
+The Integration Layer connects Agentwerke to external systems.
 
 Connectors:
 
@@ -839,12 +839,12 @@ Tracked metrics:
 
 ```mermaid
 C4Context
-    title Autofac - System Context
+    title Agentwerke - System Context
 
     Person(engineer, "Engineer", "Creates workflows, starts runs, reviews outputs, approves gates")
     Person(admin, "Administrator", "Configures providers, policies, integrations, storage, and security")
 
-    System(autofac, "Autofac", "Secure BPMN-native autonomous software factory")
+    System(autofac, "Agentwerke", "Secure BPMN-native autonomous software factory")
 
     System_Ext(github, "GitHub", "Repositories, pull requests, issues, webhooks")
     System_Ext(jira, "Jira", "Issue tracking and workflow triggers")
@@ -872,11 +872,11 @@ C4Context
 
 ```mermaid
 C4Container
-    title Autofac - Container Diagram
+    title Agentwerke - Container Diagram
 
-    Person(engineer, "Engineer", "Uses Autofac")
+    Person(engineer, "Engineer", "Uses Agentwerke")
 
-    System_Boundary(autofac, "Autofac") {
+    System_Boundary(autofac, "Agentwerke") {
         Container(web, "Web UI", "React, TypeScript, BPMN.js", "Workflow designer, run board, approvals, audit explorer")
         Container(api, "API Server", "ASP.NET Core", "REST API, auth, orchestration facade, SignalR/SSE")
         Container(workflow, "BPMN Workflow Runtime", "C#/.NET", "Executes BPMN workflow instances")
@@ -929,7 +929,7 @@ C4Container
 
 ```mermaid
 C4Component
-    title Autofac - AgentSecOps Policy Enforcement Plane
+    title Agentwerke - AgentSecOps Policy Enforcement Plane
 
     Container_Boundary(policy, "AgentSecOps Policy Enforcement Plane") {
         Component(gateway, "Policy Enforcement Gateway", "C#", "Receives action requests and coordinates evaluation")
@@ -969,11 +969,11 @@ C4Component
 
 ```mermaid
 C4Component
-    title Autofac - BPMN Workflow Runtime
+    title Agentwerke - BPMN Workflow Runtime
 
     Container_Boundary(runtime, "BPMN Workflow Runtime") {
         Component(parser, "BPMN Parser", "C#", "Parses BPMN 2.0 XML")
-        Component(validator, "Workflow Validator", "C#", "Validates BPMN and Autofac extensions")
+        Component(validator, "Workflow Validator", "C#", "Validates BPMN and Agentwerke extensions")
         Component(instanceManager, "Instance Manager", "C#", "Creates and tracks workflow instances")
         Component(tokenEngine, "Token Engine", "C#", "Moves process tokens through BPMN elements")
         Component(taskDispatcher, "Task Dispatcher", "C#", "Dispatches service, user, script, and agent tasks")
@@ -1005,7 +1005,7 @@ C4Component
 
 ```mermaid
 C4Component
-    title Autofac - Agent Orchestrator
+    title Agentwerke - Agent Orchestrator
 
     Container_Boundary(agent, "Agent Orchestrator") {
         Component(sessionManager, "Agent Session Manager", "C#", "Creates and tracks agent sessions")
@@ -1037,7 +1037,7 @@ C4Component
 
 ```mermaid
 C4Component
-    title Autofac - Docker Sandbox Manager
+    title Agentwerke - Docker Sandbox Manager
 
     Container_Boundary(sandbox, "Docker Sandbox Manager") {
         Component(factory, "Sandbox Factory", "C#", "Creates sandbox containers")
@@ -1079,7 +1079,7 @@ C4Component
 
 ```text
 1. User designs BPMN workflow in the Web UI.
-2. BPMN workflow includes Autofac extension metadata for agent tasks and policy tags.
+2. BPMN workflow includes Agentwerke extension metadata for agent tasks and policy tags.
 3. User starts a workflow run.
 4. API Server creates workflow instance.
 5. BPMN Runtime moves token to an agent service task.
@@ -1182,7 +1182,7 @@ Mitigations:
 
 ## 8.4 Prompt Injection Defense
 
-Autofac uses layered defenses:
+Agentwerke uses layered defenses:
 
 - Prompt sanitization.
 - Tool-use authorization.
@@ -1208,7 +1208,7 @@ Important principle:
 | Web UI | React + TypeScript |
 | Workflow Format | BPMN 2.0 XML |
 | BPMN Editor | BPMN.js |
-| Workflow Runtime | Camunda 8 in production via Autofac adapter; in-process C# runtime for tests/simulation only |
+| Workflow Runtime | Camunda 8 in production via Agentwerke adapter; in-process C# runtime for tests/simulation only |
 | Realtime Updates | SignalR + SSE |
 | Sandbox Runtime | Docker Engine |
 | Docker Client | Docker.DotNet |
@@ -1306,7 +1306,7 @@ volumes:
 - Camunda 8 local/runtime profile
 - Camunda-compatible BPMN projection
 - Workflow publish deployment to Camunda
-- Process instance start from Autofac APIs
+- Process instance start from Agentwerke APIs
 - Agent service-task job workers
 - User-task approval bridge
 - Durable workflow state through Camunda
@@ -1363,7 +1363,7 @@ volumes:
 
 # 12. Summary
 
-Autofac is a secure, autonomous software factory built around:
+Agentwerke is a secure, autonomous software factory built around:
 
 ```text
 BPMN workflows
@@ -1376,8 +1376,8 @@ BPMN workflows
 + Immutable auditability
 ```
 
-The key differentiator is **Autofac AgentSecOps**:
+The key differentiator is **Agentwerke AgentSecOps**:
 
 > Every sensitive AI agent action is evaluated against verified purpose, workflow context, evidence, risk, and policy before it is allowed to affect code, infrastructure, secrets, or external systems.
 
-This makes Autofac suitable for enterprise-grade autonomous software development where speed, safety, compliance, and auditability are all required.
+This makes Agentwerke suitable for enterprise-grade autonomous software development where speed, safety, compliance, and auditability are all required.

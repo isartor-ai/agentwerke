@@ -236,7 +236,7 @@ Target direction: use OpenSandbox as the preferred sandbox control plane, with K
 
 #### Sandbox Profiles
 
-Agents do not get an open-ended sandbox. Every sandbox-routed action requests one of four named profiles (`Autofac.Sandboxes.SandboxProfileCatalog`), and the profile name determines the OpenSandbox `resourceLimits`, `networkPolicy`, `volumes`, and credential-vault bindings the sandbox receives:
+Agents do not get an open-ended sandbox. Every sandbox-routed action requests one of four named profiles (`Agentwerke.Sandboxes.SandboxProfileCatalog`), and the profile name determines the OpenSandbox `resourceLimits`, `networkPolicy`, `volumes`, and credential-vault bindings the sandbox receives:
 
 | Profile | Network egress | Repository mount | Credentials | Typical agents |
 | --- | --- | --- | --- | --- |
@@ -247,7 +247,7 @@ Agents do not get an open-ended sandbox. Every sandbox-routed action requests on
 
 Credentials are always bound by name from the secret/vault layer at a fixed file path inside the sandbox; they are never inlined as command arguments or written to logs.
 
-**Selection.** Each `AgentProfile` declares the profiles it may request (`AgentProfile.SandboxProfiles`; empty means "offline" only — least privilege by default). A BPMN service task may pin a specific profile with the `autofac:agentTask` `sandboxProfile` attribute; if omitted, the agent's first declared profile is used (or "offline" if it declares none). `Autofac.AgentSecOps.ISandboxProfileSelector` checks the requested profile against the agent's declared allow-list and, as defense in depth, rejects the `deployment` profile outright when the action-level policy decision's risk level is `critical` — independent of what the agent declares. Rejections happen in `ToolGateway` before any sandbox is created, are recorded in the run's tool-invocation history with status `profile_rejected`, and carry a diagnostic trail explaining which check failed.
+**Selection.** Each `AgentProfile` declares the profiles it may request (`AgentProfile.SandboxProfiles`; empty means "offline" only — least privilege by default). A BPMN service task may pin a specific profile with the `autofac:agentTask` `sandboxProfile` attribute; if omitted, the agent's first declared profile is used (or "offline" if it declares none). `Agentwerke.AgentSecOps.ISandboxProfileSelector` checks the requested profile against the agent's declared allow-list and, as defense in depth, rejects the `deployment` profile outright when the action-level policy decision's risk level is `critical` — independent of what the agent declares. Rejections happen in `ToolGateway` before any sandbox is created, are recorded in the run's tool-invocation history with status `profile_rejected`, and carry a diagnostic trail explaining which check failed.
 
 This is a second, narrower gate than the action-level allow/deny/escalate decision from `IPolicyEvaluationService`: that decision answers "is this action permitted at all"; the sandbox profile answers "what can the sandbox running it touch."
 
@@ -665,7 +665,7 @@ Rationale:
 
 #### Impact on the Architecture
 
-- `Autofac.Sandboxes` remains the Agentwerke-owned sandbox boundary and should become provider-neutral.
+- `Agentwerke.Sandboxes` remains the Agentwerke-owned sandbox boundary and should become provider-neutral.
 - The current Docker executor becomes a fallback implementation rather than the target production design.
 - Production deployment should assume `Agentwerke -> OpenSandbox -> Kubernetes secure runtime` instead of `Agentwerke -> direct Docker daemon`.
 - Sandbox profiles should eventually map Agentwerke policy intent into provider resource, network, filesystem, and credential configuration.
@@ -775,18 +775,18 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 
 | Project | Role | Maturity |
 | --- | --- | --- |
-| `Autofac.Domain` | Persistence entities, agent-runtime contracts, policy decisions | Solid |
-| `Autofac.Application` | Run orchestration service, authoring service, observability + run contracts | Solid |
-| `Autofac.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary | Solid; graph-based traversal, sequence flow parsing |
-| `Autofac.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Solid; drives **real** model execution via `Autofac.Agents.Models` |
-| `Autofac.Agents.Models` | `ILanguageModelClient` (Anthropic + mock + null providers), `AnthropicRetryHandler` (resilient HTTP), `IAgentModelRunner` tool-use loop, sandboxed agent runner | Real LLM execution (#143/#149/#150/#151) |
-| `Autofac.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
-| `Autofac.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; runs the agent-runner workload; OpenSandbox control plane selected in ADR-003 |
-| `Autofac.Integrations` | `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF comments), Slack, Teams connectors; `IConnectorRegistry`; per-connector policy gate, audit, metrics, and OTel spans | Solid (Phase E) |
-| `Autofac.Infrastructure` | EF Core + PostgreSQL (Npgsql), repositories, runtime store, 8 migrations | Solid |
-| `Autofac.Storage` | Artifact storage abstraction; local filesystem + S3 (`AWSSDK.S3`) drivers | Phase E: S3 added |
-| `Autofac.Observability` | Prometheus metrics, JSON console logs, correlation middleware, OTel tracing (`WithTracing` + OTLP exporter), `IWorkflowTracer`/`ISpan` abstraction, Jaeger via docker-compose | Metrics + tracing (Phase F) |
-| `Autofac.Api` | ASP.NET Core controllers, contract mapping, OpenAPI | Solid; unauthenticated |
+| `Agentwerke.Domain` | Persistence entities, agent-runtime contracts, policy decisions | Solid |
+| `Agentwerke.Application` | Run orchestration service, authoring service, observability + run contracts | Solid |
+| `Agentwerke.Workflows` | In-process BPMN engine, BPMN validator, engine-adapter boundary | Solid; graph-based traversal, sequence flow parsing |
+| `Agentwerke.Agents` | Agent orchestrator, tool gateway, hook gateway, MCP session, skills, prompt assembler | Solid; drives **real** model execution via `Agentwerke.Agents.Models` |
+| `Agentwerke.Agents.Models` | `ILanguageModelClient` (Anthropic + mock + null providers), `AnthropicRetryHandler` (resilient HTTP), `IAgentModelRunner` tool-use loop, sandboxed agent runner | Real LLM execution (#143/#149/#150/#151) |
+| `Agentwerke.AgentSecOps` | Rule-based policy evaluation service | MVP rules, hardcoded |
+| `Agentwerke.Sandboxes` | Docker sandbox executor (Docker.DotNet) | Real container lifecycle; runs the agent-runner workload; OpenSandbox control plane selected in ADR-003 |
+| `Agentwerke.Integrations` | `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF comments), Slack, Teams connectors; `IConnectorRegistry`; per-connector policy gate, audit, metrics, and OTel spans | Solid (Phase E) |
+| `Agentwerke.Infrastructure` | EF Core + PostgreSQL (Npgsql), repositories, runtime store, 8 migrations | Solid |
+| `Agentwerke.Storage` | Artifact storage abstraction; local filesystem + S3 (`AWSSDK.S3`) drivers | Phase E: S3 added |
+| `Agentwerke.Observability` | Prometheus metrics, JSON console logs, correlation middleware, OTel tracing (`WithTracing` + OTLP exporter), `IWorkflowTracer`/`ISpan` abstraction, Jaeger via docker-compose | Metrics + tracing (Phase F) |
+| `Agentwerke.Api` | ASP.NET Core controllers, contract mapping, OpenAPI | Solid; unauthenticated |
 
 Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites. The `WorkflowDesigner` view embeds a full `BpmnModeler` component (bpmn-js v17) with Agentwerke moddle extension (`autofac:AgentTask`, `autofac:ApprovalTask`) — extension metadata is serialized directly into BPMN XML via `modeling.updateModdleProperties`. Custom `additionalModules` add a drag-and-drop palette, CSS canvas markers, and a `bpmn-js-properties-panel` sidebar for editing all Agentwerke-specific fields. A `__mocks__/BpmnModeler.tsx` stub allows Vitest to run without jsdom SVG layout.
 
@@ -805,7 +805,7 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 - **Policy lifecycle, simulation & risk scoring**: data-driven rules with a draft→publish lifecycle (`POST /api/policies/{id}/publish`|`unpublish`) and **impact simulation** (`POST /api/policies/simulate`) surfaced in a Policies admin UI (#34/#170); `PurposeRiskScorer` attaches a 0–100 purpose-confidence and a context-correlated (escalating) risk to every decision (#26).
 - **Sandbox provider selection**: `ConfiguredSandboxExecutor` routes each run to the provider pinned on its sandbox profile (Docker / OpenSandbox / Kubernetes), so the execution backend is selectable **per policy/project** (#36); a kata-isolated Kubernetes executor with NetworkPolicy egress is implemented behind it (#171).
 - **Inbound triggers**: GitHub/Jira webhook ingestion with HMAC signature validation and tag-based workflow routing (`TagBasedTriggerRouter`).
-- **Observability**: workflow/step/approval/webhook metrics on `/metrics` (Prometheus), structured JSON logs with scoped `RunId`/`WorkflowId`/`Operation`, correlation-ID propagation, and **distributed tracing** via OTel `WithTracing` + OTLP to Jaeger (`Autofac.Workflows` `ActivitySource`; spans on engine start/resume/recover and every connector call).
+- **Observability**: workflow/step/approval/webhook metrics on `/metrics` (Prometheus), structured JSON logs with scoped `RunId`/`WorkflowId`/`Operation`, correlation-ID propagation, and **distributed tracing** via OTel `WithTracing` + OTLP to Jaeger (`Agentwerke.Workflows` `ActivitySource`; spans on engine start/resume/recover and every connector call).
 - **Connectors**: `IConnector`/`ConnectorBase` policy-gated abstraction; GitHub, Jira (Atlassian Document Format), Slack, Teams connectors; data-driven `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML-backed) and `InMemoryPolicyRuleStore` (tests); S3 artifact driver.
 - **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web + Jaeger; **Helm chart** (`deploy/helm/agentwerke`) deploys api (HPA 2→8), worker (HPA 2→6), web, Postgres StatefulSet, RBAC for sandbox namespace; Grafana dashboard at `deploy/grafana/dashboards/workflow-overview.json`; Prometheus alert rules at `deploy/prometheus/alerts.yml`; a **production single-host profile** (`docker/docker-compose.prod.yml` — non-dev auth, env secrets, resource limits) and deploy docs (`deploy/README.md`) added in #160.
 - **OSS readiness + supply chain**: Apache-2.0 `LICENSE` with an open-core boundary doc; community health files (SECURITY, CODE_OF_CONDUCT, CHANGELOG, issue templates); a one-command tokenless quickstart; a stable docs set. CI gates build/test/lint on every PR plus CodeQL and dependency review (#168), and a tag-driven release pipeline publishes container images to GHCR + a GitHub Release (#159).
@@ -820,7 +820,7 @@ These are the load-bearing gaps between the running system and the target archit
 4. ~~**Authentication/RBAC is stubbed.**~~ **Resolved.** JWT/OIDC bearer validation (enterprise SSO via configurable `Authority`), Viewer/Operator/Approver/Admin enforcement on product controllers, a role-based administration model (#33/#120), **LDAP/AD group-to-role mapping** (`Ldap:*`, #178), and approval decisions that record the authenticated principal. Dev-token/dev-identity modes are explicit and disabled by default in the production profile (#160). Secret-provider (vault) integration remains future work — see limitation #10.
 5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
 6. ~~**One outbound connector.**~~ **Resolved (Phase E).** `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF), Slack, Teams connectors registered via `IConnectorRegistry`; email/CI-CD remain future work.
-7. ~~**No distributed tracing.**~~ **Resolved (Phase F).** `WithTracing` + OTLP exporter wired; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application`; engine and connectors emit spans to Jaeger.
+7. ~~**No distributed tracing.**~~ **Resolved (Phase F).** `WithTracing` + OTLP exporter wired; `IWorkflowTracer`/`ISpan` abstraction in `Agentwerke.Application`; engine and connectors emit spans to Jaeger.
 8. ~~**No Kubernetes footprint.**~~ **Resolved (Phase F).** Helm chart at `deploy/helm/agentwerke` covers api, worker, web, Postgres StatefulSet, RBAC, HPA; Grafana dashboard and Prometheus alert rules included.
 9. ~~**Policy is code, not data.**~~ **Resolved (Phase E).** `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML file) and `InMemoryPolicyRuleStore`; admin authoring surface (policy-rule file) outside of code.
 10. **No plugin runtime.** The Plugin Runtime container (Section 6.8) and secret manager (Section 9) are not implemented; credentials come from configuration/env only.
@@ -858,7 +858,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 **Goal:** replace simulation with governed LLM execution.
 
-1. ✓ `Autofac.Agents.Models` abstraction: `ILanguageModelClient` with a provider-agnostic request/response (messages, tools, max-tokens, stop). First provider is Anthropic Claude behind `AnthropicRetryHandler`; the interface keeps OpenAI/Azure drop-in. A tokenless `MockLanguageModelClient` (#151) and a `NullLanguageModelClient` fallback round out provider selection (`Anthropic:Provider` = `mock`/`anthropic`/`auto`).
+1. ✓ `Agentwerke.Agents.Models` abstraction: `ILanguageModelClient` with a provider-agnostic request/response (messages, tools, max-tokens, stop). First provider is Anthropic Claude behind `AnthropicRetryHandler`; the interface keeps OpenAI/Azure drop-in. A tokenless `MockLanguageModelClient` (#151) and a `NullLanguageModelClient` fallback round out provider selection (`Anthropic:Provider` = `mock`/`anthropic`/`auto`).
 2. ✓ Wired into `AgentOrchestrator` via `IAgentModelRunner`: the assembled prompt + resolved skills + allowed tools drive a tool-use loop, with every tool call routed through `ToolGateway` (policy stays authoritative).
 3. ✓ The loop runs behind the sandbox interface through `OpenSandboxedAgentRunner`/`SandboxedAgentRuntimeExecutor` — a real agent runner replaces the placeholder workload, capturing token usage, tool invocations, and artifacts into `AgentRuntimeSnapshot`. Docker remains the interim local fallback.
 4. ~ Model-call usage (tokens) is captured per run; latency/cost metrics and full prompt/output secret-redaction remain incremental hardening (see Section 24, cost/budget governance).
@@ -911,7 +911,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 
 ### Phase F — Production observability and deployment (Medium) ✓ **Complete**
 
-1. ~~Add OTel tracing~~ — `WithTracing` + OTLP exporter in `Autofac.Observability`; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application` keeps core libraries OTel-free; `WorkflowRunExecutor` and `ConnectorBase` emit spans with `RunId`, `WorkflowId`, `connector.id`, `connector.operation`, and error recording; Jaeger added to `docker/docker-compose.yml`.
+1. ~~Add OTel tracing~~ — `WithTracing` + OTLP exporter in `Agentwerke.Observability`; `IWorkflowTracer`/`ISpan` abstraction in `Agentwerke.Application` keeps core libraries OTel-free; `WorkflowRunExecutor` and `ConnectorBase` emit spans with `RunId`, `WorkflowId`, `connector.id`, `connector.operation`, and error recording; Jaeger added to `docker/docker-compose.yml`.
 2. ~~Author Helm charts~~ — `deploy/helm/agentwerke/`: api (HPA 2→8), worker (HPA 2→6; `ServiceAccount` with `Role`/`RoleBinding` for sandbox namespace), web, Postgres `StatefulSet` (20 Gi PVC), namespace + RBAC, optional ingress.
 3. ~~SLO dashboards and alerting~~ — `deploy/grafana/dashboards/workflow-overview.json` (run success/failure rate, approval wait p50/p95, step/connector latency p50/p95, tool-call latency by category); `deploy/prometheus/alerts.yml` (high failure rate, approval SLA breach, worker backlog, connector error rate).
 

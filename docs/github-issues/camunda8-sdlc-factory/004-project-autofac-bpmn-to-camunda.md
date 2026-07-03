@@ -23,6 +23,6 @@ Camunda should execute valid Camunda BPMN. Rich Agentwerke metadata can exist in
 - Projected BPMN deploys to local Camunda.
 
 ## Suggested Files
-- `src/Autofac.Workflows/Bpmn`
-- `src/Autofac.Infrastructure/Workflows`
-- `tests/Autofac.Workflows.Tests`
+- `src/Agentwerke.Workflows/Bpmn`
+- `src/Agentwerke.Infrastructure/Workflows`
+- `tests/Agentwerke.Workflows.Tests`

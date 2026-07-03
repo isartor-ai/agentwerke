@@ -23,7 +23,7 @@ Human approval is central to the dark software factory model. Camunda should own
 - Manual test confirms approval UI can drive Camunda continuation.
 
 ## Suggested Files
-- `src/Autofac.Application/Workflows`
-- `src/Autofac.Infrastructure/Persistence`
-- `src/Autofac.Api/Controllers/ApprovalsController.cs`
-- `tests/Autofac.Application.Tests`
+- `src/Agentwerke.Application/Workflows`
+- `src/Agentwerke.Infrastructure/Persistence`
+- `src/Agentwerke.Api/Controllers/ApprovalsController.cs`
+- `tests/Agentwerke.Application.Tests`

@@ -27,4 +27,4 @@ Human gates should be rare, meaningful, and easy to decide correctly.
 - `web/src/views/ApprovalsDashboard.tsx`
 - `web/src/components/ConfirmDialog.tsx`
 - `web/src/api/client.ts`
-- `src/Autofac.Api/Controllers/ApprovalsController.cs`
+- `src/Agentwerke.Api/Controllers/ApprovalsController.cs`

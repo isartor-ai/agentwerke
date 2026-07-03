@@ -536,7 +536,7 @@ WebSocket /ws/runs/:runId
 ### Type Definitions (Shared with Frontend via OpenAPI schema or TypeScript)
 
 ```typescript
-// backend/Autofac.Application/Contracts/WorkflowContracts.cs
+// backend/Agentwerke.Application/Contracts/WorkflowContracts.cs
 interface ValidationError {
   nodeId: string;
   elementName: string;

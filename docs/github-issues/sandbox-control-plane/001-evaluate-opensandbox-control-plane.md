@@ -30,4 +30,4 @@ OpenSandbox gives Agentwerke a REST or OpenAPI lifecycle API, optional C# SDK pa
 - `docs/decisions/`
 - `docs/architecture-design.md`
 - `docs/functional-specification.md`
-- `src/Autofac.Sandboxes`
+- `src/Agentwerke.Sandboxes`

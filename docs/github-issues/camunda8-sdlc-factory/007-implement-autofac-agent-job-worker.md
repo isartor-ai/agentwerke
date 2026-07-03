@@ -23,7 +23,7 @@ Camunda service tasks are the correct extension point for custom Agentwerke agen
 - Worker logs include job key, run id, BPMN element id, and agent id.
 
 ## Suggested Files
-- `src/Autofac.Infrastructure/Workers`
-- `src/Autofac.Agents`
-- `src/Autofac.Application/Workflows`
-- `tests/Autofac.E2ETests`
+- `src/Agentwerke.Infrastructure/Workers`
+- `src/Agentwerke.Agents`
+- `src/Agentwerke.Application/Workflows`
+- `tests/Agentwerke.E2ETests`

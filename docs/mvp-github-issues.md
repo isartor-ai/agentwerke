@@ -48,7 +48,7 @@ The workflow designer is one of the core MVP surfaces, but backend behavior is s
 
 ### Scope
 
-- add workflow authoring use cases in `Autofac.Application`
+- add workflow authoring use cases in `Agentwerke.Application`
 - move import, validate, and publish logic out of controllers
 - define workflow versioning rules for MVP
 - persist workflow metadata consistently
@@ -119,7 +119,7 @@ This is the core execution loop for MVP.
 
 ### Scope
 
-- add run orchestration service in `Autofac.Application`
+- add run orchestration service in `Agentwerke.Application`
 - formalize start, resume, and recover use cases
 - persist checkpoints and state transitions intentionally
 - expose run events cleanly for UI consumption
@@ -283,7 +283,7 @@ Agentwerke must be governable, not just automated.
 
 ### Scope
 
-- implement policy evaluation service in `Autofac.AgentSecOps`
+- implement policy evaluation service in `Agentwerke.AgentSecOps`
 - support allow, escalate, reject decisions
 - connect policy checks to tool invocation path
 - persist policy decision events

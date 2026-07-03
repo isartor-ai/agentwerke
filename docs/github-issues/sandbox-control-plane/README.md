@@ -21,7 +21,7 @@ isartor-ai/autofac-private
 Created GitHub issues:
 
 1. [#124 Evaluate OpenSandbox as Agentwerke's sandbox control plane with Kata underneath](https://github.com/isartor-ai/autofac-private/issues/124)
-2. [#125 Refactor Autofac.Sandboxes for provider-neutral OpenSandbox integration](https://github.com/isartor-ai/autofac-private/issues/125)
+2. [#125 Refactor Agentwerke.Sandboxes for provider-neutral OpenSandbox integration](https://github.com/isartor-ai/autofac-private/issues/125)
 3. [#126 Implement an OpenSandbox-backed sandbox executor for Agentwerke](https://github.com/isartor-ai/autofac-private/issues/126)
 4. [#127 Map Agentwerke sandbox profiles to OpenSandbox policy, resources, and credentials](https://github.com/isartor-ai/autofac-private/issues/127)
 5. [#128 Add local fallback, deployment, and E2E verification for OpenSandbox rollout](https://github.com/isartor-ai/autofac-private/issues/128)
