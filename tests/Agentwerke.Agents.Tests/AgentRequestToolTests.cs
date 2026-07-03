@@ -21,7 +21,9 @@ public sealed class AgentRequestToolTests
             Succeeded: true, Output: "scaffolding done", FailureReason: null,
             ToolInvocations: [], Artifacts: null, TokenUsage: null));
         store = new FakeInteractionStore();
-        return new AgentRequestTool(new FakeRegistry(profiles), runner, store);
+        var capturedRunner = runner;
+        return new AgentRequestTool(
+            new FakeRegistry(profiles), new Lazy<IAgentModelRunner>(() => capturedRunner), store);
     }
 
     [Fact]
@@ -97,7 +99,8 @@ public sealed class AgentRequestToolTests
             Succeeded: false, Output: null, FailureReason: "model not configured",
             ToolInvocations: [], Artifacts: null, TokenUsage: null));
         var tool = new AgentRequestTool(
-            new FakeRegistry(new AgentProfile { AgentId = "coder", Name = "coder" }), runner, store);
+            new FakeRegistry(new AgentProfile { AgentId = "coder", Name = "coder" }),
+            new Lazy<IAgentModelRunner>(() => runner), store);
 
         var result = await tool.ExecuteAsync(
             Context("planner"),

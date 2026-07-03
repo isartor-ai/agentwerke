@@ -20,12 +20,15 @@ namespace Agentwerke.Agents.Tools;
 public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IAgentRegistry _registry;
-    private readonly IAgentModelRunner _modelRunner;
+    // Resolved lazily to break a DI cycle: this tool is part of the tool set the model runner
+    // itself depends on (AgentRequestTool -> IAgentModelRunner -> IToolGateway -> IToolRegistry ->
+    // IEnumerable<IAgentTool> -> AgentRequestTool). The runner is only needed at execution time.
+    private readonly Lazy<IAgentModelRunner> _modelRunner;
     private readonly IAgentInteractionRepository _interactions;
 
     public AgentRequestTool(
         IAgentRegistry registry,
-        IAgentModelRunner modelRunner,
+        Lazy<IAgentModelRunner> modelRunner,
         IAgentInteractionRepository interactions)
     {
         _registry = registry;
@@ -78,7 +81,7 @@ public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
         var correlationId = Guid.NewGuid().ToString("n");
         await RecordAsync(context, correlationId, from: context.AgentName, addressee: to, text: task, cancellationToken);
 
-        var result = await _modelRunner.RunAsync(
+        var result = await _modelRunner.Value.RunAsync(
             BuildDelegatedRequest(context, profile, task),
             cancellationToken);
 
