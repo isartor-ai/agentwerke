@@ -199,7 +199,7 @@ A relational database is recommended. The following tables can be used to store 
 
 ## 3. API Endpoints
 
-The following API endpoints need to be implemented in the `Autofac.Api` project. The controllers are located in `src/Autofac.Api/Controllers`.
+The following API endpoints need to be implemented in the `Agentwerke.Api` project. The controllers are located in `src/Agentwerke.Api/Controllers`.
 
 ### WorkflowsController
 

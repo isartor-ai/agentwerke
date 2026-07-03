@@ -2,7 +2,7 @@
 
 ## Overview
 
-Agentwerke currently uses EF Core migrations in `src/Autofac.Infrastructure` with the default PostgreSQL schema `autofac`.
+Agentwerke currently uses EF Core migrations in `src/Agentwerke.Infrastructure` with the default PostgreSQL schema `autofac`.
 
 The model stores timestamps as ISO-8601 strings in text columns and uses `jsonb` for list-valued fields.
 
@@ -133,8 +133,8 @@ delegations, and questions/notifications to a human. Backs the run **Conversatio
 - `agent_interactions` is likewise standalone (no FK), keyed and indexed by `RunId`. Approvals still live in their own `approval_requests` table (conceptually `Kind=approval`); folding them into `agent_interactions` is a possible future consolidation.
 - `workflow_run_context` is likewise standalone (no FK), keyed by `RunId`; entries are upserted by (`RunId`, `Key`).
 - To add a migration:
-  - `dotnet ef migrations add <Name> --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`
+  - `dotnet ef migrations add <Name> --project src/Agentwerke.Infrastructure --startup-project src/Agentwerke.Api`
 - To list migrations:
-  - `dotnet ef migrations list --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`
+  - `dotnet ef migrations list --project src/Agentwerke.Infrastructure --startup-project src/Agentwerke.Api`
 - To generate an idempotent SQL script:
-  - `dotnet ef migrations script --idempotent --project src/Autofac.Infrastructure --startup-project src/Autofac.Api`
+  - `dotnet ef migrations script --idempotent --project src/Agentwerke.Infrastructure --startup-project src/Agentwerke.Api`

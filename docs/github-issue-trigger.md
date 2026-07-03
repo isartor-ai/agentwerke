@@ -72,9 +72,9 @@ Integrations__GitHub__RequiredLabel=agentwerke
 
 ## Reference
 
-- `src/Autofac.Api/Controllers/WebhooksController.cs` —
+- `src/Agentwerke.Api/Controllers/WebhooksController.cs` —
   `HandleIssuesEventAsync` / `HasRequiredLabel`
-- `src/Autofac.Integrations/IntegrationOptions.cs` — `GitHubOptions`
-- `tests/Autofac.Api.Tests/WebhooksControllerTests.cs` — trigger/skip/opt-out
+- `src/Agentwerke.Integrations/IntegrationOptions.cs` — `GitHubOptions`
+- `tests/Agentwerke.Api.Tests/WebhooksControllerTests.cs` — trigger/skip/opt-out
   coverage
 - isartor-ai/autofac-private#191 — the issue that introduced this gate

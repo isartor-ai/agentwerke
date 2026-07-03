@@ -8,7 +8,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](global.json)
 [![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
-[![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Autofac.Agents/Models/AnthropicLanguageModelClient.cs)
+[![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Agentwerke.Agents/Models/AnthropicLanguageModelClient.cs)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 [Premise](#premise) | [Factory line](#factory-line) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
@@ -94,15 +94,15 @@ pack.
 ### Build from source
 
 ```bash
-dotnet restore Autofac.sln
-dotnet build Autofac.sln
-dotnet test Autofac.sln --no-build
+dotnet restore Agentwerke.sln
+dotnet build Agentwerke.sln
+dotnet test Agentwerke.sln --no-build
 ```
 
 Run the API locally:
 
 ```bash
-dotnet run --project src/Autofac.Api/Autofac.Api.csproj
+dotnet run --project src/Agentwerke.Api/Agentwerke.Api.csproj
 ```
 
 The OpenAPI document is served at `/openapi/v1.json`.
@@ -133,21 +133,21 @@ When a run reaches its `MaxRunCostUsd`/`MaxRunTokens` budget, further model call
 
 Agentwerke is a layered .NET control plane. The domain model stays at the center; model providers, storage, sandboxes, workflow adapters, and external systems sit at the edge.
 
-The first public rebrand keeps internal solution, project, and namespace names under the legacy `Autofac.*` prefix. That keeps existing builds, migrations, and downstream references stable while the customer-facing product becomes Agentwerke.
+The solution, projects, and .NET namespaces use the `Agentwerke.*` prefix. Database table names, the `Autofac` runtime-mode alias, and the BPMN `autofac:` extension prefix are intentionally retained as stable compatibility contracts, so existing installs and persisted workflows keep working without migration (see [docs/brand-migration.md](docs/brand-migration.md)).
 
 | Project | Responsibility |
 | --- | --- |
-| `src/Autofac.Api` | ASP.NET Core API host |
-| `src/Autofac.Application` | Application use cases and orchestration contracts |
-| `src/Autofac.Domain` | Core domain model and rules |
-| `src/Autofac.Infrastructure` | Infrastructure adapters and implementations |
-| `src/Autofac.Workflows` | BPMN runtime concerns |
-| `src/Autofac.Agents` | Agent orchestration, model client, tool and hook gateways |
-| `src/Autofac.AgentSecOps` | Policy enforcement and action governance |
-| `src/Autofac.Sandboxes` | Sandbox lifecycle and controls |
-| `src/Autofac.Integrations` | External platform connectors for GitHub, CI/CD, Jira, Slack, Teams, and more |
-| `src/Autofac.Storage` | Artifact and blob abstractions |
-| `src/Autofac.Observability` | Logging, metrics, and tracing wiring |
+| `src/Agentwerke.Api` | ASP.NET Core API host |
+| `src/Agentwerke.Application` | Application use cases and orchestration contracts |
+| `src/Agentwerke.Domain` | Core domain model and rules |
+| `src/Agentwerke.Infrastructure` | Infrastructure adapters and implementations |
+| `src/Agentwerke.Workflows` | BPMN runtime concerns |
+| `src/Agentwerke.Agents` | Agent orchestration, model client, tool and hook gateways |
+| `src/Agentwerke.AgentSecOps` | Policy enforcement and action governance |
+| `src/Agentwerke.Sandboxes` | Sandbox lifecycle and controls |
+| `src/Agentwerke.Integrations` | External platform connectors for GitHub, CI/CD, Jira, Slack, Teams, and more |
+| `src/Agentwerke.Storage` | Artifact and blob abstractions |
+| `src/Agentwerke.Observability` | Logging, metrics, and tracing wiring |
 | `tests/` | Domain, agent, workflow, integration, and end-to-end tests |
 
 ### Workflow runtime mode

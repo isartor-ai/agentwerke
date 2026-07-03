@@ -54,12 +54,12 @@ The test is gated on an API key so it is a no-op without credentials:
 
 ```bash
 # Skipped (no-op) when the env var is absent:
-dotnet test tests/Autofac.Agents.Tests/Autofac.Agents.Tests.csproj \
+dotnet test tests/Agentwerke.Agents.Tests/Agentwerke.Agents.Tests.csproj \
   --filter "FullyQualifiedName~RealClaudeIntegrationTests"
 
 # Runs against the real API when a key is present:
 AUTOFAC_E2E_ANTHROPIC_API_KEY=sk-ant-... \
-  dotnet test tests/Autofac.Agents.Tests/Autofac.Agents.Tests.csproj \
+  dotnet test tests/Agentwerke.Agents.Tests/Agentwerke.Agents.Tests.csproj \
   --filter "FullyQualifiedName~RealClaudeIntegrationTests"
 ```
 
@@ -226,8 +226,8 @@ Repeat steps 6 through 10 above, but:
 
 ## References
 
-- `src/Autofac.Application/Workflows/SdlcTemplateSeeds.cs` — the `AutonomousSdlc` template
-- `tests/Autofac.Workflows.Tests/SdlcTemplateSeedsValidationTests.cs` — automated structural
+- `src/Agentwerke.Application/Workflows/SdlcTemplateSeeds.cs` — the `AutonomousSdlc` template
+- `tests/Agentwerke.Workflows.Tests/SdlcTemplateSeedsValidationTests.cs` — automated structural
   validation of this template (and every other seeded template) against the real BPMN validator
 - `docs/manual-test-opensandbox.md` — the `agent_sandboxed` validation this scenario builds on
 - isartor-ai/autofac-private#89 — the parent SDLC epic and original target scenario
