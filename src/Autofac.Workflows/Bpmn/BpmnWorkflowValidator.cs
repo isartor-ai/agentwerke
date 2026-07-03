@@ -70,7 +70,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var errors = new List<BpmnValidationError>();
         var warnings = new List<BpmnValidationWarning>();
         var bpmnNamespace = document.Root?.GetNamespaceOfPrefix("bpmn") ?? XNamespace.Get("http://www.omg.org/spec/BPMN/20100524/MODEL");
-        var autofacNamespace = document.Root?.GetNamespaceOfPrefix("autofac") ?? XNamespace.Get("https://autofac.ai/bpmn");
+        var autofacNamespace = document.Root?.GetNamespaceOfPrefix("autofac") ?? XNamespace.Get("https://agentwerke.de/bpmn/extensions/v1");
 
         var process = document.Descendants(bpmnNamespace + "process").FirstOrDefault();
         if (process is null)

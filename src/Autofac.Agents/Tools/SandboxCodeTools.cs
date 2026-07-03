@@ -413,7 +413,7 @@ public sealed class SandboxGitTool(
 
     private async Task ConfigureIdentityAsync(CancellationToken cancellationToken)
     {
-        await SandboxWorkspace.RunProcessAsync("git", ["config", "user.email", "autofac-bot@autofac.de"], workspaceRoot, cancellationToken);
+        await SandboxWorkspace.RunProcessAsync("git", ["config", "user.email", "agentwerke-bot@agentwerke.de"], workspaceRoot, cancellationToken);
         await SandboxWorkspace.RunProcessAsync("git", ["config", "user.name", "Autofac"], workspaceRoot, cancellationToken);
     }
 

@@ -1,5 +1,5 @@
 ###############################################################################
-# Autofac — Manual test stack
+# Agentwerke — Manual test stack
 #
 # Brings up: Postgres, API, Web UI, and WireMock (GitHub stub).
 # Optional `camunda` profile adds a local Camunda 8 Zeebe runtime for
@@ -58,7 +58,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: autofac_manual
+      POSTGRES_DB: agentwerke_manual
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -66,7 +66,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_manual"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_manual"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -82,7 +82,7 @@ services:
       --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
       --startup-project src/Autofac.Api/Autofac.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_manual;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_manual;Username=postgres;Password=postgres"
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,7 +112,7 @@ services:
       - "8081:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_manual;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_manual;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       # Skills directory empty → agent tasks run as simulated no-op (succeed immediately)
       Agents__Skills__SkillsDirectory: ""
@@ -127,9 +127,9 @@ services:
       Integrations__GitHub__WebhookSecret: ""
       # Dev-only JWT — signs tokens accepted by the web UI's pre-baked admin token.
       # Secret must match VITE_DEV_ADMIN_TOKEN in the web service build args.
-      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
-      Jwt__Issuer: "autofac-dev"
-      Jwt__Audience: "autofac-dev"
+      Jwt__SecretKey: "agentwerke-dev-manual-testing-key-2026"
+      Jwt__Issuer: "agentwerke-dev"
+      Jwt__Audience: "agentwerke-dev"
       Jwt__DevTokensEnabled: "true"
     volumes:
       - api_storage:/app/storage
@@ -152,7 +152,7 @@ services:
     # --set ON_ERROR_STOP=1 so a bad SQL statement fails loudly instead of silently
     command: >
       psql --set ON_ERROR_STOP=1
-      "host=postgres port=5432 dbname=autofac_manual user=postgres password=postgres"
+      "host=postgres port=5432 dbname=agentwerke_manual user=postgres password=postgres"
       -f /seed/seed-manual.sql
     volumes:
       - ./seed-manual.sql:/seed/seed-manual.sql:ro
@@ -169,8 +169,8 @@ services:
         VITE_API_BASE_URL: ""
         # Pre-signed HS256 JWT (role=admin, exp=2030-01-01, signed with Jwt__SecretKey above).
         # Allows the SPA to call protected endpoints without a login flow.
-        # role=Admin (PascalCase) to match AutofacRoles.Admin / RequireRole policy checks
-        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+        # role=Admin (PascalCase) to match backend RequireRole policy checks.
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhZ2VudHdlcmtlLWRldiIsImF1ZCI6ImFnZW50d2Vya2UtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.ICCK9WVptCdU81iugfkBGyW5yPM9QAyxOYVtYStnjb0"
     restart: unless-stopped
     ports:
       - "3002:80"

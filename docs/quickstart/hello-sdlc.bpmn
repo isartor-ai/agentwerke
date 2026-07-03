@@ -9,7 +9,7 @@
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.de/bpmn/extensions/v1"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="hello-sdlc-defs" targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
   <bpmn:process id="HelloSdlc" name="Hello SDLC" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">

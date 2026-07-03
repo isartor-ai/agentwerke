@@ -1,10 +1,10 @@
 <div align="center">
 
-# Autofac
+# Agentwerke
 
-### A dark software factory for governed AI delivery
+### Governed Lights-Out Software Factory
 
-**Autofac turns autonomous coding agents into a controlled production line: BPMN workflows, sandboxed execution, policy gates, human approvals, and tamper-evident evidence for every artifact the factory emits.**
+**Agentwerke by Isartor AI runs autonomous coding agents through enterprise integrations, BPMN workflows, policy gates, approvals, sandboxes, and audit-ready evidence packs.**
 
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](global.json)
 [![Runtime](https://img.shields.io/badge/runtime-BPMN--native-0A7BBB)](docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
@@ -19,13 +19,14 @@
 
 ## Premise
 
-Autofac takes its name from Philip K. Dick's 1955 story [Autofac](https://en.wikipedia.org/wiki/Autofac): a postwar world where automatic factories keep manufacturing after meaningful human control has slipped away.
+Agentwerke is the new product name for the platform formerly known as Autofac.
+The origin is still Philip K. Dick's 1955 story [Autofac](https://en.wikipedia.org/wiki/Autofac): a postwar world where automatic factories keep manufacturing after meaningful human control has slipped away.
 
 That warning is the product thesis.
 
 AI agents can now plan, code, test, review, and open pull requests. Left alone, that power becomes another opaque production system: fast, tireless, difficult to interrogate, and too easy to trust because it looks useful.
 
-Autofac is the countermeasure. It is not another coding agent. It is the control plane around the agents: the dark factory floor where every job has a process model, every tool call crosses a policy gate, every sandbox has a boundary, and every run leaves evidence behind.
+Agentwerke is the countermeasure. It is not another coding agent. It is the enterprise control plane around the agents: the factory floor where every job has a process model, every tool call crosses a policy gate, every sandbox has a boundary, and every run leaves evidence behind.
 
 - **Autonomy without blind trust.** Agents can act, but they do not get direct access to sensitive tools, credentials, networks, repositories, or deployment paths.
 - **Workflow over vibes.** Software delivery is modeled as versioned BPMN, not hidden in a prompt transcript.
@@ -107,7 +108,7 @@ The OpenAPI document is served at `/openapi/v1.json`.
 
 ### Enabling real agents and choosing a model provider
 
-Agents run against a real model when an API key is configured. Without a key, Autofac uses a safe null client and agent steps report that no model is configured; set `Anthropic:Provider=mock` for deterministic, tokenless runs. Admin users can inspect and rotate model credentials from **Settings**, or continue using appsettings, environment variables, and user-secrets.
+Agents run against a real model when an API key is configured. Without a key, Agentwerke uses a safe null client and agent steps report that no model is configured; set `Anthropic:Provider=mock` for deterministic, tokenless runs. Admin users can inspect and rotate model credentials from **Settings**, or continue using appsettings, environment variables, and user-secrets.
 
 `Anthropic:Provider` selects the backend: `anthropic` (default when a key is present), `openai`, `litellm` (any OpenAI-compatible endpoint — Azure OpenAI or a LiteLLM proxy fronting many models), `mock`, or `auto`.
 
@@ -129,7 +130,9 @@ When a run reaches its `MaxRunCostUsd`/`MaxRunTokens` budget, further model call
 
 ## Architecture
 
-Autofac is a layered .NET control plane. The domain model stays at the center; model providers, storage, sandboxes, workflow adapters, and external systems sit at the edge.
+Agentwerke is a layered .NET control plane. The domain model stays at the center; model providers, storage, sandboxes, workflow adapters, and external systems sit at the edge.
+
+The first public rebrand keeps internal solution, project, and namespace names under the legacy `Autofac.*` prefix. That keeps existing builds, migrations, and downstream references stable while the customer-facing product becomes Agentwerke.
 
 | Project | Responsibility |
 | --- | --- |
@@ -148,17 +151,18 @@ Autofac is a layered .NET control plane. The domain model stays at the center; m
 
 ### Workflow runtime mode
 
-Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting:
+Agentwerke selects its execution runtime through the `WorkflowRuntime:Mode` setting:
 
 | Value | Behavior |
 | --- | --- |
-| `Autofac` | Default. Uses the bounded, Postgres-backed Autofac runtime. Camunda configuration is not read and no Camunda client is constructed. |
+| `Agentwerke` | Default. Uses the bounded, Postgres-backed Agentwerke runtime. Camunda configuration is not read and no Camunda client is constructed. |
 | `Camunda` | Opt-in enterprise adapter. Camunda options, client, health probe, and status are wired. |
+| `Autofac` | Legacy alias for `Agentwerke`. Existing installs keep working, but new configuration should use `Agentwerke`. |
 
 ```jsonc
 // appsettings.json
 "WorkflowRuntime": {
-  "Mode": "Autofac"
+  "Mode": "Agentwerke"
 }
 ```
 
@@ -213,7 +217,7 @@ Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting
 ### Authentication and data residency
 
 - OIDC/JWT SSO with a Viewer/Operator/Approver/Admin role model and configurable role-claim mapping.
-- **LDAP/Active Directory** group-to-role mapping (`Ldap:*` settings): authenticated users receive Autofac roles from their directory groups via the existing role mappings.
+- **LDAP/Active Directory** group-to-role mapping (`Ldap:*` settings): authenticated users receive product roles from their directory groups via the existing role mappings.
 - Fully self-hostable (in-process engine, Postgres, local artifact storage) so content can stay within the customer boundary.
 - Enterprise SSO/RBAC and self-hosted data-boundary guidance: `docs/deployment-auth-data-residency.md`
 
@@ -234,10 +238,10 @@ Autofac selects its execution runtime through the `WorkflowRuntime:Mode` setting
 
 ## License
 
-[Apache-2.0](LICENSE). Autofac is **open core** — the full self-hostable platform is Apache-2.0; a separately-licensed commercial tier adds enterprise governance, SSO/RBAC, scale, and compliance features. See [docs/open-core.md](docs/open-core.md) for the boundary.
+[Apache-2.0](LICENSE). Agentwerke is **open core** — the full self-hostable platform is Apache-2.0; a separately-licensed commercial tier adds enterprise governance, SSO/RBAC, scale, and compliance features. See [docs/open-core.md](docs/open-core.md) for the boundary.
 
 ---
 
 <div align="center">
-<sub>Autofac | dark software factory | BPMN-native, sandboxed, policy-governed autonomous delivery</sub>
+<sub>Agentwerke by Isartor AI | Governed Lights-Out Software Factory | BPMN-native, sandboxed, policy-governed autonomous delivery</sub>
 </div>

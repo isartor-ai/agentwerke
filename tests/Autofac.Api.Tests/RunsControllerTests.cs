@@ -164,7 +164,7 @@ public sealed class RunsControllerTests
                 DefinitionVersion: "v1",
                 BpmnSha256: "abc123",
                 HashAlgorithm: "SHA-256"),
-            Runtime: new EvidenceRuntime("Autofac", CamundaEnabled: false),
+            Runtime: new EvidenceRuntime("Agentwerke", CamundaEnabled: false),
             Run: new EvidenceRun(
                 RunId: runId,
                 Status: "completed",

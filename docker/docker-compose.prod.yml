@@ -1,7 +1,7 @@
 ###############################################################################
-# Autofac — production self-host stack (single host / Docker Compose).
+# Agentwerke — production self-host stack (single host / Docker Compose).
 #
-# For Kubernetes use the Helm chart at deploy/helm/autofac (recommended for HA
+# For Kubernetes use the Helm chart at deploy/helm/agentwerke (recommended for HA
 # and stronger sandbox isolation). This compose is a production-oriented
 # single-host option: NO dev auth, secrets from the environment, pinned
 # published images, restart policies, and resource limits.
@@ -14,27 +14,30 @@
 #   JWT_SECRET            HS256 signing key (omit if using OIDC via JWT_AUTHORITY)
 #   JWT_AUTHORITY         OIDC issuer URL (Entra/Keycloak) — see deploy/README.md
 #   ANTHROPIC_API_KEY     model provider key
-#   AUTOFAC_GITHUB_PAT    GitHub PAT (if the GitHub connector is used)
-# Optional: AUTOFAC_VERSION (image tag, default "latest"), OTLP_ENDPOINT
+#   AGENTWERKE_GITHUB_PAT GitHub PAT (if the GitHub connector is used)
+# Optional: AGENTWERKE_VERSION (image tag, default "latest"), AGENTWERKE_DB,
+#           AGENTWERKE_REGISTRY, OTLP_ENDPOINT
+# Legacy AUTOFAC_VERSION and AUTOFAC_GITHUB_PAT are still read as fallbacks
+# during the rename transition.
 #
 # Start:
 #   docker compose -f docker/docker-compose.prod.yml up -d
 ###############################################################################
 x-images:
-  registry: &registry "ghcr.io/isartor-ai/autofac"
+  registry: &registry "ghcr.io/isartor-ai/agentwerke"
 
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: autofac
+      POSTGRES_DB: "${AGENTWERKE_DB:-agentwerke}"
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${AGENTWERKE_DB:-agentwerke}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -43,43 +46,43 @@ services:
         limits: { cpus: "1.0", memory: 1G }
 
   migrate:
-    image: "ghcr.io/isartor-ai/autofac/api:${AUTOFAC_VERSION:-latest}"
+    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/api:${AGENTWERKE_VERSION:-${AUTOFAC_VERSION:-latest}}"
     restart: "no"
     entrypoint: ["dotnet", "ef", "database", "update",
       "--project", "src/Autofac.Infrastructure/Autofac.Infrastructure.csproj",
       "--startup-project", "src/Autofac.Api/Autofac.Api.csproj"]
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=${POSTGRES_PASSWORD:?}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${AGENTWERKE_DB:-agentwerke};Username=postgres;Password=${POSTGRES_PASSWORD:?}"
     depends_on:
       postgres: { condition: service_healthy }
 
   api:
-    image: "ghcr.io/isartor-ai/autofac/api:${AUTOFAC_VERSION:-latest}"
+    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/api:${AGENTWERKE_VERSION:-${AUTOFAC_VERSION:-latest}}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"   # bind to localhost; expose via your TLS proxy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=${POSTGRES_PASSWORD:?}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${AGENTWERKE_DB:-agentwerke};Username=postgres;Password=${POSTGRES_PASSWORD:?}"
       Storage__RootPath: /app/storage
       # --- Auth: real auth only; dev modes OFF ---
       Jwt__DevTokensEnabled: "false"
       Jwt__DevIdentityEnabled: "false"
       Jwt__Authority: "${JWT_AUTHORITY:-}"        # OIDC issuer (Entra/Keycloak) — preferred
       Jwt__SecretKey: "${JWT_SECRET:-}"           # or a symmetric HS256 key
-      Jwt__Issuer: "${JWT_ISSUER:-autofac}"
-      Jwt__Audience: "${JWT_AUDIENCE:-autofac}"
+      Jwt__Issuer: "${JWT_ISSUER:-agentwerke}"
+      Jwt__Audience: "${JWT_AUDIENCE:-agentwerke}"
       # --- Model provider ---
       Anthropic__Provider: "anthropic"
       Anthropic__ApiKey: "${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}"
       # --- GitHub connector (optional) ---
       Integrations__GitHub__Enabled: "${GITHUB_ENABLED:-false}"
-      Integrations__GitHub__PersonalAccessToken: "${AUTOFAC_GITHUB_PAT:-}"
+      Integrations__GitHub__PersonalAccessToken: "${AGENTWERKE_GITHUB_PAT:-${AUTOFAC_GITHUB_PAT:-}}"
       Integrations__GitHub__RepositoryOwner: "${GITHUB_OWNER:-}"
       Integrations__GitHub__RepositoryName: "${GITHUB_REPO:-}"
       # --- Observability (optional OTLP collector) ---
       Tracing__OtlpEndpoint: "${OTLP_ENDPOINT:-}"
-      Tracing__ServiceName: "autofac-api"
+      Tracing__ServiceName: "agentwerke-api"
     volumes:
       - api_storage:/app/storage
     depends_on:
@@ -95,7 +98,7 @@ services:
         limits: { cpus: "1.0", memory: 512M }
 
   web:
-    image: "ghcr.io/isartor-ai/autofac/web:${AUTOFAC_VERSION:-latest}"
+    image: "${AGENTWERKE_REGISTRY:-ghcr.io/isartor-ai/agentwerke}/web:${AGENTWERKE_VERSION:-${AUTOFAC_VERSION:-latest}}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:80"     # expose via your TLS proxy

@@ -1,7 +1,7 @@
 # Surface Camunda retry and incident state in Run Detail
 
 ## Summary
-Expose Camunda job failures, retries, and incidents through Autofac APIs and Run Detail UI.
+Expose Camunda job failures, retries, and incidents through Agentwerke APIs and Run Detail UI.
 
 ## Why
 Operators need to distinguish agent failure, policy block, exhausted retries, and engine incident without opening Camunda tooling.
@@ -12,7 +12,7 @@ Operators need to distinguish agent failure, policy block, exhausted retries, an
 - Add failure-path tests.
 
 ## Acceptance Criteria
-- Failed job retry state appears in Autofac run detail.
+- Failed job retry state appears in Agentwerke run detail.
 - Incident state is visually distinct and textually clear.
 - Operator can identify the affected workflow step.
 - Tests cover incident serialization and UI rendering.

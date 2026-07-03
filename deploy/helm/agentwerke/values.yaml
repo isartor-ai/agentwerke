@@ -5,7 +5,7 @@ global:
 # --- API ---
 api:
   image:
-    repository: autofac/api
+    repository: agentwerke/api
     tag: "latest"
     pullPolicy: IfNotPresent
   replicaCount: 2
@@ -27,20 +27,20 @@ api:
   ingress:
     enabled: false
     className: nginx
-    host: autofac.example.com
-    tlsSecretName: autofac-tls
+    host: agentwerke.example.com
+    tlsSecretName: agentwerke-tls
   env:
     ASPNETCORE_ENVIRONMENT: Production
-    Tracing__ServiceName: autofac-api
+    Tracing__ServiceName: agentwerke-api
     # Set Tracing__OtlpEndpoint to your OTLP collector, e.g. http://jaeger-collector:4317
     Tracing__OtlpEndpoint: ""
     # See the `sandbox` section below for the Sandboxes__* env vars merged in
-    # by the autofac.sandboxEnv template.
+    # by the agentwerke.sandboxEnv template.
 
 # --- Worker (RunDispatchWorker) ---
 worker:
   image:
-    repository: autofac/api     # same image, different entrypoint via env
+    repository: agentwerke/api     # same image, different entrypoint via env
     tag: "latest"
     pullPolicy: IfNotPresent
   replicaCount: 2
@@ -58,7 +58,7 @@ worker:
     targetCPUUtilizationPercentage: 70
   env:
     ASPNETCORE_ENVIRONMENT: Production
-    Tracing__ServiceName: autofac-worker
+    Tracing__ServiceName: agentwerke-worker
     Tracing__OtlpEndpoint: ""
     # See the `sandbox` section below — this is the process that actually runs
     # AgentOrchestrator and dispatches sandboxed tasks.
@@ -66,11 +66,11 @@ worker:
 # --- Web (SPA) ---
 web:
   image:
-    repository: autofac/web
+    repository: agentwerke/web
     tag: "latest"
     pullPolicy: IfNotPresent
   replicaCount: 1
-  apiBaseUrl: "https://autofac.example.com/api"
+  apiBaseUrl: "https://agentwerke.example.com/api"
   resources:
     requests:
       cpu: 50m
@@ -101,13 +101,13 @@ postgres:
     storageClass: ""
   credentials:
     existingSecret: ""    # name of K8s Secret with POSTGRES_PASSWORD key
-    database: autofac
+    database: agentwerke
     username: postgres
 
 # --- Shared secrets reference ---
-# Create a K8s Secret named `autofac-secrets` with keys:
+# Create a K8s Secret named `agentwerke-secrets` with keys:
 #   POSTGRES_PASSWORD, ANTHROPIC_API_KEY, JWT_SECRET, OPEN_SANDBOX_API_KEY (optional)
-secretName: autofac-secrets
+secretName: agentwerke-secrets
 
 # --- Sandbox execution ---
 #
@@ -116,7 +116,7 @@ secretName: autofac-secrets
 #
 # Production should set provider to "opensandbox" and point openSandbox.serverUrl
 # at an OpenSandbox server deployed in Kubernetes mode with a Kata (or
-# Kata+Firecracker) RuntimeClass configured on its sandbox pods. Autofac does
+# Kata+Firecracker) RuntimeClass configured on its sandbox pods. Agentwerke does
 # not deploy OpenSandbox itself or create sandbox pods directly in this mode —
 # it is a client of the OpenSandbox server's REST API. Deploy OpenSandbox with
 # its own chart/manifests per https://github.com/opensandbox-group/OpenSandbox.
@@ -137,8 +137,9 @@ sandbox:
     # API key is read from `secretName` (key: OPEN_SANDBOX_API_KEY) when set.
 
   # Namespace + RBAC for the reserved direct Kubernetes/Kata executor
-  # (Autofac.Sandboxes.KubernetesKataSandboxExecutor). This is the fallback
-  # architecture only if the OpenSandbox spike fails — see ADR-003. It is not
+  # (Autofac.Sandboxes.KubernetesKataSandboxExecutor). This internal class keeps
+  # the legacy namespace until the deferred technical namespace migration.
+  # This is the fallback architecture only if the OpenSandbox spike fails — see ADR-003. It is not
   # used while provider is "opensandbox" or "docker".
-  namespace: autofac-sandboxes
+  namespace: agentwerke-sandboxes
   createNamespace: true

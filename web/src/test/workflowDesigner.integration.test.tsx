@@ -74,7 +74,7 @@ describe('WorkflowDesigner integration', () => {
       bpmnXml: PERSISTED_XML,
     }));
     vi.mocked(apiClient.getAgents).mockResolvedValue([]);
-    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Autofac', camundaEnabled: false });
+    vi.mocked(apiClient.getRuntimeMode).mockResolvedValue({ mode: 'Agentwerke', camundaEnabled: false });
     vi.mocked(apiClient.getTemplates).mockResolvedValue(templatesFixture);
     vi.mocked(apiClient.getTemplate).mockImplementation(async (id: string) =>
       id === templateDetailFixture.id ? templateDetailFixture : undefined,

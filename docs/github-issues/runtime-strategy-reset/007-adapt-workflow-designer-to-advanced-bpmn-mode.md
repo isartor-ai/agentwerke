@@ -8,7 +8,7 @@ The existing BPMN designer is powerful, but exposing it as the first workflow cr
 
 - Refactor the designer so it can be launched from a workflow draft as advanced editing mode.
 - Make validation feedback distinguish default-runtime errors from optional-adapter compatibility warnings.
-- Keep Autofac custom tasks and approval gates visible in BPMN mode.
+- Keep Agentwerke custom tasks and approval gates visible in BPMN mode.
 - Hide Camunda-specific projection, deployment, and runtime fields unless Camunda mode is active.
 - Preserve round-trip BPMN XML editing and existing validation overlays.
 

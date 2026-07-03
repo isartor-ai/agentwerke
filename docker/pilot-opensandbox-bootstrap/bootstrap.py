@@ -57,7 +57,7 @@ def wait_for_api():
         except Exception:
             time.sleep(2)
 
-    raise RuntimeError("Timed out waiting for Autofac API health endpoint.")
+    raise RuntimeError("Timed out waiting for Agentwerke API health endpoint.")
 
 
 def ensure_agent(agent_file: Path, file_name: str):

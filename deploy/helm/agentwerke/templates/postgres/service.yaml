@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "autofac.fullname" . }}-postgres
+  name: {{ include "agentwerke.fullname" . }}-postgres
   labels:
-    {{- include "autofac.labels" . | nindent 4 }}
+    {{- include "agentwerke.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres
 spec:
   type: ClusterIP
@@ -15,7 +15,7 @@ spec:
       protocol: TCP
       name: postgres
   selector:
-    app.kubernetes.io/name: {{ include "autofac.name" . }}
+    app.kubernetes.io/name: {{ include "agentwerke.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: postgres
 {{- end }}

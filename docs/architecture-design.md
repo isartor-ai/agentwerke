@@ -1,4 +1,4 @@
-# Autofac Architecture Design
+# Agentwerke Architecture Design
 
 Version: Draft v0.3
 Status: Working Draft
@@ -9,9 +9,9 @@ Related documents: `docs/architecture.md` (concise current overview), `docs/func
 
 ## 1. Purpose
 
-This document defines the target architecture for Autofac based on the current Functional Specification Document.
+This document defines the target architecture for Agentwerke based on the current Functional Specification Document.
 
-The objective is to describe how Autofac should be structured as a secure, cloud-native, observable software factory platform that:
+The objective is to describe how Agentwerke should be structured as a secure, cloud-native, observable software factory platform that:
 - models SDLC workflows in BPMN
 - orchestrates agents as workflow executors
 - integrates with enterprise systems
@@ -44,14 +44,14 @@ The architecture should satisfy the following product and technical goals:
 
 ## 4. System Context
 
-Autofac sits between human operators, enterprise systems, LLM providers, execution sandboxes, and delivery platforms.
+Agentwerke sits between human operators, enterprise systems, LLM providers, execution sandboxes, and delivery platforms.
 
 ### C4 Model Level 1: System Context
 
 ```mermaid
 flowchart LR
     user["Users\nProduct, Engineering, QA, DevOps, Approvers, Admins"]
-    autofac["Autofac\nDark software factory platform"]
+    autofac["Agentwerke\nDark software factory platform"]
     jira["Jira"]
     github["GitHub"]
     slack["Slack"]
@@ -78,7 +78,7 @@ flowchart LR
 
 ## 5. Container Architecture
 
-Autofac should be designed as a set of cooperating platform services rather than a single monolith. The main architectural units are:
+Agentwerke should be designed as a set of cooperating platform services rather than a single monolith. The main architectural units are:
 
 - React Web Application
 - API Gateway / Backend API
@@ -97,7 +97,7 @@ Autofac should be designed as a set of cooperating platform services rather than
 flowchart TB
     user["User"]
 
-    subgraph autofac["Autofac Platform"]
+    subgraph autofac["Agentwerke Platform"]
         web["Web App\nReact"]
         api["Platform API\nC# ASP.NET Core"]
         workflow["Workflow Runtime Engine\nBPMN execution, run state, scheduling"]
@@ -188,7 +188,7 @@ Responsibilities:
 ### 6.3 Workflow Runtime Engine
 
 Responsibilities:
-- Execute the Autofac-supported BPMN subset through the default Postgres-backed runtime
+- Execute the Agentwerke-supported BPMN subset through the default Postgres-backed runtime
 - Maintain workflow state and transitions through the engine adapter
 - Process triggers and schedules
 - Create and resume workflow runs
@@ -196,7 +196,7 @@ Responsibilities:
 - Route task execution to agent or integration handlers
 - Handle retries, compensation, and rollback controls
 
-Architecture decision: Autofac is BPMN-centric, but the default runtime is the bounded Postgres-backed Autofac runtime. Camunda 8 is retained as an optional enterprise adapter, not the production default. See `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
+Architecture decision: Agentwerke is BPMN-centric, but the default runtime is the bounded Postgres-backed Agentwerke runtime. Camunda 8 is retained as an optional enterprise adapter, not the production default. See `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
 
 ### 6.4 Agent Orchestrator
 
@@ -366,7 +366,7 @@ flowchart LR
 1. A trigger is received from Slack, Teams, Jira, GitHub, webhook, email, schedule, or manual invocation.
 2. The Integration Hub or Trigger Service validates the event and creates a workflow run.
 3. The Workflow Runtime Engine loads the BPMN definition and starts execution.
-4. When an Autofac Agent Task is reached, the Agent Orchestrator resolves agent profile, skills, tools, and policies.
+4. When an Agentwerke Agent Task is reached, the Agent Orchestrator resolves agent profile, skills, tools, and policies.
 5. The Sandbox Execution Manager provisions an isolated execution environment if required.
 6. The agent performs the LLM task and invokes approved tools through the Tool Gateway.
 7. Tool invocations are evaluated by policy before execution.
@@ -390,7 +390,7 @@ For the Jira-driven use case:
 
 ## 9. Data Architecture
 
-Autofac requires a combination of transactional storage, event streams, artifacts, and secrets.
+Agentwerke requires a combination of transactional storage, event streams, artifacts, and secrets.
 
 ### Core Data Domains
 
@@ -417,7 +417,7 @@ Autofac requires a combination of transactional storage, event streams, artifact
 
 ## 10. Integration Architecture
 
-Autofac should use a connector-based integration model.
+Agentwerke should use a connector-based integration model.
 
 ### Connector Categories
 
@@ -439,7 +439,7 @@ Autofac should use a connector-based integration model.
 
 ## 11. Security Architecture
 
-Security is central to Autofac because the platform can perform code generation, repository changes, infrastructure actions, and deployment activities.
+Security is central to Agentwerke because the platform can perform code generation, repository changes, infrastructure actions, and deployment activities.
 
 ### Security Controls
 
@@ -465,7 +465,7 @@ Security is central to Autofac because the platform can perform code generation,
 
 ## 12. Observability Architecture
 
-Autofac must support logging, tracing, and monitoring as first-class capabilities.
+Agentwerke must support logging, tracing, and monitoring as first-class capabilities.
 
 ### Telemetry Types
 
@@ -488,7 +488,7 @@ Autofac must support logging, tracing, and monitoring as first-class capabilitie
 
 ## 13. Deployment Architecture
 
-Autofac should be deployed as a cloud-native platform on Kubernetes.
+Agentwerke should be deployed as a cloud-native platform on Kubernetes.
 
 ### C4 Model Level 4 Style Deployment View
 
@@ -552,7 +552,7 @@ flowchart TB
 ### Frontend
 
 - React for the application shell and workflow UI
-- Open source BPMN modeler extended with Autofac custom components
+- Open source BPMN modeler extended with Agentwerke custom components
 - Real-time operational dashboards for workflow and agent monitoring
 
 ### Backend
@@ -572,39 +572,39 @@ flowchart TB
 
 ### 14.1 BPMN Runtime Strategy
 
-Autofac needs two distinct BPMN capabilities:
-- a React-friendly modeling experience that can be extended with Autofac custom components
-- a reliable runtime that executes the governed SDLC workflow subset used by Autofac templates
+Agentwerke needs two distinct BPMN capabilities:
+- a React-friendly modeling experience that can be extended with Agentwerke custom components
+- a reliable runtime that executes the governed SDLC workflow subset used by Agentwerke templates
 
-These capabilities are deliberately separated. BPMN remains the workflow artifact, import/export format, and governance language. Runtime choice is infrastructure behind the Autofac workflow boundary.
+These capabilities are deliberately separated. BPMN remains the workflow artifact, import/export format, and governance language. Runtime choice is infrastructure behind the Agentwerke workflow boundary.
 
 #### Candidate Comparison
 
-| Candidate | Strengths | Risks / Constraints | Fit for Autofac |
+| Candidate | Strengths | Risks / Constraints | Fit for Agentwerke |
 | --- | --- | --- | --- |
-| Autofac bounded runtime | Native .NET/Postgres deployment; already integrated with run state, context, approvals, audit, outbox, timers, and recovery; simplest self-hosted path for German companies | Must remain explicitly scoped to Autofac-supported SDLC templates; not a general BPMN engine | Default runtime for MVP, pilots, and first self-hosted deployments |
+| Agentwerke bounded runtime | Native .NET/Postgres deployment; already integrated with run state, context, approvals, audit, outbox, timers, and recovery; simplest self-hosted path for German companies | Must remain explicitly scoped to Agentwerke-supported SDLC templates; not a general BPMN engine | Default runtime for MVP, pilots, and first self-hosted deployments |
 | Camunda 8 with Zeebe | Mature orchestration runtime; service-task/job-worker model aligns with agent tasks; strong user task, timer, retry, and incident concepts | Adds separate production runtime, licensing and operations questions, Camunda-specific BPMN projection, and installation complexity | Optional enterprise adapter when a customer requires or already operates Camunda |
 | Flowable OSS | Mature classical BPM engine; broad BPMN support; strong self-hosted story in Java environments | Java-first runtime and separate operational surface; not aligned with simple .NET/Postgres default deployment | Fallback only if richer BPMN breadth becomes a customer requirement |
-| Embedded third-party workflow engine | Could reduce custom runtime maintenance while keeping deployment simpler than a full external BPM platform | No current option clearly beats the existing Autofac runtime for .NET, Postgres, BPMN artifact continuity, and template-first strategy | Deferred evaluation |
+| Embedded third-party workflow engine | Could reduce custom runtime maintenance while keeping deployment simpler than a full external BPM platform | No current option clearly beats the existing Agentwerke runtime for .NET, Postgres, BPMN artifact continuity, and template-first strategy | Deferred evaluation |
 
 #### Evaluation Criteria
 
-Autofac's engine choice should optimize for:
+Agentwerke's engine choice should optimize for:
 - React-compatible BPMN modeling and custom node extensibility
 - simple self-hosted deployment with PostgreSQL
 - immediate usability for German companies with data residency requirements
 - bounded long-running workflow support for SDLC templates
 - timer and human-approval orchestration
-- service-task execution that maps cleanly to Autofac agents
+- service-task execution that maps cleanly to Agentwerke agents
 - run observability, auditability, and evidence capture
 - low migration risk between MVP and long-term platform evolution
 
 #### Decision (Revised - 2026-06-17)
 
-**Autofac remains BPMN-centric, but Camunda 8 is no longer the default production runtime.** The default runtime is the bounded Postgres-backed Autofac runtime, executing the supported BPMN subset required by curated SDLC templates. Camunda 8 is an optional enterprise adapter behind the runtime boundary.
+**Agentwerke remains BPMN-centric, but Camunda 8 is no longer the default production runtime.** The default runtime is the bounded Postgres-backed Agentwerke runtime, executing the supported BPMN subset required by curated SDLC templates. Camunda 8 is an optional enterprise adapter behind the runtime boundary.
 
 Rationale:
-- Autofac's strategic value is SDLC semantics, real agent execution, policy, evidence, approvals, integrations, audit, and operator UX.
+- Agentwerke's strategic value is SDLC semantics, real agent execution, policy, evidence, approvals, integrations, audit, and operator UX.
 - Company SDLC processes are usually stable enough to start from a small catalog of governed templates rather than arbitrary BPMN.
 - The existing Postgres/outbox runtime already covers the near-term needs for durable runs, recovery, timers, approvals, and run context without adding a separate stateful engine.
 - A simple .NET/Postgres self-hosted deployment better matches first German customer adoption than a required Camunda 8 cluster.
@@ -612,7 +612,7 @@ Rationale:
 
 #### Engine Strategy
 
-- Default runtime: Autofac bounded runtime backed by PostgreSQL, outbox workers, run events, checkpoints, and run context.
+- Default runtime: Agentwerke bounded runtime backed by PostgreSQL, outbox workers, run events, checkpoints, and run context.
 - Supported BPMN subset: `startEvent`, `serviceTask`, `userTask`, `exclusiveGateway`, `parallelGateway`, `intermediateCatchEvent`, `boundaryEvent`, `endEvent`, and sequence flows required by curated SDLC templates.
 - Unsupported BPMN constructs must fail validation for the default runtime instead of being interpreted partially.
 - Optional runtime: Camunda 8 adapter, enabled only through explicit configuration and customer need.
@@ -621,14 +621,14 @@ Rationale:
 
 #### Impact on the Architecture
 
-- `Workflow Runtime Engine` = bounded Autofac runtime by default, reached through product workflow services
+- `Workflow Runtime Engine` = bounded Agentwerke runtime by default, reached through product workflow services
 - `BPMN Engine Adapter` = runtime boundary for optional engines such as Camunda 8
 - `React BPMN UI` = template-first SDLC builder plus advanced `bpmn-js` editor; BPMN XML remains the design artifact
 - `WorkflowInstanceEngine` = default runtime until a measured re-decision trigger requires a different engine
 
 ### 14.2 Sandbox Runtime Strategy
 
-Autofac's sandbox layer also needs two distinct choices:
+Agentwerke's sandbox layer also needs two distinct choices:
 - a control plane that manages lifecycle, command execution, files, resources, and cleanup
 - a runtime that provides the actual isolation boundary for agent execution
 
@@ -636,48 +636,48 @@ These choices are deliberately separated. The current implementation is Docker-s
 
 #### Candidate Comparison
 
-| Candidate | Strengths | Risks / Constraints | Fit for Autofac |
+| Candidate | Strengths | Risks / Constraints | Fit for Agentwerke |
 | --- | --- | --- | --- |
-| OpenSandbox control plane with Kata runtime | Matches Autofac's need for lifecycle, command, file, resource, network, and credential control while delegating secure-runtime details; aligns with Kubernetes deployment | Adds a new platform dependency and requires an integration spike before full adoption | Preferred target architecture |
-| Direct Kubernetes plus Kata executor | Strong production isolation and direct control of the runtime integration | Autofac must own more lifecycle, exec, artifact, and cleanup behavior directly | Fallback if OpenSandbox fails the spike |
+| OpenSandbox control plane with Kata runtime | Matches Agentwerke's need for lifecycle, command, file, resource, network, and credential control while delegating secure-runtime details; aligns with Kubernetes deployment | Adds a new platform dependency and requires an integration spike before full adoption | Preferred target architecture |
+| Direct Kubernetes plus Kata executor | Strong production isolation and direct control of the runtime integration | Agentwerke must own more lifecycle, exec, artifact, and cleanup behavior directly | Fallback if OpenSandbox fails the spike |
 | gVisor-based runtime path | Better isolation than plain containers with lighter operational weight than Kata in some environments | Weaker isolation than Kata for the most sensitive execution cases | Secondary production option |
 | Docker direct | Already implemented and easy for local development | Daemon-specific, weaker isolation, not the desired long-term production posture | Local and test fallback only |
-| Podman rootless | Cleaner local engine story than Docker in some environments | Does not materially change the production isolation story Autofac needs | Local alternative only |
+| Podman rootless | Cleaner local engine story than Docker in some environments | Does not materially change the production isolation story Agentwerke needs | Local alternative only |
 | Firecracker direct | Strong microVM posture | Too much platform ownership too early | Deferred |
 
 #### Decision (2026-06-18)
 
-**Autofac will evaluate OpenSandbox as the preferred sandbox control plane and use Kata-class secure runtimes as the default production isolation target.** Docker remains acceptable for local development and narrow integration testing behind the same Autofac sandbox interface.
+**Agentwerke will evaluate OpenSandbox as the preferred sandbox control plane and use Kata-class secure runtimes as the default production isolation target.** Docker remains acceptable for local development and narrow integration testing behind the same Agentwerke sandbox interface.
 
 Rationale:
-- Autofac needs stronger production isolation for untrusted or LLM-generated code than a direct Docker daemon path provides.
-- OpenSandbox already models lifecycle, command execution, files, resource limits, network policy, and credential proxy behavior that Autofac would otherwise have to build.
+- Agentwerke needs stronger production isolation for untrusted or LLM-generated code than a direct Docker daemon path provides.
+- OpenSandbox already models lifecycle, command execution, files, resource limits, network policy, and credential proxy behavior that Agentwerke would otherwise have to build.
 - Kata is still the right default production boundary because the key missing property is isolation strength, not only container engine choice.
-- Keeping the Autofac-owned `ISandboxExecutor` boundary allows a clean fallback to direct Kubernetes plus Kata if the OpenSandbox spike proves unsuitable.
+- Keeping the Agentwerke-owned `ISandboxExecutor` boundary allows a clean fallback to direct Kubernetes plus Kata if the OpenSandbox spike proves unsuitable.
 
 #### Sandbox Strategy
 
-- Preferred control plane: OpenSandbox behind an Autofac-owned provider boundary.
+- Preferred control plane: OpenSandbox behind an Agentwerke-owned provider boundary.
 - Default production runtime: Kata Containers, with Kata plus Firecracker allowed when a platform operator wants that stricter microVM posture.
 - Local fallback: Docker behind the same provider-neutral contract.
 - Secondary production runtime: gVisor where customers want a lighter operational profile.
-- Application boundary: `ISandboxExecutor` remains the Autofac interface; OpenSandbox REST or OpenAPI integration should be wrapped behind Autofac-owned client abstractions.
+- Application boundary: `ISandboxExecutor` remains the Agentwerke interface; OpenSandbox REST or OpenAPI integration should be wrapped behind Agentwerke-owned client abstractions.
 
 #### Impact on the Architecture
 
-- `Autofac.Sandboxes` remains the Autofac-owned sandbox boundary and should become provider-neutral.
+- `Autofac.Sandboxes` remains the Agentwerke-owned sandbox boundary and should become provider-neutral.
 - The current Docker executor becomes a fallback implementation rather than the target production design.
-- Production deployment should assume `Autofac -> OpenSandbox -> Kubernetes secure runtime` instead of `Autofac -> direct Docker daemon`.
-- Sandbox profiles should eventually map Autofac policy intent into provider resource, network, filesystem, and credential configuration.
+- Production deployment should assume `Agentwerke -> OpenSandbox -> Kubernetes secure runtime` instead of `Agentwerke -> direct Docker daemon`.
+- Sandbox profiles should eventually map Agentwerke policy intent into provider resource, network, filesystem, and credential configuration.
 
 ## 15. Key Architectural Decisions
 
-### Decision 1: BPMN-Centric Orchestration with Bounded Autofac Runtime
+### Decision 1: BPMN-Centric Orchestration with Bounded Agentwerke Runtime
 
 Why:
 - aligns with business-readable workflow modeling
 - supports auditability and lifecycle visibility
-- allows custom Autofac nodes for agent and governance behavior
+- allows custom Agentwerke nodes for agent and governance behavior
 - keeps first deployment simple: .NET service plus PostgreSQL, with Camunda 8 available only as an optional enterprise adapter
 - constrains runtime scope to curated SDLC templates instead of arbitrary BPMN execution
 
@@ -740,7 +740,7 @@ MVP should avoid overbuilding:
 
 ## 18. Open Architecture Questions
 
-1. Should workflow state be persisted directly by the BPMN engine or through an Autofac run abstraction?
+1. Should workflow state be persisted directly by the BPMN engine or through an Agentwerke run abstraction?
 2. What message bus should be used for agent coordination and event propagation?
 3. How should plugin execution be isolated from core platform services?
 4. What is the first supported secret management provider?
@@ -759,9 +759,9 @@ The BPMN engine recommendation above is based on current primary-source document
 
 ## 20. Summary
 
-Autofac should be implemented as a workflow-first, cloud-native orchestration platform with strong separation between workflow state management, agent execution, policy enforcement, integration handling, and observability.
+Agentwerke should be implemented as a workflow-first, cloud-native orchestration platform with strong separation between workflow state management, agent execution, policy enforcement, integration handling, and observability.
 
-The C4 views in this document show Autofac as a governed execution fabric sitting between human operators, enterprise systems, LLM-based agents, and deployment infrastructure. Its strength comes from combining BPMN process clarity, secure agent runtime controls, and complete operational visibility in one software factory platform.
+The C4 views in this document show Agentwerke as a governed execution fabric sitting between human operators, enterprise systems, LLM-based agents, and deployment infrastructure. Its strength comes from combining BPMN process clarity, secure agent runtime controls, and complete operational visibility in one software factory platform.
 
 ---
 
@@ -788,12 +788,12 @@ The backend is a layered C# solution (`net9.0`) with clean dependency direction 
 | `Autofac.Observability` | Prometheus metrics, JSON console logs, correlation middleware, OTel tracing (`WithTracing` + OTLP exporter), `IWorkflowTracer`/`ISpan` abstraction, Jaeger via docker-compose | Metrics + tracing (Phase F) |
 | `Autofac.Api` | ASP.NET Core controllers, contract mapping, OpenAPI | Solid; unauthenticated |
 
-Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites. The `WorkflowDesigner` view embeds a full `BpmnModeler` component (bpmn-js v17) with Autofac moddle extension (`autofac:AgentTask`, `autofac:ApprovalTask`) — extension metadata is serialized directly into BPMN XML via `modeling.updateModdleProperties`. Custom `additionalModules` add a drag-and-drop palette, CSS canvas markers, and a `bpmn-js-properties-panel` sidebar for editing all Autofac-specific fields. A `__mocks__/BpmnModeler.tsx` stub allows Vitest to run without jsdom SVG layout.
+Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunDetail`, `ApprovalsDashboard`, `Login`, plus a component library and ~8 Vitest integration/e2e suites. The `WorkflowDesigner` view embeds a full `BpmnModeler` component (bpmn-js v17) with Agentwerke moddle extension (`autofac:AgentTask`, `autofac:ApprovalTask`) — extension metadata is serialized directly into BPMN XML via `modeling.updateModdleProperties`. Custom `additionalModules` add a drag-and-drop palette, CSS canvas markers, and a `bpmn-js-properties-panel` sidebar for editing all Agentwerke-specific fields. A `__mocks__/BpmnModeler.tsx` stub allows Vitest to run without jsdom SVG layout.
 
 ### 21.2 What Actually Works End-to-End
 
-- **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer. The designer provides a drag-and-drop canvas with Autofac-specific palette entries ("Agent Task", "Approval Gate"), a properties panel sidebar for editing `autofac:agentTask` and `autofac:ApprovalTask` extension elements, canvas accent markers for visual identification, and overlay badges that surface backend validation errors directly on the relevant BPMN elements. Extension metadata round-trips natively through `bpmnXml` — no side-channel JSON.
-- **Workflow execution today** runs via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`. This is now the default runtime foundation for MVP and pilots, constrained to curated Autofac SDLC templates rather than arbitrary BPMN execution.
+- **BPMN authoring → validation → publish** via `WorkflowAuthoringService` and `BpmnWorkflowValidator`, exposed through `WorkflowsController` and the bpmn-js designer. The designer provides a drag-and-drop canvas with Agentwerke-specific palette entries ("Agent Task", "Approval Gate"), a properties panel sidebar for editing `autofac:agentTask` and `autofac:ApprovalTask` extension elements, canvas accent markers for visual identification, and overlay badges that surface backend validation errors directly on the relevant BPMN elements. Extension metadata round-trips natively through `bpmnXml` — no side-channel JSON.
+- **Workflow execution today** runs via the in-process `WorkflowInstanceEngine` (`EngineId => "in-process"`): start events, service tasks (retry + boundary timeout), user/approval tasks, exclusive gateways (condition evaluation), parallel gateways (sequential branches with fork/join detection), intermediate/boundary timer events, and end events. The engine uses **graph-based traversal**: `BpmnSequenceFlow` elements are parsed and stored; when absent (tests), flows are inferred from node order. Checkpoints are keyed by node ID (not list index) and are written as event-sourced `checkpoint_saved` events, enabling `ResumeAsync` and `RecoverAsync`. This is now the default runtime foundation for MVP and pilots, constrained to curated Agentwerke SDLC templates rather than arbitrary BPMN execution.
 - **Policy enforcement** at the Tool Gateway (`ToolGateway`): allow/deny lists, permission-level checks, input validation, and `PolicyEvaluationService` evaluation before every tool call — the single control point envisioned in Decision 3.
 - **Agent runtime assembly**: skill resolution from markdown manifests (`SkillRepository`/`MarkdownSkillLoader`), prompt assembly with full prompt snapshots, hook execution (`HookGateway` with `before/after_agent_run`), MCP tool sessions (`McpToolSessionFactory`), and a complete `AgentRuntimeSnapshot` persisted per step.
 - **Real agent execution**: `AgentOrchestrator` drives a governed model tool-use loop via `IAgentModelRunner` — the assembled prompt + resolved skills + allowed tools are sent to the configured `ILanguageModelClient` (Anthropic SDK behind `AnthropicRetryHandler`, with a deterministic `MockLanguageModelClient` for tokenless demos/CI and a `NullLanguageModelClient` fallback), and **every** tool call still routes through `ToolGateway` so policy stays authoritative. Provider is selected by `Anthropic:Provider` — `anthropic`, `openai`, `litellm` (any OpenAI Chat Completions-compatible endpoint incl. Azure OpenAI or a LiteLLM proxy, via `OpenAiCompatibleLanguageModelClient` — #174), `mock`, or `auto`; token usage, tool invocations, and artifacts are captured into `AgentRuntimeSnapshot`. Per-run **cost/token budgets** (`MaxRunCostUsd`/`MaxRunTokens`) halt further model calls with a `budget_exceeded` status (`ModelRunBudget`, #175). The Docker/OpenSandbox path runs a real **agent runner** (`OpenSandboxedAgentRunner` / `SandboxedAgentRuntimeExecutor`), not a placeholder workload. Per-task prompts (#149) and seeded run-context inputs (#142) feed the prompt; agent output flows into the PR (#150).
@@ -807,7 +807,7 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 - **Inbound triggers**: GitHub/Jira webhook ingestion with HMAC signature validation and tag-based workflow routing (`TagBasedTriggerRouter`).
 - **Observability**: workflow/step/approval/webhook metrics on `/metrics` (Prometheus), structured JSON logs with scoped `RunId`/`WorkflowId`/`Operation`, correlation-ID propagation, and **distributed tracing** via OTel `WithTracing` + OTLP to Jaeger (`Autofac.Workflows` `ActivitySource`; spans on engine start/resume/recover and every connector call).
 - **Connectors**: `IConnector`/`ConnectorBase` policy-gated abstraction; GitHub, Jira (Atlassian Document Format), Slack, Teams connectors; data-driven `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML-backed) and `InMemoryPolicyRuleStore` (tests); S3 artifact driver.
-- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web + Jaeger; **Helm chart** (`deploy/helm/autofac`) deploys api (HPA 2→8), worker (HPA 2→6), web, Postgres StatefulSet, RBAC for sandbox namespace; Grafana dashboard at `deploy/grafana/dashboards/workflow-overview.json`; Prometheus alert rules at `deploy/prometheus/alerts.yml`; a **production single-host profile** (`docker/docker-compose.prod.yml` — non-dev auth, env secrets, resource limits) and deploy docs (`deploy/README.md`) added in #160.
+- **Persistence + deployment**: PostgreSQL via EF Core migrations; `docker-compose` brings up Postgres + migrate + api + web + Jaeger; **Helm chart** (`deploy/helm/agentwerke`) deploys api (HPA 2→8), worker (HPA 2→6), web, Postgres StatefulSet, RBAC for sandbox namespace; Grafana dashboard at `deploy/grafana/dashboards/workflow-overview.json`; Prometheus alert rules at `deploy/prometheus/alerts.yml`; a **production single-host profile** (`docker/docker-compose.prod.yml` — non-dev auth, env secrets, resource limits) and deploy docs (`deploy/README.md`) added in #160.
 - **OSS readiness + supply chain**: Apache-2.0 `LICENSE` with an open-core boundary doc; community health files (SECURITY, CODE_OF_CONDUCT, CHANGELOG, issue templates); a one-command tokenless quickstart; a stable docs set. CI gates build/test/lint on every PR plus CodeQL and dependency review (#168), and a tag-driven release pipeline publishes container images to GHCR + a GitHub Release (#159).
 
 ### 21.3 Honest Limitations
@@ -815,13 +815,13 @@ Frontend (`web/`, React + Vite + bpmn-js): `WorkflowDesigner`, `RunBoard`, `RunD
 These are the load-bearing gaps between the running system and the target architecture:
 
 1. ~~**Agent execution is simulated.**~~ **Resolved.** Agents run a real model tool-use loop (`IAgentModelRunner` → `ILanguageModelClient`): the Anthropic SDK behind `AnthropicRetryHandler` (jittered backoff, `Retry-After`), with a deterministic tokenless `MockLanguageModelClient` for demos/CI and a `NullLanguageModelClient` fallback. Every tool call is routed through `ToolGateway`, and the Docker/OpenSandbox path runs a real agent runner. Remaining hardening: broader provider coverage (OpenAI/Azure are drop-in via the interface) and per-run cost/budget governance (see Section 24).
-2. **Runtime strategy has been reset to Autofac-default.** The current implementation executes through `WorkflowInstanceEngine`, backed by Postgres persistence, run context, outbox dispatch, and recovery. This is now the default path for MVP and pilots, not a temporary gap. Camunda work is optional adapter groundwork only.
+2. **Runtime strategy has been reset to Agentwerke-default.** The current implementation executes through `WorkflowInstanceEngine`, backed by Postgres persistence, run context, outbox dispatch, and recovery. This is now the default path for MVP and pilots, not a temporary gap. Camunda work is optional adapter groundwork only.
 3. ~~**No asynchronous backbone.**~~ **Resolved (Phase C).** `WorkflowRunOrchestrationService.StartRunAsync` now creates a `pending` run and enqueues an outbox entry; the API returns 202 immediately. `RunDispatchWorker` (BackgroundService) polls the `run_outbox` table every 2 s, executes via `WorkflowRunExecutor`, and handles crash recovery on startup.
 4. ~~**Authentication/RBAC is stubbed.**~~ **Resolved.** JWT/OIDC bearer validation (enterprise SSO via configurable `Authority`), Viewer/Operator/Approver/Admin enforcement on product controllers, a role-based administration model (#33/#120), **LDAP/AD group-to-role mapping** (`Ldap:*`, #178), and approval decisions that record the authenticated principal. Dev-token/dev-identity modes are explicit and disabled by default in the production profile (#160). Secret-provider (vault) integration remains future work — see limitation #10.
 5. **Timers and parallelism are partially resolved.** Parallel branches run sequentially (Phase C adds `Task.WhenAll` via `IServiceScopeFactory`). Timer scheduling is real in Phase C (`waiting_timer` checkpoint + outbox `timer` entry with `visibleAfter=dueAt`). In Phase D standalone, timers still fire immediately (the Phase C async backbone is a separate branch).
 6. ~~**One outbound connector.**~~ **Resolved (Phase E).** `IConnector`/`ConnectorBase` abstraction; GitHub, Jira (ADF), Slack, Teams connectors registered via `IConnectorRegistry`; email/CI-CD remain future work.
 7. ~~**No distributed tracing.**~~ **Resolved (Phase F).** `WithTracing` + OTLP exporter wired; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application`; engine and connectors emit spans to Jaeger.
-8. ~~**No Kubernetes footprint.**~~ **Resolved (Phase F).** Helm chart at `deploy/helm/autofac` covers api, worker, web, Postgres StatefulSet, RBAC, HPA; Grafana dashboard and Prometheus alert rules included.
+8. ~~**No Kubernetes footprint.**~~ **Resolved (Phase F).** Helm chart at `deploy/helm/agentwerke` covers api, worker, web, Postgres StatefulSet, RBAC, HPA; Grafana dashboard and Prometheus alert rules included.
 9. ~~**Policy is code, not data.**~~ **Resolved (Phase E).** `IPolicyRuleStore` with `FilePolicyRuleStore` (YAML file) and `InMemoryPolicyRuleStore`; admin authoring surface (policy-rule file) outside of code.
 10. **No plugin runtime.** The Plugin Runtime container (Section 6.8) and secret manager (Section 9) are not implemented; credentials come from configuration/env only.
 
@@ -829,8 +829,8 @@ These are the load-bearing gaps between the running system and the target archit
 
 | Capability (target) | As-built | Gap severity | Notes |
 | --- | --- | --- | --- |
-| BPMN modeling (bpmn-js) | Implemented (Phase 1–3 complete) | — | Drag-and-drop canvas; Autofac moddle extension; properties panel; palette; markers; validation overlays |
-| BPMN execution engine | Bounded Autofac runtime backed by Postgres/outbox | Medium | Keep scope capped to SDLC templates; do not expand into arbitrary BPMN |
+| BPMN modeling (bpmn-js) | Implemented (Phase 1–3 complete) | — | Drag-and-drop canvas; Agentwerke moddle extension; properties panel; palette; markers; validation overlays |
+| BPMN execution engine | Bounded Agentwerke runtime backed by Postgres/outbox | Medium | Keep scope capped to SDLC templates; do not expand into arbitrary BPMN |
 | Agent task execution (LLM) | Real model client (Anthropic) + tokenless mock; governed tool-use loop | — | **Resolved** (#143/#149/#150/#151); OpenAI/Azure drop-in via `ILanguageModelClient` |
 | Tool Gateway + policy | Implemented | — | Strong; single control point in place |
 | Sandbox isolation | Real container lifecycle + agent-runner workload | Medium | network=none, mem/cpu limits; OpenSandbox runner wired (ADR-003); Kata-class production runtime + K8s provider (#36) remain |
@@ -886,7 +886,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 ### Phase D — Default runtime scope and template conformance (High)
 
 1. ADR-001 has been superseded by `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
-2. The Autofac/Postgres runtime is the default production path for MVP and pilots. Camunda 8 remains an optional adapter, not a dependency of the core plan.
+2. The Agentwerke/Postgres runtime is the default production path for MVP and pilots. Camunda 8 remains an optional adapter, not a dependency of the core plan.
 3. **Engine hardened**:
    - `BpmnSequenceFlow` added to `BpmnWorkflowDefinition`; `BpmnWorkflowValidator` now parses `<sequenceFlow>` and `<conditionExpression>` elements and validates source/target references.
    - `WorkflowInstanceEngine` refactored to graph-based traversal via `FlowGraph` (node map + outgoing-flows map). When sequence flows are absent (tests), `FlowGraph` infers linear edges from node order.
@@ -896,7 +896,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
    - Compensation/rollback: documented as Phase E concern; engine emits `compensation_not_supported` when it would be needed (not yet implemented).
 
 4. Add a default-runtime conformance suite for every built-in SDLC template. Unsupported BPMN constructs must fail validation before publish.
-5. Add runtime-mode configuration and startup diagnostics so `Autofac` is the default mode and `Camunda` is explicit opt-in.
+5. Add runtime-mode configuration and startup diagnostics so `Agentwerke` is the default mode and `Camunda` is explicit opt-in.
 
 *Exit:* all curated templates validate and run on the default runtime; Camunda-specific paths are optional and configuration-gated.
 
@@ -912,7 +912,7 @@ A phased plan ordered by dependency and risk. Each phase is independently shippa
 ### Phase F — Production observability and deployment (Medium) ✓ **Complete**
 
 1. ~~Add OTel tracing~~ — `WithTracing` + OTLP exporter in `Autofac.Observability`; `IWorkflowTracer`/`ISpan` abstraction in `Autofac.Application` keeps core libraries OTel-free; `WorkflowRunExecutor` and `ConnectorBase` emit spans with `RunId`, `WorkflowId`, `connector.id`, `connector.operation`, and error recording; Jaeger added to `docker/docker-compose.yml`.
-2. ~~Author Helm charts~~ — `deploy/helm/autofac/`: api (HPA 2→8), worker (HPA 2→6; `ServiceAccount` with `Role`/`RoleBinding` for sandbox namespace), web, Postgres `StatefulSet` (20 Gi PVC), namespace + RBAC, optional ingress.
+2. ~~Author Helm charts~~ — `deploy/helm/agentwerke/`: api (HPA 2→8), worker (HPA 2→6; `ServiceAccount` with `Role`/`RoleBinding` for sandbox namespace), web, Postgres `StatefulSet` (20 Gi PVC), namespace + RBAC, optional ingress.
 3. ~~SLO dashboards and alerting~~ — `deploy/grafana/dashboards/workflow-overview.json` (run success/failure rate, approval wait p50/p95, step/connector latency p50/p95, tool-call latency by category); `deploy/prometheus/alerts.yml` (high failure rate, approval SLA breach, worker backlog, connector error rate).
 
 *Exit criterion met:* a request can be traced end-to-end via Jaeger and the platform deploys to Kubernetes via Helm.
@@ -924,7 +924,7 @@ A (agents real) ─┐
 B (auth/secrets)─┼─► C (async backbone) ─► D (runtime conformance) ─► E (breadth) ─► F (prod ops)
                  │
    A and B can proceed in parallel; both are prerequisites for a credible pilot.
-   Phase D now hardens the default Autofac runtime and template contract, not a Camunda migration.
+   Phase D now hardens the default Agentwerke runtime and template contract, not a Camunda migration.
 ```
 
 ## 24. Future Enhancements (Beyond the Roadmap)

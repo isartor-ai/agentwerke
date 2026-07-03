@@ -1,10 +1,10 @@
 # Add Camunda validation and publish status UI
 
 ## Summary
-Show Autofac validation and Camunda deployment status clearly during workflow publish.
+Show Agentwerke validation and Camunda deployment status clearly during workflow publish.
 
 ## Why
-Users need to understand whether a workflow is invalid because of Autofac metadata or because Camunda rejected deployment.
+Users need to understand whether a workflow is invalid because of Agentwerke metadata or because Camunda rejected deployment.
 
 ## Scope
 - Add publish panel or drawer that separates validation, policy preview, and Camunda deployment result.

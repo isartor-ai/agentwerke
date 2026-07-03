@@ -168,7 +168,7 @@ export function Integrations() {
 
       <article className="panel">
         <h2>Inbound webhooks</h2>
-        <p className="muted">Register these URLs in the external system so it can trigger Autofac.</p>
+        <p className="muted">Register these URLs in the external system so it can trigger Agentwerke.</p>
         <ul className="webhook-list">
           {WEBHOOKS.map((webhook) => {
             const url = apiClient.webhookUrl(webhook.path);

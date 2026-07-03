@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "autofac.fullname" . }}-api
+  name: {{ include "agentwerke.fullname" . }}-api
   labels:
-    {{- include "autofac.labels" . | nindent 4 }}
+    {{- include "agentwerke.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
@@ -22,7 +22,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "autofac.fullname" . }}-api
+                name: {{ include "agentwerke.fullname" . }}-api
                 port:
                   name: http
 {{- end }}

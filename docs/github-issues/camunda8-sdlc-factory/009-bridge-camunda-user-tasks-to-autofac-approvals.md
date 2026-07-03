@@ -1,14 +1,14 @@
-# Bridge Camunda user tasks to Autofac approvals
+# Bridge Camunda user tasks to Agentwerke approvals
 
 ## Summary
-Create Autofac approval requests when Camunda reaches user tasks and complete Camunda user tasks when users decide.
+Create Agentwerke approval requests when Camunda reaches user tasks and complete Camunda user tasks when users decide.
 
 ## Why
-Human approval is central to the dark software factory model. Camunda should own the waiting state, and Autofac should own the approval UX and audit record.
+Human approval is central to the dark software factory model. Camunda should own the waiting state, and Agentwerke should own the approval UX and audit record.
 
 ## Scope
-- Detect or query active Camunda user tasks for Autofac process instances.
-- Create pending `ApprovalRequest` records in Autofac.
+- Detect or query active Camunda user tasks for Agentwerke process instances.
+- Create pending `ApprovalRequest` records in Agentwerke.
 - Complete the Camunda user task on approve.
 - Apply rejection behavior and record rationale.
 

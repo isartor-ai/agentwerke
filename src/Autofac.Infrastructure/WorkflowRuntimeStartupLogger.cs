@@ -22,16 +22,23 @@ public sealed class WorkflowRuntimeStartupLogger : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        if (_options.LegacyModeAliasUsed)
+        {
+            _logger.LogWarning(
+                "Workflow runtime mode 'Autofac' is deprecated. Use 'Agentwerke' for {Section}:Mode.",
+                WorkflowRuntimeOptions.Section);
+        }
+
         if (_options.Mode == WorkflowRuntimeMode.Camunda)
         {
             _logger.LogInformation(
-                "Autofac workflow runtime mode: {Mode}. Camunda adapter paths are active.",
+                "Agentwerke workflow runtime mode: {Mode}. Camunda adapter paths are active.",
                 _options.Mode);
         }
         else
         {
             _logger.LogInformation(
-                "Autofac workflow runtime mode: {Mode}. Camunda adapter paths are disabled.",
+                "Agentwerke workflow runtime mode: {Mode}. Camunda adapter paths are disabled.",
                 _options.Mode);
         }
 

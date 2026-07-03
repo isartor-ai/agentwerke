@@ -1,6 +1,6 @@
 <svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <title>Autofac refined execution monitoring dashboard mockup</title>
-  <desc>Figma-ready desktop mockup based on docs/design/DESIGN.md and the inspected Autofac dashboard.</desc>
+  <title>Agentwerke refined execution monitoring dashboard mockup</title>
+  <desc>Figma-ready desktop mockup based on docs/design/DESIGN.md and the inspected Agentwerke dashboard.</desc>
   <defs>
     <style>
       .bg { fill: #0e0e0f; }
@@ -32,7 +32,7 @@
   <line x1="256" y1="0" x2="256" y2="900" stroke="#3a494a" stroke-opacity=".6"/>
   <rect x="20" y="21" width="42" height="42" rx="4" fill="#00dce5" fill-opacity=".16" stroke="#00dce5" stroke-opacity=".55"/>
   <text x="31" y="49" class="mono cyan" font-size="18">AF</text>
-  <text x="76" y="38" class="sans strong" font-size="18" font-weight="700">Autofac</text>
+  <text x="76" y="38" class="sans strong" font-size="18" font-weight="700">Agentwerke</text>
   <text x="76" y="60" class="mono muted" font-size="12">v2.4.0-stable</text>
   <line x1="16" y1="84" x2="240" y2="84" stroke="#3a494a" stroke-opacity=".45"/>
 

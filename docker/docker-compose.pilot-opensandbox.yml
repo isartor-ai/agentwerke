@@ -1,5 +1,5 @@
 ###############################################################################
-# Autofac — Pilot OpenSandbox stack
+# Agentwerke — Pilot OpenSandbox stack
 #
 # Starts a pilot-style local stack that exercises real sandbox-backed agent
 # execution through a local OpenSandbox server running in Docker mode.
@@ -39,7 +39,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: autofac_pilot_opensandbox
+      POSTGRES_DB: agentwerke_pilot_opensandbox
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -47,7 +47,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac_pilot_opensandbox"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_pilot_opensandbox"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -63,7 +63,7 @@ services:
       --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
       --startup-project src/Autofac.Api/Autofac.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot_opensandbox;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_pilot_opensandbox;Username=postgres;Password=postgres"
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,7 +91,7 @@ services:
     build:
       context: ..
       dockerfile: docker/agent-runner/Dockerfile
-    image: autofac-agent-runner:pilot
+    image: agentwerke-agent-runner:pilot
     entrypoint: ["true"]
     restart: "no"
 
@@ -101,7 +101,7 @@ services:
       dockerfile: docker/opensandbox/Dockerfile
       args:
         OPENSANDBOX_SERVER_VERSION: "${OPENSANDBOX_SERVER_VERSION:-}"
-    container_name: autofac-pilot-opensandbox-server
+    container_name: agentwerke-pilot-opensandbox-server
     restart: unless-stopped
     environment:
       OPENSANDBOX_INSECURE_SERVER: "YES"
@@ -122,13 +122,13 @@ services:
     build:
       context: ..
       dockerfile: docker/api/Dockerfile
-    container_name: autofac-pilot-opensandbox-api
+    container_name: agentwerke-pilot-opensandbox-api
     restart: unless-stopped
     ports:
       - "8084:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac_pilot_opensandbox;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_pilot_opensandbox;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       Agents__Registry__AgentsDirectory: /app/agents
       Agents__Skills__SkillsDirectory: ""
@@ -142,7 +142,7 @@ services:
       Sandboxes__OpenSandbox__ReadinessTimeoutSeconds: "60"
       Sandboxes__OpenSandbox__UseServerProxy: "false"
       Sandboxes__OpenSandbox__WorkingDirectory: "/workspace"
-      Sandboxes__OpenSandbox__AgentRunnerImage: "autofac-agent-runner:pilot"
+      Sandboxes__OpenSandbox__AgentRunnerImage: "agentwerke-agent-runner:pilot"
       # Falls back to a placeholder when ANTHROPIC__APIKEY isn't set (e.g. via
       # --env-file docker/.env.pilot.local, the same convention docker-compose.pilot.yml
       # uses) — the agent_sandboxed pilot run then reaches the real Anthropic API and
@@ -155,9 +155,9 @@ services:
       Integrations__GitHub__RepositoryName: "mock-repo"
       Integrations__Jira__WebhookSecret: ""
       Integrations__GitHub__WebhookSecret: ""
-      Jwt__SecretKey: "autofac-dev-manual-testing-key-2026"
-      Jwt__Issuer: "autofac-dev"
-      Jwt__Audience: "autofac-dev"
+      Jwt__SecretKey: "agentwerke-dev-manual-testing-key-2026"
+      Jwt__Issuer: "agentwerke-dev"
+      Jwt__Audience: "agentwerke-dev"
       Jwt__DevTokensEnabled: "true"
     volumes:
       - api_storage:/app/storage
@@ -182,10 +182,10 @@ services:
     restart: "no"
     command: >
       sh -lc '
-      until docker inspect autofac-pilot-opensandbox-server >/dev/null 2>&1; do sleep 1; done;
-      docker network connect bridge autofac-pilot-opensandbox-server 2>/dev/null || true;
-      until docker inspect autofac-pilot-opensandbox-api >/dev/null 2>&1; do sleep 1; done;
-      docker network connect bridge autofac-pilot-opensandbox-api 2>/dev/null || true
+      until docker inspect agentwerke-pilot-opensandbox-server >/dev/null 2>&1; do sleep 1; done;
+      docker network connect bridge agentwerke-pilot-opensandbox-server 2>/dev/null || true;
+      until docker inspect agentwerke-pilot-opensandbox-api >/dev/null 2>&1; do sleep 1; done;
+      docker network connect bridge agentwerke-pilot-opensandbox-api 2>/dev/null || true
       '
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -200,7 +200,7 @@ services:
     command: >
       sh -lc '
       psql --set ON_ERROR_STOP=1 \
-      "host=postgres port=5432 dbname=autofac_pilot_opensandbox user=postgres password=postgres"
+      "host=postgres port=5432 dbname=agentwerke_pilot_opensandbox user=postgres password=postgres"
       -f /seed/seed-pilot.sql
       '
     volumes:
@@ -231,7 +231,7 @@ services:
       dockerfile: docker/web/Dockerfile
       args:
         VITE_API_BASE_URL: ""
-        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhZ2VudHdlcmtlLWRldiIsImF1ZCI6ImFnZW50d2Vya2UtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.ICCK9WVptCdU81iugfkBGyW5yPM9QAyxOYVtYStnjb0"
     restart: unless-stopped
     ports:
       - "3004:80"

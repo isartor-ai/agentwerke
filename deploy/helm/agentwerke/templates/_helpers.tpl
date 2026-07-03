@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "autofac.name" -}}
+{{- define "agentwerke.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "autofac.fullname" -}}
+{{- define "agentwerke.fullname" -}}
 {{- $name := default .Chart.Name .Values.nameOverride }}
 {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
 {{- end }}
@@ -16,7 +16,7 @@ Create a default fully qualified app name.
 {{/*
 Common labels
 */}}
-{{- define "autofac.labels" -}}
+{{- define "agentwerke.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/instance: {{ .Release.Name }}
@@ -26,8 +26,8 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{/*
 Selector labels for a component
 */}}
-{{- define "autofac.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "autofac.name" . }}
+{{- define "agentwerke.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "agentwerke.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
@@ -35,8 +35,8 @@ app.kubernetes.io/component: {{ .component }}
 {{/*
 Postgres connection string
 */}}
-{{- define "autofac.postgresConnectionString" -}}
-{{- $host := printf "%s-postgres" (include "autofac.fullname" .) }}
+{{- define "agentwerke.postgresConnectionString" -}}
+{{- $host := printf "%s-postgres" (include "agentwerke.fullname" .) -}}
 Host={{ $host }};Port=5432;Database={{ .Values.postgres.credentials.database }};Username={{ .Values.postgres.credentials.username }};Password=$(POSTGRES_PASSWORD)
 {{- end }}
 
@@ -44,7 +44,7 @@ Host={{ $host }};Port=5432;Database={{ .Values.postgres.credentials.database }};
 Sandbox provider env vars, shared between the api and worker deployments.
 See values.yaml `sandbox` block and ADR-003.
 */}}
-{{- define "autofac.sandboxEnv" -}}
+{{- define "agentwerke.sandboxEnv" -}}
 - name: Sandboxes__Provider
   value: {{ .Values.sandbox.provider | quote }}
 - name: Sandboxes__OpenSandbox__Enabled

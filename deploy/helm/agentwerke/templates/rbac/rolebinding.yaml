@@ -1,15 +1,15 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "autofac.fullname" . }}-sandbox-executor
+  name: {{ include "agentwerke.fullname" . }}-sandbox-executor
   namespace: {{ .Values.sandbox.namespace }}
   labels:
-    {{- include "autofac.labels" . | nindent 4 }}
+    {{- include "agentwerke.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "autofac.fullname" . }}-sandbox-executor
+  name: {{ include "agentwerke.fullname" . }}-sandbox-executor
 subjects:
   - kind: ServiceAccount
-    name: {{ include "autofac.fullname" . }}-worker
+    name: {{ include "agentwerke.fullname" . }}-worker
     namespace: {{ .Release.Namespace }}

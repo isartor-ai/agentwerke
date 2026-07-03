@@ -18,7 +18,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: autofac
+      POSTGRES_DB: agentwerke
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -26,7 +26,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d autofac"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -41,7 +41,7 @@ services:
       --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
       --startup-project src/Autofac.Api/Autofac.Api.csproj
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke;Username=postgres;Password=postgres"
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
   seed:
     image: postgres:16-alpine
     command: >
-      psql -h postgres -U postgres -d autofac
+      psql -h postgres -U postgres -d agentwerke
       -v ON_ERROR_STOP=1
       -f /seed/seed-first-run.sql
     environment:
@@ -71,7 +71,7 @@ services:
       - "8081:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=autofac;Username=postgres;Password=postgres"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke;Username=postgres;Password=postgres"
       Storage__RootPath: /app/storage
       Agents__Skills__SkillsDirectory: /app/skills
       Agents__Registry__AgentsDirectory: /app/agents
@@ -79,7 +79,7 @@ services:
       Sandboxes__Docker__Enabled: "false"
       Sandboxes__Docker__DockerEndpoint: "unix:///var/run/docker.sock"
       Tracing__OtlpEndpoint: "http://jaeger:4317"
-      Tracing__ServiceName: "autofac-api"
+      Tracing__ServiceName: "agentwerke-api"
     volumes:
       - api_storage:/app/storage
       - ../.github/skills:/app/skills:ro

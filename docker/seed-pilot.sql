@@ -1,4 +1,4 @@
--- Autofac pilot test seed data
+-- Agentwerke pilot test seed data
 -- Covers 4 scenarios: GitHub-only, approval gate, policy block, LLM agent.
 -- Idempotent: all inserts use ON CONFLICT DO NOTHING / DO UPDATE.
 -- Run after EF Core migrations have created the schema.
@@ -26,9 +26,9 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-github-defs"
-    targetNamespace="https://autofac.ai/bpmn">
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-github" name="GitHub Branch + PR" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
       <bpmn:outgoing>Flow1</bpmn:outgoing>
@@ -107,9 +107,9 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-approval-defs"
-    targetNamespace="https://autofac.ai/bpmn">
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-approval" name="Branch + Approval Gate" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
       <bpmn:outgoing>Flow1</bpmn:outgoing>
@@ -190,9 +190,9 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-policy-defs"
-    targetNamespace="https://autofac.ai/bpmn">
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-policy" name="Policy Block Demo" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
       <bpmn:outgoing>Flow1</bpmn:outgoing>
@@ -258,9 +258,9 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://autofac.ai/bpmn"
+    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-llm-defs"
-    targetNamespace="https://autofac.ai/bpmn">
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-llm" name="LLM Agent Task" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
       <bpmn:outgoing>Flow1</bpmn:outgoing>
@@ -338,7 +338,7 @@ INSERT INTO autofac.workflow_run_steps (
 (
     'step-p001-2', 'run-pilot-001', 'Create Feature Branch', 'service_task', 'completed',
     '2026-06-18T09:10:00.200Z', '2026-06-18T09:10:04.100Z', 'platform-agent',
-    '{"branch":"autofac/run-run-pilot-001","html_url":"https://github.com/mock/repo/tree/autofac/run-run-pilot-001","state":"open"}',
+    '{"branch":"agentwerke/run-run-pilot-001","html_url":"https://github.com/mock/repo/tree/agentwerke/run-run-pilot-001","state":"open"}',
     NULL
 ),
 (
@@ -363,7 +363,7 @@ INSERT INTO autofac.workflow_events (
 ),
 (
     'evt-p001-2', 'run-pilot-001', 'task_completed',
-    'Branch autofac/run-run-pilot-001 created successfully via WireMock stub.',
+    'Branch agentwerke/run-run-pilot-001 created successfully via WireMock stub.',
     '2026-06-18T09:10:04.100Z'
 ),
 (
@@ -422,7 +422,7 @@ INSERT INTO autofac.workflow_run_steps (
     to_char(NOW() - INTERVAL '4 minutes 59 seconds', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
     to_char(NOW() - INTERVAL '4 minutes 55 seconds', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
     'platform-agent',
-    '{"branch":"autofac/run-run-pilot-002","html_url":"https://github.com/mock/repo/tree/autofac/run-run-pilot-002","state":"open"}',
+    '{"branch":"agentwerke/run-run-pilot-002","html_url":"https://github.com/mock/repo/tree/agentwerke/run-run-pilot-002","state":"open"}',
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 ),
 (
@@ -441,7 +441,7 @@ INSERT INTO autofac.workflow_events (
 ) VALUES
 (
     'evt-p002-1', 'run-pilot-002', 'task_completed',
-    'Branch autofac/run-run-pilot-002 created via WireMock.',
+    'Branch agentwerke/run-run-pilot-002 created via WireMock.',
     to_char(NOW() - INTERVAL '4 minutes 55 seconds', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
 ),
 (
@@ -460,7 +460,7 @@ INSERT INTO autofac.approval_requests (
     'apr-pilot-001',
     'run-pilot-002',
     'Branch + Approval Gate',
-    'Merge branch autofac/run-run-pilot-002 and deploy to production',
+    'Merge branch agentwerke/run-run-pilot-002 and deploy to production',
     'dev:admin',
     'platform-agent',
     'Deployment to production requires human sign-off.',

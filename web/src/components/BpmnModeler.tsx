@@ -46,7 +46,7 @@ export interface BpmnModelerProps {
   /**
    * When true, the modeler is configured for Camunda-compatible editing:
    * Camunda-specific moddle extensions and properties providers will be loaded
-   * when available. Defaults to false (Autofac default runtime only).
+   * when available. Defaults to false (Agentwerke default runtime only).
    */
   camundaMode?: boolean;
   className?: string;

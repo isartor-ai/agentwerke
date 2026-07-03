@@ -256,7 +256,7 @@ The OTel exporter uses the instrument name as prefix (not the meter name), so
 metrics start with `workflow_`, tagged with `otel_scope_name="Autofac.Workflows"`.
 
 ```bash
-curl -sf http://localhost:8081/metrics | grep 'otel_scope_name="Autofac' | grep -v "bucket\|_sum\|_count"
+curl -sf http://localhost:8081/metrics | grep 'otel_scope_name="Agentwerke' | grep -v "bucket\|_sum\|_count"
 ```
 
 You should see counters like:

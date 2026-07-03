@@ -1,6 +1,6 @@
 # Enterprise authentication and data residency
 
-Autofac protects product APIs with JWT bearer authentication and role-based
+Agentwerke protects product APIs with JWT bearer authentication and role-based
 authorization. Health probes, auth discovery/dev-token endpoints, and signed
 integration webhooks remain anonymous by design.
 
@@ -12,17 +12,17 @@ Configure the API to validate tokens from the enterprise identity provider:
 
 ```bash
 Jwt__Authority=https://login.microsoftonline.com/<tenant-id>/v2.0
-Jwt__Audience=api://autofac
+Jwt__Audience=api://agentwerke
 ```
 
 For Keycloak, use the realm issuer:
 
 ```bash
 Jwt__Authority=https://keycloak.example.com/realms/<realm>
-Jwt__Audience=autofac-api
+Jwt__Audience=agentwerke-api
 ```
 
-Autofac normalizes role claims from `role`, `roles`, `groups`, and the standard
+Agentwerke normalizes role claims from `role`, `roles`, `groups`, and the standard
 .NET role claim type into its internal role checks. If your provider emits
 roles under a different claim, configure:
 
@@ -34,19 +34,19 @@ Jwt__NameClaimTypes__1=email
 ```
 
 If the provider emits enterprise group IDs or external app-role names, map them
-to the built-in Autofac roles explicitly:
+to the built-in Agentwerke roles explicitly:
 
 ```bash
-Jwt__RoleMappings__autofac_viewers__0=Viewer
-Jwt__RoleMappings__autofac_operators__0=Operator
-Jwt__RoleMappings__autofac_approvers__0=Approver
-Jwt__RoleMappings__autofac_admins__0=Admin
+Jwt__RoleMappings__agentwerke_viewers__0=Viewer
+Jwt__RoleMappings__agentwerke_operators__0=Operator
+Jwt__RoleMappings__agentwerke_approvers__0=Approver
+Jwt__RoleMappings__agentwerke_admins__0=Admin
 ```
 
 Use JSON configuration or a secret/config provider for external group IDs that
 contain punctuation not allowed in shell variable names.
 
-For Microsoft Entra ID, assign app roles matching the Autofac roles below and
+For Microsoft Entra ID, assign app roles matching the Agentwerke roles below and
 emit them in the `roles` claim. For Keycloak, add a protocol mapper that emits
 realm or client roles into a top-level `roles` claim.
 
@@ -55,14 +55,14 @@ realm or client roles into a top-level `roles` claim.
 Local and manual-test stacks can use a development signing key:
 
 ```bash
-Jwt__SecretKey=autofac-dev-manual-testing-key-2026
-Jwt__Issuer=autofac-dev
-Jwt__Audience=autofac-dev
+Jwt__SecretKey=agentwerke-dev-manual-testing-key-2026
+Jwt__Issuer=agentwerke-dev
+Jwt__Audience=agentwerke-dev
 Jwt__DevTokensEnabled=true
 ```
 
 When `Jwt:DevTokensEnabled=true`, `POST /api/auth/token` can issue a short-lived
-development token for one of the Autofac roles. Do not enable this in production.
+development token for one of the Agentwerke roles. Do not enable this in production.
 
 ### Development identity mode
 
@@ -93,8 +93,10 @@ database. Artifact bytes stay in the configured storage provider:
 - `Storage:Provider=filesystem` stores artifacts under `Storage:RootPath`.
 - `Storage:Provider=s3` stores artifacts in the configured bucket and region.
 
-The default `WorkflowRuntime:Mode=Autofac` does not require Camunda. Camunda
-settings are only consumed when `WorkflowRuntime:Mode=Camunda`.
+The default `WorkflowRuntime:Mode=Agentwerke` does not require Camunda. The
+legacy `WorkflowRuntime:Mode=Autofac` value is accepted as an alias during the
+rename transition. Camunda settings are only consumed when
+`WorkflowRuntime:Mode=Camunda`.
 
 External data leaves the self-hosted boundary only through explicitly enabled
 integrations and model providers:

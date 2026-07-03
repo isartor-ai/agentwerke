@@ -3,7 +3,7 @@ import { getBusinessObject } from 'bpmn-js/lib/util/ModelUtil';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * Helpers for reading and writing Autofac extension elements
+ * Helpers for reading and writing Agentwerke extension elements
  * (`autofac:agentTask` / `autofac:approvalTask`) on a BPMN element's business
  * object. All writes go through `modeling.updateModdleProperties` so they are
  * undoable and trigger a re-render + change event.
@@ -36,7 +36,7 @@ export function getExtensionProperty(
 }
 
 /**
- * Ensures `bpmn:extensionElements` and the typed Autofac extension element both
+ * Ensures `bpmn:extensionElements` and the typed Agentwerke extension element both
  * exist, then sets the given properties on the extension element. Creates the
  * containers lazily on first edit.
  */

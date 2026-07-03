@@ -1,19 +1,19 @@
-# Project Autofac BPMN metadata to Camunda-compatible BPMN
+# Project Agentwerke BPMN metadata to Camunda-compatible BPMN
 
 ## Summary
-Implement a projection step that turns Autofac agent metadata into Camunda-deployable BPMN service tasks and task headers.
+Implement a projection step that turns Agentwerke agent metadata into Camunda-deployable BPMN service tasks and task headers.
 
 ## Why
-Camunda should execute valid Camunda BPMN. Rich Autofac metadata can exist in the UI and database, but deployed BPMN must use Camunda-supported service task configuration.
+Camunda should execute valid Camunda BPMN. Rich Agentwerke metadata can exist in the UI and database, but deployed BPMN must use Camunda-supported service task configuration.
 
 ## Scope
-- Convert Autofac agent tasks to `bpmn:serviceTask` with `zeebe:taskDefinition type="autofac.agent"`.
-- Store small static task configuration in Zeebe task headers or Autofac metadata keyed by BPMN element id.
+- Convert Agentwerke agent tasks to `bpmn:serviceTask` with `zeebe:taskDefinition type="autofac.agent"`.
+- Store small static task configuration in Zeebe task headers or Agentwerke metadata keyed by BPMN element id.
 - Preserve approval tasks as BPMN user tasks.
 - Add validation errors for unsupported or missing metadata.
 
 ## Acceptance Criteria
-- Valid Autofac workflow projects to Camunda-deployable BPMN.
+- Valid Agentwerke workflow projects to Camunda-deployable BPMN.
 - Agent, action, policy tag, and evidence metadata can be resolved by the worker.
 - Unsupported task metadata blocks publish with actionable errors.
 - Projection is covered by unit tests.

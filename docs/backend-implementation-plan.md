@@ -1,6 +1,6 @@
 # Backend Implementation Plan
 
-This document outlines the plan for implementing the backend for the Autofac application.
+This document outlines the plan for implementing the backend for the Agentwerke application.
 
 ## 1. Data Models
 

@@ -11,12 +11,12 @@
 
 | Phase | Status | Branch / PR | Notes |
 |-------|--------|-------------|-------|
-| 2.4.1 — Canvas + Templates | ✅ Done | `arc/workflow-designer-bpmn-js` | bpmn-js v17 canvas, Autofac moddle extension, template gallery, import/export |
+| 2.4.1 — Canvas + Templates | ✅ Done | `arc/workflow-designer-bpmn-js` | bpmn-js v17 canvas, Agentwerke moddle extension, template gallery, import/export |
 | 2.4.2 — Metadata Editor + Validation | ✅ Done | `arc/workflow-designer-bpmn-js` | bpmn-js-properties-panel; metadata embedded in BPMN XML via extension elements |
 | 2.4.3 — Publishing + Monitoring | ✅ Done | `arc/workflow-designer-bpmn-js` | Design/Monitor tab toggle, 10s poll, BpmnViewer with raf-* token markers, Start Run |
 | 2.4.4 — Diff + Approvals + Polish | ✅ Done | `arc/workflow-designer-bpmn-js` | RunDiffModal (client-side diff, deviation badges), inline Approve/Reject/Escalate, cancel run |
 
-> **Architecture decision (Phase 1–3, 2026-06):** Autofac extension metadata (`autofac:agentTask`, `autofac:ApprovalTask`) is serialized **directly into BPMN XML** via moddle extension elements using `modeling.updateModdleProperties`. This eliminates the side-channel metadata editor planned in Phases 2.4.1–2 (no separate form syncing required). The bpmn-js properties panel sidebar (via `bpmn-js-properties-panel` + `@bpmn-io/properties-panel`) renders the same property entries that write back into the XML, so the design artifact and the metadata are always in sync.
+> **Architecture decision (Phase 1–3, 2026-06):** Agentwerke extension metadata (`autofac:agentTask`, `autofac:ApprovalTask`) is serialized **directly into BPMN XML** via moddle extension elements using `modeling.updateModdleProperties`. This eliminates the side-channel metadata editor planned in Phases 2.4.1–2 (no separate form syncing required). The bpmn-js properties panel sidebar (via `bpmn-js-properties-panel` + `@bpmn-io/properties-panel`) renders the same property entries that write back into the XML, so the design artifact and the metadata are always in sync.
 
 ---
 
@@ -37,7 +37,7 @@
 ### Problem Statement
 
 Currently, workflow designers lack a unified interface to:
-- **Design** BPMN workflows with full Autofac extension metadata (agent, action, policyTag, requiresEvidence)
+- **Design** BPMN workflows with full Agentwerke extension metadata (agent, action, policyTag, requiresEvidence)
 - **Validate** workflows before publishing (catch missing required fields at design-time)
 - **Monitor** workflow runs with real-time execution visibility
 - **Debug** runs by understanding why tasks behaved unexpectedly (diff from definition)
@@ -125,7 +125,7 @@ A single-page React application that combines three core panels:
 
 2. **BPMN Canvas integration** (read-only + design mode toggle)
    - Embed BPMN.js viewer/modeler
-   - Implement Autofac extension plugins:
+   - Implement Agentwerke extension plugins:
      - `autofac:agentTask` visual indicator (colored icon on serviceTask/scriptTask)
      - `autofac:approvalTask` indicator on userTask
    - Load BPMN XML from backend and display
@@ -143,7 +143,7 @@ A single-page React application that combines three core panels:
 
 **Acceptance Criteria:**
 - ✅ User can load a template workflow into the designer
-- ✅ BPMN canvas renders correctly with Autofac extension indicators
+- ✅ BPMN canvas renders correctly with Agentwerke extension indicators
 - ✅ User can upload a .bpmn2.xml file and see it rendered
 - ✅ Export button downloads valid BPMN with extensions intact
 - ✅ App is responsive (desktop/tablet tested)
@@ -193,7 +193,7 @@ A single-page React application that combines three core panels:
 
 **Acceptance Criteria:**
 - ✅ User can select a task and open metadata editor
-- ✅ All Autofac extension fields are editable (agent, action, policyTag, etc.)
+- ✅ All Agentwerke extension fields are editable (agent, action, policyTag, etc.)
 - ✅ Real-time validation shows missing required fields with visual badges
 - ✅ Metadata changes are pushed to backend and persisted
 - ✅ Policy risk simulation shows on each task (3-tier UX: basic/detailed)
@@ -340,7 +340,7 @@ src/
 
 ```
 src/
-├── bpmn/                               # Autofac bpmn-js extension modules
+├── bpmn/                               # Agentwerke bpmn-js extension modules
 │   ├── autofacModdle.ts                # Moddle extension descriptor (namespace, types, attrs)
 │   ├── autofacModule.ts                # Aggregates all additionalModules for the Modeler
 │   ├── autofacPaletteProvider.ts       # Custom palette: "Agent Task", "Approval Gate"
@@ -365,7 +365,7 @@ src/
 ```
 
 **Key design notes:**
-- `BpmnModeler` mounts a `BpmnJS.Modeler` with `additionalModules` (Autofac palette, markers, properties provider) and `moddleExtensions: { autofac: autofacModdleDescriptor }`.
+- `BpmnModeler` mounts a `BpmnJS.Modeler` with `additionalModules` (Agentwerke palette, markers, properties provider) and `moddleExtensions: { autofac: autofacModdleDescriptor }`.
 - The properties panel renders in a dedicated `div.bpmn-modeler-panel` container alongside the canvas, giving a split-pane view without a separate modal/form.
 - `setExtensionProperty` calls `modeling.updateModdleProperties` — the standard undoable API — so Ctrl+Z works across metadata edits.
 - The `__mocks__/BpmnModeler.tsx` auto-hoists via `vi.mock('../components/BpmnModeler')` in test files; the real component cannot render in jsdom.
@@ -595,7 +595,7 @@ interface DiffItem {
 
 ### Phase 2.4.2: Metadata & Validation
 - [x] Selecting a task opens metadata editor (bpmn-js properties panel sidebar)
-- [x] All Autofac extension fields are editable (agent, action, policyTag, evidence, retries, timeout)
+- [x] All Agentwerke extension fields are editable (agent, action, policyTag, evidence, retries, timeout)
 - [x] Visual error badges appear on canvas for invalid tasks (canvas markers + overlay badges)
 - [x] Metadata changes are serialized directly into BPMN XML (via moddle extension elements)
 - [ ] Policy risk simulation loads and displays risk levels on tasks — deferred to Phase 2.4.3
@@ -663,7 +663,7 @@ interface DiffItem {
 
 ### Assumptions to Validate
 
-1. **BPMN.js plugins work with Autofac extensions** → Spike: test `extensionElements` parsing
+1. **BPMN.js plugins work with Agentwerke extensions** → Spike: test `extensionElements` parsing
 2. **SignalR can broadcast 100+ events/sec without batching** → Performance test in lab
 3. **Policy simulation endpoint can return < 200ms for workflow with 50 tasks** → Backend measured
 4. **Template-first approach reduces new user time-to-first-workflow by 50%** → Validate in user testing

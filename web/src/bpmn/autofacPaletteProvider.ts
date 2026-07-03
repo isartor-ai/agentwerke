@@ -3,7 +3,8 @@ import { AGENT_TASK_TYPE, APPROVAL_TASK_TYPE, EXTERNAL_EVENT_TYPE } from './cons
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * Adds first-class Autofac entries to the editor palette so users drag Autofac
+ * Adds first-class Agentwerke entries to the editor palette so users drag
+ * governed agent and approval tasks directly onto BPMN diagrams.
  * concepts rather than raw BPMN:
  *  - "Agent Task"  → bpmn:ServiceTask pre-stamped with autofac:agentTask
  *  - "Approval Gate" → bpmn:UserTask pre-stamped with autofac:approvalTask

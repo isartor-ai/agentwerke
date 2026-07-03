@@ -2,7 +2,7 @@
 
 ## Overview
 
-Autofac currently uses EF Core migrations in `src/Autofac.Infrastructure` with the default PostgreSQL schema `autofac`.
+Agentwerke currently uses EF Core migrations in `src/Autofac.Infrastructure` with the default PostgreSQL schema `autofac`.
 
 The model stores timestamps as ISO-8601 strings in text columns and uses `jsonb` for list-valued fields.
 

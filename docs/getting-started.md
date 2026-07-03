@@ -1,6 +1,6 @@
 # Getting started (5-minute tokenless quickstart)
 
-Run a real governed Autofac workflow end to end — **no API keys, no accounts**.
+Run a real governed Agentwerke workflow end to end — **no API keys, no accounts**.
 Model calls use a deterministic mock provider and GitHub is disabled, so you can
 see the engine, agents, approval gates, and evidence working before wiring up
 real credentials.
@@ -38,7 +38,7 @@ mock provider, so it needs no API key.
 Prefer curl? The quickstart API runs with a dev token, so set it once:
 
 ```bash
-TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhdXRvZmFjLWRldiIsImF1ZCI6ImF1dG9mYWMtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.1koOCkdx_pfBXg8WIobkTotJevt-3H2ofM66IecvVmQ"
+TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhZ2VudHdlcmtlLWRldiIsImF1ZCI6ImFnZW50d2Vya2UtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.ICCK9WVptCdU81iugfkBGyW5yPM9QAyxOYVtYStnjb0"
 API=http://localhost:8081
 WID=wf-first-run-sample
 RID=$(curl -sf "$API/api/runs" -H "Authorization: Bearer $TOKEN" \
@@ -87,7 +87,7 @@ docker compose -f docker/docker-compose.quickstart.yml down -v
   `RepositoryOwner` / `RepositoryName` / `PersonalAccessToken` to let agents open
   real branches and pull requests.
 - **Start runs from GitHub issues:** tag a workflow `github-trigger`, point the
-  repo's `issues` webhook at your instance, and label issues `autofac` to opt
+  repo's `issues` webhook at your instance, and label issues `agentwerke` to opt
   them in — see [GitHub issue trigger](github-issue-trigger.md).
 - **Author your own workflows** in the designer, or see the BPMN extension and
   agent-authoring references under [`docs/`](.).

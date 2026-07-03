@@ -3,26 +3,29 @@ using Microsoft.Extensions.Configuration;
 namespace Autofac.Infrastructure;
 
 /// <summary>
-/// Selects which workflow execution runtime Autofac uses. The bounded, Postgres-backed
-/// <see cref="WorkflowRuntimeMode.Autofac"/> runtime is the default; <see cref="WorkflowRuntimeMode.Camunda"/>
+/// Selects which workflow execution runtime Agentwerke uses. The bounded, Postgres-backed
+/// <see cref="WorkflowRuntimeMode.Agentwerke"/> runtime is the default; <see cref="WorkflowRuntimeMode.Camunda"/>
 /// is an explicit, opt-in enterprise adapter (see ADR-002).
 /// </summary>
 public enum WorkflowRuntimeMode
 {
-    Autofac,
+    Agentwerke,
     Camunda
 }
 
 public sealed class WorkflowRuntimeOptions
 {
     public const string Section = "WorkflowRuntime";
+    public const string LegacyAutofacMode = "Autofac";
 
-    public WorkflowRuntimeMode Mode { get; set; } = WorkflowRuntimeMode.Autofac;
+    public WorkflowRuntimeMode Mode { get; set; } = WorkflowRuntimeMode.Agentwerke;
+
+    public bool LegacyModeAliasUsed { get; set; }
 
     public bool IsCamundaMode => Mode == WorkflowRuntimeMode.Camunda;
 
     /// <summary>
-    /// Resolves the active runtime mode from configuration, defaulting to <see cref="WorkflowRuntimeMode.Autofac"/>
+    /// Resolves the active runtime mode from configuration, defaulting to <see cref="WorkflowRuntimeMode.Agentwerke"/>
     /// when unset and failing fast with an actionable error when an unsupported value is supplied.
     /// </summary>
     public static WorkflowRuntimeOptions Resolve(IConfiguration configuration)
@@ -33,16 +36,26 @@ public sealed class WorkflowRuntimeOptions
 
         if (string.IsNullOrWhiteSpace(raw))
         {
-            return new WorkflowRuntimeOptions { Mode = WorkflowRuntimeMode.Autofac };
+            return new WorkflowRuntimeOptions { Mode = WorkflowRuntimeMode.Agentwerke };
         }
 
-        if (Enum.TryParse<WorkflowRuntimeMode>(raw.Trim(), ignoreCase: true, out var mode)
+        var normalized = raw.Trim();
+        if (string.Equals(normalized, LegacyAutofacMode, StringComparison.OrdinalIgnoreCase))
+        {
+            return new WorkflowRuntimeOptions
+            {
+                Mode = WorkflowRuntimeMode.Agentwerke,
+                LegacyModeAliasUsed = true
+            };
+        }
+
+        if (Enum.TryParse<WorkflowRuntimeMode>(normalized, ignoreCase: true, out var mode)
             && Enum.IsDefined(mode))
         {
             return new WorkflowRuntimeOptions { Mode = mode };
         }
 
-        var supported = string.Join(", ", Enum.GetNames<WorkflowRuntimeMode>());
+        var supported = $"{string.Join(", ", Enum.GetNames<WorkflowRuntimeMode>())} (legacy alias: {LegacyAutofacMode})";
         throw new InvalidOperationException(
             $"Unsupported workflow runtime mode '{raw}'. " +
             $"Set '{Section}:Mode' to one of: {supported}.");

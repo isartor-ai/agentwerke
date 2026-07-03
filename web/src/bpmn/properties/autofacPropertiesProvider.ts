@@ -20,7 +20,7 @@ function isMessageCatchEvent(element: any) {
 }
 
 /**
- * Properties-panel provider that injects Autofac groups:
+ * Properties-panel provider that injects Agentwerke governance groups:
  *  - "Agent Task" for service/script tasks
  *  - "Approval Gate" for user tasks
  *
@@ -36,7 +36,7 @@ function AutofacPropertiesProvider(
       if (is(element, 'bpmn:ServiceTask') || is(element, 'bpmn:ScriptTask')) {
         groups.push({
           id: 'autofacAgentTask',
-          label: translate('Autofac — Agent Task'),
+          label: translate('Agentwerke — Agent Task'),
           entries: agentTaskEntries(element),
           component: Group,
         });
@@ -45,7 +45,7 @@ function AutofacPropertiesProvider(
       if (is(element, 'bpmn:UserTask')) {
         groups.push({
           id: 'autofacApproval',
-          label: translate('Autofac — Approval Gate'),
+          label: translate('Agentwerke — Approval Gate'),
           entries: approvalEntries(element),
           component: Group,
         });
@@ -54,7 +54,7 @@ function AutofacPropertiesProvider(
       if (is(element, 'bpmn:ReceiveTask') || isMessageCatchEvent(element)) {
         groups.push({
           id: 'autofacExternalEvent',
-          label: translate('Autofac — External Wait'),
+          label: translate('Agentwerke — External Wait'),
           entries: externalEventEntries(element),
           component: Group,
         });

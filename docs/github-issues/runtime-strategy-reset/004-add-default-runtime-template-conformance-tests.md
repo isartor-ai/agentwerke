@@ -2,7 +2,7 @@
 
 ## Context
 
-The default runtime should not become a general BPMN engine. It must reliably execute the curated SDLC templates Autofac ships and reject unsupported BPMN constructs before publish.
+The default runtime should not become a general BPMN engine. It must reliably execute the curated SDLC templates Agentwerke ships and reject unsupported BPMN constructs before publish.
 
 ## Scope
 

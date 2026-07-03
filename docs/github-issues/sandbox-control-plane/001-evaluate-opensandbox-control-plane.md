@@ -1,17 +1,17 @@
-# Evaluate OpenSandbox as Autofac's sandbox control plane with Kata underneath
+# Evaluate OpenSandbox as Agentwerke's sandbox control plane with Kata underneath
 
 ## Summary
-Evaluate and adopt OpenSandbox as the preferred sandbox control plane candidate for Autofac, with Kata Containers or Kata plus Firecracker configured as the production isolation runtime underneath it.
+Evaluate and adopt OpenSandbox as the preferred sandbox control plane candidate for Agentwerke, with Kata Containers or Kata plus Firecracker configured as the production isolation runtime underneath it.
 
 ## Why
-Initial sandbox planning treated Kata as something Autofac would integrate directly through Kubernetes RuntimeClass. After reviewing OpenSandbox, the better first move is to use OpenSandbox as the higher-level sandbox lifecycle and execution layer, then configure its secure runtime support for Kata, gVisor, or Firecracker depending on environment.
+Initial sandbox planning treated Kata as something Agentwerke would integrate directly through Kubernetes RuntimeClass. After reviewing OpenSandbox, the better first move is to use OpenSandbox as the higher-level sandbox lifecycle and execution layer, then configure its secure runtime support for Kata, gVisor, or Firecracker depending on environment.
 
-OpenSandbox gives Autofac a REST or OpenAPI lifecycle API, optional C# SDK path, command and file execution APIs, Kubernetes and Docker runtime backends, TTL cleanup, resource limits, network policy, egress controls, credential vault support, snapshots, and secure runtime integration. Kata remains the recommended production isolation primitive, but OpenSandbox may save Autofac from owning all lifecycle, exec, egress, and credential plumbing directly.
+OpenSandbox gives Agentwerke a REST or OpenAPI lifecycle API, optional C# SDK path, command and file execution APIs, Kubernetes and Docker runtime backends, TTL cleanup, resource limits, network policy, egress controls, credential vault support, snapshots, and secure runtime integration. Kata remains the recommended production isolation primitive, but OpenSandbox may save Agentwerke from owning all lifecycle, exec, egress, and credential plumbing directly.
 
 ## Scope
 - Write an ADR comparing direct Kubernetes plus Kata against OpenSandbox-backed execution.
 - Decide whether OpenSandbox becomes the default sandbox provider abstraction target.
-- Define target topology: Autofac worker -> `ISandboxExecutor` -> OpenSandbox provider -> OpenSandbox server -> Kubernetes runtime -> Kata RuntimeClass.
+- Define target topology: Agentwerke worker -> `ISandboxExecutor` -> OpenSandbox provider -> OpenSandbox server -> Kubernetes runtime -> Kata RuntimeClass.
 - Document Docker or runc as local development only, gVisor as a lower-overhead production option, and Kata or Kata plus Firecracker as the high-isolation production options.
 - Identify security, operational, dependency, and maturity risks before committing to implementation.
 

@@ -173,14 +173,14 @@ public sealed class EvidencePackBuilderTests
             auditRecords,
             Array.Empty<RunContextEntry>(),
             [new EvidenceArtifactInput("scan-report.json", 2048, "2026-06-18T09:04:30.0000000Z")],
-            runtimeMode: "Autofac",
+            runtimeMode: "Agentwerke",
             camundaEnabled: false,
             generatedAt);
 
         Assert.Equal(EvidencePackBuilder.SchemaVersion, pack.SchemaVersion);
         Assert.Equal("run_1", pack.RunId);
         Assert.Equal("completed", pack.Run.Status);
-        Assert.Equal("Autofac", pack.Runtime.Mode);
+        Assert.Equal("Agentwerke", pack.Runtime.Mode);
         Assert.False(pack.Runtime.CamundaEnabled);
         Assert.Null(pack.Camunda);
         Assert.Equal(ExpectedSha256(bpmnXml), pack.Workflow.BpmnSha256);
@@ -264,7 +264,7 @@ public sealed class EvidencePackBuilderTests
             Array.Empty<AuditRecord>(),
             Array.Empty<RunContextEntry>(),
             Array.Empty<EvidenceArtifactInput>(),
-            runtimeMode: "Autofac",
+            runtimeMode: "Agentwerke",
             camundaEnabled: false,
             DateTimeOffset.Parse("2026-06-18T10:00:00.0000000Z"));
 
