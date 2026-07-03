@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Agentwerke governed run map</title>
+  <desc id="desc">A workflow trigger enters a BPMN run, reaches an agent task, passes through policy and sandbox boundaries, then produces evidence.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .lane { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .node { fill: #ffffff; stroke: #0f766e; stroke-width: 3; }
+      .node-alt { fill: #fffbeb; stroke: #92400e; stroke-width: 3; }
+      .node-risk { fill: #fef2f2; stroke: #b91c1c; stroke-width: 3; }
+      .title { fill: #0f172a; font: 700 25px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .label { fill: #0f172a; font: 700 20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { fill: #475569; font: 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .line { stroke: #334155; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="430" rx="18"/>
+  <text x="48" y="54" class="title">A governed Agentwerke run</text>
+  <rect x="48" y="86" width="1104" height="284" rx="16" class="lane"/>
+  <g>
+    <rect x="86" y="150" width="150" height="96" rx="10" class="node"/>
+    <text x="126" y="188" class="label">Trigger</text>
+    <text x="111" y="215" class="small">API or webhook</text>
+  </g>
+  <path d="M 238 198 L 304 198" class="line"/>
+  <g>
+    <rect x="312" y="132" width="166" height="132" rx="10" class="node"/>
+    <text x="350" y="180" class="label">BPMN run</text>
+    <text x="342" y="208" class="small">versioned process</text>
+    <text x="357" y="232" class="small">durable state</text>
+  </g>
+  <path d="M 480 198 L 548 198" class="line"/>
+  <g>
+    <rect x="556" y="132" width="168" height="132" rx="10" class="node-alt"/>
+    <text x="603" y="180" class="label">Agent task</text>
+    <text x="593" y="208" class="small">prompt, skills</text>
+    <text x="593" y="232" class="small">model provider</text>
+  </g>
+  <path d="M 726 198 L 794 198" class="line"/>
+  <g>
+    <rect x="802" y="132" width="168" height="132" rx="10" class="node-risk"/>
+    <text x="833" y="180" class="label">Policy gate</text>
+    <text x="839" y="208" class="small">allow, escalate</text>
+    <text x="868" y="232" class="small">or reject</text>
+  </g>
+  <path d="M 888 266 C 888 326, 650 326, 650 270" class="line"/>
+  <text x="674" y="318" class="small">approval can pause the run</text>
+  <path d="M 972 198 L 1036 198" class="line"/>
+  <g>
+    <rect x="1044" y="132" width="72" height="132" rx="10" class="node"/>
+    <text x="1063" y="184" class="label">Tool</text>
+    <text x="1058" y="210" class="small">call</text>
+  </g>
+  <g>
+    <rect x="374" y="296" width="452" height="46" rx="8" fill="#ecfeff" stroke="#0d9488" stroke-width="2"/>
+    <text x="437" y="325" class="small">All actions leave audit records, artifacts, cost, and evidence.</text>
+  </g>
+</svg>

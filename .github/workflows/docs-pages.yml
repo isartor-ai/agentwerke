@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs.autofac.de/**'
+      - 'docs.agentwerke.de/**'
       - '.github/workflows/docs-pages.yml'
   pull_request:
     paths:
-      - 'docs.autofac.de/**'
+      - 'docs.agentwerke.de/**'
       - '.github/workflows/docs-pages.yml'
   workflow_dispatch:
 
@@ -36,15 +36,15 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: docs.autofac.de/package-lock.json
+          cache-dependency-path: docs.agentwerke.de/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: docs.autofac.de
+        working-directory: docs.agentwerke.de
 
       - name: Build docs
         run: npm run build
-        working-directory: docs.autofac.de
+        working-directory: docs.agentwerke.de
 
       - name: Configure Pages
         if: github.event_name != 'pull_request'
@@ -54,7 +54,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs.autofac.de/.vitepress/dist
+          path: docs.agentwerke.de/.vitepress/dist
 
   deploy:
     if: github.event_name != 'pull_request'
