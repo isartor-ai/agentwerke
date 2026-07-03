@@ -31,6 +31,20 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
     return (
       <div data-testid="bpmn-modeler-mock" aria-label="BPMN canvas">
         {xml}
+        {/* Test affordance: simulate a canvas edit so tests can exercise the
+            unpublished-changes / diff flow without a real bpmn-js instance. */}
+        <button
+          type="button"
+          data-testid="bpmn-mock-edit"
+          onClick={() => {
+            const next = `${xmlRef.current}<bpmn:task id="MockEdit" name="Mock Edit" />`;
+            xmlRef.current = next;
+            setXml(next);
+            props.onChange?.(next);
+          }}
+        >
+          mock edit
+        </button>
       </div>
     );
   },
