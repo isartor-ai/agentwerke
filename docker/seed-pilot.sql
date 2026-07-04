@@ -6,7 +6,7 @@
 -- ── Scenario A: GitHub Branch + PR (wf-pilot-001) ──────────────────────────
 -- Two sequential GitHub service tasks; both route to WireMock without an API key.
 
-INSERT INTO autofac.workflows (
+INSERT INTO agentwerke.workflows (
     "Id", "Name", "Description", "Version", "Status", "Owner",
     "CreatedAt", "LastEditedAt", "ValidationState", "Tags", "BpmnXml"
 ) VALUES (
@@ -26,7 +26,7 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-github-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-github" name="GitHub Branch + PR" isExecutable="true">
@@ -35,14 +35,14 @@ INSERT INTO autofac.workflows (
     </bpmn:startEvent>
     <bpmn:serviceTask id="CreateBranch" name="Create Feature Branch">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="platform-agent" action="github.create_branch" environment="ci" purposeType="delivery" policyTag="standard" requiresEvidence="" />
+        <agentwerke:agentTask agent="platform-agent" action="github.create_branch" environment="ci" purposeType="delivery" policyTag="standard" requiresEvidence="" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow1</bpmn:incoming>
       <bpmn:outgoing>Flow2</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:serviceTask id="CreatePR" name="Open Pull Request">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="platform-agent" action="github.create_pull_request" environment="ci" purposeType="delivery" policyTag="standard" requiresEvidence="" />
+        <agentwerke:agentTask agent="platform-agent" action="github.create_pull_request" environment="ci" purposeType="delivery" policyTag="standard" requiresEvidence="" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow2</bpmn:incoming>
       <bpmn:outgoing>Flow3</bpmn:outgoing>
@@ -87,7 +87,7 @@ INSERT INTO autofac.workflows (
 -- ── Scenario B: Approval Gate (wf-pilot-002) ────────────────────────────────
 -- Branch creation (WireMock) → human userTask approval gate.
 
-INSERT INTO autofac.workflows (
+INSERT INTO agentwerke.workflows (
     "Id", "Name", "Description", "Version", "Status", "Owner",
     "CreatedAt", "LastEditedAt", "ValidationState", "Tags", "BpmnXml"
 ) VALUES (
@@ -107,7 +107,7 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-approval-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-approval" name="Branch + Approval Gate" isExecutable="true">
@@ -116,14 +116,14 @@ INSERT INTO autofac.workflows (
     </bpmn:startEvent>
     <bpmn:serviceTask id="CreateBranch" name="Create Feature Branch">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="platform-agent" action="github.create_branch" environment="ci" purposeType="delivery" policyTag="standard" requiresEvidence="" />
+        <agentwerke:agentTask agent="platform-agent" action="github.create_branch" environment="ci" purposeType="delivery" policyTag="standard" requiresEvidence="" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow1</bpmn:incoming>
       <bpmn:outgoing>Flow2</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:userTask id="ReviewAndApprove" name="Review and Approve">
       <bpmn:extensionElements>
-        <autofac:approvalTask purposeType="human-approval" policyTag="standard-deploy" />
+        <agentwerke:approvalTask purposeType="human-approval" policyTag="standard-deploy" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow2</bpmn:incoming>
       <bpmn:outgoing>Flow3</bpmn:outgoing>
@@ -170,7 +170,7 @@ INSERT INTO autofac.workflows (
 -- material access" rule (action contains "access", text contains "credential").
 -- The step fails immediately with PolicyDecision.Kind = "reject"; no LLM call.
 
-INSERT INTO autofac.workflows (
+INSERT INTO agentwerke.workflows (
     "Id", "Name", "Description", "Version", "Status", "Owner",
     "CreatedAt", "LastEditedAt", "ValidationState", "Tags", "BpmnXml"
 ) VALUES (
@@ -190,7 +190,7 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-policy-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-policy" name="Policy Block Demo" isExecutable="true">
@@ -199,7 +199,7 @@ INSERT INTO autofac.workflows (
     </bpmn:startEvent>
     <bpmn:serviceTask id="AccessSecrets" name="Access Credential Store">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="security-analyst" action="access.credential_store" environment="ci" purposeType="credential-access" policyTag="standard" requiresEvidence="" />
+        <agentwerke:agentTask agent="security-analyst" action="access.credential_store" environment="ci" purposeType="credential-access" policyTag="standard" requiresEvidence="" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow1</bpmn:incoming>
       <bpmn:outgoing>Flow2</bpmn:outgoing>
@@ -238,7 +238,7 @@ INSERT INTO autofac.workflows (
 -- Requires ANTHROPIC__APIKEY. Without it, NullLanguageModelClient returns a
 -- clear failure message. With it, the real Anthropic API is called.
 
-INSERT INTO autofac.workflows (
+INSERT INTO agentwerke.workflows (
     "Id", "Name", "Description", "Version", "Status", "Owner",
     "CreatedAt", "LastEditedAt", "ValidationState", "Tags", "BpmnXml"
 ) VALUES (
@@ -258,7 +258,7 @@ INSERT INTO autofac.workflows (
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="pilot-llm-defs"
     targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
   <bpmn:process id="pilot-llm" name="LLM Agent Task" isExecutable="true">
@@ -267,7 +267,7 @@ INSERT INTO autofac.workflows (
     </bpmn:startEvent>
     <bpmn:serviceTask id="GenerateSpec" name="Generate Specification">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="spec-writer" action="spec.generate" environment="ci" purposeType="specification" policyTag="sdlc-spec" requiresEvidence="" />
+        <agentwerke:agentTask agent="spec-writer" action="spec.generate" environment="ci" purposeType="specification" policyTag="sdlc-spec" requiresEvidence="" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow1</bpmn:incoming>
       <bpmn:outgoing>Flow2</bpmn:outgoing>
@@ -307,7 +307,7 @@ INSERT INTO autofac.workflows (
 -- live execution. Trigger new runs from the UI to see live behaviour.
 
 -- Scenario A completed run
-INSERT INTO autofac.workflow_runs (
+INSERT INTO agentwerke.workflow_runs (
     "Id", "WorkflowId", "WorkflowName", "WorkflowVersion", "Status",
     "RiskLevel", "CurrentStep", "RequestedBy", "StartedAt", "CompletedAt",
     "DurationMs", "PendingApprovals", "Tags", "CorrelationId"
@@ -328,7 +328,7 @@ INSERT INTO autofac.workflow_runs (
     NULL
 ) ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_run_steps (
+INSERT INTO agentwerke.workflow_run_steps (
     "Id", "RunId", "Name", "Type", "Status", "StartedAt", "CompletedAt", "AgentName", "Output", "Error"
 ) VALUES
 (
@@ -353,7 +353,7 @@ INSERT INTO autofac.workflow_run_steps (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_events (
+INSERT INTO agentwerke.workflow_events (
     "Id", "RunId", "Type", "Message", "CreatedAt"
 ) VALUES
 (
@@ -384,7 +384,7 @@ INSERT INTO autofac.workflow_events (
 ON CONFLICT ("Id") DO NOTHING;
 
 -- Scenario B — awaiting approval run
-INSERT INTO autofac.workflow_runs (
+INSERT INTO agentwerke.workflow_runs (
     "Id", "WorkflowId", "WorkflowName", "WorkflowVersion", "Status",
     "RiskLevel", "CurrentStep", "RequestedBy", "StartedAt", "CompletedAt",
     "DurationMs", "PendingApprovals", "Tags", "CorrelationId"
@@ -405,7 +405,7 @@ INSERT INTO autofac.workflow_runs (
     NULL
 ) ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_run_steps (
+INSERT INTO agentwerke.workflow_run_steps (
     "Id", "RunId", "Name", "Type", "Status", "StartedAt", "CompletedAt", "AgentName", "Output", "Error",
     "PolicyDecision_Kind", "PolicyDecision_PolicyId", "PolicyDecision_PolicyName",
     "PolicyDecision_Rationale", "PolicyDecision_RiskScore", "PolicyDecision_RiskLevel",
@@ -436,7 +436,7 @@ INSERT INTO autofac.workflow_run_steps (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_events (
+INSERT INTO agentwerke.workflow_events (
     "Id", "RunId", "Type", "Message", "CreatedAt"
 ) VALUES
 (
@@ -451,7 +451,7 @@ INSERT INTO autofac.workflow_events (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.approval_requests (
+INSERT INTO agentwerke.approval_requests (
     "Id", "RunId", "WorkflowName", "ActionRequested", "Requester", "AgentName",
     "PolicyRationale", "RiskScore", "RiskLevel", "RiskFactors", "AffectedSystems",
     "SlaDeadline", "CreatedAt", "Status", "Priority",
@@ -476,7 +476,7 @@ INSERT INTO autofac.approval_requests (
 ) ON CONFLICT ("Id") DO NOTHING;
 
 -- Scenario C — policy-blocked run
-INSERT INTO autofac.workflow_runs (
+INSERT INTO agentwerke.workflow_runs (
     "Id", "WorkflowId", "WorkflowName", "WorkflowVersion", "Status",
     "RiskLevel", "CurrentStep", "RequestedBy", "StartedAt", "CompletedAt",
     "DurationMs", "PendingApprovals", "Tags", "CorrelationId"
@@ -497,7 +497,7 @@ INSERT INTO autofac.workflow_runs (
     NULL
 ) ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_run_steps (
+INSERT INTO agentwerke.workflow_run_steps (
     "Id", "RunId", "Name", "Type", "Status", "StartedAt", "CompletedAt", "AgentName", "Output", "Error",
     "PolicyDecision_Kind", "PolicyDecision_PolicyId", "PolicyDecision_PolicyName",
     "PolicyDecision_Rationale", "PolicyDecision_RiskScore", "PolicyDecision_RiskLevel",
@@ -521,7 +521,7 @@ INSERT INTO autofac.workflow_run_steps (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_events (
+INSERT INTO agentwerke.workflow_events (
     "Id", "RunId", "Type", "Message", "CreatedAt"
 ) VALUES
 (
@@ -537,7 +537,7 @@ INSERT INTO autofac.workflow_events (
 ON CONFLICT ("Id") DO NOTHING;
 
 -- Scenario D — LLM agent run (no API key, shows graceful failure)
-INSERT INTO autofac.workflow_runs (
+INSERT INTO agentwerke.workflow_runs (
     "Id", "WorkflowId", "WorkflowName", "WorkflowVersion", "Status",
     "RiskLevel", "CurrentStep", "RequestedBy", "StartedAt", "CompletedAt",
     "DurationMs", "PendingApprovals", "Tags", "CorrelationId"
@@ -558,7 +558,7 @@ INSERT INTO autofac.workflow_runs (
     NULL
 ) ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_run_steps (
+INSERT INTO agentwerke.workflow_run_steps (
     "Id", "RunId", "Name", "Type", "Status", "StartedAt", "CompletedAt", "AgentName", "Output", "Error"
 ) VALUES
 (
@@ -572,7 +572,7 @@ INSERT INTO autofac.workflow_run_steps (
 )
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO autofac.workflow_events (
+INSERT INTO agentwerke.workflow_events (
     "Id", "RunId", "Type", "Message", "CreatedAt"
 ) VALUES
 (

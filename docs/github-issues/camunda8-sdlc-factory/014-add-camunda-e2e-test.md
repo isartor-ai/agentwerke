@@ -19,9 +19,9 @@ The architecture decision is not real until it is covered by an executable end-t
 - Failure output includes Camunda response body.
 
 ## Verification
-- `CAMUNDA_ENABLED=true dotnet test tests/Autofac.E2ETests/Autofac.E2ETests.csproj`
+- `CAMUNDA_ENABLED=true dotnet test tests/Agentwerke.E2ETests/Agentwerke.E2ETests.csproj`
 
 ## Suggested Files
-- `tests/Autofac.E2ETests`
+- `tests/Agentwerke.E2ETests`
 - `docker/docker-compose.e2e.yml`
-- `tests/Autofac.E2ETests/Fixtures`
+- `tests/Agentwerke.E2ETests/Fixtures`

@@ -52,8 +52,8 @@ services:
     working_dir: /repo
     command: >
       dotnet ef database update
-      --project src/Autofac.Infrastructure/Autofac.Infrastructure.csproj
-      --startup-project src/Autofac.Api/Autofac.Api.csproj
+      --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
+      --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
     environment:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_pilot;Username=postgres;Password=postgres"
     depends_on:
@@ -70,7 +70,7 @@ services:
     ports:
       - "9091:8080"
     volumes:
-      - ../tests/Autofac.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github-catchall.json:ro
+      - ../tests/Agentwerke.E2ETests/Fixtures/wiremock-github-stub.json:/home/wiremock/mappings/github-catchall.json:ro
       - ./wiremock-pilot-stubs.json:/home/wiremock/mappings/github-pilot.json:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health | grep -q healthy"]

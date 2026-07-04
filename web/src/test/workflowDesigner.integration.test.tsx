@@ -38,7 +38,7 @@ const INVALID_VALIDATION = {
   warnings: [],
   errors: [
     {
-      message: 'Service/script task requires autofac:agentTask metadata under extensionElements.',
+      message: 'Service/script task requires agentwerke:agentTask metadata under extensionElements.',
       elementName: 'serviceTask',
       elementId: 'DeployTask',
       lineNumber: 12,
@@ -193,7 +193,7 @@ describe('WorkflowDesigner integration', () => {
         expect.objectContaining({ bpmnXml: expect.stringContaining('PersistedFlow') }),
       );
       expect(screen.getByText('Invalid')).toBeInTheDocument();
-      expect(screen.getByText(/requires autofac:agentTask metadata/i)).toBeInTheDocument();
+      expect(screen.getByText(/requires agentwerke:agentTask metadata/i)).toBeInTheDocument();
       expect(screen.getByText(/at line 12, col 5/i)).toBeInTheDocument();
     });
   });
@@ -439,7 +439,7 @@ describe('WorkflowDesigner integration', () => {
         expect.objectContaining({ fileName: 'workflow.bpmn' }),
       );
       expect(screen.getByText('Invalid')).toBeInTheDocument();
-      expect(screen.getByText(/requires autofac:agentTask metadata/i)).toBeInTheDocument();
+      expect(screen.getByText(/requires agentwerke:agentTask metadata/i)).toBeInTheDocument();
     });
   });
 });

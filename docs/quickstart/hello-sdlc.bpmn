@@ -9,7 +9,7 @@
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
     xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
     xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    xmlns:autofac="https://agentwerke.de/bpmn/extensions/v1"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
     id="hello-sdlc-defs" targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
   <bpmn:process id="HelloSdlc" name="Hello SDLC" isExecutable="true">
     <bpmn:startEvent id="Start" name="Start">
@@ -18,10 +18,10 @@
 
     <bpmn:serviceTask id="Analyze" name="Analyze">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="analyst" action="analyze"
+        <agentwerke:agentTask agent="analyst" action="analyze"
           executionMode="local" purposeType="analysis" policyTag="standard">
-          <autofac:prompt>Summarize the requested change in two short bullet points.</autofac:prompt>
-        </autofac:agentTask>
+          <agentwerke:prompt>Summarize the requested change in two short bullet points.</agentwerke:prompt>
+        </agentwerke:agentTask>
       </bpmn:extensionElements>
       <bpmn:incoming>f1</bpmn:incoming>
       <bpmn:outgoing>f2</bpmn:outgoing>
@@ -29,7 +29,7 @@
 
     <bpmn:userTask id="Review" name="Review Approval">
       <bpmn:extensionElements>
-        <autofac:approvalTask purposeType="human-approval" policyTag="standard" />
+        <agentwerke:approvalTask purposeType="human-approval" policyTag="standard" />
       </bpmn:extensionElements>
       <bpmn:incoming>f2</bpmn:incoming>
       <bpmn:outgoing>f3</bpmn:outgoing>

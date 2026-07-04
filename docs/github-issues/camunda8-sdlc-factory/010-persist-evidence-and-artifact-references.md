@@ -23,7 +23,7 @@ Camunda variables should not become the artifact store. Agentwerke needs a durab
 - Manual run shows spec/test/PR evidence in Run Detail.
 
 ## Suggested Files
-- `src/Autofac.Storage`
-- `src/Autofac.Application/Workflows`
-- `src/Autofac.Api/Contracts/Runs`
+- `src/Agentwerke.Storage`
+- `src/Agentwerke.Application/Workflows`
+- `src/Agentwerke.Api/Contracts/Runs`
 - `web/src/views/RunDetail.tsx`

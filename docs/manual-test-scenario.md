@@ -253,7 +253,7 @@ Expected: `status: "cancelled"`.
 
 The Prometheus scraping endpoint exposes counters for run lifecycle events.
 The OTel exporter uses the instrument name as prefix (not the meter name), so
-metrics start with `workflow_`, tagged with `otel_scope_name="Autofac.Workflows"`.
+metrics start with `workflow_`, tagged with `otel_scope_name="Agentwerke.Workflows"`.
 
 ```bash
 curl -sf http://localhost:8081/metrics | grep 'otel_scope_name="Agentwerke' | grep -v "bucket\|_sum\|_count"
@@ -261,10 +261,10 @@ curl -sf http://localhost:8081/metrics | grep 'otel_scope_name="Agentwerke' | gr
 
 You should see counters like:
 ```
-workflow_runs_started_total{otel_scope_name="Autofac.Workflows",...,workflow_name="Production Deployment Approval"} 1
-workflow_runs_completed_total{otel_scope_name="Autofac.Workflows",...} 1
-workflow_approvals_created_total{otel_scope_name="Autofac.Workflows",...,risk_level="high"} 1
-workflow_approvals_decided_total{otel_scope_name="Autofac.Workflows",...,decision="approve",risk_level="high"} 1
+workflow_runs_started_total{otel_scope_name="Agentwerke.Workflows",...,workflow_name="Production Deployment Approval"} 1
+workflow_runs_completed_total{otel_scope_name="Agentwerke.Workflows",...} 1
+workflow_approvals_created_total{otel_scope_name="Agentwerke.Workflows",...,risk_level="high"} 1
+workflow_approvals_decided_total{otel_scope_name="Agentwerke.Workflows",...,decision="approve",risk_level="high"} 1
 ```
 
 ---

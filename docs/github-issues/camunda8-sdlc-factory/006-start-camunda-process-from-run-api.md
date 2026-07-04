@@ -23,7 +23,7 @@ Agentwerke should remain the product API while Camunda owns process execution.
 - Run detail API shows linkage between Agentwerke run and Camunda process instance.
 
 ## Suggested Files
-- `src/Autofac.Application/Workflows`
-- `src/Autofac.Infrastructure/Workflows`
-- `src/Autofac.Api/Controllers/RunsController.cs`
-- `tests/Autofac.Application.Tests`
+- `src/Agentwerke.Application/Workflows`
+- `src/Agentwerke.Infrastructure/Workflows`
+- `src/Agentwerke.Api/Controllers/RunsController.cs`
+- `tests/Agentwerke.Application.Tests`

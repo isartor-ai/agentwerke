@@ -14,7 +14,7 @@ import { getExtensionProperty, setExtensionProperty } from './extensionUtil';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** Builds a text entry bound to a single `autofac:agentTask` attribute. */
+/** Builds a text entry bound to a single `agentwerke:agentTask` attribute. */
 function textField(
   attribute: string,
   label: string,
@@ -124,7 +124,7 @@ function agentSelectField() {
   };
 }
 
-/** Builds a non-negative integer entry bound to an `autofac:agentTask` attribute. */
+/** Builds a non-negative integer entry bound to an `agentwerke:agentTask` attribute. */
 function numberField(attribute: string, label: string) {
   return function AgentTaskNumberField(props: any) {
     const { element, id } = props;
@@ -182,19 +182,19 @@ const PERMISSION_LEVEL_OPTIONS = [
  */
 export function agentTaskEntries(element: any) {
   return [
-    { id: 'autofac-agent', component: agentSelectField(), isEdited: isSelectEntryEdited, element },
-    { id: 'autofac-action', component: textField('action', 'Action', 'e.g. cloud.deploy_artifact'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-environment', component: textField('environment', 'Environment', 'e.g. production'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-purposeType', component: textField('purposeType', 'Purpose type', 'e.g. production_deployment'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-policyTag', component: textField('policyTag', 'Policy tag', 'e.g. deploy_gateway'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-executionMode', component: selectField('executionMode', 'Execution mode', EXECUTION_MODE_OPTIONS), isEdited: isSelectEntryEdited, element },
-    { id: 'autofac-sandboxProfile', component: selectField('sandboxProfile', 'Sandbox profile', SANDBOX_PROFILE_OPTIONS), isEdited: isSelectEntryEdited, element },
-    { id: 'autofac-permissionLevel', component: selectField('permissionLevel', 'Permission level', PERMISSION_LEVEL_OPTIONS), isEdited: isSelectEntryEdited, element },
-    { id: 'autofac-allowedTools', component: textField('allowedTools', 'Allowed tools', 'comma-separated, e.g. sandbox.execute'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-deniedTools', component: textField('deniedTools', 'Denied tools', 'comma-separated, e.g. web_search'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-requiresEvidence', component: textField('requiresEvidence', 'Required evidence', 'comma-separated'), isEdited: isTextFieldEntryEdited, element },
-    { id: 'autofac-maxRetries', component: numberField('maxRetries', 'Max retries'), isEdited: isNumberFieldEntryEdited, element },
-    { id: 'autofac-retryBackoffSeconds', component: numberField('retryBackoffSeconds', 'Retry backoff (s)'), isEdited: isNumberFieldEntryEdited, element },
-    { id: 'autofac-timeoutSeconds', component: numberField('timeoutSeconds', 'Timeout (s)'), isEdited: isNumberFieldEntryEdited, element },
+    { id: 'agentwerke-agent', component: agentSelectField(), isEdited: isSelectEntryEdited, element },
+    { id: 'agentwerke-action', component: textField('action', 'Action', 'e.g. cloud.deploy_artifact'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-environment', component: textField('environment', 'Environment', 'e.g. production'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-purposeType', component: textField('purposeType', 'Purpose type', 'e.g. production_deployment'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-policyTag', component: textField('policyTag', 'Policy tag', 'e.g. deploy_gateway'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-executionMode', component: selectField('executionMode', 'Execution mode', EXECUTION_MODE_OPTIONS), isEdited: isSelectEntryEdited, element },
+    { id: 'agentwerke-sandboxProfile', component: selectField('sandboxProfile', 'Sandbox profile', SANDBOX_PROFILE_OPTIONS), isEdited: isSelectEntryEdited, element },
+    { id: 'agentwerke-permissionLevel', component: selectField('permissionLevel', 'Permission level', PERMISSION_LEVEL_OPTIONS), isEdited: isSelectEntryEdited, element },
+    { id: 'agentwerke-allowedTools', component: textField('allowedTools', 'Allowed tools', 'comma-separated, e.g. sandbox.execute'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-deniedTools', component: textField('deniedTools', 'Denied tools', 'comma-separated, e.g. web_search'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-requiresEvidence', component: textField('requiresEvidence', 'Required evidence', 'comma-separated'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-maxRetries', component: numberField('maxRetries', 'Max retries'), isEdited: isNumberFieldEntryEdited, element },
+    { id: 'agentwerke-retryBackoffSeconds', component: numberField('retryBackoffSeconds', 'Retry backoff (s)'), isEdited: isNumberFieldEntryEdited, element },
+    { id: 'agentwerke-timeoutSeconds', component: numberField('timeoutSeconds', 'Timeout (s)'), isEdited: isNumberFieldEntryEdited, element },
   ];
 }

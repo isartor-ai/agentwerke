@@ -16,9 +16,18 @@ packages/
 *.nupkg
 .nuget/
 
+# Node
+node_modules/
+
 # Coverage
 coverage/
 coverage.*
+
+# Node / static site
+node_modules/
+web/dist/
+docs.agentwerke.de/.vitepress/cache/
+docs.agentwerke.de/.vitepress/dist/
 
 # OS
 .DS_Store
@@ -28,9 +37,17 @@ Thumbs.db
 docker/.env.pilot.local
 config/settings.overrides.json
 config/settings.secrets.json
-src/Autofac.Api/config/settings.overrides.json
-src/Autofac.Api/config/settings.secrets.json
+src/Agentwerke.Api/config/settings.overrides.json
+src/Agentwerke.Api/config/settings.secrets.json
 
 # scripts/run-agent-sandboxed-e2e.sh artifacts bind-mount (see docker-compose.e2e.yml)
 docker/.agent-sandboxed-artifacts/
 docker/.real-e2e-artifacts/
+
+# VitePress / static-site build output and caches
+dist/
+.vitepress/dist/
+.vitepress/cache/
+
+# Local editor/tooling config
+.claude/

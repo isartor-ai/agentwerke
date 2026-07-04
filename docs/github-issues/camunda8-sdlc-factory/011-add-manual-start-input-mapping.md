@@ -23,7 +23,7 @@ Agents need clear input context, and runs need traceable trigger metadata.
 - Manual test starts a run with input visible to the first agent task.
 
 ## Suggested Files
-- `src/Autofac.Api/Contracts/Runs`
-- `src/Autofac.Application/Workflows`
-- `src/Autofac.Infrastructure/Persistence`
-- `tests/Autofac.Api.Tests`
+- `src/Agentwerke.Api/Contracts/Runs`
+- `src/Agentwerke.Application/Workflows`
+- `src/Agentwerke.Infrastructure/Persistence`
+- `tests/Agentwerke.Api.Tests`

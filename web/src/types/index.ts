@@ -532,7 +532,7 @@ export interface SkillDetail extends SkillSummary {
 }
 
 export interface RuntimeMode {
-  mode: 'Agentwerke' | 'Autofac' | 'Camunda';
+  mode: 'Agentwerke' | 'Agentwerke' | 'Camunda';
   camundaEnabled: boolean;
 }
 

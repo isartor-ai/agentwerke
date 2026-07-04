@@ -1,7 +1,7 @@
 # ADR-001: Use Camunda 8 as the Production BPMN Runtime
 
 ## Status
-Superseded by [ADR-002: Use BPMN-Centric Agentwerke Runtime by Default](ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)
+Superseded by [ADR-002: Use BPMN-Centric Agentwerke Runtime by Default](ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md)
 
 This ADR is retained for historical context only. Do not use the implementation guidance below for new work unless ADR-002's re-decision triggers are met.
 
@@ -110,7 +110,7 @@ Rejected for the core product direction.
 ## Consequences
 
 - The next implementation plan should prioritize a Camunda adapter and job worker path.
-- Agentwerke BPMN XML must be deployable to Camunda. Rich `autofac:*` metadata should either be translated to Zeebe task definitions and task headers or stored in Agentwerke's database keyed by BPMN element id.
+- Agentwerke BPMN XML must be deployable to Camunda. Rich `agentwerke:*` metadata should either be translated to Zeebe task definitions and task headers or stored in Agentwerke's database keyed by BPMN element id.
 - UI should present simple SDLC concepts, while generating Camunda-compatible BPMN underneath.
 - The in-process runtime should be treated as legacy/test support and not expanded for production features.
 - Manual testing and E2E testing must include a real Camunda-backed workflow run.

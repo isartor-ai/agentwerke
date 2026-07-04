@@ -1,21 +1,21 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /repo
 
-COPY global.json Directory.Build.props Autofac.sln ./
-COPY src/Autofac.Domain/Autofac.Domain.csproj src/Autofac.Domain/
-COPY src/Autofac.Application/Autofac.Application.csproj src/Autofac.Application/
-COPY src/Autofac.Workflows/Autofac.Workflows.csproj src/Autofac.Workflows/
-COPY src/Autofac.Infrastructure/Autofac.Infrastructure.csproj src/Autofac.Infrastructure/
-COPY src/Autofac.Storage/Autofac.Storage.csproj src/Autofac.Storage/
-COPY src/Autofac.Sandboxes/Autofac.Sandboxes.csproj src/Autofac.Sandboxes/
-COPY src/Autofac.Agents/Autofac.Agents.csproj src/Autofac.Agents/
-COPY src/Autofac.Integrations/Autofac.Integrations.csproj src/Autofac.Integrations/
-COPY src/Autofac.AgentSecOps/Autofac.AgentSecOps.csproj src/Autofac.AgentSecOps/
-COPY src/Autofac.AgentRunner/Autofac.AgentRunner.csproj src/Autofac.AgentRunner/
-RUN dotnet restore src/Autofac.AgentRunner/Autofac.AgentRunner.csproj
+COPY global.json Directory.Build.props Agentwerke.sln ./
+COPY src/Agentwerke.Domain/Agentwerke.Domain.csproj src/Agentwerke.Domain/
+COPY src/Agentwerke.Application/Agentwerke.Application.csproj src/Agentwerke.Application/
+COPY src/Agentwerke.Workflows/Agentwerke.Workflows.csproj src/Agentwerke.Workflows/
+COPY src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj src/Agentwerke.Infrastructure/
+COPY src/Agentwerke.Storage/Agentwerke.Storage.csproj src/Agentwerke.Storage/
+COPY src/Agentwerke.Sandboxes/Agentwerke.Sandboxes.csproj src/Agentwerke.Sandboxes/
+COPY src/Agentwerke.Agents/Agentwerke.Agents.csproj src/Agentwerke.Agents/
+COPY src/Agentwerke.Integrations/Agentwerke.Integrations.csproj src/Agentwerke.Integrations/
+COPY src/Agentwerke.AgentSecOps/Agentwerke.AgentSecOps.csproj src/Agentwerke.AgentSecOps/
+COPY src/Agentwerke.AgentRunner/Agentwerke.AgentRunner.csproj src/Agentwerke.AgentRunner/
+RUN dotnet restore src/Agentwerke.AgentRunner/Agentwerke.AgentRunner.csproj
 
 COPY src/ src/
-RUN dotnet publish src/Autofac.AgentRunner/Autofac.AgentRunner.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish src/Agentwerke.AgentRunner/Agentwerke.AgentRunner.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/runtime:9.0 AS runtime
 WORKDIR /app
@@ -25,4 +25,4 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 RUN mkdir -p /output
-ENTRYPOINT ["dotnet", "Autofac.AgentRunner.dll"]
+ENTRYPOINT ["dotnet", "Agentwerke.AgentRunner.dll"]

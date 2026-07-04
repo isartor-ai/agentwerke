@@ -11,9 +11,9 @@ import {
 } from 'bpmn-js-properties-panel';
 import { ensureDiagramInterchange } from '../bpmn/layout';
 import type { BpmnValidationError } from '../types';
-import { autofacModdleDescriptor } from '../bpmn/autofacModdle';
-import { autofacModules } from '../bpmn/autofacModule';
-import { AUTOFAC_NS_PREFIX } from '../bpmn/constants';
+import { agentwerkeModdleDescriptor } from '../bpmn/agentwerkeModdle';
+import { agentwerkeModules } from '../bpmn/agentwerkeModule';
+import { AGENTWERKE_NS_PREFIX } from '../bpmn/constants';
 
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-js.css';
@@ -21,7 +21,7 @@ import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 import '@bpmn-io/properties-panel/dist/assets/properties-panel.css';
 
 const CHANGE_DEBOUNCE_MS = 300;
-const VALIDATION_MARKER = 'autofac-validation-error';
+const VALIDATION_MARKER = 'agentwerke-validation-error';
 
 export interface BpmnModelerHandle {
   /** Serializes the current diagram to formatted BPMN 2.0 XML. */
@@ -166,10 +166,10 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
         additionalModules: [
           BpmnPropertiesPanelModule,
           BpmnPropertiesProviderModule,
-          ...autofacModules,
+          ...agentwerkeModules,
         ],
         moddleExtensions: {
-          [AUTOFAC_NS_PREFIX]: autofacModdleDescriptor,
+          [AGENTWERKE_NS_PREFIX]: agentwerkeModdleDescriptor,
         },
         keyboard: { bindTo: document },
       });
@@ -244,7 +244,7 @@ export const BpmnModeler = forwardRef<BpmnModelerHandle, BpmnModelerProps>(
         }
         canvas.addMarker(element, VALIDATION_MARKER);
         const badge = document.createElement('div');
-        badge.className = 'autofac-validation-overlay';
+        badge.className = 'agentwerke-validation-overlay';
         badge.textContent = issue.message;
         overlays.add(issue.elementId, {
           position: { bottom: -6, left: 0 },

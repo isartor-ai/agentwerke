@@ -10,12 +10,12 @@ const LAYOUT_LESS_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
   </bpmn:process>
 </bpmn:definitions>`;
 
-const LAYOUT_LESS_AUTOFAC_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:autofac="https://autofac.ai/bpmn" id="Definitions_Autofac">
-  <bpmn:process id="AutofacFlow" isExecutable="true">
+const LAYOUT_LESS_AGENTWERKE_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:agentwerke="https://agentwerke.ai/bpmn" id="Definitions_Agentwerke">
+  <bpmn:process id="AgentwerkeFlow" isExecutable="true">
     <bpmn:serviceTask id="Implement" name="Implement">
       <bpmn:extensionElements>
-        <autofac:agentTask agent="developer" action="repo.write" />
+        <agentwerke:agentTask agent="developer" action="repo.write" />
       </bpmn:extensionElements>
     </bpmn:serviceTask>
   </bpmn:process>
@@ -37,11 +37,11 @@ describe('BPMN layout normalization', () => {
     await expect(ensureDiagramInterchange(xmlWithLayout)).resolves.toBe(xmlWithLayout);
   });
 
-  it('preserves Autofac extension metadata while adding BPMNDI', async () => {
-    const xml = await ensureDiagramInterchange(LAYOUT_LESS_AUTOFAC_BPMN);
+  it('preserves Agentwerke extension metadata while adding BPMNDI', async () => {
+    const xml = await ensureDiagramInterchange(LAYOUT_LESS_AGENTWERKE_BPMN);
 
     expect(xml).toContain('<bpmndi:BPMNDiagram');
-    expect(xml).toContain('autofac:agentTask');
+    expect(xml).toContain('agentwerke:agentTask');
     expect(xml).toContain('agent="developer"');
     expect(xml).toContain('action="repo.write"');
   });

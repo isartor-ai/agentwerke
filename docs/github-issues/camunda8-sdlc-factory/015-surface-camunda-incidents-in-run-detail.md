@@ -23,7 +23,7 @@ Operators need to distinguish agent failure, policy block, exhausted retries, an
 - Manual failure scenario.
 
 ## Suggested Files
-- `src/Autofac.Api/Contracts/Runs`
-- `src/Autofac.Application/Workflows`
+- `src/Agentwerke.Api/Contracts/Runs`
+- `src/Agentwerke.Application/Workflows`
 - `web/src/views/RunBoard.tsx`
 - `web/src/views/RunDetail.tsx`

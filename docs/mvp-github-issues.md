@@ -1,6 +1,6 @@
 # Agentwerke MVP GitHub Issue Drafts
 
-Target repository: `isartor-ai/autofac-private`
+Target repository: `isartor-ai/agentwerke-private`
 Prepared from:
 - `docs/functional-specification.md`
 - `docs/architecture-design.md`
@@ -48,7 +48,7 @@ The workflow designer is one of the core MVP surfaces, but backend behavior is s
 
 ### Scope
 
-- add workflow authoring use cases in `Autofac.Application`
+- add workflow authoring use cases in `Agentwerke.Application`
 - move import, validate, and publish logic out of controllers
 - define workflow versioning rules for MVP
 - persist workflow metadata consistently
@@ -73,8 +73,8 @@ Agentwerke workflows depend on agent tasks, approval tasks, and policy metadata.
 ### Scope
 
 - validate supported BPMN node types
-- validate `autofac:agentTask` metadata
-- validate `autofac:approvalTask` metadata
+- validate `agentwerke:agentTask` metadata
+- validate `agentwerke:approvalTask` metadata
 - return actionable validation errors and warnings
 
 ### Acceptance Criteria
@@ -119,7 +119,7 @@ This is the core execution loop for MVP.
 
 ### Scope
 
-- add run orchestration service in `Autofac.Application`
+- add run orchestration service in `Agentwerke.Application`
 - formalize start, resume, and recover use cases
 - persist checkpoints and state transitions intentionally
 - expose run events cleanly for UI consumption
@@ -283,7 +283,7 @@ Agentwerke must be governable, not just automated.
 
 ### Scope
 
-- implement policy evaluation service in `Autofac.AgentSecOps`
+- implement policy evaluation service in `Agentwerke.AgentSecOps`
 - support allow, escalate, reject decisions
 - connect policy checks to tool invocation path
 - persist policy decision events
@@ -387,5 +387,5 @@ These issue drafts were prepared locally because GitHub write access could not b
 
 Observed blockers:
 - local checkout remote is `isartor-ai/agentwerke`
-- requested issue target is `isartor-ai/autofac-private`
+- requested issue target is `isartor-ai/agentwerke-private`
 - local `gh` authentication is currently invalid for `github.com`

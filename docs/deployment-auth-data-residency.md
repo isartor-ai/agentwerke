@@ -94,7 +94,7 @@ database. Artifact bytes stay in the configured storage provider:
 - `Storage:Provider=s3` stores artifacts in the configured bucket and region.
 
 The default `WorkflowRuntime:Mode=Agentwerke` does not require Camunda. The
-legacy `WorkflowRuntime:Mode=Autofac` value is accepted as an alias during the
+legacy `WorkflowRuntime:Mode=Agentwerke` value is accepted as an alias during the
 rename transition. Camunda settings are only consumed when
 `WorkflowRuntime:Mode=Camunda`.
 

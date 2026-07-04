@@ -2,7 +2,7 @@
 
 This directory contains the original Camunda-first issue drafts. They are retained for traceability only.
 
-As of 2026-06-17, `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md` is superseded by `docs/decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md`.
+As of 2026-06-17, `docs/decisions/ADR-001-use-camunda8-for-production-bpmn-runtime.md` is superseded by `docs/decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md`.
 
 The current strategy is:
 
@@ -14,7 +14,7 @@ The current strategy is:
 Target repository:
 
 ```text
-isartor-ai/autofac-private
+isartor-ai/agentwerke-private
 ```
 
 Do not create or continue this issue set as the default implementation plan. Use the replacement issue drafts in:
@@ -32,7 +32,7 @@ GH_TOKEN=... scripts/create-camunda8-github-issues.sh
 The script also accepts overrides:
 
 ```bash
-scripts/create-camunda8-github-issues.sh isartor-ai/autofac-private docs/github-issues/camunda8-sdlc-factory
+scripts/create-camunda8-github-issues.sh isartor-ai/agentwerke-private docs/github-issues/camunda8-sdlc-factory
 ```
 
 The issue bodies are intentionally small enough for autonomous code agents to implement one issue at a time.
@@ -44,7 +44,7 @@ The issue bodies are intentionally small enough for autonomous code agents to im
 | `001-docs-accept-camunda8-runtime.md` | Superseded by ADR-002 |
 | `002-add-camunda8-local-runtime-profile.md` | Park as optional adapter infrastructure |
 | `003-add-camunda-config-and-client.md` | Park as optional adapter infrastructure |
-| `004-project-autofac-bpmn-to-camunda.md` | Reframe as optional Camunda compatibility projection |
+| `004-project-agentwerke-bpmn-to-camunda.md` | Reframe as optional Camunda compatibility projection |
 | `005-deploy-workflows-to-camunda.md` | Park; only valid after explicit Camunda runtime mode |
 | `006-start-camunda-process-instances.md` | Park; do not merge into default run path |
 | `007-camunda-agent-job-worker.md` | Park as adapter spike/reference |

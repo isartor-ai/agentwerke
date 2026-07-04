@@ -15,7 +15,7 @@ The product needs one real factory line before broad workflow features.
 ## Acceptance Criteria
 - Template validates through Agentwerke validation.
 - Template deploys to Camunda.
-- Template can start and reach the first `autofac.agent` job.
+- Template can start and reach the first `agentwerke.agent` job.
 - Template is selectable from the UI.
 
 ## Verification

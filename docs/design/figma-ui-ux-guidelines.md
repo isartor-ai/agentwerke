@@ -3,7 +3,7 @@
 ## Source Inputs
 
 - Design system: `docs/design/DESIGN.md`
-- Live product reference: `https://autofac-prime-149586821318.europe-west3.run.app/`
+- Live product reference: `https://agentwerke-prime-149586821318.europe-west3.run.app/`
 - Figma-ready mockup: `docs/design/mockups/execution-monitoring-refined.svg`
 
 ## Figma Setup

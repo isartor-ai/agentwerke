@@ -23,30 +23,30 @@ Trigger (API / GitHub webhook)
 
 ## Components (by project)
 
-Internal .NET projects still use the legacy `Autofac.*` prefix during the staged
+Internal .NET projects still use the legacy `Agentwerke.*` prefix during the staged
 public rebrand. Treat those names as implementation details until the optional
 namespace/project rename is approved.
 
 | Project | Responsibility |
 | --- | --- |
-| `Autofac.Api` | ASP.NET Core host: workflows, runs, approvals, artifacts, evidence, health. |
-| `Autofac.Application` | Use cases & orchestration contracts (run orchestration, evidence builder, run context). |
-| `Autofac.Domain` | Core domain model (agent runtime contracts, persistence entities). |
-| `Autofac.Workflows` | BPMN validator + the in-process workflow engine. |
-| `Autofac.Agents` | Agent orchestrator, model client(s), Tool Gateway, Hook Gateway, skills, prompt assembler. |
-| `Autofac.AgentSecOps` | Policy evaluation & action governance. |
-| `Autofac.Sandboxes` | Sandbox lifecycle (Docker / OpenSandbox / Kubernetes). |
-| `Autofac.Integrations` | Connectors (GitHub, CI/CD, …). |
-| `Autofac.Storage` | Artifact / blob storage. |
-| `Autofac.Observability` | Logs, metrics, tracing. |
-| `Autofac.Infrastructure` | EF Core / Postgres persistence, outbox + dispatch worker. |
-| `Autofac.AgentRunner` | The in-sandbox runner image entrypoint. |
+| `Agentwerke.Api` | ASP.NET Core host: workflows, runs, approvals, artifacts, evidence, health. |
+| `Agentwerke.Application` | Use cases & orchestration contracts (run orchestration, evidence builder, run context). |
+| `Agentwerke.Domain` | Core domain model (agent runtime contracts, persistence entities). |
+| `Agentwerke.Workflows` | BPMN validator + the in-process workflow engine. |
+| `Agentwerke.Agents` | Agent orchestrator, model client(s), Tool Gateway, Hook Gateway, skills, prompt assembler. |
+| `Agentwerke.AgentSecOps` | Policy evaluation & action governance. |
+| `Agentwerke.Sandboxes` | Sandbox lifecycle (Docker / OpenSandbox / Kubernetes). |
+| `Agentwerke.Integrations` | Connectors (GitHub, CI/CD, …). |
+| `Agentwerke.Storage` | Artifact / blob storage. |
+| `Agentwerke.Observability` | Logs, metrics, tracing. |
+| `Agentwerke.Infrastructure` | EF Core / Postgres persistence, outbox + dispatch worker. |
+| `Agentwerke.AgentRunner` | The in-sandbox runner image entrypoint. |
 
 ## Execution runtime
 
 - **Default (`WorkflowRuntime:Mode=Agentwerke`):** a bounded, Postgres-backed
   in-process engine (`EngineId = "in-process"`) with event-sourced checkpoints.
-  This is the default ([ADR-002](decisions/ADR-002-use-bpmn-centric-autofac-runtime-by-default.md)).
+  This is the default ([ADR-002](decisions/ADR-002-use-bpmn-centric-agentwerke-runtime-by-default.md)).
 - **Legacy alias (`Mode=Agentwerke`):** accepted for existing installs and mapped to
   the Agentwerke runtime with a startup deprecation warning.
 - **Opt-in (`Mode=Camunda`):** an enterprise Camunda 8 adapter.
