@@ -33,8 +33,9 @@ Headings use tight tracking (`-0.01em` to `-0.02em`) and weight 600–650.
 | --- | --- | --- |
 | `accent-300` | `#5fd4dd` | hover on dark surfaces |
 | `accent-400` | `#33c5cf` | default accent on dark surfaces |
-| `accent-500` | `#0193a0` | default accent on light surfaces |
-| `accent-600` | `#017e8a` | hover / active on light surfaces |
+| `accent-500` | `#0193a0` | solid fills on light surfaces (white text, large only) |
+| `accent-600` | `#017e8a` | default accent text/links on light surfaces (AA 4.7:1) |
+| `accent-700` | `#016d77` | hover / active text on light surfaces |
 
 The former neon `#00dce5` is retired; `#33c5cf` keeps the hue with less glare.
 
