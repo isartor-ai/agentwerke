@@ -64,6 +64,44 @@ public sealed class GitHubUser
 }
 
 /// <summary>
+/// Subset of GitHub's "issue_comment" webhook event payload.
+/// GitHub sends this for issue and pull request comments. Agentwerke uses issue comments
+/// containing an approval token to resume GitHub issue approval gates.
+/// </summary>
+public sealed class GitHubIssueCommentWebhookPayload
+{
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = string.Empty;
+
+    [JsonPropertyName("issue")]
+    public GitHubIssue? Issue { get; set; }
+
+    [JsonPropertyName("comment")]
+    public GitHubComment? Comment { get; set; }
+
+    [JsonPropertyName("repository")]
+    public GitHubRepository? Repository { get; set; }
+
+    [JsonPropertyName("sender")]
+    public GitHubUser? Sender { get; set; }
+}
+
+public sealed class GitHubComment
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("html_url")]
+    public string? HtmlUrl { get; set; }
+
+    [JsonPropertyName("body")]
+    public string? Body { get; set; }
+
+    [JsonPropertyName("user")]
+    public GitHubUser? User { get; set; }
+}
+
+/// <summary>
 /// Subset of GitHub's "pull_request" webhook event payload.
 /// GitHub sends this for actions like "opened", "synchronize", "closed"
 /// (merges show up as action "closed" with pull_request.merged = true).

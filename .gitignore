@@ -35,6 +35,8 @@ Thumbs.db
 
 # Local environment overrides
 docker/.env.pilot.local
+docker/demo-nvidia/.env
+docker/.demo-nvidia-artifacts/
 config/settings.overrides.json
 config/settings.secrets.json
 src/Agentwerke.Api/config/settings.overrides.json

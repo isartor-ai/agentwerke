@@ -37,7 +37,8 @@ public sealed record SandboxedAgentRunResult(
     string? FailureReason,
     AgentModelTokenUsage? TokenUsage,
     IReadOnlyDictionary<string, string>? Artifacts = null,
-    IReadOnlyList<AgentToolInvocationRecord>? ToolInvocations = null);
+    IReadOnlyList<AgentToolInvocationRecord>? ToolInvocations = null,
+    AgentModelTraceRecord? ModelTrace = null);
 
 public interface ISandboxedAgentRunner
 {

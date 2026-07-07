@@ -8,7 +8,10 @@ using Microsoft.Extensions.Options;
 const string EnvelopeEnvironmentVariable = "AGENTWERKE_AGENT_RUN_ENVELOPE_B64";
 const string ModelApiKeyEnvironmentVariable = "AGENTWERKE_MODEL_API_KEY";
 const string LegacyModelApiKeyEnvironmentVariable = "ANTHROPIC_API_KEY";
+const string ModelProviderEnvironmentVariable = "AGENTWERKE_MODEL_PROVIDER";
 const string ModelApiBaseUrlEnvironmentVariable = "AGENTWERKE_MODEL_API_BASE_URL";
+const string ModelTimeoutSecondsEnvironmentVariable = "AGENTWERKE_MODEL_TIMEOUT_SECONDS";
+const string ModelMaxToolIterationsEnvironmentVariable = "AGENTWERKE_MODEL_MAX_TOOL_ITERATIONS";
 const string OutputDirectory = "/output";
 const string ResultFileName = "agent-run-result.json";
 
@@ -61,13 +64,23 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         return new SandboxedAgentRunResult(false, null, $"Missing {ModelApiKeyEnvironmentVariable}.", null);
     }
 
-    var modelOptions = Options.Create(new LanguageModelOptions
+    var languageModelOptions = new LanguageModelOptions
     {
         ApiKey = apiKey,
+        Provider = Environment.GetEnvironmentVariable(ModelProviderEnvironmentVariable) ?? "anthropic",
         ApiBaseUrl = Environment.GetEnvironmentVariable(ModelApiBaseUrlEnvironmentVariable) ?? LanguageModelOptions.DefaultApiBaseUrl,
         Model = envelope.Model,
         MaxTokens = envelope.MaxTokens
-    });
+    };
+    if (int.TryParse(Environment.GetEnvironmentVariable(ModelTimeoutSecondsEnvironmentVariable), out var timeoutSeconds) && timeoutSeconds > 0)
+    {
+        languageModelOptions.TimeoutSeconds = timeoutSeconds;
+    }
+    if (int.TryParse(Environment.GetEnvironmentVariable(ModelMaxToolIterationsEnvironmentVariable), out var maxToolIterations) && maxToolIterations > 0)
+    {
+        languageModelOptions.MaxToolIterations = maxToolIterations;
+    }
+    var modelOptions = Options.Create(languageModelOptions);
 
     // No DI container in the sandboxed runner, so build the resilient HTTP pipeline by hand:
     // retry handler (429/529/5xx) over the default handler, with the configured timeout.
@@ -75,7 +88,9 @@ static async Task<SandboxedAgentRunResult> RunAsync()
     {
         Timeout = TimeSpan.FromSeconds(Math.Max(1, modelOptions.Value.TimeoutSeconds))
     };
-    var client = new AnthropicLanguageModelClient(httpClient, modelOptions);
+    ILanguageModelClient client = IsOpenAiCompatibleProvider(modelOptions.Value.Provider)
+        ? new OpenAiCompatibleLanguageModelClient(httpClient, modelOptions)
+        : new AnthropicLanguageModelClient(httpClient, modelOptions);
 
     var executor = new SandboxedAgentRuntimeExecutor(
         client,
@@ -83,3 +98,7 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         RunnerToolFactory.CreateRegistry(envelope));
     return await executor.ExecuteAsync(envelope, CancellationToken.None);
 }
+
+static bool IsOpenAiCompatibleProvider(string? provider) =>
+    string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(provider, "litellm", StringComparison.OrdinalIgnoreCase);

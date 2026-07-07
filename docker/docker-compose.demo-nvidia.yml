@@ -1,0 +1,184 @@
+###############################################################################
+# Agentwerke — NVIDIA NIM GitHub Issue to PR demo
+#
+# Setup:
+#   cp docker/demo-nvidia/.env.example docker/demo-nvidia/.env
+#   # edit docker/demo-nvidia/.env
+#   docker compose -f docker/docker-compose.demo-nvidia.yml up -d --build
+#
+# UI      : http://localhost:3007
+# API     : http://localhost:8087
+# LiteLLM : http://localhost:4001
+#
+# This demo mounts the host Docker socket so sandboxed developer/reviewer agents
+# can run isolated containers. Treat this as local-demo-only configuration.
+###############################################################################
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agentwerke_demo_nvidia
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5437:5432"
+    volumes:
+      - demo_nvidia_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentwerke_demo_nvidia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: build
+    working_dir: /repo
+    command: >
+      dotnet ef database update
+      --project src/Agentwerke.Infrastructure/Agentwerke.Infrastructure.csproj
+      --startup-project src/Agentwerke.Api/Agentwerke.Api.csproj
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_demo_nvidia;Username=postgres;Password=postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    image: postgres:16-alpine
+    command:
+      - /bin/sh
+      - -c
+      - >
+        psql -h postgres -U postgres -d agentwerke_demo_nvidia
+        -v ON_ERROR_STOP=1
+        -v bpmn_xml="$$(cat /seed/demo-issue-to-pr-nvidia.bpmn)"
+        -f /seed/seed-demo-nvidia.sql
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./demo-nvidia/seed-demo-nvidia.sql:/seed/seed-demo-nvidia.sql:ro
+      - ./demo-nvidia/demo-issue-to-pr-nvidia.bpmn:/seed/demo-issue-to-pr-nvidia.bpmn:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.90.3
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    env_file:
+      - ./demo-nvidia/.env
+    ports:
+      - "4001:4000"
+    volumes:
+      - ./demo-nvidia/litellm-config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=2).read()\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  agent-runner-image:
+    build:
+      context: ..
+      dockerfile: docker/agent-runner/Dockerfile
+    image: agentwerke-agent-runner:demo-nvidia
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["echo agentwerke-agent-runner:demo-nvidia built"]
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8087:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./demo-nvidia/.env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=agentwerke_demo_nvidia;Username=postgres;Password=postgres"
+      Storage__RootPath: /app/storage
+      Agents__Registry__AgentsDirectory: /app/agents
+      Agents__Registry__WritableAgentsDirectory: /app/storage/agents
+      Agents__Skills__SkillsDirectory: ""
+      Anthropic__Provider: "litellm"
+      Anthropic__ApiBaseUrl: "http://host.docker.internal:4001/v1"
+      # LiteLLM routes this alias through the NVIDIA NIM provider
+      # (nvidia_nim/meta/llama-3.1-8b-instruct).
+      Anthropic__Model: "llama-3.1-8b-instruct"
+      Anthropic__TimeoutSeconds: "600"
+      Anthropic__MaxToolIterations: "30"
+      Sandboxes__Enabled: "true"
+      Sandboxes__Provider: "docker"
+      Sandboxes__Docker__Enabled: "true"
+      # Whole-container window for sandboxed agent runs (coding + reasoning models
+      # need far more than the 60s default).
+      Sandboxes__Docker__TimeoutSeconds: "1800"
+      Sandboxes__Docker__DockerEndpoint: "unix:///var/run/docker.sock"
+      Sandboxes__Docker__ArtifactsHostPath: "${PWD}/docker/.demo-nvidia-artifacts"
+      Sandboxes__OpenSandbox__AgentRunnerImage: "agentwerke-agent-runner:demo-nvidia"
+      Integrations__GitHub__Enabled: "true"
+      Integrations__GitHub__ApiBaseUrl: "https://api.github.com/"
+      Integrations__GitHub__RepositoryOwner: "isartor-ai"
+      Integrations__GitHub__RepositoryName: "agentwerke-demo"
+      Integrations__GitHub__DefaultBaseBranch: "main"
+      Integrations__GitHub__BranchPrefix: "agentwerke/todo-"
+      Integrations__GitHub__CreateDraftPullRequests: "false"
+      Integrations__GitHub__RequiredLabel: "agentwerke"
+      Integrations__GitHub__TriggerActions__0: "opened"
+      Integrations__GitHub__TriggerActions__1: "labeled"
+      Integrations__Jira__WebhookSecret: ""
+      Jwt__SecretKey: "agentwerke-dev-manual-testing-key-2026"
+      Jwt__Issuer: "agentwerke-dev"
+      Jwt__Audience: "agentwerke-dev"
+      Jwt__DevTokensEnabled: "true"
+    volumes:
+      - demo_nvidia_api_storage:/app/storage
+      - ../agents:/app/agents:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}/docker/.demo-nvidia-artifacts:${PWD}/docker/.demo-nvidia-artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
+      litellm:
+        condition: service_healthy
+      agent-runner-image:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+        VITE_DEV_ADMIN_TOKEN: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXY6YWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiZGV2OmFkbWluIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiQWRtaW4iLCJpc3MiOiJhZ2VudHdlcmtlLWRldiIsImF1ZCI6ImFnZW50d2Vya2UtZGV2IiwiZXhwIjoxODkzNDU2MDAwfQ.ICCK9WVptCdU81iugfkBGyW5yPM9QAyxOYVtYStnjb0"
+    restart: unless-stopped
+    ports:
+      - "3007:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  demo_nvidia_postgres_data:
+  demo_nvidia_api_storage:

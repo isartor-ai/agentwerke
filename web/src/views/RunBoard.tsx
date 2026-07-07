@@ -69,6 +69,7 @@ const statusTone: Record<RunStatus, string> = {
   cancelled: 'queued',
   blocked: 'error',
   awaiting_approval: 'warning',
+  waiting_external: 'warning',
   needs_config: 'warning',
 };
 

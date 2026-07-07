@@ -3,6 +3,7 @@ using System.Text.Json;
 using Agentwerke.Agents.Mcp;
 using Agentwerke.Agents.Tools;
 using Agentwerke.Domain.AgentRuntime;
+using Agentwerke.Domain.Security;
 
 namespace Agentwerke.Agents.Models;
 
@@ -57,13 +58,15 @@ public sealed class SandboxedAgentRuntimeExecutor
         var invocations = new List<AgentToolInvocationRecord>();
         var artifacts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        var startedAt = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();
         var response = await _modelClient.RunAsync(
             new LanguageModelRequest(
                 SystemPrompt: envelope.SystemPrompt,
                 UserPrompt: envelope.UserPrompt,
                 Tools: toolDefinitions,
-                MaxTokens: envelope.MaxTokens),
+                MaxTokens: envelope.MaxTokens,
+                ModelOverride: envelope.Model),
             (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, ct),
             cancellationToken);
         sw.Stop();
@@ -73,6 +76,7 @@ public sealed class SandboxedAgentRuntimeExecutor
             response.Usage.OutputTokens,
             response.ModelId ?? envelope.Model,
             sw.Elapsed.TotalMilliseconds);
+        var modelTrace = ToModelTrace(response, envelope, startedAt, sw.Elapsed.TotalMilliseconds);
 
         return new SandboxedAgentRunResult(
             Succeeded: response.Succeeded,
@@ -80,7 +84,8 @@ public sealed class SandboxedAgentRuntimeExecutor
             FailureReason: response.FailureReason,
             TokenUsage: tokenUsage,
             Artifacts: artifacts.Count == 0 ? null : artifacts,
-            ToolInvocations: invocations);
+            ToolInvocations: invocations,
+            ModelTrace: modelTrace);
     }
 
     private async Task<LanguageModelToolResult> ExecuteToolCallAsync(
@@ -149,6 +154,54 @@ public sealed class SandboxedAgentRuntimeExecutor
 
         return enriched;
     }
+
+    private static AgentModelTraceRecord ToModelTrace(
+        LanguageModelResponse response,
+        SandboxedAgentRunEnvelope envelope,
+        DateTimeOffset startedAt,
+        double elapsedMs)
+    {
+        return new AgentModelTraceRecord
+        {
+            Status = response.Succeeded ? "completed" : "failed",
+            ModelId = response.ModelId ?? envelope.Model,
+            StartedAt = startedAt.ToString("o"),
+            CompletedAt = DateTimeOffset.UtcNow.ToString("o"),
+            ElapsedMs = elapsedMs,
+            InputTokens = response.Usage.InputTokens,
+            OutputTokens = response.Usage.OutputTokens,
+            Output = RedactOptional(response.Output),
+            FailureReason = RedactOptional(response.FailureReason),
+            ToolCalls = response.AllToolCalls
+                .Select(static call => new AgentModelToolCallRecord
+                {
+                    Id = call.Id,
+                    Name = call.Name,
+                    InputSummary = RedactInput(call.Input)
+                })
+                .ToArray()
+        };
+    }
+
+    private static string? RedactOptional(string? value) =>
+        value is null ? null : SecretRedactor.Redact(value);
+
+    private static string RedactInput(IReadOnlyDictionary<string, string> input)
+    {
+        var redacted = input.ToDictionary(
+            static pair => pair.Key,
+            static pair => IsSensitiveKey(pair.Key) ? "[redacted]" : SecretRedactor.Redact(pair.Value),
+            StringComparer.OrdinalIgnoreCase);
+
+        return SecretRedactor.Redact(JsonSerializer.Serialize(redacted));
+    }
+
+    private static bool IsSensitiveKey(string key) =>
+        key.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("token", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("api_key", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("apikey", StringComparison.OrdinalIgnoreCase);
 
     private async Task<LanguageModelToolResult> ExecuteDirectToolAsync(
         SandboxedToolDescriptor descriptor,

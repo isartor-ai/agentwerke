@@ -234,10 +234,11 @@ public sealed class WebhooksController : ControllerBase
     /// <summary>
     /// Accepts GitHub webhooks. "issues" triggers the configured workflow (workflows must
     /// carry the tag "github-trigger") when the issue also carries the
-    /// <see cref="GitHubOptions.RequiredLabel"/> label (#191). "pull_request", "workflow_run",
-    /// and "check_suite" are normalized and recorded for the SDLC external-wait gates (#136),
-    /// then matched against the waiting-external correlation store and auto-resumed if a run
-    /// is waiting on that exact event kind + correlation key (#138).
+    /// <see cref="GitHubOptions.RequiredLabel"/> label (#191). "issue_comment",
+    /// "pull_request", "workflow_run", and "check_suite" are normalized and recorded for
+    /// the SDLC external-wait gates (#136), then matched against the waiting-external
+    /// correlation store and auto-resumed if a run is waiting on that exact event kind +
+    /// correlation key (#138).
     /// </summary>
     [HttpPost("github")]
     public async Task<IActionResult> GitHub(CancellationToken cancellationToken)
@@ -258,6 +259,7 @@ public sealed class WebhooksController : ControllerBase
         return eventHeader?.ToLowerInvariant() switch
         {
             "issues" => await HandleIssuesEventAsync(body, cancellationToken),
+            "issue_comment" => await HandleIssueCommentEventAsync(body, cancellationToken),
             "pull_request" => await HandlePullRequestEventAsync(body, cancellationToken),
             "workflow_run" => await HandleWorkflowRunEventAsync(body, cancellationToken),
             "check_suite" => await HandleCheckSuiteEventAsync(body, cancellationToken),
@@ -318,7 +320,8 @@ public sealed class WebhooksController : ControllerBase
             Body: payload.Issue.Body,
             Inputs: BuildTriggerInputs(
                 ("repository", payload.Repository?.FullName),
-                ("issue_url", payload.Issue.HtmlUrl)));
+                ("issue_url", payload.Issue.HtmlUrl),
+                ("issue_number", payload.Issue.Number.ToString(System.Globalization.CultureInfo.InvariantCulture))));
 
         var initiator = payload.Sender?.Login ?? "github-webhook";
 
@@ -350,6 +353,79 @@ public sealed class WebhooksController : ControllerBase
         }
 
         return false;
+    }
+
+    private async Task<IActionResult> HandleIssueCommentEventAsync(byte[] body, CancellationToken cancellationToken)
+    {
+        GitHubIssueCommentWebhookPayload payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<GitHubIssueCommentWebhookPayload>(body)
+                ?? throw new JsonException("Null payload.");
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = "Invalid JSON payload.", detail = ex.Message });
+        }
+
+        if (payload.Issue is null)
+        {
+            return BadRequest(new { error = "Payload is missing 'issue' field." });
+        }
+
+        if (payload.Comment is null)
+        {
+            return BadRequest(new { error = "Payload is missing 'comment' field." });
+        }
+
+        var approval = string.Equals(payload.Action, "created", StringComparison.OrdinalIgnoreCase)
+            && ContainsApprovalToken(payload.Comment.Body);
+        var kind = approval
+            ? "github.issue_comment.approved"
+            : $"github.issue_comment.{payload.Action}";
+        var issueNumber = payload.Issue.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var repoIssue = string.IsNullOrWhiteSpace(payload.Repository?.FullName)
+            ? null
+            : $"{payload.Repository.FullName}#{issueNumber}";
+        var correlationCandidates = BuildCorrelationCandidates(issueNumber, repoIssue);
+
+        var @event = new ExternalWorkflowEvent
+        {
+            Id = $"ext_{Guid.NewGuid():N}",
+            Kind = kind,
+            CorrelationHint = issueNumber,
+            Payload = JsonSerializer.Serialize(new
+            {
+                action = payload.Action,
+                issueNumber = payload.Issue.Number,
+                issueUrl = payload.Issue.HtmlUrl,
+                commentId = payload.Comment.Id,
+                commentUrl = payload.Comment.HtmlUrl,
+                commentBody = payload.Comment.Body,
+                commentAuthor = payload.Comment.User?.Login ?? payload.Sender?.Login,
+                repository = payload.Repository?.FullName,
+                approved = approval,
+            }),
+            ReceivedAt = DateTimeOffset.UtcNow.ToString("o"),
+        };
+
+        var resumePayload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["issue_number"] = issueNumber,
+            ["approved"] = approval ? "true" : "false",
+            ["comment_body"] = payload.Comment.Body ?? string.Empty,
+        };
+        if (payload.Comment.Id > 0)
+            resumePayload["comment_id"] = payload.Comment.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (payload.Comment.HtmlUrl is { Length: > 0 } commentUrl)
+            resumePayload["comment_url"] = commentUrl;
+        var author = payload.Comment.User?.Login ?? payload.Sender?.Login;
+        if (author is { Length: > 0 })
+            resumePayload["comment_author"] = author;
+        if (payload.Repository?.FullName is { Length: > 0 } repository)
+            resumePayload["repository"] = repository;
+
+        return await RecordExternalEventAsync(@event, correlationCandidates, resumePayload, cancellationToken);
     }
 
     private async Task<IActionResult> HandlePullRequestEventAsync(byte[] body, CancellationToken cancellationToken)
@@ -492,13 +568,28 @@ public sealed class WebhooksController : ControllerBase
     /// deploy dispatch (#139) is naturally sha-keyed, since a branch can have multiple runs.
     /// Branch is tried first (the common case), sha second. Empty/duplicate values are dropped.
     /// </summary>
-    private static IReadOnlyList<string> BuildCorrelationCandidates(string? branch, string? sha)
+    private static bool ContainsApprovalToken(string? commentBody)
+    {
+        if (string.IsNullOrWhiteSpace(commentBody))
+        {
+            return false;
+        }
+
+        return commentBody
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Any(static line =>
+                string.Equals(line, "approved", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(line, "/approve", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("agentwerke approved", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<string> BuildCorrelationCandidates(string? primary, string? secondary)
     {
         var candidates = new List<string>(2);
-        if (!string.IsNullOrWhiteSpace(branch))
-            candidates.Add(branch);
-        if (!string.IsNullOrWhiteSpace(sha) && !string.Equals(sha, branch, StringComparison.Ordinal))
-            candidates.Add(sha);
+        if (!string.IsNullOrWhiteSpace(primary))
+            candidates.Add(primary);
+        if (!string.IsNullOrWhiteSpace(secondary) && !string.Equals(secondary, primary, StringComparison.Ordinal))
+            candidates.Add(secondary);
 
         return candidates;
     }

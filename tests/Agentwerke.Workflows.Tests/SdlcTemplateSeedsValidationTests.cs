@@ -102,6 +102,30 @@ public sealed class SdlcTemplateSeedsValidationTests
         Assert.NotNull(approvalTask.ApprovalMetadata);
     }
 
+    [Fact]
+    public void DemoNvidiaIssueToPrWorkflow_ValidatesWithoutErrors()
+    {
+        var bpmn = File.ReadAllText(FindRepositoryFile("docker", "demo-nvidia", "demo-issue-to-pr-nvidia.bpmn"));
+
+        var result = new BpmnWorkflowValidator().Validate(bpmn);
+
+        Assert.True(
+            result.IsValid,
+            $"Demo NVIDIA workflow failed validation: {string.Join("; ", result.Errors.Select(static e => e.Message))}");
+        Assert.NotNull(result.Definition);
+
+        var definition = result.Definition!;
+        Assert.Equal("demo-nvidia-issue-to-pr", definition.ProcessId);
+        Assert.Equal("github.issue_comment.approved", definition.Nodes.Single(static n => n.Id == "WaitRequirementsApproval").ExternalEventMetadata!.MessageName);
+        Assert.Equal("github.issue_comment.approved", definition.Nodes.Single(static n => n.Id == "WaitArchitectureApproval").ExternalEventMetadata!.MessageName);
+        Assert.Equal("github.pull_request.merged", definition.Nodes.Single(static n => n.Id == "WaitPullRequestMerged").ExternalEventMetadata!.MessageName);
+        Assert.Equal("local", definition.Nodes.Single(static n => n.Id == "DraftRequirements").Metadata!.ExecutionMode);
+        Assert.Equal("local", definition.Nodes.Single(static n => n.Id == "DraftArchitecture").Metadata!.ExecutionMode);
+        Assert.Equal("agent_sandboxed", definition.Nodes.Single(static n => n.Id == "DevelopTodoApp").Metadata!.ExecutionMode);
+        Assert.Equal("repo-write", definition.Nodes.Single(static n => n.Id == "DevelopTodoApp").Metadata!.SandboxProfile);
+        Assert.Equal("repo-read", definition.Nodes.Single(static n => n.Id == "ReviewPullRequest").Metadata!.SandboxProfile);
+    }
+
     private static string FindRepositoryFile(params string[] segments)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -6,6 +6,7 @@ export type RunStatus =
   | 'cancelled'
   | 'blocked'
   | 'awaiting_approval'
+  | 'waiting_external'
   | 'needs_config';
 
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low' | 'none';
@@ -122,6 +123,25 @@ export interface RunStepTokenUsage {
   elapsedMs?: number;
 }
 
+export interface RunStepModelToolCall {
+  id: string;
+  name: string;
+  inputSummary?: string | null;
+}
+
+export interface RunStepModelTrace {
+  status: string;
+  modelId?: string | null;
+  startedAt: string;
+  completedAt?: string | null;
+  elapsedMs?: number | null;
+  inputTokens: number;
+  outputTokens: number;
+  output?: string | null;
+  failureReason?: string | null;
+  toolCalls: RunStepModelToolCall[];
+}
+
 export interface RunStepRuntimeSnapshot {
   agentName?: string;
   action?: string;
@@ -141,6 +161,7 @@ export interface RunStepRuntimeSnapshot {
   stepArtifacts: RunStepArtifactRef[];
   sandboxExecution?: RunStepSandboxExecution;
   tokenUsage?: RunStepTokenUsage;
+  modelTraces?: RunStepModelTrace[];
 }
 
 export interface RunStep {

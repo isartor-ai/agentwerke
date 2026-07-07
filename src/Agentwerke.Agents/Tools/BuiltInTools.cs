@@ -240,6 +240,126 @@ public sealed class GitHubReadIssueTool : IAgentTool, IToolSchemaProvider
     }
 }
 
+public sealed class GitHubCommentIssueTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IGitHubConnector _connector;
+
+    public GitHubCommentIssueTool(IGitHubConnector connector)
+    {
+        _connector = connector;
+    }
+
+    public string Name => "github.comment_issue";
+
+    public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("issue_number", "string", "The GitHub issue number to comment on.", Required: true),
+        new("body", "string", "The Markdown comment body.", Required: true)
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input)
+    {
+        GitHubToolInput.Require(input, "issue_number");
+        GitHubToolInput.Require(input, "body");
+    }
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var result = await _connector.CommentIssueAsync(
+            new CommentGitHubIssueCommand(
+                GitHubToolInput.ParseInt(input, "issue_number"),
+                input["body"]),
+            cancellationToken);
+
+        return new AgentToolExecutionResult(
+            Succeeded: true,
+            Output: JsonSerializer.Serialize(new
+            {
+                provider = "github",
+                action = "comment_issue",
+                status = "completed",
+                issue_number = result.IssueNumber,
+                comment_id = result.CommentId,
+                url = result.CommentUrl
+            }),
+            FailureReason: null,
+            ExternalActions:
+            [
+                new ExternalActionRecord(
+                    Provider: "github",
+                    Action: "comment_issue",
+                    Status: "completed",
+                    ResourceId: result.CommentId.ToString(CultureInfo.InvariantCulture),
+                    ResourceUrl: result.CommentUrl,
+                    Summary: $"Commented on GitHub issue #{result.IssueNumber}")
+            ]);
+    }
+}
+
+public sealed class GitHubCloseIssueTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IGitHubConnector _connector;
+
+    public GitHubCloseIssueTool(IGitHubConnector connector)
+    {
+        _connector = connector;
+    }
+
+    public string Name => "github.close_issue";
+
+    public string Category => AgentToolCategories.Integration;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("issue_number", "string", "The GitHub issue number to close.", Required: true),
+        new("state_reason", "string", "Optional GitHub issue close reason. Defaults to completed.", Required: false)
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input)
+    {
+        GitHubToolInput.Require(input, "issue_number");
+    }
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var result = await _connector.CloseIssueAsync(
+            new CloseGitHubIssueCommand(
+                GitHubToolInput.ParseInt(input, "issue_number"),
+                GitHubToolInput.ReadOptional(input, "state_reason")),
+            cancellationToken);
+
+        return new AgentToolExecutionResult(
+            Succeeded: true,
+            Output: JsonSerializer.Serialize(new
+            {
+                provider = "github",
+                action = "close_issue",
+                status = result.State,
+                issue_number = result.Number,
+                url = result.IssueUrl
+            }),
+            FailureReason: null,
+            ExternalActions:
+            [
+                new ExternalActionRecord(
+                    Provider: "github",
+                    Action: "close_issue",
+                    Status: result.State,
+                    ResourceId: result.Number.ToString(CultureInfo.InvariantCulture),
+                    ResourceUrl: result.IssueUrl,
+                    Summary: $"Closed GitHub issue #{result.Number}")
+            ]);
+    }
+}
+
 public sealed class GitHubRequestReviewTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IGitHubConnector _connector;

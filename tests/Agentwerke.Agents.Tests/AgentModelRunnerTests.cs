@@ -167,6 +167,12 @@ public sealed class AgentModelRunnerTests
         Assert.Equal("claude-sonnet-4-6", result.TokenUsage.ModelId);
         Assert.True(result.TokenUsage.ElapsedMs >= 0);
         Assert.True(result.ElapsedMs >= 0);
+        Assert.NotNull(result.ModelTrace);
+        Assert.Equal("completed", result.ModelTrace!.Status);
+        Assert.Equal("Agent output text.", result.ModelTrace.Output);
+        Assert.Equal(50, result.ModelTrace.InputTokens);
+        Assert.Equal(80, result.ModelTrace.OutputTokens);
+        Assert.True(result.ModelTrace.ElapsedMs >= 0);
 
         // Metric emitted with correct data
         Assert.Single(metrics.ModelInvocations);
@@ -272,9 +278,47 @@ public sealed class AgentModelRunnerTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("LLM call failed: API error 429", result.FailureReason);
+        Assert.NotNull(result.ModelTrace);
+        Assert.Equal("failed", result.ModelTrace!.Status);
+        Assert.Equal("LLM call failed: API error 429", result.ModelTrace.FailureReason);
 
         Assert.Single(metrics.ModelInvocations);
         Assert.False(metrics.ModelInvocations[0].Succeeded);
+    }
+
+    [Fact]
+    public async Task RunAsync_ModelTrace_RedactsToolCallInputs()
+    {
+        var metrics = new CapturingMetrics();
+        var response = new LanguageModelResponse(
+            Succeeded: true,
+            Output: "ok",
+            FailureReason: null,
+            AllToolCalls:
+            [
+                new LanguageModelToolCall(
+                    "call-1",
+                    "github.create_pull_request",
+                    new Dictionary<string, string>
+                    {
+                        ["title"] = "Demo PR",
+                        ["token"] = "secret-token-123"
+                    })
+            ],
+            Usage: new LanguageModelTokenUsage(10, 5),
+            ModelId: "claude-sonnet-4-6");
+
+        var runner = BuildRunner(
+            new StubLanguageModelClient(response),
+            new StubToolGateway(new ToolGatewayResult(true, null, null, null, new AgentToolInvocationRecord { ToolName = "noop" })),
+            metrics);
+
+        var result = await runner.RunAsync(MakeRequest(), CancellationToken.None);
+
+        var call = Assert.Single(result.ModelTrace!.ToolCalls);
+        Assert.Equal("github.create_pull_request", call.Name);
+        Assert.DoesNotContain("secret-token-123", call.InputSummary, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", call.InputSummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

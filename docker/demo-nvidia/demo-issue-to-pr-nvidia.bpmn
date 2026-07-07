@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
+    id="demo-nvidia-issue-to-pr-defs"
+    targetNamespace="https://agentwerke.de/bpmn/extensions/v1">
+  <bpmn:process id="demo-nvidia-issue-to-pr" name="Demo NVIDIA Issue to PR" isExecutable="true">
+    <bpmn:startEvent id="Start" name="GitHub Issue">
+      <bpmn:outgoing>Flow_Start_DraftRequirements</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="DraftRequirements" name="Draft Requirements">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="analyst"
+          action="requirements.write"
+          environment="github"
+          purposeType="requirement_design"
+          policyTag="demo-requirements"
+          executionMode="local"
+          permissionLevel="read-only"
+          allowedTools="github.read_issue">
+          <agentwerke:prompt><![CDATA[
+Write the requirements specification for GitHub issue #{{input.issue_number}}.
+
+Issue title: {{input.title}}
+Issue URL: {{input.issue_url}}
+Issue body:
+{{input.body}}
+
+Do not call any tools. "requirements.write" is the name of this task, not a tool.
+Your entire reply is posted verbatim as a GitHub issue comment, so reply with the full
+requirements document itself - never a summary or a description of what you did.
+
+Return Markdown only. Start with "## Requirements" and end with the exact sentence:
+Human approval requested: comment approved on this issue to continue.
+          ]]></agentwerke:prompt>
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Start_DraftRequirements</bpmn:incoming>
+      <bpmn:outgoing>Flow_DraftRequirements_PostRequirements</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="PostRequirements" name="Comment Requirements">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="analyst"
+          action="github.comment_issue"
+          environment="github"
+          purposeType="issue_comment"
+          policyTag="github-comment"
+          permissionLevel="read-write"
+          allowedTools="github.comment_issue">
+          <agentwerke:metadata key="tool.input.issue_number" value="{{input.issue_number}}" />
+          <agentwerke:metadata key="tool.input.body" value="{{output.DraftRequirements}}" />
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DraftRequirements_PostRequirements</bpmn:incoming>
+      <bpmn:outgoing>Flow_PostRequirements_WaitRequirementsApproval</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:intermediateCatchEvent id="WaitRequirementsApproval" name="Wait Requirements Approval">
+      <bpmn:extensionElements>
+        <agentwerke:externalEvent
+          messageName="github.issue_comment.approved"
+          correlationKeyTemplate="{{input.issue_number}}" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_PostRequirements_WaitRequirementsApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitRequirementsApproval_DraftArchitecture</bpmn:outgoing>
+      <bpmn:messageEventDefinition />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:serviceTask id="DraftArchitecture" name="Draft Architecture">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="architect"
+          action="architecture.write"
+          environment="github"
+          purposeType="architecture_design"
+          policyTag="demo-architecture"
+          executionMode="local"
+          permissionLevel="read-only"
+          allowedTools="github.read_issue">
+          <agentwerke:prompt><![CDATA[
+Write the implementation architecture for GitHub issue #{{input.issue_number}}.
+
+Issue title: {{input.title}}
+Issue body:
+{{input.body}}
+
+Approved requirements:
+{{output.DraftRequirements}}
+
+Approval comment:
+{{event.comment_body}}
+
+Do not call any tools. "architecture.write" is the name of this task, not a tool.
+Your entire reply is posted verbatim as a GitHub issue comment, so reply with the full
+design document itself - never a summary or a description of what you did.
+
+Return Markdown only. Start with "## Architecture" and end with the exact sentence:
+Human approval requested: comment approved on this issue to start implementation.
+          ]]></agentwerke:prompt>
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_WaitRequirementsApproval_DraftArchitecture</bpmn:incoming>
+      <bpmn:outgoing>Flow_DraftArchitecture_PostArchitecture</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="PostArchitecture" name="Comment Architecture">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="architect"
+          action="github.comment_issue"
+          environment="github"
+          purposeType="issue_comment"
+          policyTag="github-comment"
+          permissionLevel="read-write"
+          allowedTools="github.comment_issue">
+          <agentwerke:metadata key="tool.input.issue_number" value="{{input.issue_number}}" />
+          <agentwerke:metadata key="tool.input.body" value="{{output.DraftArchitecture}}" />
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DraftArchitecture_PostArchitecture</bpmn:incoming>
+      <bpmn:outgoing>Flow_PostArchitecture_WaitArchitectureApproval</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:intermediateCatchEvent id="WaitArchitectureApproval" name="Wait Architecture Approval">
+      <bpmn:extensionElements>
+        <agentwerke:externalEvent
+          messageName="github.issue_comment.approved"
+          correlationKeyTemplate="{{input.issue_number}}" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_PostArchitecture_WaitArchitectureApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitArchitectureApproval_DevelopTodoApp</bpmn:outgoing>
+      <bpmn:messageEventDefinition />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:serviceTask id="DevelopTodoApp" name="Implement Todo App">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="developer"
+          action="implementation.build"
+          environment="sandbox"
+          purposeType="implementation"
+          policyTag="demo-implementation"
+          executionMode="agent_sandboxed"
+          sandboxProfile="repo-write"
+          permissionLevel="read-write"
+          allowedTools="sandbox.git,sandbox.file_read,sandbox.file_write,sandbox.file_edit,sandbox.shell,github.comment_issue,github.create_pull_request">
+          <agentwerke:prompt><![CDATA[
+Implement GitHub issue #{{input.issue_number}} on branch agentwerke/todo-{{input.issue_number}}.
+
+Issue:
+{{input.title}}
+
+Requirements:
+{{output.DraftRequirements}}
+
+Architecture:
+{{output.DraftArchitecture}}
+
+The pull request body must include: Closes #{{input.issue_number}}
+Return the branch, PR number, PR URL, and validation performed.
+          ]]></agentwerke:prompt>
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_WaitArchitectureApproval_DevelopTodoApp</bpmn:incoming>
+      <bpmn:outgoing>Flow_DevelopTodoApp_ReviewPullRequest</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="ReviewPullRequest" name="Senior Review">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="senior-reviewer"
+          action="review.pr"
+          environment="sandbox"
+          purposeType="code_review"
+          policyTag="demo-review"
+          executionMode="agent_sandboxed"
+          sandboxProfile="repo-read"
+          permissionLevel="read-only"
+          allowedTools="sandbox.git,sandbox.file_read,sandbox.shell,github.post_review">
+          <agentwerke:prompt><![CDATA[
+Review the pull request opened for GitHub issue #{{input.issue_number}}.
+
+Developer output:
+{{output.DevelopTodoApp}}
+
+Requirements:
+{{output.DraftRequirements}}
+
+Architecture:
+{{output.DraftArchitecture}}
+
+Post a GitHub PR review with specific observations. Return the PR number and review state.
+          ]]></agentwerke:prompt>
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DevelopTodoApp_ReviewPullRequest</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReviewPullRequest_WaitPullRequestMerged</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:intermediateCatchEvent id="WaitPullRequestMerged" name="Wait PR Merge">
+      <bpmn:extensionElements>
+        <agentwerke:externalEvent
+          messageName="github.pull_request.merged"
+          correlationKeyTemplate="agentwerke/todo-{{input.issue_number}}" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReviewPullRequest_WaitPullRequestMerged</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitPullRequestMerged_CloseIssue</bpmn:outgoing>
+      <bpmn:messageEventDefinition />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:serviceTask id="CloseIssue" name="Close Issue">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="github-agent"
+          action="github.close_issue"
+          environment="github"
+          purposeType="issue_close"
+          policyTag="github-close"
+          permissionLevel="read-write"
+          allowedTools="github.close_issue">
+          <agentwerke:metadata key="tool.input.issue_number" value="{{input.issue_number}}" />
+          <agentwerke:metadata key="tool.input.state_reason" value="completed" />
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_WaitPullRequestMerged_CloseIssue</bpmn:incoming>
+      <bpmn:outgoing>Flow_CloseIssue_End</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End" name="Complete">
+      <bpmn:incoming>Flow_CloseIssue_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_Start_DraftRequirements" sourceRef="Start" targetRef="DraftRequirements" />
+    <bpmn:sequenceFlow id="Flow_DraftRequirements_PostRequirements" sourceRef="DraftRequirements" targetRef="PostRequirements" />
+    <bpmn:sequenceFlow id="Flow_PostRequirements_WaitRequirementsApproval" sourceRef="PostRequirements" targetRef="WaitRequirementsApproval" />
+    <bpmn:sequenceFlow id="Flow_WaitRequirementsApproval_DraftArchitecture" sourceRef="WaitRequirementsApproval" targetRef="DraftArchitecture" />
+    <bpmn:sequenceFlow id="Flow_DraftArchitecture_PostArchitecture" sourceRef="DraftArchitecture" targetRef="PostArchitecture" />
+    <bpmn:sequenceFlow id="Flow_PostArchitecture_WaitArchitectureApproval" sourceRef="PostArchitecture" targetRef="WaitArchitectureApproval" />
+    <bpmn:sequenceFlow id="Flow_WaitArchitectureApproval_DevelopTodoApp" sourceRef="WaitArchitectureApproval" targetRef="DevelopTodoApp" />
+    <bpmn:sequenceFlow id="Flow_DevelopTodoApp_ReviewPullRequest" sourceRef="DevelopTodoApp" targetRef="ReviewPullRequest" />
+    <bpmn:sequenceFlow id="Flow_ReviewPullRequest_WaitPullRequestMerged" sourceRef="ReviewPullRequest" targetRef="WaitPullRequestMerged" />
+    <bpmn:sequenceFlow id="Flow_WaitPullRequestMerged_CloseIssue" sourceRef="WaitPullRequestMerged" targetRef="CloseIssue" />
+    <bpmn:sequenceFlow id="Flow_CloseIssue_End" sourceRef="CloseIssue" targetRef="End" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_DemoNvidia">
+    <bpmndi:BPMNPlane id="BPMNPlane_DemoNvidia" bpmnElement="demo-nvidia-issue-to-pr">
+      <bpmndi:BPMNShape id="Start_di" bpmnElement="Start"><dc:Bounds x="152" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DraftRequirements_di" bpmnElement="DraftRequirements"><dc:Bounds x="240" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="PostRequirements_di" bpmnElement="PostRequirements"><dc:Bounds x="432" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="WaitRequirementsApproval_di" bpmnElement="WaitRequirementsApproval"><dc:Bounds x="632" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DraftArchitecture_di" bpmnElement="DraftArchitecture"><dc:Bounds x="728" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="PostArchitecture_di" bpmnElement="PostArchitecture"><dc:Bounds x="920" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="WaitArchitectureApproval_di" bpmnElement="WaitArchitectureApproval"><dc:Bounds x="1120" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DevelopTodoApp_di" bpmnElement="DevelopTodoApp"><dc:Bounds x="1216" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ReviewPullRequest_di" bpmnElement="ReviewPullRequest"><dc:Bounds x="1408" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="WaitPullRequestMerged_di" bpmnElement="WaitPullRequestMerged"><dc:Bounds x="1608" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CloseIssue_di" bpmnElement="CloseIssue"><dc:Bounds x="1704" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_di" bpmnElement="End"><dc:Bounds x="1896" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_Start_DraftRequirements_di" bpmnElement="Flow_Start_DraftRequirements"><di:waypoint x="188" y="160" /><di:waypoint x="240" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DraftRequirements_PostRequirements_di" bpmnElement="Flow_DraftRequirements_PostRequirements"><di:waypoint x="372" y="160" /><di:waypoint x="432" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PostRequirements_WaitRequirementsApproval_di" bpmnElement="Flow_PostRequirements_WaitRequirementsApproval"><di:waypoint x="564" y="160" /><di:waypoint x="632" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WaitRequirementsApproval_DraftArchitecture_di" bpmnElement="Flow_WaitRequirementsApproval_DraftArchitecture"><di:waypoint x="668" y="160" /><di:waypoint x="728" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DraftArchitecture_PostArchitecture_di" bpmnElement="Flow_DraftArchitecture_PostArchitecture"><di:waypoint x="860" y="160" /><di:waypoint x="920" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PostArchitecture_WaitArchitectureApproval_di" bpmnElement="Flow_PostArchitecture_WaitArchitectureApproval"><di:waypoint x="1052" y="160" /><di:waypoint x="1120" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WaitArchitectureApproval_DevelopTodoApp_di" bpmnElement="Flow_WaitArchitectureApproval_DevelopTodoApp"><di:waypoint x="1156" y="160" /><di:waypoint x="1216" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DevelopTodoApp_ReviewPullRequest_di" bpmnElement="Flow_DevelopTodoApp_ReviewPullRequest"><di:waypoint x="1348" y="160" /><di:waypoint x="1408" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ReviewPullRequest_WaitPullRequestMerged_di" bpmnElement="Flow_ReviewPullRequest_WaitPullRequestMerged"><di:waypoint x="1540" y="160" /><di:waypoint x="1608" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WaitPullRequestMerged_CloseIssue_di" bpmnElement="Flow_WaitPullRequestMerged_CloseIssue"><di:waypoint x="1644" y="160" /><di:waypoint x="1704" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CloseIssue_End_di" bpmnElement="Flow_CloseIssue_End"><di:waypoint x="1836" y="160" /><di:waypoint x="1896" y="160" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

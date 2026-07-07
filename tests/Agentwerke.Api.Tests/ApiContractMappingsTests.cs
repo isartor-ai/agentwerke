@@ -131,7 +131,30 @@ public sealed class ApiContractMappingsTests
                             InputTokens: 512,
                             OutputTokens: 256,
                             ModelId: "claude-sonnet-4-6",
-                            ElapsedMs: 1875)
+                            ElapsedMs: 1875),
+                        ModelTraces =
+                        [
+                            new AgentModelTraceRecord
+                            {
+                                Status = "completed",
+                                ModelId = "claude-sonnet-4-6",
+                                StartedAt = "2026-06-19T12:00:00.0000000+00:00",
+                                CompletedAt = "2026-06-19T12:00:02.0000000+00:00",
+                                ElapsedMs = 1875,
+                                InputTokens = 512,
+                                OutputTokens = 256,
+                                Output = "generated spec",
+                                ToolCalls =
+                                [
+                                    new AgentModelToolCallRecord
+                                    {
+                                        Id = "call-1",
+                                        Name = "github.create_pull_request",
+                                        InputSummary = "{\"branch\":\"agentwerke/run-1\"}"
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 }
             ]
@@ -171,6 +194,10 @@ public sealed class ApiContractMappingsTests
         Assert.Equal(256, step.RuntimeSnapshot.TokenUsage.OutputTokens);
         Assert.Equal("claude-sonnet-4-6", step.RuntimeSnapshot.TokenUsage.ModelId);
         Assert.Equal(1875, step.RuntimeSnapshot.TokenUsage.ElapsedMs);
+        var trace = Assert.Single(step.RuntimeSnapshot.ModelTraces);
+        Assert.Equal("completed", trace.Status);
+        Assert.Equal("generated spec", trace.Output);
+        Assert.Equal("github.create_pull_request", Assert.Single(trace.ToolCalls).Name);
     }
 
     [Fact]

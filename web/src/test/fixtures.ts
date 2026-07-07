@@ -172,6 +172,26 @@ export const runsFixture: WorkflowRun[] = [
             modelId: 'claude-sonnet-4-6',
             elapsedMs: 2140,
           },
+          modelTraces: [
+            {
+              status: 'completed',
+              modelId: 'claude-sonnet-4-6',
+              startedAt: new Date(Date.now() - 92_000).toISOString(),
+              completedAt: new Date(Date.now() - 90_000).toISOString(),
+              elapsedMs: 2140,
+              inputTokens: 412,
+              outputTokens: 198,
+              output: 'The agent drafted a technical specification.',
+              failureReason: null,
+              toolCalls: [
+                {
+                  id: 'call-1',
+                  name: 'github.read_issue',
+                  inputSummary: '{"issue_number":"42"}',
+                },
+              ],
+            },
+          ],
         },
       },
     ],

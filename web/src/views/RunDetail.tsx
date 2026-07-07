@@ -7,6 +7,7 @@ import { BpmnViewer } from '../components/BpmnViewer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
+import { ModelActivityDetails } from '../components/ModelActivityDetails';
 import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { RunDiffModal } from '../components/RunDiffModal';
@@ -15,6 +16,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
 import { ConversationTab } from '../components/ConversationTab';
 import type { AuthState, EvidencePack, RunInteraction, RunStatus, WorkflowRun } from '../types';
+import { formatTokenCount, sumRunTokens } from '../utils/tokens';
 
 const tabs = ['Summary', 'Conversation', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
 
@@ -58,6 +60,7 @@ export function RunDetail({ auth }: RunDetailProps) {
   const navigate = useNavigate();
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [interactions, setInteractions] = useState<RunInteraction[]>([]);
+  const [interactionError, setInteractionError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   const [panelStepId, setPanelStepId] = useState<string | null>(null);
@@ -113,7 +116,18 @@ export function RunDetail({ auth }: RunDetailProps) {
       }
       setRun(data);
       // Best-effort: the conversation thread should never block the run view (#192).
-      void apiClient.getRunInteractions(runId).then(setInteractions).catch(() => undefined);
+      void apiClient.getRunInteractions(runId)
+        .then((items) => {
+          setInteractions(items);
+          setInteractionError(null);
+        })
+        .catch((interactionLoadError) => {
+          setInteractionError(
+            interactionLoadError instanceof Error
+              ? interactionLoadError.message
+              : 'Failed to load agent conversation.',
+          );
+        });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unknown error');
     } finally {
@@ -243,6 +257,8 @@ export function RunDetail({ auth }: RunDetailProps) {
     () => (run?.steps ?? []).filter((s) => Boolean(s.policyDecision)),
     [run?.steps],
   );
+
+  const runTokens = useMemo(() => sumRunTokens(run?.steps ?? []), [run?.steps]);
 
   const runApprovals = useMemo(() => run?.approvals ?? [], [run]);
 
@@ -535,6 +551,7 @@ export function RunDetail({ auth }: RunDetailProps) {
         return (
           <ConversationTab
             interactions={interactions}
+            error={interactionError}
             canAnswer={canSubmitApprovals}
             onAnswer={handleAnswerInteraction}
           />
@@ -607,6 +624,11 @@ export function RunDetail({ auth }: RunDetailProps) {
             <SandboxExecutionDetails
               sandboxExecution={selectedStep.runtimeSnapshot?.sandboxExecution}
               tokenUsage={selectedStep.runtimeSnapshot?.tokenUsage}
+              sectionClassName="policy-box"
+              headingClassName=""
+            />
+            <ModelActivityDetails
+              modelTraces={selectedStep.runtimeSnapshot?.modelTraces}
               sectionClassName="policy-box"
               headingClassName=""
             />
@@ -773,6 +795,14 @@ export function RunDetail({ auth }: RunDetailProps) {
         <RiskBadge level={run.riskLevel} />
         <span>Requester: {run.requestedBy}</span>
         <span>{run.pendingApprovals} pending approval(s)</span>
+        {runTokens.inputTokens + runTokens.outputTokens > 0 ? (
+          <span
+            className="run-token-total"
+            title={`Model tokens used so far — input: ${runTokens.inputTokens.toLocaleString()}, output: ${runTokens.outputTokens.toLocaleString()}`}
+          >
+            Tokens: {formatTokenCount(runTokens.inputTokens)} in · {formatTokenCount(runTokens.outputTokens)} out
+          </span>
+        ) : null}
       </section>
 
       <section className="run-detail-grid">

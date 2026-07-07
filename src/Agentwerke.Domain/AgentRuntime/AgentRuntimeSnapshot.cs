@@ -30,6 +30,8 @@ public sealed record AgentRuntimeSnapshot
 
     public AgentModelTokenUsage? TokenUsage { get; init; }
 
+    public IReadOnlyList<AgentModelTraceRecord> ModelTraces { get; init; } = [];
+
     public AgentSandboxExecutionRecord? SandboxExecution { get; init; }
 }
 
@@ -137,6 +139,38 @@ public sealed record AgentPermissionDecisionRecord
 }
 
 public sealed record AgentModelTokenUsage(int InputTokens, int OutputTokens, string? ModelId, double? ElapsedMs = null);
+
+public sealed record AgentModelTraceRecord
+{
+    public string Status { get; init; } = "completed";
+
+    public string? ModelId { get; init; }
+
+    public string StartedAt { get; init; } = string.Empty;
+
+    public string? CompletedAt { get; init; }
+
+    public double? ElapsedMs { get; init; }
+
+    public int InputTokens { get; init; }
+
+    public int OutputTokens { get; init; }
+
+    public string? Output { get; init; }
+
+    public string? FailureReason { get; init; }
+
+    public IReadOnlyList<AgentModelToolCallRecord> ToolCalls { get; init; } = [];
+}
+
+public sealed record AgentModelToolCallRecord
+{
+    public required string Id { get; init; }
+
+    public required string Name { get; init; }
+
+    public string? InputSummary { get; init; }
+}
 
 public sealed record AgentSandboxExecutionRecord
 {

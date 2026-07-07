@@ -12,7 +12,9 @@ public sealed record LanguageModelRequest(
     string SystemPrompt,
     string UserPrompt,
     IReadOnlyList<LanguageModelToolDefinition> Tools,
-    int MaxTokens = 4096);
+    int MaxTokens = 4096,
+    /// <summary>Per-agent model id override; falls back to the configured default when null.</summary>
+    string? ModelOverride = null);
 
 public sealed record LanguageModelResponse(
     bool Succeeded,

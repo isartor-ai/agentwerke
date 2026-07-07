@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Agentwerke.AgentSecOps;
 using Agentwerke.Agents.Hooks;
 using Agentwerke.Agents.Mcp;
@@ -28,6 +29,9 @@ namespace Agentwerke.Agents;
 public sealed class AgentOrchestrator : IServiceTaskExecutor
 {
     private const int OutputOffloadThresholdBytes = 8192;
+    private static readonly Regex ToolInputTemplatePattern = new(
+        "{{\\s*([a-zA-Z0-9_.-]+)\\s*}}",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly ISkillRepository _skillRepository;
     private readonly IAgentPromptAssembler _promptAssembler;
@@ -216,7 +220,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 cancellationToken);
         }
 
-        var explicitToolRequest = BuildExplicitToolGatewayRequest(runId, stepId, node, metadata, attempt);
+        var explicitToolRequest = BuildExplicitToolGatewayRequest(runId, stepId, node, metadata, attempt, runContext);
         if (explicitToolRequest is not null)
         {
             return await RunViaToolGatewayAsync(explicitToolRequest, node, metadata, attempt, runtimeSnapshot, cancellationToken);
@@ -279,7 +283,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             RequiresEvidence: metadata.RequiresEvidence,
             Attempt: attempt,
             PromptSnapshot: promptAssembly.PromptSnapshot,
-            Contract: metadata.RuntimeContract ?? new AgentRuntimeContract());
+            Contract: metadata.RuntimeContract ?? new AgentRuntimeContract(),
+            Model: profile?.Model);
 
         ModelRunResult modelResult;
         switch (executionMode)
@@ -369,6 +374,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Artifacts = runtimeSnapshot.Artifacts.Concat(MapArtifacts(modelResult.Artifacts)).ToArray(),
             PermissionDecision = permissionDecision,
             TokenUsage = modelResult.TokenUsage,
+            ModelTraces = AppendModelTrace(runtimeSnapshot.ModelTraces, modelResult.ModelTrace),
             SandboxExecution = modelResult.SandboxExecution,
             ExecutionMode = executionMode
         };
@@ -488,7 +494,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string stepId,
         BpmnNodeDefinition node,
         AgentwerkeTaskMetadata metadata,
-        int attempt)
+        int attempt,
+        IReadOnlyDictionary<string, string> runContext)
     {
         var permissions = metadata.RuntimeContract?.Permissions ?? AgentPermissionContract.ReadOnly;
         if (string.Equals(metadata.Action, "github.create_branch", StringComparison.OrdinalIgnoreCase))
@@ -541,7 +548,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 metadata,
                 attempt,
                 permissions,
-                ExtractToolInput(metadata.RuntimeContract));
+                ExtractToolInput(metadata.RuntimeContract, runContext, runId, stepId, attempt));
         }
 
         if (_toolRegistry.Find(metadata.Action) is { Category: var category } &&
@@ -555,7 +562,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 metadata,
                 attempt,
                 permissions,
-                ExtractToolInput(metadata.RuntimeContract));
+                ExtractToolInput(metadata.RuntimeContract, runContext, runId, stepId, attempt));
         }
 
         return null;
@@ -697,6 +704,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
 
     private static bool IsDirectGitHubToolAction(string action) =>
         string.Equals(action, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(action, "github.comment_issue", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(action, "github.close_issue", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(action, "github.post_review", StringComparison.OrdinalIgnoreCase);
 
@@ -1105,7 +1114,12 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             input,
             allowedSandboxProfiles ?? []);
 
-    private static IReadOnlyDictionary<string, string> ExtractToolInput(AgentRuntimeContract? runtimeContract)
+    private static IReadOnlyDictionary<string, string> ExtractToolInput(
+        AgentRuntimeContract? runtimeContract,
+        IReadOnlyDictionary<string, string> runContext,
+        string runId,
+        string stepId,
+        int attempt)
     {
         const string Prefix = "tool.input.";
 
@@ -1118,8 +1132,29 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             .Where(static pair => pair.Key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
             .ToDictionary(
                 static pair => pair.Key[Prefix.Length..],
-                static pair => pair.Value,
+                pair => RenderToolInput(pair.Value, runContext, runId, stepId, attempt),
                 StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string RenderToolInput(
+        string value,
+        IReadOnlyDictionary<string, string> runContext,
+        string runId,
+        string stepId,
+        int attempt)
+    {
+        var variables = new Dictionary<string, string>(runContext, StringComparer.OrdinalIgnoreCase)
+        {
+            ["run_id"] = runId,
+            ["step_id"] = stepId,
+            ["attempt"] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        return ToolInputTemplatePattern.Replace(value, match =>
+        {
+            var key = match.Groups[1].Value;
+            return variables.TryGetValue(key, out var replacement) ? replacement : match.Value;
+        });
     }
 
     private static IReadOnlyList<AgentArtifactRecord> MapArtifacts(IReadOnlyDictionary<string, string>? artifacts)
@@ -1136,6 +1171,18 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 Name = name
             })
             .ToArray();
+    }
+
+    private static IReadOnlyList<AgentModelTraceRecord> AppendModelTrace(
+        IReadOnlyList<AgentModelTraceRecord> existing,
+        AgentModelTraceRecord? trace)
+    {
+        if (trace is null)
+        {
+            return existing;
+        }
+
+        return existing.Concat([trace]).ToArray();
     }
 
     private string ResolveExecutionMode(AgentwerkeTaskMetadata metadata, AgentProfile? profile)

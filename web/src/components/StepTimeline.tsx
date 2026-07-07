@@ -1,4 +1,5 @@
 import type { RunStep } from '../types';
+import { formatTokenCount } from '../utils/tokens';
 
 interface StepTimelineProps {
   steps: RunStep[];
@@ -33,6 +34,7 @@ export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionC
         {steps.map((step) => {
           const expanded = expandedStepId === step.id;
           const interactionCount = interactionCountByStep?.[step.id] ?? 0;
+          const tokenUsage = step.runtimeSnapshot?.tokenUsage;
           return (
             <li key={step.id} className="timeline-item">
               <button
@@ -46,6 +48,14 @@ export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionC
                   <strong>{step.name}</strong>
                   <span>{step.status.replace('_', ' ')}</span>
                 </span>
+                {tokenUsage ? (
+                  <span
+                    className="chip chip-static timeline-token-badge"
+                    title={`Model tokens — input: ${tokenUsage.inputTokens.toLocaleString()}, output: ${tokenUsage.outputTokens.toLocaleString()}`}
+                  >
+                    {formatTokenCount(tokenUsage.inputTokens)} in · {formatTokenCount(tokenUsage.outputTokens)} out
+                  </span>
+                ) : null}
                 {interactionCount > 0 ? (
                   <span className="chip chip-static timeline-interaction-badge">
                     {interactionCount} message{interactionCount === 1 ? '' : 's'}

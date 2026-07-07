@@ -4,6 +4,7 @@ import { agentIdentity } from '../utils/agentIdentity';
 
 interface ConversationTabProps {
   interactions: RunInteraction[];
+  error?: string | null;
   canAnswer: boolean;
   onAnswer: (interactionId: string, answer: string) => Promise<void>;
 }
@@ -31,22 +32,29 @@ function kindLabel(interaction: RunInteraction): string {
   }
 }
 
-export function ConversationTab({ interactions, canAnswer, onAnswer }: ConversationTabProps) {
+export function ConversationTab({ interactions, error, canAnswer, onAnswer }: ConversationTabProps) {
+  if (error && interactions.length === 0) {
+    return <p className="validation-error">{error}</p>;
+  }
+
   if (interactions.length === 0) {
     return <p>No agent conversation has been recorded for this run yet.</p>;
   }
 
   return (
-    <ol className="conversation-thread" role="list" aria-label="Agent conversation">
-      {interactions.map((interaction) => (
-        <ConversationEntry
-          key={interaction.id}
-          interaction={interaction}
-          canAnswer={canAnswer}
-          onAnswer={onAnswer}
-        />
-      ))}
-    </ol>
+    <>
+      {error ? <p className="validation-error">{error}</p> : null}
+      <ol className="conversation-thread" role="list" aria-label="Agent conversation">
+        {interactions.map((interaction) => (
+          <ConversationEntry
+            key={interaction.id}
+            interaction={interaction}
+            canAnswer={canAnswer}
+            onAnswer={onAnswer}
+          />
+        ))}
+      </ol>
+    </>
   );
 }
 

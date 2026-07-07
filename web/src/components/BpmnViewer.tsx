@@ -24,6 +24,7 @@ const STATUS_MARKER: Partial<Record<RunStatus, string>> = {
   completed: 'raf-completed',
   running: 'raf-running',
   awaiting_approval: 'raf-awaiting',
+  waiting_external: 'raf-awaiting',
   needs_config: 'raf-awaiting',
   failed: 'raf-failed',
   blocked: 'raf-failed',

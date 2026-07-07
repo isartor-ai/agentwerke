@@ -116,6 +116,19 @@ describe('RunDetail integration', () => {
     expect(screen.getByRole('button', { name: 'Download JSON' })).toBeInTheDocument();
   });
 
+  it('renders model activity for the selected agent step', async () => {
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'I/O' }));
+
+    expect(screen.getAllByText('LLM Activity').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('The agent drafted a technical specification.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('github.read_issue').length).toBeGreaterThan(0);
+  });
+
   it('does not fetch operator-only evidence or allow cancel for viewers', async () => {
     renderDetail('run-0421', viewerAuthFixture);
 
@@ -340,5 +353,16 @@ describe('RunDetail integration', () => {
         'Add tests first',
       );
     });
+  });
+
+  it('surfaces conversation load failures instead of hiding identity data problems', async () => {
+    vi.mocked(apiClient.getRunInteractions).mockRejectedValue(new Error('Conversation unavailable'));
+
+    renderDetail();
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }));
+
+    expect(await screen.findByText('Conversation unavailable')).toBeInTheDocument();
   });
 });

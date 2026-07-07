@@ -16,6 +16,14 @@ public interface IGitHubConnector
         int issueNumber,
         CancellationToken cancellationToken = default);
 
+    Task<GitHubIssueCommentPostResult> CommentIssueAsync(
+        CommentGitHubIssueCommand command,
+        CancellationToken cancellationToken = default);
+
+    Task<GitHubIssueStateResult> CloseIssueAsync(
+        CloseGitHubIssueCommand command,
+        CancellationToken cancellationToken = default);
+
     Task<GitHubBranchResult> CreateBranchAsync(
         CreateGitHubBranchCommand command,
         CancellationToken cancellationToken = default);
@@ -61,6 +69,24 @@ public sealed record GitHubIssueResult(
     string State,
     string IssueUrl,
     IReadOnlyList<GitHubIssueCommentResult> Comments);
+
+public sealed record CommentGitHubIssueCommand(
+    int IssueNumber,
+    string Body);
+
+public sealed record GitHubIssueCommentPostResult(
+    long CommentId,
+    int IssueNumber,
+    string CommentUrl);
+
+public sealed record CloseGitHubIssueCommand(
+    int IssueNumber,
+    string? StateReason = null);
+
+public sealed record GitHubIssueStateResult(
+    int Number,
+    string State,
+    string IssueUrl);
 
 public sealed record CreateGitHubBranchCommand(
     string BranchName,
@@ -204,6 +230,8 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
     public override IReadOnlyList<string> SupportedOperations =>
         [
             "read_issue",
+            "comment_issue",
+            "close_issue",
             "create_branch",
             "create_pull_request",
             "get_pull_request",
@@ -245,6 +273,61 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
                     comment.Body ?? string.Empty,
                     comment.CreatedAt))
                 .ToArray());
+    }
+
+    public async Task<GitHubIssueCommentPostResult> CommentIssueAsync(
+        CommentGitHubIssueCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command.Body);
+        EnsureConfigured();
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            body = command.Body
+        });
+
+        using var request = await CreateRequestAsync(HttpMethod.Post, $"issues/{command.IssueNumber}/comments", payload, cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var comment = await DeserializeAsync<IssueCommentPostResponse>(response, cancellationToken)
+            ?? throw new InvalidOperationException($"GitHub did not return comment details for issue #{command.IssueNumber}.");
+
+        return new GitHubIssueCommentPostResult(
+            CommentId: comment.Id,
+            IssueNumber: command.IssueNumber,
+            CommentUrl: comment.HtmlUrl);
+    }
+
+    public async Task<GitHubIssueStateResult> CloseIssueAsync(
+        CloseGitHubIssueCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureConfigured();
+
+        var stateReason = string.IsNullOrWhiteSpace(command.StateReason)
+            ? "completed"
+            : command.StateReason.Trim();
+        var payload = JsonSerializer.Serialize(new
+        {
+            state = "closed",
+            state_reason = stateReason
+        });
+
+        using var request = await CreateRequestAsync(HttpMethod.Patch, $"issues/{command.IssueNumber}", payload, cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var issue = await DeserializeAsync<IssueStateResponse>(response, cancellationToken)
+            ?? throw new InvalidOperationException($"GitHub did not return issue details for issue #{command.IssueNumber}.");
+
+        return new GitHubIssueStateResult(
+            Number: issue.Number,
+            State: issue.State,
+            IssueUrl: issue.HtmlUrl);
     }
 
     public async Task<GitHubBranchResult> CreateBranchAsync(
@@ -512,6 +595,8 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         return request.Operation switch
         {
             "read_issue" => await ExecuteGetIssueAsync(request, cancellationToken),
+            "comment_issue" => await ExecuteCommentIssueAsync(request, cancellationToken),
+            "close_issue" => await ExecuteCloseIssueAsync(request, cancellationToken),
             "create_branch" => await ExecuteCreateBranchAsync(request, cancellationToken),
             "create_pull_request" => await ExecuteCreatePullRequestAsync(request, cancellationToken),
             "get_pull_request" => await ExecuteGetPullRequestAsync(request, cancellationToken),
@@ -533,6 +618,34 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             Succeeded: true,
             Status: "completed",
             Summary: $"GitHub issue #{result.Number} loaded.",
+            ExternalId: result.Number.ToString(),
+            ExternalUrl: result.IssueUrl);
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteCommentIssueAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<CommentGitHubIssueCommand>(SerializerOptions)
+            ?? throw new InvalidOperationException("GitHub issue-comment payload was empty.");
+
+        var result = await CommentIssueAsync(command, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: "completed",
+            Summary: $"Commented on GitHub issue #{result.IssueNumber}.",
+            ExternalId: result.CommentId.ToString(),
+            ExternalUrl: result.CommentUrl);
+    }
+
+    private async Task<ConnectorExecutionResult> ExecuteCloseIssueAsync(ConnectorExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var command = request.Payload.Deserialize<CloseGitHubIssueCommand>(SerializerOptions)
+            ?? throw new InvalidOperationException("GitHub close-issue payload was empty.");
+
+        var result = await CloseIssueAsync(command, cancellationToken);
+        return new ConnectorExecutionResult(
+            Succeeded: true,
+            Status: result.State,
+            Summary: $"Closed GitHub issue #{result.Number}.",
             ExternalId: result.Number.ToString(),
             ExternalUrl: result.IssueUrl);
     }
@@ -822,6 +935,15 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         string? Body,
         [property: JsonPropertyName("created_at")] string CreatedAt,
         GitHubUserResponse? User);
+
+    private sealed record IssueCommentPostResponse(
+        long Id,
+        [property: JsonPropertyName("html_url")] string HtmlUrl);
+
+    private sealed record IssueStateResponse(
+        int Number,
+        string State,
+        [property: JsonPropertyName("html_url")] string HtmlUrl);
 
     private sealed record ReadGitHubIssueCommand(int IssueNumber);
 

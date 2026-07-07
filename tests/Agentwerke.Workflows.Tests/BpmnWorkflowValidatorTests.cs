@@ -292,6 +292,37 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenMetadataChildElementsArePresent_ParsesRuntimeMetadata()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
+              <bpmn:process id="W" name="W">
+                <bpmn:serviceTask id="Comment" name="Comment">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask agent="github-agent" action="github.comment_issue"
+                      purposeType="documentation" policyTag="issue-comment">
+                      <agentwerke:metadata key="tool.input.issue_number" value="{{input.issue_number}}" />
+                      <agentwerke:metadata key="tool.input.body">{{output.Requirements}}</agentwerke:metadata>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "Comment");
+        var contract = node.Metadata!.RuntimeContract;
+        Assert.NotNull(contract);
+        Assert.Equal("{{input.issue_number}}", contract!.Metadata["tool.input.issue_number"]);
+        Assert.Equal("{{output.Requirements}}", contract.Metadata["tool.input.body"]);
+    }
+
+    [Fact]
     public void Validate_WhenPromptChildElementIsPresent_ParsesAndTrimsMultilinePrompt()
     {
         var xml = """

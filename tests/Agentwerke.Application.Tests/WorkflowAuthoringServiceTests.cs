@@ -19,7 +19,10 @@ public sealed class WorkflowAuthoringServiceTests
         var service = new WorkflowAuthoringService(repository, validator);
 
         var result = await service.ImportWorkflowAsync(
-            new ImportWorkflowCommand("invoice.bpmn", "<bpmn />"));
+            new ImportWorkflowCommand(
+                "invoice.bpmn",
+                "<bpmn />",
+                Tags: ["github-trigger", "todo-e2e", "GitHub-Trigger", " "]));
 
         var workflow = Assert.Single(repository.AddedWorkflows);
         Assert.StartsWith("wf_", workflow.Id, StringComparison.Ordinal);
@@ -29,6 +32,7 @@ public sealed class WorkflowAuthoringServiceTests
         Assert.Equal("draft", workflow.Status);
         Assert.Equal("system", workflow.Owner);
         Assert.Equal("valid", workflow.ValidationState);
+        Assert.Equal(["github-trigger", "todo-e2e"], workflow.Tags);
         Assert.Equal("<bpmn />", workflow.BpmnXml);
         Assert.True(DateTimeOffset.TryParse(workflow.CreatedAt, out _));
         Assert.Equal(workflow.Id, result.WorkflowId);
@@ -66,7 +70,10 @@ public sealed class WorkflowAuthoringServiceTests
 
         var result = await service.PublishWorkflowAsync(
             "wf_123",
-            new PublishWorkflowCommand("<new />", "Published description"));
+            new PublishWorkflowCommand(
+                "<new />",
+                "Published description",
+                ["github-trigger", "nvidia-litellm"]));
 
         Assert.Equal("wf_123", result.WorkflowId);
         Assert.Equal("v2.0.0", result.Version);
@@ -74,6 +81,7 @@ public sealed class WorkflowAuthoringServiceTests
         Assert.Equal("active", workflow.Status);
         Assert.Equal("Invoice Approval", workflow.Name);
         Assert.Equal("Published description", workflow.Description);
+        Assert.Equal(["github-trigger", "nvidia-litellm"], workflow.Tags);
         Assert.Equal("valid", workflow.ValidationState);
         Assert.Equal("<new />", workflow.BpmnXml);
         Assert.True(DateTimeOffset.TryParse(result.PublishedAt, out _));

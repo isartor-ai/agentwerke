@@ -6,11 +6,13 @@ public sealed record ImportWorkflowCommand(
     string FileName,
     string BpmnXml,
     string? Description = null,
-    string? Owner = null);
+    string? Owner = null,
+    IReadOnlyList<string>? Tags = null);
 
 public sealed record PublishWorkflowCommand(
     string BpmnXml,
-    string? Description = null);
+    string? Description = null,
+    IReadOnlyList<string>? Tags = null);
 
 public sealed record WorkflowImportResult(
     string WorkflowId,
