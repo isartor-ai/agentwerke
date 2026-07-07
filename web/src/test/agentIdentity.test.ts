@@ -7,6 +7,7 @@ describe('agentIdentity', () => {
     const b = agentIdentity('  Planner  ');
     expect(a.accent).toBe(b.accent);
     expect(a.onAccent).toBe(b.onAccent);
+    expect(a.icon).toBe(b.icon);
   });
 
   it('gives different agents different accents (best effort across a small set)', () => {
@@ -25,5 +26,6 @@ describe('agentIdentity', () => {
     const identity = agentIdentity('');
     expect(identity.initials).toBe('?');
     expect(identity.accent).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    expect(identity.icon.length).toBeGreaterThan(0);
   });
 });

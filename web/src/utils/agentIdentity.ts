@@ -12,6 +12,8 @@ export interface AgentIdentity {
   accent: string;
   /** Text colour on the accent-filled avatar (darkest stop of the same ramp). */
   onAccent: string;
+  /** Stable non-colour icon so identity remains distinct without relying on colour alone. */
+  icon: string;
   /** 1–2 letter fallback shown in the avatar. */
   initials: string;
 }
@@ -26,6 +28,8 @@ const PALETTE: ReadonlyArray<{ accent: string; onAccent: string }> = [
   { accent: '#639922', onAccent: '#173404' }, // green
   { accent: '#BA7517', onAccent: '#412402' }, // amber
 ];
+
+const ICONS: ReadonlyArray<string> = ['◆', '●', '■', '▲', '✦', '✚', '◇'];
 
 function hash(value: string): number {
   let h = 0;
@@ -44,6 +48,8 @@ function initialsOf(name: string): string {
 
 export function agentIdentity(name: string): AgentIdentity {
   const key = (name ?? '').trim().toLowerCase();
-  const slot = PALETTE[hash(key) % PALETTE.length];
-  return { accent: slot.accent, onAccent: slot.onAccent, initials: initialsOf(name ?? '') };
+  const hashValue = hash(key);
+  const slot = PALETTE[hashValue % PALETTE.length];
+  const icon = ICONS[Math.floor(hashValue / PALETTE.length) % ICONS.length];
+  return { accent: slot.accent, onAccent: slot.onAccent, icon, initials: initialsOf(name ?? '') };
 }
