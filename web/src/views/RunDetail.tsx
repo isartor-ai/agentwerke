@@ -63,7 +63,16 @@ function buildReasoningStartSummary(action: unknown, attempt: unknown): string {
 
 function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<string, string[]> {
   const byStep: Record<string, string[]> = {};
-  for (const event of events ?? []) {
+  const orderedEvents = [...(events ?? [])].sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt);
+    const rightTime = Date.parse(right.createdAt);
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+      return left.createdAt.localeCompare(right.createdAt);
+    }
+    return leftTime - rightTime;
+  });
+
+  for (const event of orderedEvents) {
     try {
       if (event.type === 'agent_reasoning_started' || event.type === 'agent_reasoning_recorded') {
         const parsed = JSON.parse(event.message) as { stepId?: unknown; summary?: unknown };
