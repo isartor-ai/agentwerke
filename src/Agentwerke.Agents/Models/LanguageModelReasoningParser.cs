@@ -7,6 +7,49 @@ internal static class LanguageModelReasoningParser
     private const string StartTag = "<agent_reasoning>";
     private const string EndTag = "</agent_reasoning>";
 
+    // Reasoning models (DeepSeek R1, Qwen thinking variants, GLM, …) emit their chain of thought
+    // inside <think>…</think> at the start of the content when they don't use a separate
+    // reasoning_content field. Split it out so the reasoning streams to the UI and the visible
+    // output stays clean.
+    private const string ThinkStartTag = "<think>";
+    private const string ThinkEndTag = "</think>";
+
+    /// <summary>
+    /// Splits a completed content string into its visible output and the reasoning it embedded via
+    /// <c>&lt;think&gt;</c> tags. Unclosed <c>&lt;think&gt;</c> (model still mid-thought) treats the
+    /// remainder as reasoning with no output yet.
+    /// </summary>
+    public static ParsedReasoningOutput ExtractThink(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return new ParsedReasoningOutput(output, null);
+        }
+
+        var start = output.IndexOf(ThinkStartTag, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return new ParsedReasoningOutput(output, null);
+        }
+
+        var contentStart = start + ThinkStartTag.Length;
+        var end = output.IndexOf(ThinkEndTag, contentStart, StringComparison.OrdinalIgnoreCase);
+        if (end < 0)
+        {
+            var openReasoning = output[contentStart..].Trim();
+            var beforeThink = output[..start].Trim();
+            return new ParsedReasoningOutput(
+                string.IsNullOrWhiteSpace(beforeThink) ? null : beforeThink,
+                string.IsNullOrWhiteSpace(openReasoning) ? null : openReasoning);
+        }
+
+        var reasoning = output[contentStart..end].Trim();
+        var cleaned = string.Concat(output.AsSpan(0, start), output.AsSpan(end + ThinkEndTag.Length)).Trim();
+        return new ParsedReasoningOutput(
+            string.IsNullOrWhiteSpace(cleaned) ? null : cleaned,
+            string.IsNullOrWhiteSpace(reasoning) ? null : reasoning);
+    }
+
     public static ParsedReasoningOutput Extract(string? output)
     {
         if (string.IsNullOrWhiteSpace(output))

@@ -32,13 +32,19 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
             MaxToolIterations = 5,
         }));
 
+    /// <summary>Builds an SSE chat-completions stream from JSON chunk bodies, terminated by [DONE].</summary>
+    private static string Sse(params string[] chunks) =>
+        string.Concat(chunks.Select(c => $"data: {c}\n\n")) + "data: [DONE]\n\n";
+
+    private const string UsageChunk =
+        """{"model":"gpt-4o","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":2}}""";
+
     [Fact]
-    public async Task RunAsync_EmitsOpenAiToolSchemaAndMessages()
+    public async Task RunAsync_EmitsOpenAiToolSchemaAndStreamsMessages()
     {
-        const string finalResponse = """
-            {"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"done"}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}
-            """;
-        using var server = QueuedHttpServer.Start(finalResponse);
+        using var server = QueuedHttpServer.Start(Sse(
+            """{"model":"gpt-4o","choices":[{"delta":{"content":"done"}}]}""",
+            UsageChunk));
 
         var response = await Client(server).RunAsync(
             new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
@@ -53,7 +59,8 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
         using var doc = JsonDocument.Parse(server.ReceivedBodies[0]);
         var root = doc.RootElement;
         Assert.Equal("gpt-4o", root.GetProperty("model").GetString());
-        Assert.False(root.GetProperty("stream").GetBoolean());
+        Assert.True(root.GetProperty("stream").GetBoolean());
+        Assert.True(root.GetProperty("stream_options").GetProperty("include_usage").GetBoolean());
         Assert.Equal("auto", root.GetProperty("tool_choice").GetString());
 
         var messages = root.GetProperty("messages");
@@ -71,12 +78,11 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
     }
 
     [Fact]
-    public async Task RunAsync_ExtractsVisibleReasoningBlockFromFinalOutput()
+    public async Task RunAsync_ExtractsAgentReasoningBlockFromFinalOutput()
     {
-        const string finalResponse = """
-            {"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"<agent_reasoning>Checked the issue, inspected available tools, and chose a minimal patch.</agent_reasoning>\nFinal answer only."}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}
-            """;
-        using var server = QueuedHttpServer.Start(finalResponse);
+        using var server = QueuedHttpServer.Start(Sse(
+            """{"model":"gpt-4o","choices":[{"delta":{"content":"<agent_reasoning>Checked the issue, inspected available tools, and chose a minimal patch.</agent_reasoning>\nFinal answer only."}}]}""",
+            UsageChunk));
 
         var response = await Client(server).RunAsync(
             new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
@@ -91,15 +97,72 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
     }
 
     [Fact]
-    public async Task RunAsync_ExecutesToolCallLoop_AndAppendsToolResult()
+    public async Task RunAsync_StreamsNativeReasoningContentCumulatively()
     {
-        const string toolCallResponse = """
-            {"model":"gpt-4o","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"github_post_review","arguments":"{\"decision\":\"approve\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":3}}
-            """;
-        const string finalResponse = """
-            {"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"all set"}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}
-            """;
-        using var server = QueuedHttpServer.Start(toolCallResponse, finalResponse);
+        // A reasoning model (DeepSeek R1, GLM, …) emits its chain of thought in reasoning_content
+        // deltas before the answer. Each progress update carries the reasoning so far.
+        using var server = QueuedHttpServer.Start(Sse(
+            """{"model":"deepseek-r1","choices":[{"delta":{"reasoning_content":"First, I read the issue. "}}]}""",
+            """{"model":"deepseek-r1","choices":[{"delta":{"reasoning_content":"Then I plan a minimal change.\n"}}]}""",
+            """{"model":"deepseek-r1","choices":[{"delta":{"content":"Here is the plan."}}]}""",
+            """{"model":"deepseek-r1","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":6}}"""));
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        var response = await Client(server).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None,
+            (update, _) => { updates.Add(update); return Task.CompletedTask; });
+
+        Assert.True(response.Succeeded, response.FailureReason);
+        Assert.Equal("Here is the plan.", response.Output);
+        Assert.Equal("First, I read the issue. Then I plan a minimal change.", response.ReasoningSummary);
+
+        Assert.NotEmpty(updates);
+        Assert.All(updates, u => Assert.Equal(AgentExecutionProgressKinds.Reasoning, u.Kind));
+        // Cumulative growth: each emitted summary extends the previous one (prefix-extension the UI collapses).
+        for (var i = 1; i < updates.Count; i++)
+        {
+            Assert.StartsWith(updates[i - 1].Summary!.Trim(), updates[i].Summary!.Trim());
+        }
+        Assert.Equal("First, I read the issue. Then I plan a minimal change.", updates[^1].Summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_ExtractsThinkBlockReasoning()
+    {
+        // Models that inline reasoning in <think>…</think> in the content channel.
+        using var server = QueuedHttpServer.Start(Sse(
+            """{"model":"qwen","choices":[{"delta":{"content":"<think>Consider the tradeoffs"}}]}""",
+            """{"model":"qwen","choices":[{"delta":{"content":" carefully.</think>The answer is 42."}}]}""",
+            UsageChunk));
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        var response = await Client(server).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None,
+            (update, _) => { updates.Add(update); return Task.CompletedTask; });
+
+        Assert.True(response.Succeeded, response.FailureReason);
+        Assert.Equal("The answer is 42.", response.Output);
+        Assert.Equal("Consider the tradeoffs carefully.", response.ReasoningSummary);
+        Assert.Contains(updates, u => u.Summary == "Consider the tradeoffs carefully.");
+    }
+
+    [Fact]
+    public async Task RunAsync_ExecutesStreamedToolCallLoop_AndAppendsToolResult()
+    {
+        // Tool call arguments arrive fragmented across deltas and must be concatenated by index.
+        using var server = QueuedHttpServer.Start(
+            Sse(
+                """{"model":"gpt-4o","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"github_post_review","arguments":""}}]}}]}""",
+                """{"model":"gpt-4o","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"decision\":"}}]}}]}""",
+                """{"model":"gpt-4o","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"approve\"}"}}]}}]}""",
+                """{"model":"gpt-4o","choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":3}}"""),
+            Sse(
+                """{"model":"gpt-4o","choices":[{"delta":{"content":"all set"}}]}""",
+                UsageChunk));
 
         var executed = new List<LanguageModelToolCall>();
         var response = await Client(server).RunAsync(
@@ -134,13 +197,14 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
     [Fact]
     public async Task RunAsync_WhenAssistantCommentsBeforeToolCall_EmitsVisibleReasoningProgress()
     {
-        const string toolCallResponse = """
-            {"model":"gpt-4o","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"<agent_reasoning>Loading repo context and preparing the review comment.</agent_reasoning>","tool_calls":[{"id":"call_1","type":"function","function":{"name":"github_post_review","arguments":"{\"decision\":\"approve\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":3}}
-            """;
-        const string finalResponse = """
-            {"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"all set"}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}
-            """;
-        using var server = QueuedHttpServer.Start(toolCallResponse, finalResponse);
+        using var server = QueuedHttpServer.Start(
+            Sse(
+                """{"model":"gpt-4o","choices":[{"delta":{"content":"<agent_reasoning>Loading repo context and preparing the review comment.</agent_reasoning>"}}]}""",
+                """{"model":"gpt-4o","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"github_post_review","arguments":"{\"decision\":\"approve\"}"}}]}}]}""",
+                """{"model":"gpt-4o","choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":3}}"""),
+            Sse(
+                """{"model":"gpt-4o","choices":[{"delta":{"content":"all set"}}]}""",
+                UsageChunk));
         var updates = new List<AgentExecutionProgressUpdate>();
 
         var response = await Client(server).RunAsync(
@@ -154,9 +218,8 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
             });
 
         Assert.True(response.Succeeded, response.FailureReason);
-        var update = Assert.Single(updates);
-        Assert.Equal(AgentExecutionProgressKinds.Reasoning, update.Kind);
-        Assert.Equal("Loading repo context and preparing the review comment.", update.Summary);
+        var reasoningUpdates = updates.Where(u => u.Kind == AgentExecutionProgressKinds.Reasoning).ToArray();
+        Assert.Contains(reasoningUpdates, u => u.Summary == "Loading repo context and preparing the review comment.");
     }
 
     private sealed class QueuedHttpServer : IDisposable
