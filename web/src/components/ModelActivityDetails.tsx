@@ -78,7 +78,6 @@ export function ModelActivityDetails({
                   </ul>
                 </div>
               ) : null}
-
               {trace.output ? (
                 <div className="model-trace-block">
                   <h4>Visible Output</h4>
