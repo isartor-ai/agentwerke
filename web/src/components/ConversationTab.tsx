@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import type { RunInteraction } from '../types';
 import { AgentIdentityBadge } from './AgentIdentityBadge';
-import { agentIdentity } from '../utils/agentIdentity';
+import { agentIdentity, type AgentIdentityConfig } from '../utils/agentIdentity';
 
 interface ConversationTabProps {
   interactions: RunInteraction[];
   error?: string | null;
   canAnswer: boolean;
   onAnswer: (interactionId: string, answer: string) => Promise<void>;
+  resolveAgentIdentity?: (name: string) => AgentIdentityConfig | undefined;
 }
 
 function addresseeLabel(interaction: RunInteraction): string {
@@ -33,7 +34,13 @@ function kindLabel(interaction: RunInteraction): string {
   }
 }
 
-export function ConversationTab({ interactions, error, canAnswer, onAnswer }: ConversationTabProps) {
+export function ConversationTab({
+  interactions,
+  error,
+  canAnswer,
+  onAnswer,
+  resolveAgentIdentity,
+}: ConversationTabProps) {
   if (error && interactions.length === 0) {
     return <p className="validation-error">{error}</p>;
   }
@@ -52,6 +59,7 @@ export function ConversationTab({ interactions, error, canAnswer, onAnswer }: Co
             interaction={interaction}
             canAnswer={canAnswer}
             onAnswer={onAnswer}
+            resolveAgentIdentity={resolveAgentIdentity}
           />
         ))}
       </ol>
@@ -63,15 +71,17 @@ interface ConversationEntryProps {
   interaction: RunInteraction;
   canAnswer: boolean;
   onAnswer: (interactionId: string, answer: string) => Promise<void>;
+  resolveAgentIdentity?: (name: string) => AgentIdentityConfig | undefined;
 }
 
-function ConversationEntry({ interaction, canAnswer, onAnswer }: ConversationEntryProps) {
+function ConversationEntry({ interaction, canAnswer, onAnswer, resolveAgentIdentity }: ConversationEntryProps) {
   const [answer, setAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isPending = interaction.status === 'pending' && interaction.addresseeType === 'human';
-  const identity = agentIdentity(interaction.from);
+  const configuredIdentity = resolveAgentIdentity?.(interaction.from);
+  const identity = agentIdentity(interaction.from, configuredIdentity);
 
   const submit = async (value: string) => {
     if (!value.trim() || submitting) return;
@@ -89,7 +99,11 @@ function ConversationEntry({ interaction, canAnswer, onAnswer }: ConversationEnt
   return (
     <li className="conversation-entry" style={{ borderLeftColor: identity.accent, borderLeftWidth: 3 }}>
       <div className="conversation-head">
-        <AgentIdentityBadge name={interaction.from} className="conversation-identity" />
+        <AgentIdentityBadge
+          name={interaction.from}
+          identity={configuredIdentity}
+          className="conversation-identity"
+        />
         <span aria-hidden="true"> → </span>
         <span>{addresseeLabel(interaction)}</span>
         <span className="chip chip-static">{kindLabel(interaction)}</span>

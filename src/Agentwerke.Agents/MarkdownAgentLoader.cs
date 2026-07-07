@@ -74,6 +74,8 @@ public static class MarkdownAgentLoader
             SupportedEnvironments = meta.List("supportedEnvironments"),
             SupportedPolicyTags = meta.List("supportedPolicyTags"),
             SandboxProfiles = meta.List("sandboxProfiles"),
+            IdentityColor = meta.Scalar("identityColor"),
+            IdentityIcon = meta.Scalar("identityIcon"),
             SystemPrompt = string.IsNullOrWhiteSpace(body) ? null : body.Trim(),
             Fingerprint = fingerprint,
             Source = "file"

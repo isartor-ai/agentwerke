@@ -227,10 +227,12 @@ describe('UI component unit tests', () => {
         ]}
         expandedStepId="step-llm"
         onToggleStep={vi.fn()}
+        resolveAgentIdentity={() => ({ color: '#D85A30', icon: '⚙' })}
       />,
     );
 
     expect(screen.getAllByTitle('Agent planner').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('⚙').length).toBeGreaterThan(0);
     expect(screen.getByText('LLM 1 trace')).toBeInTheDocument();
     expect(screen.getByText('LLM Activity')).toBeInTheDocument();
     expect(screen.getByText('Inference Signals')).toBeInTheDocument();
@@ -255,6 +257,7 @@ describe('UI component unit tests', () => {
         ]}
         expandedStepId="step-live"
         onToggleStep={vi.fn()}
+        resolveAgentIdentity={() => ({ color: '#378ADD', icon: '◫' })}
         reasoningByStep={{
           'step-live': [
             {
@@ -275,6 +278,7 @@ describe('UI component unit tests', () => {
     );
 
     expect(screen.getByText('Inspecting the repo state before deciding on the next tool call.')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Agent planner')[0]).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByText('repo.inspect_files')).toBeInTheDocument();
     expect(screen.getByText("Calling tool 'repo.inspect_files'.")).toBeInTheDocument();
   });

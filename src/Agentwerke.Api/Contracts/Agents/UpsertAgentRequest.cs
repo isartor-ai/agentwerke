@@ -17,4 +17,6 @@ public sealed record UpsertAgentRequest(
     IReadOnlyList<string>? SupportedPolicyTags = null,
     IReadOnlyList<string>? Secrets = null,
     IReadOnlyList<string>? SandboxProfiles = null,
+    string? IdentityColor = null,
+    string? IdentityIcon = null,
     string? SystemPrompt = null);

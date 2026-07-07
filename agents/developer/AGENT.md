@@ -23,6 +23,8 @@ supportedPolicyTags:
   - demo-implementation
 sandboxProfiles:
   - repo-write
+identityColor: "#D85A30"
+identityIcon: "⚙"
 ---
 
 You are the Developer agent for the Agentwerke GitHub Issue to PR NVIDIA demo.

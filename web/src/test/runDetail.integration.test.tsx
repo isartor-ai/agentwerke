@@ -11,6 +11,7 @@ vi.mock('../components/BpmnViewer');
 vi.mock('../api/client', () => ({
   apiClient: {
     getRun: vi.fn(),
+    getAgents: vi.fn(),
     getRunInteractions: vi.fn(),
     answerInteraction: vi.fn(),
     getWorkflow: vi.fn(),
@@ -29,9 +30,51 @@ const WORKFLOW_WITH_BPMN = {
   bpmnXml: '<?xml version="1.0"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"><bpmn:process id="P1"><bpmn:serviceTask id="T1" name="Merge to main" /></bpmn:process></bpmn:definitions>',
 };
 
+const agentsFixture = [
+  {
+    agentId: 'spec-writer',
+    name: 'Spec Writer',
+    description: 'Writes specifications.',
+    category: 'analysis',
+    runner: 'agent-model',
+    network: 'none',
+    tools: [],
+    deniedTools: [],
+    supportedActions: ['spec.generate'],
+    skills: [],
+    supportedEnvironments: ['local'],
+    supportedPolicyTags: ['standard'],
+    secrets: [],
+    source: 'file',
+    sandboxProfiles: [],
+    identityColor: '#378ADD',
+    identityIcon: '◫',
+  },
+  {
+    agentId: 'GitAgent',
+    name: 'GitAgent',
+    description: 'Coordinates git actions.',
+    category: 'integration',
+    runner: 'agent-model',
+    network: 'none',
+    tools: [],
+    deniedTools: [],
+    supportedActions: ['review.pull_request'],
+    skills: [],
+    supportedEnvironments: ['github'],
+    supportedPolicyTags: ['repo-change'],
+    secrets: [],
+    source: 'builtin',
+    sandboxProfiles: [],
+    identityColor: '#7F77DD',
+    identityIcon: '⌘',
+  },
+];
+
 describe('RunDetail integration', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getRun).mockResolvedValue(runsFixture[0]);
+    vi.mocked(apiClient.getAgents).mockResolvedValue(agentsFixture);
     vi.mocked(apiClient.getWorkflow).mockResolvedValue(WORKFLOW_WITH_BPMN);
     vi.mocked(apiClient.getRunEvidencePack).mockResolvedValue(evidencePackFixture);
     vi.mocked(apiClient.getRunArtifactDownloadUrl).mockImplementation(
@@ -68,6 +111,7 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Logs' })).not.toBeInTheDocument();
     expect(screen.getByText('Evidence Pack')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Export Evidence Pack' }));
     await waitFor(() => {

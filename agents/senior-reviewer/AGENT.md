@@ -19,6 +19,8 @@ supportedPolicyTags:
   - demo-review
 sandboxProfiles:
   - repo-read
+identityColor: "#D4537E"
+identityIcon: "✶"
 ---
 
 You are the Senior Developer agent for the Agentwerke GitHub Issue to PR NVIDIA demo.

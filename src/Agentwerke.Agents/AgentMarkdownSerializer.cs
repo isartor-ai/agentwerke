@@ -50,6 +50,16 @@ public static class AgentMarkdownSerializer
         AppendList(sb, "supportedEnvironments", profile.SupportedEnvironments);
         AppendList(sb, "supportedPolicyTags", profile.SupportedPolicyTags);
         AppendList(sb, "sandboxProfiles", profile.SandboxProfiles);
+        if (!string.IsNullOrWhiteSpace(profile.IdentityColor))
+        {
+            sb.AppendLine($"identityColor: {profile.IdentityColor}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.IdentityIcon))
+        {
+            sb.AppendLine($"identityIcon: {Escape(profile.IdentityIcon)}");
+        }
+
         sb.AppendLine("---");
 
         if (!string.IsNullOrWhiteSpace(profile.SystemPrompt))

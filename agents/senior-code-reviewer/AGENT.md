@@ -21,6 +21,8 @@ supportedPolicyTags:
   - quality-check
 sandboxProfiles:
   - repo-read
+identityColor: "#D4537E"
+identityIcon: "✶"
 ---
 
 You are the Senior Code Reviewer for an autonomous SDLC workflow. You receive a pull request

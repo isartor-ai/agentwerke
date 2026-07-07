@@ -132,7 +132,9 @@ public sealed class AgentsController : ControllerBase
             profile.Secrets.ToArray(),
             profile.Source,
             profile.Fingerprint,
-            profile.SandboxProfiles.ToArray());
+            profile.SandboxProfiles.ToArray(),
+            profile.IdentityColor,
+            profile.IdentityIcon);
 
     private AgentDetail ToDetail(ManagedAgentDocument document)
     {
@@ -156,6 +158,8 @@ public sealed class AgentsController : ControllerBase
             profile.Source,
             profile.Fingerprint,
             profile.SandboxProfiles.ToArray(),
+            profile.IdentityColor,
+            profile.IdentityIcon,
             profile.SystemPrompt,
             document.RawMarkdown,
             document.EffectiveFilePath,
@@ -206,6 +210,8 @@ public sealed class AgentsController : ControllerBase
             SupportedEnvironments = NormalizeList(request.SupportedEnvironments),
             SupportedPolicyTags = NormalizeList(request.SupportedPolicyTags),
             SandboxProfiles = NormalizeSandboxProfiles(request.SandboxProfiles),
+            IdentityColor = NormalizeOptionalScalar(request.IdentityColor),
+            IdentityIcon = NormalizeOptionalScalar(request.IdentityIcon),
             SystemPrompt = NormalizeOptionalMultiline(request.SystemPrompt),
             Source = "file"
         };

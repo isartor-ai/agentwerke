@@ -1,6 +1,7 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { canAdmin } from '../auth/permissions';
+import { AgentIdentityBadge } from '../components/AgentIdentityBadge';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -22,6 +23,9 @@ interface AgentFormState {
   supportedEnvironments: string;
   supportedPolicyTags: string;
   secrets: string;
+  sandboxProfiles: string;
+  identityColor: string;
+  identityIcon: string;
   systemPrompt: string;
   skills: AgentSkillBinding[];
 }
@@ -53,6 +57,9 @@ function toFormState(agent: AgentDetail): AgentFormState {
     supportedEnvironments: formatList(agent.supportedEnvironments),
     supportedPolicyTags: formatList(agent.supportedPolicyTags),
     secrets: formatList(agent.secrets),
+    sandboxProfiles: formatList(agent.sandboxProfiles),
+    identityColor: agent.identityColor ?? '',
+    identityIcon: agent.identityIcon ?? '',
     systemPrompt: agent.systemPrompt ?? '',
     skills: agent.skills.map((skill) => ({ ...skill })),
   };
@@ -299,6 +306,9 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
         supportedEnvironments: parseList(form.supportedEnvironments),
         supportedPolicyTags: parseList(form.supportedPolicyTags),
         secrets: parseList(form.secrets),
+        sandboxProfiles: parseList(form.sandboxProfiles),
+        identityColor: form.identityColor || undefined,
+        identityIcon: form.identityIcon || undefined,
         systemPrompt: form.systemPrompt || undefined,
       });
 
@@ -422,7 +432,12 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                   onClick={() => setSelectedAgentId(agent.agentId)}
                 >
                   <div className="agent-list-head">
-                    <strong>{agent.name}</strong>
+                    <div className="agent-list-identity">
+                      <AgentIdentityBadge
+                        name={agent.name}
+                        identity={{ color: agent.identityColor, icon: agent.identityIcon }}
+                      />
+                    </div>
                     <span className="chip chip-static">{agent.source}</span>
                   </div>
                   <p>{agent.description}</p>
@@ -458,6 +473,12 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                   <span className="chip chip-static">{selectedAgent.runner}</span>
                   <span className="chip chip-static">{selectedAgent.source}</span>
                 </div>
+              </div>
+              <div className="agent-editor-identity-preview">
+                <AgentIdentityBadge
+                  name={form.name || selectedAgent.name}
+                  identity={{ color: form.identityColor, icon: form.identityIcon }}
+                />
               </div>
 
               {saveError ? <p className="validation-error">{saveError}</p> : null}
@@ -527,6 +548,22 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                     <option value="bridge">bridge</option>
                   </select>
                 </label>
+                <label>
+                  Identity Color
+                  <input
+                    value={form.identityColor}
+                    placeholder="#378ADD"
+                    onChange={(event) => updateForm('identityColor', event.target.value)}
+                  />
+                </label>
+                <label>
+                  Identity Icon
+                  <input
+                    value={form.identityIcon}
+                    placeholder="⚙"
+                    onChange={(event) => updateForm('identityIcon', event.target.value)}
+                  />
+                </label>
                 <label className="form-span-2">
                   Supported Actions
                   <textarea
@@ -565,6 +602,14 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                     rows={4}
                     value={form.supportedPolicyTags}
                     onChange={(event) => updateForm('supportedPolicyTags', event.target.value)}
+                  />
+                </label>
+                <label className="form-span-2">
+                  Sandbox Profiles
+                  <textarea
+                    rows={3}
+                    value={form.sandboxProfiles}
+                    onChange={(event) => updateForm('sandboxProfiles', event.target.value)}
                   />
                 </label>
                 <label className="form-span-2">

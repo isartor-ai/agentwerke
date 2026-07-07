@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { RunStep, RunEvent } from '../types';
+import type { AgentIdentityConfig } from '../utils/agentIdentity';
 import {
   getStepEventsForDisplay,
   mergeVisibleReasoningEntries,
@@ -17,6 +18,7 @@ export interface AgentDetailPanelProps {
   events: RunEvent[];
   reasoningByStep?: Record<string, VisibleReasoningEntry[]>;
   onClose: () => void;
+  resolveAgentIdentity?: (name: string) => AgentIdentityConfig | undefined;
 }
 
 function formatTs(iso: string): string {
@@ -28,6 +30,7 @@ export function AgentDetailPanel({
   events,
   reasoningByStep,
   onClose,
+  resolveAgentIdentity,
 }: AgentDetailPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
 
@@ -67,6 +70,7 @@ export function AgentDetailPanel({
       ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
       : null);
   const agentName = step?.agentName ?? step?.runtimeSnapshot?.agentName;
+  const agentIdentity = agentName ? resolveAgentIdentity?.(agentName) : undefined;
 
   return (
     <div className={`adp-wrap${step ? ' adp-open' : ''}`} aria-live="polite">
@@ -100,7 +104,16 @@ export function AgentDetailPanel({
               <section className="adp-section">
                 <h3 className="adp-section-label">Agent</h3>
                 <dl className="definition-list">
-                  <div><dt>Name</dt><dd><AgentIdentityBadge name={agentName} /></dd></div>
+                  <div>
+                    <dt>Name</dt>
+                    <dd>
+                      <AgentIdentityBadge
+                        name={agentName}
+                        identity={agentIdentity}
+                        isRunning={step.status === 'running'}
+                      />
+                    </dd>
+                  </div>
                   <div><dt>Step type</dt><dd>{step.type}</dd></div>
                 </dl>
               </section>

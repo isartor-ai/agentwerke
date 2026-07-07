@@ -18,4 +18,6 @@ public sealed record AgentSummary(
     IReadOnlyList<string> Secrets,
     string Source,
     string? Fingerprint,
-    IReadOnlyList<string> SandboxProfiles);
+    IReadOnlyList<string> SandboxProfiles,
+    string? IdentityColor,
+    string? IdentityIcon);
