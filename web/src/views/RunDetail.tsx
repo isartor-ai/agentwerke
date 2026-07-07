@@ -51,20 +51,44 @@ function totalEvidenceTokens(pack: EvidencePack | null): number {
   );
 }
 
+function buildReasoningStartSummary(action: unknown, attempt: unknown): string {
+  const normalizedAction = typeof action === 'string' && action.trim()
+    ? `'${action.trim()}'`
+    : 'this step';
+  const normalizedAttempt = typeof attempt === 'number' && Number.isFinite(attempt) && attempt > 0
+    ? attempt
+    : 1;
+  return `Starting ${normalizedAction}: assembling context, checking runtime constraints, and preparing the model/tool loop (attempt ${normalizedAttempt}).`;
+}
+
 function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<string, string[]> {
   const byStep: Record<string, string[]> = {};
   for (const event of events ?? []) {
-    if (event.type !== 'agent_reasoning_started' && event.type !== 'agent_reasoning_recorded') {
-      continue;
-    }
-
     try {
-      const parsed = JSON.parse(event.message) as { stepId?: unknown; summary?: unknown };
-      if (typeof parsed.stepId !== 'string' || typeof parsed.summary !== 'string') {
+      if (event.type === 'agent_reasoning_started' || event.type === 'agent_reasoning_recorded') {
+        const parsed = JSON.parse(event.message) as { stepId?: unknown; summary?: unknown };
+        if (typeof parsed.stepId !== 'string' || typeof parsed.summary !== 'string') {
+          continue;
+        }
+        const summary = parsed.summary.trim();
+        if (!summary) continue;
+        byStep[parsed.stepId] = [...(byStep[parsed.stepId] ?? []), summary];
         continue;
       }
-      const summary = parsed.summary.trim();
-      if (!summary) continue;
+
+      if (event.type !== 'service_task_attempted') {
+        continue;
+      }
+
+      const parsed = JSON.parse(event.message) as {
+        stepId?: unknown;
+        action?: unknown;
+        attempt?: unknown;
+      };
+      if (typeof parsed.stepId !== 'string') {
+        continue;
+      }
+      const summary = buildReasoningStartSummary(parsed.action, parsed.attempt);
       byStep[parsed.stepId] = [...(byStep[parsed.stepId] ?? []), summary];
     } catch {
       // Older events may have plain-text messages; ignore anything that is not the expected shape.

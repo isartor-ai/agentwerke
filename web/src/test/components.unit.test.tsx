@@ -234,8 +234,8 @@ describe('UI component unit tests', () => {
     expect(screen.getByText('LLM 1 trace')).toBeInTheDocument();
     expect(screen.getByText('LLM Activity')).toBeInTheDocument();
     expect(screen.getByText('Inference Signals')).toBeInTheDocument();
-    expect(screen.getByText('Visible Reasoning')).toBeInTheDocument();
-    expect(screen.getByText('Read the issue, checked available tools, and picked a minimal change.')).toBeInTheDocument();
+    expect(screen.getAllByText('Visible Reasoning').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Read the issue, checked available tools, and picked a minimal change.').length).toBeGreaterThan(0);
     expect(screen.getByText('Visible Output')).toBeInTheDocument();
     expect(screen.getByText('Visible planning output.')).toBeInTheDocument();
     expect(screen.getByText('repo.search')).toBeInTheDocument();

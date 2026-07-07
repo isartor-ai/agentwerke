@@ -157,6 +157,40 @@ describe('RunDetail integration', () => {
     expect(screen.getByText('Inspecting the issue, loading context, and preparing the model/tool loop.')).toBeInTheDocument();
   });
 
+  it('synthesizes a visible reasoning start summary from legacy service task events', async () => {
+    vi.mocked(apiClient.getRun).mockResolvedValue({
+      ...runsFixture[0],
+      steps: [
+        {
+          id: 'step-legacy',
+          name: 'Draft implementation note',
+          type: 'serviceTask',
+          status: 'completed',
+          agentName: 'first-run-engineer',
+        },
+      ],
+      events: [
+        {
+          id: 'evt-service-attempted',
+          type: 'service_task_attempted',
+          message: JSON.stringify({
+            stepId: 'step-legacy',
+            action: 'first-run.implement',
+            attempt: 1,
+          }),
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    expect(
+      screen.getByText("Starting 'first-run.implement': assembling context, checking runtime constraints, and preparing the model/tool loop (attempt 1)."),
+    ).toBeInTheDocument();
+  });
+
   it('does not fetch operator-only evidence or allow cancel for viewers', async () => {
     renderDetail('run-0421', viewerAuthFixture);
 

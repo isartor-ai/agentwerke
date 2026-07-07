@@ -85,12 +85,13 @@ export function StepTimeline({
           const cumulative = cumulativeByStep[step.id];
           const cumulativeTotal = cumulative.inputTokens + cumulative.outputTokens;
           const agentName = step.agentName ?? step.runtimeSnapshot?.agentName;
-          const modelTraceCount = step.runtimeSnapshot?.modelTraces?.length ?? 0;
-          const reasoningItems = uniqueNonEmpty(reasoningByStep?.[step.id] ?? []);
-          const traceReasoningCount = uniqueNonEmpty(
-            (step.runtimeSnapshot?.modelTraces ?? []).map((trace) => trace.reasoningSummary),
-          ).length;
-          const reasoningCount = reasoningItems.length + traceReasoningCount;
+          const modelTraces = step.runtimeSnapshot?.modelTraces ?? [];
+          const modelTraceCount = modelTraces.length;
+          const reasoningItems = uniqueNonEmpty([
+            ...(reasoningByStep?.[step.id] ?? []),
+            ...modelTraces.map((trace) => trace.reasoningSummary),
+          ]);
+          const reasoningCount = reasoningItems.length;
           return (
             <li key={step.id} className="timeline-item">
               <button
