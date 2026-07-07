@@ -7,6 +7,8 @@ export interface VisibleReasoningEntry {
   createdAt?: string;
   toolName?: string;
   status?: string;
+  /** Concrete action detail — the file edited, command run, or PR opened. */
+  detail?: string;
 }
 
 const LIVE_PROGRESS_EVENT_TYPES = new Set([
@@ -37,6 +39,9 @@ function entryKey(entry: VisibleReasoningEntry): string {
     entry.kind,
     entry.toolName ?? '',
     entry.status ?? '',
+    // Distinct actions on the same tool (e.g. two file writes) differ only by detail — keep them
+    // apart so the activity log doesn't collapse them into one entry.
+    entry.detail ?? '',
     entry.summary.trim(),
   ].join('|');
 }
@@ -136,6 +141,7 @@ export function extractAgentReasoningByStep(events: RunEvent[] | undefined): Rec
         createdAt: event.createdAt,
         toolName: typeof payload?.toolName === 'string' ? payload.toolName : undefined,
         status: typeof payload?.status === 'string' ? payload.status : undefined,
+        detail: typeof payload?.detail === 'string' && payload.detail.trim() ? payload.detail : undefined,
       };
       byStep[stepId] = appendReasoningEntry(byStep[stepId] ?? [], entry);
       continue;

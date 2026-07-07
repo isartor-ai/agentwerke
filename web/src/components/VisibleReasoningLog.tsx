@@ -7,6 +7,10 @@ interface VisibleReasoningLogProps {
   headingClassName?: string;
 }
 
+function isToolEntry(entry: VisibleReasoningEntry): boolean {
+  return entry.kind === 'tool_started' || entry.kind === 'tool_finished';
+}
+
 function reasoningEntryMeta(entry: VisibleReasoningEntry): { marker: string; label: string; tone: string } {
   switch (entry.kind) {
     case 'tool_started':
@@ -59,8 +63,11 @@ export function VisibleReasoningLog({
                 <div className="timeline-reasoning-head">
                   <span className="timeline-reasoning-marker" aria-hidden="true">{meta.marker}</span>
                   <span className="timeline-reasoning-label">{meta.label}</span>
+                  {item.detail ? (
+                    <code className="timeline-reasoning-detail">{item.detail}</code>
+                  ) : null}
                 </div>
-                <p>{item.summary}</p>
+                {isToolEntry(item) && item.detail ? null : <p>{item.summary}</p>}
               </li>
             );
           })}

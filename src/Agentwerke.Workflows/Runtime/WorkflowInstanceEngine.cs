@@ -605,7 +605,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         summary,
                         toolName = update.ToolName,
                         toolCallId = update.ToolCallId,
-                        status = update.Status
+                        status = update.Status,
+                        detail = update.Detail
                     }),
                     ct);
             }
