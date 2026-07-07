@@ -797,7 +797,7 @@ public sealed class DefaultRuntimeConformanceTests
     {
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: true,

@@ -578,9 +578,42 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     summary = BuildAgentReasoningStartSummary(metadata, attempt)
                 }), cancellationToken);
 
-            var outcome = await executor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken);
+            var seenReasoningUpdates = new HashSet<string>(StringComparer.Ordinal);
+            Task ReportAgentProgressAsync(AgentExecutionProgressUpdate update, CancellationToken ct)
+            {
+                var eventType = MapAgentProgressEventType(update.Kind);
+                var summary = update.Summary?.Trim();
+                if (eventType is null || string.IsNullOrWhiteSpace(summary))
+                {
+                    return Task.CompletedTask;
+                }
+
+                if (string.Equals(update.Kind, AgentExecutionProgressKinds.Reasoning, StringComparison.Ordinal))
+                {
+                    seenReasoningUpdates.Add(summary);
+                }
+
+                return store.AppendEventAsync(
+                    runId,
+                    eventType,
+                    Serialize(new
+                    {
+                        runId,
+                        nodeId = node.Id,
+                        stepId = step.Id,
+                        agent = metadata?.Agent,
+                        summary,
+                        toolName = update.ToolName,
+                        toolCallId = update.ToolCallId,
+                        status = update.Status
+                    }),
+                    ct);
+            }
+
+            var outcome = await executor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken, ReportAgentProgressAsync);
             var visibleReasoning = FindVisibleReasoningSummary(outcome);
-            if (!string.IsNullOrWhiteSpace(visibleReasoning))
+            if (!string.IsNullOrWhiteSpace(visibleReasoning)
+                && !seenReasoningUpdates.Contains(visibleReasoning.Trim()))
             {
                 await store.AppendEventAsync(runId, "agent_reasoning_recorded",
                     Serialize(new
@@ -715,6 +748,15 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         outcome.RuntimeSnapshot?.ModelTraces
             .LastOrDefault(static trace => !string.IsNullOrWhiteSpace(trace.ReasoningSummary))
             ?.ReasoningSummary;
+
+    private static string? MapAgentProgressEventType(string? kind) =>
+        kind switch
+        {
+            AgentExecutionProgressKinds.Reasoning => "agent_reasoning_delta",
+            AgentExecutionProgressKinds.ToolStarted => "agent_tool_call_started",
+            AgentExecutionProgressKinds.ToolFinished => "agent_tool_call_finished",
+            _ => null
+        };
 
     private async Task<WorkflowExecutionState> ScheduleTimerAndPauseAsync(
         string runId,

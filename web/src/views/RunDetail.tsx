@@ -13,12 +13,19 @@ import { RiskBadge } from '../components/RiskBadge';
 import { RunDiffModal } from '../components/RunDiffModal';
 import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
-import { StepTimeline } from '../components/StepTimeline';
+import { StepTimeline, type VisibleReasoningEntry } from '../components/StepTimeline';
 import { ConversationTab } from '../components/ConversationTab';
 import type { AuthState, EvidencePack, RunEvent, RunInteraction, RunStatus, WorkflowRun } from '../types';
 import { formatTokenCount, sumRunTokens } from '../utils/tokens';
 
 const tabs = ['Summary', 'Conversation', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
+const LIVE_PROGRESS_EVENT_TYPES = new Set([
+  'agent_reasoning_started',
+  'agent_reasoning_delta',
+  'agent_reasoning_recorded',
+  'agent_tool_call_started',
+  'agent_tool_call_finished',
+]);
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -61,8 +68,20 @@ function buildReasoningStartSummary(action: unknown, attempt: unknown): string {
   return `Starting ${normalizedAction}: assembling context, checking runtime constraints, and preparing the model/tool loop (attempt ${normalizedAttempt}).`;
 }
 
-function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<string, string[]> {
-  const byStep: Record<string, string[]> = {};
+function appendReasoningEntry(
+  entriesByStep: Record<string, VisibleReasoningEntry[]>,
+  stepId: string,
+  entry: VisibleReasoningEntry,
+): void {
+  entriesByStep[stepId] = [...(entriesByStep[stepId] ?? []), entry];
+}
+
+function shouldRefreshRunForEvent(event: RunEvent): boolean {
+  return !LIVE_PROGRESS_EVENT_TYPES.has(event.type);
+}
+
+function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<string, VisibleReasoningEntry[]> {
+  const byStep: Record<string, VisibleReasoningEntry[]> = {};
   const orderedEvents = [...(events ?? [])].sort((left, right) => {
     const leftTime = Date.parse(left.createdAt);
     const rightTime = Date.parse(right.createdAt);
@@ -74,14 +93,40 @@ function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<str
 
   for (const event of orderedEvents) {
     try {
-      if (event.type === 'agent_reasoning_started' || event.type === 'agent_reasoning_recorded') {
-        const parsed = JSON.parse(event.message) as { stepId?: unknown; summary?: unknown };
+      if (
+        event.type === 'agent_reasoning_started'
+        || event.type === 'agent_reasoning_delta'
+        || event.type === 'agent_reasoning_recorded'
+        || event.type === 'agent_tool_call_started'
+        || event.type === 'agent_tool_call_finished'
+      ) {
+        const parsed = JSON.parse(event.message) as {
+          stepId?: unknown;
+          summary?: unknown;
+          toolName?: unknown;
+          status?: unknown;
+        };
         if (typeof parsed.stepId !== 'string' || typeof parsed.summary !== 'string') {
           continue;
         }
         const summary = parsed.summary.trim();
         if (!summary) continue;
-        byStep[parsed.stepId] = [...(byStep[parsed.stepId] ?? []), summary];
+        appendReasoningEntry(byStep, parsed.stepId, {
+          id: event.id,
+          kind: event.type === 'agent_reasoning_started'
+            ? 'started'
+            : event.type === 'agent_reasoning_delta'
+              ? 'reasoning'
+              : event.type === 'agent_reasoning_recorded'
+                ? 'recorded'
+                : event.type === 'agent_tool_call_started'
+                  ? 'tool_started'
+                  : 'tool_finished',
+          summary,
+          createdAt: event.createdAt,
+          toolName: typeof parsed.toolName === 'string' ? parsed.toolName : undefined,
+          status: typeof parsed.status === 'string' ? parsed.status : undefined,
+        });
         continue;
       }
 
@@ -97,8 +142,12 @@ function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<str
       if (typeof parsed.stepId !== 'string') {
         continue;
       }
-      const summary = buildReasoningStartSummary(parsed.action, parsed.attempt);
-      byStep[parsed.stepId] = [...(byStep[parsed.stepId] ?? []), summary];
+      appendReasoningEntry(byStep, parsed.stepId, {
+        id: `${event.id}-legacy-start`,
+        kind: 'started',
+        summary: buildReasoningStartSummary(parsed.action, parsed.attempt),
+        createdAt: event.createdAt,
+      });
     } catch {
       // Older events may have plain-text messages; ignore anything that is not the expected shape.
     }
@@ -258,7 +307,9 @@ export function RunDetail({ auth }: RunDetailProps) {
           if (existing.some((e) => e.id === event.id)) return prev;
           return { ...prev, events: [...existing, event] };
         });
-        void loadRun();
+        if (shouldRefreshRunForEvent(event)) {
+          void loadRun();
+        }
       },
       () => {
         void loadRun();

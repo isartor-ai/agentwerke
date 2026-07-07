@@ -21,7 +21,8 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
     public async Task<LanguageModelResponse> RunAsync(
         LanguageModelRequest request,
         Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var apiKey = _options.ApiKey
             ?? throw new InvalidOperationException(
@@ -103,12 +104,18 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             totalCacheReadTokens += response.Usage.CacheReadInputTokens;
             modelId ??= response.Model;
 
+            var assistantText = string.Join(
+                "\n",
+                response.Content
+                    .OfType<TextContent>()
+                    .Select(static content => content.Text)
+                    .Where(static text => !string.IsNullOrWhiteSpace(text)));
             var toolUses = response.Content.OfType<ToolUseContent>().ToArray();
 
             if (toolUses.Length == 0 || response.StopReason == "end_turn")
             {
-                var text = response.Content.OfType<TextContent>().FirstOrDefault()?.Text;
-                var parsed = LanguageModelReasoningParser.Extract(text);
+                var parsed = LanguageModelReasoningParser.Extract(assistantText);
+                await ReportVisibleReasoningAsync(progressReporter, parsed.ReasoningSummary, cancellationToken);
                 return new LanguageModelResponse(
                     Succeeded: true,
                     Output: parsed.Output,
@@ -122,6 +129,11 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     ModelId: modelId,
                     ReasoningSummary: parsed.ReasoningSummary);
             }
+
+            await ReportVisibleReasoningAsync(
+                progressReporter,
+                LanguageModelReasoningParser.ExtractVisibleSummary(assistantText, allowPlainTextFallback: true),
+                cancellationToken);
 
             // Append assistant turn to conversation
             messages.Add(response.Message);
@@ -244,6 +256,23 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             result[key] = value?.ToString() ?? string.Empty;
         return result;
     }
+
+    private static Task ReportVisibleReasoningAsync(
+        AgentExecutionProgressReporter? progressReporter,
+        string? summary,
+        CancellationToken cancellationToken)
+    {
+        if (progressReporter is null || string.IsNullOrWhiteSpace(summary))
+        {
+            return Task.CompletedTask;
+        }
+
+        return progressReporter(
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.Reasoning,
+                summary),
+            cancellationToken);
+    }
 }
 
 public sealed class NullLanguageModelClient : ILanguageModelClient
@@ -251,7 +280,8 @@ public sealed class NullLanguageModelClient : ILanguageModelClient
     public Task<LanguageModelResponse> RunAsync(
         LanguageModelRequest request,
         Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         return Task.FromResult(new LanguageModelResponse(
             Succeeded: false,

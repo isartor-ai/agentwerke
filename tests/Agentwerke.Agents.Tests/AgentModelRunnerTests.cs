@@ -27,7 +27,8 @@ public sealed class AgentModelRunnerTests
         public Task<LanguageModelResponse> RunAsync(
             LanguageModelRequest request,
             Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null) =>
             Task.FromResult(_response);
     }
 
@@ -38,18 +39,33 @@ public sealed class AgentModelRunnerTests
     {
         private readonly string _toolName;
         private readonly LanguageModelResponse _finalResponse;
+        private readonly string? _progressSummary;
 
-        public StubToolCallingClient(string toolName, LanguageModelResponse finalResponse)
+        public StubToolCallingClient(
+            string toolName,
+            LanguageModelResponse finalResponse,
+            string? progressSummary = null)
         {
             _toolName = toolName;
             _finalResponse = finalResponse;
+            _progressSummary = progressSummary;
         }
 
         public async Task<LanguageModelResponse> RunAsync(
             LanguageModelRequest request,
             Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
         {
+            if (progressReporter is not null && !string.IsNullOrWhiteSpace(_progressSummary))
+            {
+                await progressReporter(
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.Reasoning,
+                        _progressSummary),
+                    cancellationToken);
+            }
+
             var call = new LanguageModelToolCall("call-1", _toolName, new Dictionary<string, string>());
             await toolExecutor(call, cancellationToken);
             return _finalResponse;
@@ -279,6 +295,59 @@ public sealed class AgentModelRunnerTests
         Assert.Equal("run-1", gateway.LastRequest!.Input["run_id"]);
         Assert.Equal("step-1", gateway.LastRequest.Input["step_id"]);
         Assert.Equal("1", gateway.LastRequest.Input["attempt"]);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenProgressReporterIsProvided_ForwardsReasoningAndToolLifecycle()
+    {
+        var metrics = new CapturingMetrics();
+        var gateway = new StubToolGateway(new ToolGatewayResult(
+            Succeeded: true,
+            Output: "found the issue",
+            FailureReason: null,
+            PolicyDecision: null,
+            Invocation: new AgentToolInvocationRecord
+            {
+                ToolName = "github.read_issue",
+                Status = "completed"
+            }));
+        var runner = BuildRunner(
+            new StubToolCallingClient(
+                "github.read_issue",
+                SuccessResponse(),
+                "Inspecting the issue context before calling the repo tool."),
+            gateway,
+            metrics);
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        await runner.RunAsync(
+            MakeRequest(),
+            CancellationToken.None,
+            (update, _) =>
+            {
+                updates.Add(update);
+                return Task.CompletedTask;
+            });
+
+        Assert.Collection(
+            updates,
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.Reasoning, update.Kind);
+                Assert.Equal("Inspecting the issue context before calling the repo tool.", update.Summary);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.ToolStarted, update.Kind);
+                Assert.Equal("github.read_issue", update.ToolName);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.ToolFinished, update.Kind);
+                Assert.Equal("github.read_issue", update.ToolName);
+                Assert.Equal("completed", update.Status);
+                Assert.Equal("Tool 'github.read_issue' completed.", update.Summary);
+            });
     }
 
     // -----------------------------------------------------------------------

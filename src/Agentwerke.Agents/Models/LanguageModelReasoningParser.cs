@@ -32,6 +32,22 @@ internal static class LanguageModelReasoningParser
             string.IsNullOrWhiteSpace(cleaned) ? null : cleaned,
             string.IsNullOrWhiteSpace(reasoning) ? null : reasoning);
     }
+
+    public static string? ExtractVisibleSummary(string? output, bool allowPlainTextFallback = false)
+    {
+        var parsed = Extract(output);
+        if (!string.IsNullOrWhiteSpace(parsed.ReasoningSummary))
+        {
+            return parsed.ReasoningSummary;
+        }
+
+        if (allowPlainTextFallback && !string.IsNullOrWhiteSpace(parsed.Output))
+        {
+            return parsed.Output;
+        }
+
+        return null;
+    }
 }
 
 internal sealed record ParsedReasoningOutput(string? Output, string? ReasoningSummary);

@@ -234,6 +234,9 @@ public sealed class RunsController : ControllerBase
     [HttpGet("{runId}/events/stream")]
     public async Task StreamEvents(string runId, CancellationToken cancellationToken)
     {
+        const int PollIntervalMs = 500;
+        const int HeartbeatEveryPolls = 30;
+
         var run = await _dbContext.WorkflowRuns
             .AsNoTracking()
             .Select(r => new { r.Id, r.Status })
@@ -275,12 +278,12 @@ public sealed class RunsController : ControllerBase
         var pollCount = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(2_000, cancellationToken);
+            await Task.Delay(PollIntervalMs, cancellationToken);
             pollCount++;
 
             // Send a comment heartbeat every ~15 s to keep the connection alive
             // (browsers and proxies can close idle connections after ~30 s)
-            if (pollCount % 8 == 0)
+            if (pollCount % HeartbeatEveryPolls == 0)
             {
                 await Response.WriteAsync(":\n\n", cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);

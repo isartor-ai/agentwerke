@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Agentwerke.Agents.Models;
+using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Agentwerke.Agents.Tests;
@@ -128,6 +129,34 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
         var toolMessage = Assert.Single(messages, m => m.GetProperty("role").GetString() == "tool");
         Assert.Equal("call_1", toolMessage.GetProperty("tool_call_id").GetString());
         Assert.Equal("posted", toolMessage.GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenAssistantCommentsBeforeToolCall_EmitsVisibleReasoningProgress()
+    {
+        const string toolCallResponse = """
+            {"model":"gpt-4o","choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"<agent_reasoning>Loading repo context and preparing the review comment.</agent_reasoning>","tool_calls":[{"id":"call_1","type":"function","function":{"name":"github_post_review","arguments":"{\"decision\":\"approve\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":3}}
+            """;
+        const string finalResponse = """
+            {"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"all set"}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}
+            """;
+        using var server = QueuedHttpServer.Start(toolCallResponse, finalResponse);
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        var response = await Client(server).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (call, _) => Task.FromResult(new LanguageModelToolResult(call.Id, "posted")),
+            CancellationToken.None,
+            (update, _) =>
+            {
+                updates.Add(update);
+                return Task.CompletedTask;
+            });
+
+        Assert.True(response.Succeeded, response.FailureReason);
+        var update = Assert.Single(updates);
+        Assert.Equal(AgentExecutionProgressKinds.Reasoning, update.Kind);
+        Assert.Equal("Loading repo context and preparing the review comment.", update.Summary);
     }
 
     private sealed class QueuedHttpServer : IDisposable

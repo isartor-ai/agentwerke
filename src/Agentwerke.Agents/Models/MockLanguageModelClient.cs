@@ -1,3 +1,4 @@
+using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Agentwerke.Agents.Models;
@@ -23,9 +24,19 @@ public sealed class MockLanguageModelClient : ILanguageModelClient
     public async Task<LanguageModelResponse> RunAsync(
         LanguageModelRequest request,
         Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var toolCalls = new List<LanguageModelToolCall>();
+
+        if (progressReporter is not null)
+        {
+            await progressReporter(
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.Reasoning,
+                    "Reviewed the task prompt, checked available writable tools, and prepared a deterministic mock execution."),
+                cancellationToken);
+        }
 
         // If a writable tool is offered, call it once so tool-using steps produce a real,
         // deterministic side effect through the Tool Gateway (no model cost).

@@ -36,7 +36,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
     public async Task<ModelRunResult> RunAsync(
         ModelRunRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var toolDefinitions = BuildToolDefinitions(request.Contract);
         var systemPrompt = ModelRunPromptFactory.BuildSystemPrompt(request);
@@ -69,8 +70,9 @@ public sealed class AgentModelRunner : IAgentModelRunner
         var sw = Stopwatch.StartNew();
         var response = await _modelClient.RunAsync(
             llmRequest,
-            toolExecutor: (call, ct) => ExecuteToolCallAsync(call, request, invocations, artifacts, ct),
-            cancellationToken);
+            toolExecutor: (call, ct) => ExecuteToolCallAsync(call, request, invocations, artifacts, progressReporter, ct),
+            cancellationToken,
+            progressReporter);
         sw.Stop();
 
         var elapsedMs = sw.Elapsed.TotalMilliseconds;
@@ -120,6 +122,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
         ModelRunRequest request,
         List<AgentToolInvocationRecord> invocations,
         Dictionary<string, string> artifacts,
+        AgentExecutionProgressReporter? progressReporter,
         CancellationToken cancellationToken)
     {
         var contract = request.Contract;
@@ -142,7 +145,34 @@ public sealed class AgentModelRunner : IAgentModelRunner
             DeniedTools: permissions.DeniedTools,
             Input: enrichedInput);
 
-        var result = await _toolGateway.ExecuteAsync(gatewayRequest, cancellationToken);
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.ToolStarted,
+                $"Calling tool '{call.Name}'.",
+                ToolName: call.Name,
+                ToolCallId: call.Id,
+                Status: "started"),
+            cancellationToken);
+
+        ToolGatewayResult result;
+        try
+        {
+            result = await _toolGateway.ExecuteAsync(gatewayRequest, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.ToolFinished,
+                    $"Tool '{call.Name}' failed: {ex.Message}",
+                    ToolName: call.Name,
+                    ToolCallId: call.Id,
+                    Status: "failed"),
+                cancellationToken);
+            throw;
+        }
 
         invocations.Add(result.Invocation);
 
@@ -159,6 +189,16 @@ public sealed class AgentModelRunner : IAgentModelRunner
         {
             _metrics.ToolPolicyDenied(request.AgentName, request.PolicyTag, kind);
         }
+
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.ToolFinished,
+                BuildToolCompletionSummary(call.Name, result),
+                ToolName: call.Name,
+                ToolCallId: call.Id,
+                Status: result.Invocation.Status),
+            cancellationToken);
 
         return new LanguageModelToolResult(
             ToolCallId: call.Id,
@@ -263,5 +303,38 @@ public sealed class AgentModelRunner : IAgentModelRunner
         key.Contains("token", StringComparison.OrdinalIgnoreCase) ||
         key.Contains("api_key", StringComparison.OrdinalIgnoreCase) ||
         key.Contains("apikey", StringComparison.OrdinalIgnoreCase);
+
+    private static Task ReportProgressAsync(
+        AgentExecutionProgressReporter? progressReporter,
+        AgentExecutionProgressUpdate update,
+        CancellationToken cancellationToken)
+    {
+        if (progressReporter is null || string.IsNullOrWhiteSpace(update.Summary))
+        {
+            return Task.CompletedTask;
+        }
+
+        return progressReporter(update, cancellationToken);
+    }
+
+    private static string BuildToolCompletionSummary(string toolName, ToolGatewayResult result)
+    {
+        if (result.Succeeded)
+        {
+            return $"Tool '{toolName}' completed.";
+        }
+
+        var reason = result.FailureReason
+            ?? result.Invocation.ErrorMessage
+            ?? result.PolicyDecision?.Rationale
+            ?? "No additional details were provided.";
+
+        if (string.Equals(result.Invocation.Status, "blocked", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Tool '{toolName}' was blocked: {reason}";
+        }
+
+        return $"Tool '{toolName}' failed: {reason}";
+    }
 
 }

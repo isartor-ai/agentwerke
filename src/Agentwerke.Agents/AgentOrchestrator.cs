@@ -87,7 +87,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string stepId,
         BpmnNodeDefinition node,
         int attempt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var metadata = node.Metadata;
         if (metadata is null)
@@ -343,7 +344,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             default:
                 try
                 {
-                    modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
+                    modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken, progressReporter);
                 }
                 catch (AgentInteractionRequiredException ex)
                 {

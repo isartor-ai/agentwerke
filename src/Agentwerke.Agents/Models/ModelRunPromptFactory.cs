@@ -20,7 +20,7 @@ internal static class ModelRunPromptFactory
         }
 
         parts.Add("Use the available tools to complete the task. Be precise and efficient.");
-        parts.Add("Do not reveal hidden chain-of-thought. If you need to explain your work, include a short visible progress summary in <agent_reasoning>...</agent_reasoning> with concrete checks, decisions, and verification steps, then provide the final result outside that block.");
+        parts.Add("Do not reveal hidden chain-of-thought. Before each major decision or tool call, emit a short visible progress summary in <agent_reasoning>...</agent_reasoning> with concrete checks, decisions, and verification steps. After the work is done, provide the final result outside those blocks.");
 
         return string.Join(" ", parts);
     }

@@ -2,6 +2,7 @@ using Agentwerke.Agents.Mcp;
 using Agentwerke.Agents.Models;
 using Agentwerke.Agents.Tools;
 using Agentwerke.Domain.AgentRuntime;
+using Agentwerke.Workflows.Runtime;
 
 namespace Agentwerke.Agents.Tests;
 
@@ -180,7 +181,8 @@ public sealed class SandboxedAgentRuntimeExecutorTests
         public async Task<LanguageModelResponse> RunAsync(
             LanguageModelRequest request,
             Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
         {
             var plan = _planBuilder(request);
             if (!string.IsNullOrWhiteSpace(plan.ToolName))

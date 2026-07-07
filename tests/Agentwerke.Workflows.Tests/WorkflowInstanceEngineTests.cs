@@ -486,6 +486,37 @@ public sealed class WorkflowInstanceEngineTests
             e.Message.Contains("preparing the model/tool loop", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task StartAsync_WhenAgentReportsProgress_PersistsReasoningAndToolLifecycleEvents()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var engine = new WorkflowInstanceEngine(store, new ProgressReportingServiceTaskExecutor(), new InMemoryRunContextRepository(), NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "ProgressFlow",
+            ProcessName: "Progress Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("Task", "Task", "serviceTask", new AgentwerkeTaskMetadata("agent", "action", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ]);
+
+        var state = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        Assert.Equal("completed", state.Status);
+        var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
+        Assert.Contains(events, static e =>
+            e.Type == "agent_reasoning_delta" &&
+            e.Message.Contains("Inspecting the issue context", StringComparison.Ordinal));
+        Assert.Contains(events, static e =>
+            e.Type == "agent_tool_call_started" &&
+            e.Message.Contains("\"toolName\":\"github.read_issue\"", StringComparison.Ordinal));
+        Assert.Contains(events, static e =>
+            e.Type == "agent_tool_call_finished" &&
+            e.Message.Contains("\"status\":\"completed\"", StringComparison.Ordinal));
+    }
+
     private static BpmnWorkflowDefinition CreateReferenceDefinition()
     {
         return new BpmnWorkflowDefinition(
@@ -663,7 +694,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: false,
@@ -676,7 +707,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: false,
@@ -690,7 +721,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: true,
@@ -712,7 +743,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             var metadata = node.Metadata;
 
@@ -737,7 +768,7 @@ public sealed class WorkflowInstanceEngineTests
 
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             Calls++;
 
@@ -763,7 +794,7 @@ public sealed class WorkflowInstanceEngineTests
     {
         public Task<AgentTaskOutcome> ExecuteAsync(
             string runId, string stepId, BpmnNodeDefinition node,
-            int attempt, CancellationToken cancellationToken)
+            int attempt, CancellationToken cancellationToken, AgentExecutionProgressReporter? progressReporter = null)
         {
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: true,
@@ -784,6 +815,48 @@ public sealed class WorkflowInstanceEngineTests
                         }
                     }
                 }));
+        }
+    }
+
+    private sealed class ProgressReportingServiceTaskExecutor : IServiceTaskExecutor
+    {
+        public async Task<AgentTaskOutcome> ExecuteAsync(
+            string runId,
+            string stepId,
+            BpmnNodeDefinition node,
+            int attempt,
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
+        {
+            if (progressReporter is not null)
+            {
+                await progressReporter(
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.Reasoning,
+                        "Inspecting the issue context before opening repo tools."),
+                    cancellationToken);
+                await progressReporter(
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.ToolStarted,
+                        "Calling tool 'github.read_issue'.",
+                        ToolName: "github.read_issue",
+                        ToolCallId: "call-1",
+                        Status: "started"),
+                    cancellationToken);
+                await progressReporter(
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.ToolFinished,
+                        "Tool 'github.read_issue' completed.",
+                        ToolName: "github.read_issue",
+                        ToolCallId: "call-1",
+                        Status: "completed"),
+                    cancellationToken);
+            }
+
+            return new AgentTaskOutcome(
+                Succeeded: true,
+                Output: "progress executor",
+                FailureReason: null);
         }
     }
 }

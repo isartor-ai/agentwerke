@@ -4,6 +4,7 @@ using Agentwerke.Agents.Tools;
 using Agentwerke.Application.Agents;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Persistence;
+using Agentwerke.Workflows.Runtime;
 
 namespace Agentwerke.Agents.Tests;
 
@@ -143,7 +144,10 @@ public sealed class AgentRequestToolTests
 
         public ModelRunRequest? LastRequest { get; private set; }
 
-        public Task<ModelRunResult> RunAsync(ModelRunRequest request, CancellationToken cancellationToken)
+        public Task<ModelRunResult> RunAsync(
+            ModelRunRequest request,
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
         {
             LastRequest = request;
             return Task.FromResult(_result);

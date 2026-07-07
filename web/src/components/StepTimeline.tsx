@@ -3,6 +3,15 @@ import { formatTokenCount } from '../utils/tokens';
 import { AgentIdentityBadge } from './AgentIdentityBadge';
 import { ModelActivityDetails } from './ModelActivityDetails';
 
+export interface VisibleReasoningEntry {
+  id: string;
+  kind: 'started' | 'reasoning' | 'recorded' | 'tool_started' | 'tool_finished';
+  summary: string;
+  createdAt?: string;
+  toolName?: string;
+  status?: string;
+}
+
 interface StepTimelineProps {
   steps: RunStep[];
   expandedStepId: string | null;
@@ -10,7 +19,7 @@ interface StepTimelineProps {
   /** Number of agent-conversation interactions produced by each step (#192). */
   interactionCountByStep?: Record<string, number>;
   /** Visible reasoning/progress summaries emitted by each step while it runs. */
-  reasoningByStep?: Record<string, string[]>;
+  reasoningByStep?: Record<string, VisibleReasoningEntry[]>;
 }
 
 function stepStateClass(status: RunStep['status']): string {
@@ -54,16 +63,47 @@ function cumulativeTokensByStep(steps: RunStep[]): Record<string, CumulativeToke
   return totals;
 }
 
-function uniqueNonEmpty(items: Array<string | null | undefined>): string[] {
+function mergeReasoningEntries(
+  eventEntries: VisibleReasoningEntry[],
+  modelTraceEntries: VisibleReasoningEntry[],
+): VisibleReasoningEntry[] {
   const seen = new Set<string>();
-  const values: string[] = [];
-  for (const item of items) {
-    const value = item?.trim();
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    values.push(value);
+  const values: VisibleReasoningEntry[] = [];
+  for (const entry of [...eventEntries, ...modelTraceEntries]) {
+    const summary = entry.summary.trim();
+    if (!summary) continue;
+    const key = [
+      entry.kind,
+      entry.toolName ?? '',
+      entry.status ?? '',
+      summary,
+    ].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    values.push({ ...entry, summary });
   }
   return values;
+}
+
+function reasoningEntryMeta(entry: VisibleReasoningEntry): { marker: string; label: string; tone: string } {
+  switch (entry.kind) {
+    case 'tool_started':
+      return { marker: '↗', label: entry.toolName ?? 'Tool', tone: 'tool-started' };
+    case 'tool_finished':
+      if (entry.status === 'blocked') {
+        return { marker: '!', label: entry.toolName ?? 'Tool', tone: 'tool-blocked' };
+      }
+      if (entry.status === 'failed') {
+        return { marker: '!', label: entry.toolName ?? 'Tool', tone: 'tool-failed' };
+      }
+      return { marker: '✓', label: entry.toolName ?? 'Tool', tone: 'tool-finished' };
+    case 'recorded':
+      return { marker: '✓', label: 'Final', tone: 'recorded' };
+    case 'started':
+      return { marker: '○', label: 'Start', tone: 'started' };
+    default:
+      return { marker: '•', label: 'Reasoning', tone: 'reasoning' };
+  }
 }
 
 export function StepTimeline({
@@ -87,10 +127,17 @@ export function StepTimeline({
           const agentName = step.agentName ?? step.runtimeSnapshot?.agentName;
           const modelTraces = step.runtimeSnapshot?.modelTraces ?? [];
           const modelTraceCount = modelTraces.length;
-          const reasoningItems = uniqueNonEmpty([
-            ...(reasoningByStep?.[step.id] ?? []),
-            ...modelTraces.map((trace) => trace.reasoningSummary),
-          ]);
+          const reasoningItems = mergeReasoningEntries(
+            reasoningByStep?.[step.id] ?? [],
+            modelTraces
+              .filter((trace) => Boolean(trace.reasoningSummary?.trim()))
+              .map((trace, index) => ({
+                id: `trace-${step.id}-${index}`,
+                kind: 'recorded' as const,
+                summary: trace.reasoningSummary!.trim(),
+                createdAt: trace.completedAt ?? trace.startedAt,
+              })),
+          );
           const reasoningCount = reasoningItems.length;
           return (
             <li key={step.id} className="timeline-item">
@@ -164,9 +211,21 @@ export function StepTimeline({
                     <section className="timeline-reasoning-log" aria-label="Visible agent reasoning">
                       <h3>Visible Reasoning</h3>
                       <ol role="list">
-                        {reasoningItems.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
+                        {reasoningItems.map((item) => {
+                          const meta = reasoningEntryMeta(item);
+                          return (
+                            <li
+                              key={item.id}
+                              className={`timeline-reasoning-entry timeline-reasoning-entry-${meta.tone}`}
+                            >
+                              <div className="timeline-reasoning-head">
+                                <span className="timeline-reasoning-marker" aria-hidden="true">{meta.marker}</span>
+                                <span className="timeline-reasoning-label">{meta.label}</span>
+                              </div>
+                              <p>{item.summary}</p>
+                            </li>
+                          );
+                        })}
                       </ol>
                     </section>
                   ) : step.status === 'running' ? (
