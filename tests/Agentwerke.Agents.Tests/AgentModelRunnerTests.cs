@@ -144,6 +144,16 @@ public sealed class AgentModelRunnerTests
             Usage: new LanguageModelTokenUsage(inputTokens, outputTokens),
             ModelId: "claude-sonnet-4-6");
 
+    private static LanguageModelResponse SuccessResponseWithReasoning() =>
+        new(
+            Succeeded: true,
+            Output: "Final agent output.",
+            FailureReason: null,
+            AllToolCalls: [],
+            Usage: new LanguageModelTokenUsage(42, 24),
+            ModelId: "claude-sonnet-4-6",
+            ReasoningSummary: "Checked the issue context, selected a safe implementation path, and verified the result.");
+
     // -----------------------------------------------------------------------
     // 1. Success: model returns output; snapshot includes token usage + latency
     // -----------------------------------------------------------------------
@@ -183,6 +193,24 @@ public sealed class AgentModelRunnerTests
         Assert.Equal(80, m.OutputTokens);
         Assert.True(m.Succeeded);
         Assert.True(m.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenModelProvidesReasoningSummary_StoresVisibleReasoningInTrace()
+    {
+        var metrics = new CapturingMetrics();
+        var runner = BuildRunner(
+            new StubLanguageModelClient(SuccessResponseWithReasoning()),
+            new StubToolGateway(new ToolGatewayResult(true, null, null, null, new AgentToolInvocationRecord { ToolName = "noop" })),
+            metrics);
+
+        var result = await runner.RunAsync(MakeRequest(), CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.ModelTrace);
+        Assert.Equal(
+            "Checked the issue context, selected a safe implementation path, and verified the result.",
+            result.ModelTrace!.ReasoningSummary);
     }
 
     // -----------------------------------------------------------------------

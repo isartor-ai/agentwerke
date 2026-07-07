@@ -112,13 +112,15 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
                 if (toolCalls.ValueKind != JsonValueKind.Array || toolCalls.GetArrayLength() == 0)
                 {
                     var text = message.TryGetProperty("content", out var content) ? content.GetString() : null;
+                    var parsed = LanguageModelReasoningParser.Extract(text);
                     return new LanguageModelResponse(
                         Succeeded: true,
-                        Output: text,
+                        Output: parsed.Output,
                         FailureReason: null,
                         AllToolCalls: allToolCalls,
                         Usage: new LanguageModelTokenUsage(totalInput, totalOutput),
-                        ModelId: modelId);
+                        ModelId: modelId,
+                        ReasoningSummary: parsed.ReasoningSummary);
                 }
 
                 // Append the assistant turn (verbatim tool_calls) so the model sees its own call.

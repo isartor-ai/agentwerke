@@ -362,6 +362,7 @@ internal static class ApiContractMappings
                     trace.ElapsedMs,
                     trace.InputTokens,
                     trace.OutputTokens,
+                    trace.ReasoningSummary,
                     trace.Output,
                     trace.FailureReason,
                     trace.ToolCalls

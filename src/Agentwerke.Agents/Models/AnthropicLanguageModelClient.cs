@@ -108,9 +108,10 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             if (toolUses.Length == 0 || response.StopReason == "end_turn")
             {
                 var text = response.Content.OfType<TextContent>().FirstOrDefault()?.Text;
+                var parsed = LanguageModelReasoningParser.Extract(text);
                 return new LanguageModelResponse(
                     Succeeded: true,
-                    Output: text,
+                    Output: parsed.Output,
                     FailureReason: null,
                     AllToolCalls: allToolCalls,
                     Usage: new LanguageModelTokenUsage(
@@ -118,7 +119,8 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                         totalOutputTokens,
                         totalCacheCreationTokens,
                         totalCacheReadTokens),
-                    ModelId: modelId);
+                    ModelId: modelId,
+                    ReasoningSummary: parsed.ReasoningSummary);
             }
 
             // Append assistant turn to conversation

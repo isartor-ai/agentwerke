@@ -480,6 +480,10 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal("completed", step.Status);
         Assert.NotNull(step.Output);
         Assert.Null(step.Error);
+        var events = await store.ListRunEventsAsync(state.RunId, CancellationToken.None);
+        Assert.Contains(events, static e =>
+            e.Type == "agent_reasoning_started" &&
+            e.Message.Contains("preparing the model/tool loop", StringComparison.Ordinal));
     }
 
     private static BpmnWorkflowDefinition CreateReferenceDefinition()
