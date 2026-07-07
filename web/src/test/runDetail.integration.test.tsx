@@ -74,8 +74,13 @@ describe('RunDetail integration', () => {
       expect(vi.mocked(apiClient.downloadRunEvidencePack)).toHaveBeenCalledWith('run-0421');
     });
     expect(screen.getByText('Runtime Events')).toBeInTheDocument();
+    const eventMonitor = screen.getByText('Runtime Events').closest('details') as HTMLDetailsElement | null;
+    expect(eventMonitor).not.toBeNull();
+    expect(eventMonitor?.open).toBe(false);
     expect(screen.getByText('Retry scheduled after transient failure.')).toBeInTheDocument();
     expect(screen.getByText('Timeout boundary triggered on security scan.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Runtime Events').closest('summary')!);
+    expect(eventMonitor?.open).toBe(true);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Policy' }));
     expect(screen.getAllByText('Requires human approval.').length).toBeGreaterThan(0);

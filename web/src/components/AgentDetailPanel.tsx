@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { RunStep, RunEvent } from '../types';
+import { AgentIdentityBadge } from './AgentIdentityBadge';
 import { ModelActivityDetails } from './ModelActivityDetails';
 import { RiskBadge } from './RiskBadge';
 import { SandboxExecutionDetails } from './SandboxExecutionDetails';
@@ -42,6 +43,7 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
     (step?.startedAt && step?.completedAt
       ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
       : null);
+  const agentName = step?.agentName ?? step?.runtimeSnapshot?.agentName;
 
   return (
     <div className={`adp-wrap${step ? ' adp-open' : ''}`} aria-live="polite">
@@ -71,11 +73,11 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
             </div>
 
             {/* ── Agent ── */}
-            {step.agentName && (
+            {agentName && (
               <section className="adp-section">
                 <h3 className="adp-section-label">Agent</h3>
                 <dl className="definition-list">
-                  <div><dt>Name</dt><dd>{step.agentName}</dd></div>
+                  <div><dt>Name</dt><dd><AgentIdentityBadge name={agentName} /></dd></div>
                   <div><dt>Step type</dt><dd>{step.type}</dd></div>
                 </dl>
               </section>

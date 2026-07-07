@@ -859,8 +859,14 @@ export function RunDetail({ auth }: RunDetailProps) {
             }}
           />
 
-          <article className="panel event-monitor-panel" aria-label="Run event monitor">
-            <h2>Runtime Events</h2>
+          <details className="panel event-monitor-panel run-events-collapsible" aria-label="Run event monitor">
+            <summary className="event-monitor-summary">
+              <h2>Runtime Events</h2>
+              <span className="event-monitor-summary-actions">
+                <span className="chip chip-static">{run.events?.length ?? 0} event(s)</span>
+                <span className="event-monitor-caret" aria-hidden="true">›</span>
+              </span>
+            </summary>
             {run.events && run.events.length > 0 ? (
               <ul className="event-list" role="list">
                 {run.events.map((event) => (
@@ -874,7 +880,7 @@ export function RunDetail({ auth }: RunDetailProps) {
             ) : (
               <p>No runtime events available.</p>
             )}
-          </article>
+          </details>
         </div>
 
         <article className="panel run-side-panel">
