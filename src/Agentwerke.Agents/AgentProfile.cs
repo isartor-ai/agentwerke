@@ -42,6 +42,12 @@ public sealed class AgentProfile
     /// </summary>
     public IReadOnlyList<string> SandboxProfiles { get; init; } = [];
 
+    /// <summary>Optional UI accent color for agent identity surfaces.</summary>
+    public string? IdentityColor { get; init; }
+
+    /// <summary>Optional UI icon/glyph for agent identity surfaces.</summary>
+    public string? IdentityIcon { get; init; }
+
     /// <summary>System prompt / standing instructions (the AGENT.md body).</summary>
     public string? SystemPrompt { get; init; }
 
@@ -75,7 +81,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["staging", "production", "dev"],
             SupportedPolicyTags = ["deploy-staging", "deploy-production", "deploy-rollback"],
-            SandboxProfiles = ["deployment"]
+            SandboxProfiles = ["deployment"],
+            IdentityColor = "#378ADD",
+            IdentityIcon = "⇪"
         },
         ["security-agent"] = new AgentProfile
         {
@@ -92,7 +100,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["secret-rotation", "security-scan", "compliance-check"],
-            SandboxProfiles = ["repo-read"]
+            SandboxProfiles = ["repo-read"],
+            IdentityColor = "#D4537E",
+            IdentityIcon = "⛨"
         },
         ["infra-agent"] = new AgentProfile
         {
@@ -109,7 +119,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["aws", "gcp", "azure"],
             SupportedPolicyTags = ["infra-change", "scale-event", "resource-provision"],
-            SandboxProfiles = ["deployment"]
+            SandboxProfiles = ["deployment"],
+            IdentityColor = "#1D9E75",
+            IdentityIcon = "▣"
         },
         ["test-agent"] = new AgentProfile
         {
@@ -126,7 +138,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["test-gate", "quality-check"],
-            SandboxProfiles = ["repo-read"]
+            SandboxProfiles = ["repo-read"],
+            IdentityColor = "#639922",
+            IdentityIcon = "✓"
         },
         ["github-agent"] = new AgentProfile
         {
@@ -151,7 +165,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["github"],
             SupportedPolicyTags = ["repo-change", "pull-request", "branch-create"],
-            SandboxProfiles = ["repo-write"]
+            SandboxProfiles = ["repo-write"],
+            IdentityColor = "#7F77DD",
+            IdentityIcon = "⌘"
         },
 
         // ── SDLC agents (autonomous software-delivery workflow) ──────────────────
@@ -171,7 +187,9 @@ public static class AgentRegistry
                     ["requirement-design", "design-requirements"])
             ],
             SupportedEnvironments = ["all"],
-            SupportedPolicyTags = ["requirement-design", "doc-generation"]
+            SupportedPolicyTags = ["requirement-design", "doc-generation"],
+            IdentityColor = "#378ADD",
+            IdentityIcon = "◫"
         },
         ["solution-architect"] = new AgentProfile
         {
@@ -186,7 +204,9 @@ public static class AgentRegistry
                     ["architecture-design", "design-architecture"])
             ],
             SupportedEnvironments = ["all"],
-            SupportedPolicyTags = ["architecture-design", "doc-generation"]
+            SupportedPolicyTags = ["architecture-design", "doc-generation"],
+            IdentityColor = "#1D9E75",
+            IdentityIcon = "△"
         },
         ["technical-analyst"] = new AgentProfile
         {
@@ -201,7 +221,9 @@ public static class AgentRegistry
                     ["technical-analysis", "implementation-plan"])
             ],
             SupportedEnvironments = ["all"],
-            SupportedPolicyTags = ["implementation-plan", "doc-generation"]
+            SupportedPolicyTags = ["implementation-plan", "doc-generation"],
+            IdentityColor = "#BA7517",
+            IdentityIcon = "⋯"
         },
         ["implementation-engineer"] = new AgentProfile
         {
@@ -217,7 +239,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["sandbox", "ci", "github"],
             SupportedPolicyTags = ["implementation", "pull-request", "repo-change"],
-            SandboxProfiles = ["repo-write"]
+            SandboxProfiles = ["repo-write"],
+            IdentityColor = "#D85A30",
+            IdentityIcon = "⚙"
         },
         ["senior-code-reviewer"] = new AgentProfile
         {
@@ -233,7 +257,9 @@ public static class AgentRegistry
             ],
             SupportedEnvironments = ["sandbox", "github"],
             SupportedPolicyTags = ["code-review", "quality-check"],
-            SandboxProfiles = ["repo-read"]
+            SandboxProfiles = ["repo-read"],
+            IdentityColor = "#D4537E",
+            IdentityIcon = "✶"
         }
     };
 

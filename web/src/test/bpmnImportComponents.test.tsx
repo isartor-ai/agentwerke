@@ -44,7 +44,19 @@ vi.mock('bpmn-js/lib/Modeler', () => ({
     off = vi.fn();
     get = vi.fn((name: string) => {
       if (name === 'canvas') {
-        return { zoom: vi.fn() };
+        return {
+          zoom: vi.fn(),
+          resized: vi.fn(),
+          viewbox: vi.fn(() => ({
+            inner: { x: 40, y: 24, width: 320, height: 180 },
+            outer: { width: 640, height: 420 },
+            x: 0,
+            y: 0,
+            width: 640,
+            height: 420,
+            scale: 1,
+          })),
+        };
       }
       if (name === 'overlays') {
         return { clear: vi.fn(), add: vi.fn() };
@@ -88,7 +100,21 @@ vi.mock('bpmn-js/lib/NavigatedViewer', () => ({
 
     get = vi.fn((name: string) => {
       if (name === 'canvas') {
-        return { zoom: vi.fn(), addMarker: vi.fn(), removeMarker: vi.fn() };
+        return {
+          zoom: vi.fn(),
+          resized: vi.fn(),
+          viewbox: vi.fn(() => ({
+            inner: { x: 24, y: 16, width: 320, height: 180 },
+            outer: { width: 640, height: 420 },
+            x: 0,
+            y: 0,
+            width: 640,
+            height: 420,
+            scale: 1,
+          })),
+          addMarker: vi.fn(),
+          removeMarker: vi.fn(),
+        };
       }
       if (name === 'elementRegistry') {
         return { forEach: vi.fn() };

@@ -34,6 +34,9 @@ const agentsFixture: AgentSummary[] = [
     secrets: ['GITHUB_TOKEN'],
     source: 'file',
     fingerprint: 'agent-fingerprint',
+    sandboxProfiles: ['repo-write'],
+    identityColor: '#7F77DD',
+    identityIcon: '⌘',
   },
 ];
 
@@ -81,6 +84,8 @@ describe('AgentRegistry integration', () => {
     vi.mocked(apiClient.updateAgent).mockResolvedValue({
       ...agentDetailFixture,
       name: 'GitHub Agent v2',
+      identityColor: '#D85A30',
+      identityIcon: '⚙',
       skills: [
         {
           skillId: 'skill.github-pr',
@@ -116,6 +121,8 @@ describe('AgentRegistry integration', () => {
         expect.objectContaining({
           agentId: 'github-agent',
           name: 'GitHub Agent v2',
+          identityColor: '#7F77DD',
+          identityIcon: '⌘',
           skills: [
             expect.objectContaining({
               skillId: 'skill.github-pr',
@@ -175,6 +182,8 @@ const uploadedAgentFixture: AgentDetail = {
   name: 'Ops Agent',
   description: 'Coordinates operational workflows and rollback checks.',
   category: 'operations',
+  identityColor: '#1D9E75',
+  identityIcon: '△',
   rawMarkdown: `---
 id: ops-agent
 name: Ops Agent

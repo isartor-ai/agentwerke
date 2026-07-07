@@ -1,4 +1,5 @@
 import type { RunStep } from '../types';
+import type { AgentIdentityConfig } from '../utils/agentIdentity';
 import { formatTokenCount } from '../utils/tokens';
 import { mergeVisibleReasoningEntries, type VisibleReasoningEntry } from '../utils/visibleReasoning';
 import { AgentIdentityBadge } from './AgentIdentityBadge';
@@ -13,6 +14,7 @@ interface StepTimelineProps {
   interactionCountByStep?: Record<string, number>;
   /** Visible reasoning/progress summaries emitted by each step while it runs. */
   reasoningByStep?: Record<string, VisibleReasoningEntry[]>;
+  resolveAgentIdentity?: (name: string) => AgentIdentityConfig | undefined;
 }
 
 function stepStateClass(status: RunStep['status']): string {
@@ -62,6 +64,7 @@ export function StepTimeline({
   onToggleStep,
   interactionCountByStep,
   reasoningByStep,
+  resolveAgentIdentity,
 }: StepTimelineProps) {
   const cumulativeByStep = cumulativeTokensByStep(steps);
   return (
@@ -75,6 +78,7 @@ export function StepTimeline({
           const cumulative = cumulativeByStep[step.id];
           const cumulativeTotal = cumulative.inputTokens + cumulative.outputTokens;
           const agentName = step.agentName ?? step.runtimeSnapshot?.agentName;
+          const agentIdentity = agentName ? resolveAgentIdentity?.(agentName) : undefined;
           const modelTraces = step.runtimeSnapshot?.modelTraces ?? [];
           const modelTraceCount = modelTraces.length;
           const reasoningItems = mergeVisibleReasoningEntries(
@@ -103,7 +107,12 @@ export function StepTimeline({
                   <span>{step.status.replace('_', ' ')}</span>
                 </span>
                 {agentName ? (
-                  <AgentIdentityBadge name={agentName} className="timeline-agent-badge" />
+                  <AgentIdentityBadge
+                    name={agentName}
+                    identity={agentIdentity}
+                    isRunning={step.status === 'running'}
+                    className="timeline-agent-badge"
+                  />
                 ) : null}
                 {tokenUsage ? (
                   <span
@@ -142,7 +151,11 @@ export function StepTimeline({
                   {agentName ? (
                     <div className="timeline-detail-row">
                       <span className="timeline-detail-label">Agent</span>
-                      <AgentIdentityBadge name={agentName} />
+                      <AgentIdentityBadge
+                        name={agentName}
+                        identity={agentIdentity}
+                        isRunning={step.status === 'running'}
+                      />
                     </div>
                   ) : null}
                   {tokenUsage ? (

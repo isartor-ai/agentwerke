@@ -18,6 +18,11 @@ export interface AgentIdentity {
   initials: string;
 }
 
+export interface AgentIdentityConfig {
+  color?: string | null;
+  icon?: string | null;
+}
+
 // Seven ramps (400 accent / 900 on-accent) — distinct hues, readable on the dark UI.
 const PALETTE: ReadonlyArray<{ accent: string; onAccent: string }> = [
   { accent: '#7F77DD', onAccent: '#26215C' }, // purple
@@ -46,10 +51,45 @@ function initialsOf(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-export function agentIdentity(name: string): AgentIdentity {
+function normalizeConfiguredColor(color?: string | null): string | null {
+  const normalized = color?.trim();
+  if (!normalized) return null;
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized) ? normalized : null;
+}
+
+function normalizeConfiguredIcon(icon?: string | null): string | null {
+  const normalized = icon?.trim();
+  if (!normalized) return null;
+  return Array.from(normalized).slice(0, 2).join('');
+}
+
+function toRgb(hex: string): { r: number; g: number; b: number } {
+  const normalized = hex.length === 4
+    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+    : hex;
+  return {
+    r: Number.parseInt(normalized.slice(1, 3), 16),
+    g: Number.parseInt(normalized.slice(3, 5), 16),
+    b: Number.parseInt(normalized.slice(5, 7), 16),
+  };
+}
+
+function configuredOnAccent(accent: string): string {
+  const { r, g, b } = toRgb(accent);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 150 ? '#0E0E0F' : '#F8FAFC';
+}
+
+export function normalizeAgentIdentityKey(name: string): string {
+  return (name ?? '').trim().toLowerCase();
+}
+
+export function agentIdentity(name: string, config?: AgentIdentityConfig): AgentIdentity {
   const key = (name ?? '').trim().toLowerCase();
   const hashValue = hash(key);
   const slot = PALETTE[hashValue % PALETTE.length];
-  const icon = ICONS[Math.floor(hashValue / PALETTE.length) % ICONS.length];
-  return { accent: slot.accent, onAccent: slot.onAccent, icon, initials: initialsOf(name ?? '') };
+  const accent = normalizeConfiguredColor(config?.color) ?? slot.accent;
+  const onAccent = normalizeConfiguredColor(config?.color) ? configuredOnAccent(accent) : slot.onAccent;
+  const icon = normalizeConfiguredIcon(config?.icon) ?? ICONS[Math.floor(hashValue / PALETTE.length) % ICONS.length];
+  return { accent, onAccent, icon, initials: initialsOf(name ?? '') };
 }

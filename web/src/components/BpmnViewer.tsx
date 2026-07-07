@@ -33,6 +33,8 @@ const STATUS_MARKER: Partial<Record<RunStatus, string>> = {
 
 const SELECTED_MARKER = 'raf-selected';
 const ALL_MARKERS = [...new Set(Object.values(STATUS_MARKER))].filter(Boolean) as string[];
+const BPMN_VIEW_PADDING = 56;
+const BPMN_MAX_AUTO_ZOOM = 1.35;
 
 function applyMarkers(
   viewer: NavigatedViewer,
@@ -56,10 +58,47 @@ function applyMarkers(
   });
 }
 
+function focusWorkflow(viewer: NavigatedViewer) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const canvas = viewer.get<any>('canvas');
+  const viewbox = canvas.viewbox?.();
+  const inner = viewbox?.inner;
+  const outer = viewbox?.outer;
+
+  if (!inner || !outer || inner.width <= 0 || inner.height <= 0 || outer.width <= 0 || outer.height <= 0) {
+    canvas.zoom('fit-viewport');
+    return;
+  }
+
+  const widthWithPadding = inner.width + BPMN_VIEW_PADDING * 2;
+  const heightWithPadding = inner.height + BPMN_VIEW_PADDING * 2;
+  const scale = Math.min(
+    BPMN_MAX_AUTO_ZOOM,
+    outer.width / widthWithPadding,
+    outer.height / heightWithPadding,
+  );
+
+  if (!Number.isFinite(scale) || scale <= 0) {
+    canvas.zoom('fit-viewport');
+    return;
+  }
+
+  const viewboxWidth = outer.width / scale;
+  const viewboxHeight = outer.height / scale;
+
+  canvas.viewbox({
+    x: inner.x - (viewboxWidth - inner.width) / 2,
+    y: inner.y - (viewboxHeight - inner.height) / 2,
+    width: viewboxWidth,
+    height: viewboxHeight,
+  });
+}
+
 export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, className }: BpmnViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<NavigatedViewer | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const hasImportedRef = useRef(false);
   const onSelectStepRef = useRef(onSelectStep);
   onSelectStepRef.current = onSelectStep;
   const selectedStepNameRef = useRef(selectedStepName);
@@ -85,6 +124,25 @@ export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, 
 
     const viewer = new NavigatedViewer({ container: containerRef.current });
     viewerRef.current = viewer;
+    hasImportedRef.current = false;
+
+    let animationFrame: number | null = null;
+    const fitCurrentDiagram = () => {
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+      }
+
+      animationFrame = requestAnimationFrame(() => {
+        if (cancelled || !hasImportedRef.current) {
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const canvas = viewer.get<any>('canvas');
+        canvas.resized?.();
+        focusWorkflow(viewer);
+        applyMarkers(viewer, statusesRef.current ?? {}, selectedStepNameRef.current);
+      });
+    };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     viewer.get<any>('eventBus').on('element.click', (event: any) => {
@@ -97,13 +155,18 @@ export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, 
 
     setImportError(null);
 
+    const resizeObserver = typeof ResizeObserver === 'undefined' || !containerRef.current
+      ? null
+      : new ResizeObserver(() => fitCurrentDiagram());
+
+    resizeObserver?.observe(containerRef.current);
+
     void ensureDiagramInterchange(xml)
       .then((xmlWithLayout) => viewer.importXML(xmlWithLayout))
       .then(() => {
         if (cancelled) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        viewer.get<any>('canvas').zoom('fit-viewport');
-        applyMarkers(viewer, statusesRef.current ?? {}, selectedStepNameRef.current);
+        hasImportedRef.current = true;
+        fitCurrentDiagram();
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -112,6 +175,11 @@ export function BpmnViewer({ xml, stepStatuses, selectedStepName, onSelectStep, 
 
     return () => {
       cancelled = true;
+      hasImportedRef.current = false;
+      resizeObserver?.disconnect();
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+      }
       viewer.destroy();
       viewerRef.current = null;
     };

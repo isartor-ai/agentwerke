@@ -28,4 +28,18 @@ describe('agentIdentity', () => {
     expect(identity.accent).toMatch(/^#[0-9A-Fa-f]{6}$/);
     expect(identity.icon.length).toBeGreaterThan(0);
   });
+
+  it('prefers configured icon and color when provided', () => {
+    const identity = agentIdentity('planner', { color: '#123456', icon: '⚙' });
+    expect(identity.accent).toBe('#123456');
+    expect(identity.icon).toBe('⚙');
+    expect(identity.onAccent).toBe('#F8FAFC');
+  });
+
+  it('falls back to the deterministic palette when configured color is invalid', () => {
+    const configured = agentIdentity('planner', { color: 'teal-ish', icon: '⚙' });
+    const fallback = agentIdentity('planner');
+    expect(configured.accent).toBe(fallback.accent);
+    expect(configured.icon).toBe('⚙');
+  });
 });

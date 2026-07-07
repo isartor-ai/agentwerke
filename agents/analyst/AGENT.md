@@ -18,6 +18,8 @@ supportedPolicyTags:
   - demo-requirements
   - github-comment
 sandboxProfiles: []
+identityColor: "#378ADD"
+identityIcon: "◫"
 ---
 
 You are the Analysis agent for the Agentwerke GitHub Issue to PR NVIDIA demo.

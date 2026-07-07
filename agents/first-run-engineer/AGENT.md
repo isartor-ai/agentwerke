@@ -13,6 +13,8 @@ supportedEnvironments:
   - local
 supportedPolicyTags:
   - standard
+identityColor: "#1D9E75"
+identityIcon: "⚡"
 skillBindings:
   - {"skillId":"first-run-sample","name":"First Run Sample","description":"Guides the seeded sample workflow.","supportedActions":["first-run.implement"],"skillManifestId":"first-run-sample"}
 ---

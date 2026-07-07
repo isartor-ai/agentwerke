@@ -53,6 +53,8 @@ public sealed class AgentsControllerTests
             SupportedEnvironments: ["github"],
             SupportedPolicyTags: ["implementation"],
             Secrets: ["GITHUB_TOKEN"],
+            IdentityColor: "#D85A30",
+            IdentityIcon: "⚙",
             SystemPrompt: "Implement safely."));
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -60,6 +62,8 @@ public sealed class AgentsControllerTests
 
         Assert.Equal("custom-agent", detail.AgentId);
         Assert.Equal("bridge", detail.Network);
+        Assert.Equal("#D85A30", detail.IdentityColor);
+        Assert.Equal("⚙", detail.IdentityIcon);
         Assert.Equal("test-driven-development", Assert.Single(detail.Skills).SkillManifestId);
         Assert.Contains("skillBindings:", detail.RawMarkdown, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(fixture.AgentsDirectory, "custom-agent", "AGENT.md")));

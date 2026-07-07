@@ -21,6 +21,8 @@ supportedPolicyTags:
   - quality-check
 sandboxProfiles:
   - repo-read
+identityColor: "#639922"
+identityIcon: "✓"
 ---
 
 You are the Tester for an autonomous SDLC workflow. You run after a pull request has merged (or

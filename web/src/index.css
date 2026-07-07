@@ -769,6 +769,12 @@ th {
   min-height: 24rem;
 }
 
+.run-side-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .designer-list-panel input {
   width: 100%;
   border: 1px solid var(--color-border);
@@ -866,6 +872,11 @@ th {
 .event-monitor-panel h2 {
   margin-top: 0;
   margin-bottom: 0.5rem;
+}
+
+.graph-panel {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .event-monitor-summary {
@@ -1836,18 +1847,22 @@ th {
 .tab-row {
   display: flex;
   gap: 0.4rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
+  scrollbar-width: thin;
 }
 
 .tab {
+  flex: 0 0 auto;
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-text);
   border-radius: 0.35rem;
   padding: 0.25rem 0.55rem;
+  white-space: nowrap;
 }
 
 .tab-active {
@@ -1856,23 +1871,41 @@ th {
 }
 
 .tab-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
   color: var(--color-text);
   font-size: 0.875rem;
+}
+
+.run-detail-tab-panel {
+  flex: 1 1 auto;
+  min-height: 26rem;
 }
 
 .definition-list {
   margin: 0;
   display: grid;
   gap: 0.55rem;
+  min-width: 0;
 }
 
 .definition-list div {
   display: grid;
   grid-template-columns: 8rem 1fr;
+  gap: 0.75rem;
+  min-width: 0;
 }
 
 .definition-list dt {
   color: var(--color-muted);
+}
+
+.definition-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .timeline {
@@ -2042,6 +2075,16 @@ th {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   font-size: 0.72rem;
   text-transform: uppercase;
+}
+
+.timeline-reasoning-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-reasoning-entry-started {
@@ -3132,7 +3175,7 @@ textarea {
 
 .bpmn-viewer {
   width: 100%;
-  height: 420px;
+  height: clamp(24rem, 52vh, 38rem);
   border-radius: 0.375rem;
   border: 1px solid var(--color-border);
   overflow: hidden;
@@ -3140,6 +3183,12 @@ textarea {
      (same reasoning as .bpmn-modeler-canvas) — a dark background here made the
      diagram itself nearly invisible. */
   background: #fbfbfb;
+}
+
+.bpmn-viewer .djs-container,
+.bpmn-viewer .djs-container > svg {
+  width: 100%;
+  height: 100%;
 }
 
 .bpmn-viewer .djs-element {
@@ -3595,6 +3644,7 @@ textarea {
 }
 
 .agent-identity-avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3608,7 +3658,23 @@ textarea {
   flex-shrink: 0;
 }
 
+.agent-identity-running .agent-identity-avatar {
+  animation: agent-identity-bob 0.95s ease-in-out infinite;
+}
+
+.agent-identity-spinner {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--agent-accent);
+  border-top-color: transparent;
+  border-radius: 999px;
+  opacity: 0.5;
+  animation: agent-identity-spin 0.8s linear infinite;
+}
+
 .agent-identity-icon {
+  position: relative;
+  z-index: 1;
   line-height: 1;
   transform: translateY(-0.02rem);
 }
@@ -3621,6 +3687,14 @@ textarea {
 
 .timeline-agent-badge {
   flex: 0 1 12rem;
+}
+
+.agent-list-identity {
+  min-width: 0;
+}
+
+.agent-editor-identity-preview {
+  margin-bottom: 0.85rem;
 }
 
 .timeline-model-badge {
@@ -3642,6 +3716,23 @@ textarea {
 .model-trace:first-child {
   padding-top: 0;
   border-top: 0;
+}
+
+@keyframes agent-identity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes agent-identity-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-2px);
+  }
 }
 
 .model-trace-block {

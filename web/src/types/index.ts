@@ -520,6 +520,9 @@ export interface AgentSummary {
   secrets: string[];
   source: string;
   fingerprint?: string;
+  sandboxProfiles: string[];
+  identityColor?: string;
+  identityIcon?: string;
 }
 
 export interface AgentSkillBinding {

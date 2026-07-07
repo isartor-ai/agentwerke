@@ -26,6 +26,8 @@ public sealed class MarkdownAgentLoaderTests
             supportedPolicyTags: [requirement-design, doc-generation]
             secrets: [ANTHROPIC_API_KEY]
             sandboxProfiles: [repo-read]
+            identityColor: "#378ADD"
+            identityIcon: "◫"
             ---
 
             You are a senior Business Analyst. Read {{input.body}} and write a spec.
@@ -46,6 +48,8 @@ public sealed class MarkdownAgentLoaderTests
         Assert.Equal(["requirement-design", "design-requirements"], profile.SupportedActions);
         Assert.Equal(["all"], profile.SupportedEnvironments);
         Assert.Equal(["repo-read"], profile.SandboxProfiles);
+        Assert.Equal("#378ADD", profile.IdentityColor);
+        Assert.Equal("◫", profile.IdentityIcon);
         Assert.Equal("file", profile.Source);
         Assert.NotNull(profile.SystemPrompt);
         Assert.Contains("senior Business Analyst", profile.SystemPrompt);
@@ -206,6 +210,8 @@ public sealed class MarkdownAgentLoaderTests
         var profile = Assert.Single(profiles, p => p.AgentId == "first-run-engineer");
         Assert.Equal("agent-model", profile.Runner);
         Assert.Equal("onboarding", profile.Category);
+        Assert.False(string.IsNullOrWhiteSpace(profile.IdentityColor));
+        Assert.False(string.IsNullOrWhiteSpace(profile.IdentityIcon));
         Assert.Contains("first-run.implement", profile.SupportedActions);
         Assert.Contains("quickstart", profile.SupportedEnvironments);
 

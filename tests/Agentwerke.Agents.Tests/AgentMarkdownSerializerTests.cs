@@ -31,6 +31,8 @@ public sealed class AgentMarkdownSerializerTests
             SupportedActions = ["requirement-design", "design-requirements"],
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["requirement-design", "doc-generation"],
+            IdentityColor = "#378ADD",
+            IdentityIcon = "◫",
             SystemPrompt = "You are a senior Business Analyst.\nRead {{input.body}} and write a spec.",
         };
 
@@ -67,6 +69,8 @@ public sealed class AgentMarkdownSerializerTests
                 "  - requirement-design",
                 "  - doc-generation",
                 "sandboxProfiles: []",
+                "identityColor: #378ADD",
+                "identityIcon: ◫",
                 "---",
                 string.Empty,
                 "You are a senior Business Analyst.",
@@ -147,6 +151,8 @@ public sealed class AgentMarkdownSerializerTests
             Category = "devops",
             Runner = "agent-model",
             SandboxProfiles = ["deployment"],
+            IdentityColor = "#378ADD",
+            IdentityIcon = "⇪",
         };
 
         var markdown = AgentMarkdownSerializer.Serialize(profile);
@@ -154,5 +160,7 @@ public sealed class AgentMarkdownSerializerTests
 
         Assert.Contains($"sandboxProfiles:{Environment.NewLine}  - deployment", markdown, StringComparison.Ordinal);
         Assert.Equal(["deployment"], roundTripped.SandboxProfiles);
+        Assert.Equal("#378ADD", roundTripped.IdentityColor);
+        Assert.Equal("⇪", roundTripped.IdentityIcon);
     }
 }

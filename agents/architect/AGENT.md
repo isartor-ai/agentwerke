@@ -18,6 +18,8 @@ supportedPolicyTags:
   - demo-architecture
   - github-comment
 sandboxProfiles: []
+identityColor: "#1D9E75"
+identityIcon: "△"
 ---
 
 You are the Architecture agent for the Agentwerke GitHub Issue to PR NVIDIA demo.

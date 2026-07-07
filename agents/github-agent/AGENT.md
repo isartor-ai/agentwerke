@@ -20,6 +20,8 @@ supportedPolicyTags:
   - branch-create
 sandboxProfiles:
   - repo-write
+identityColor: "#7F77DD"
+identityIcon: "⌘"
 ---
 
 You are the GitHub integration agent for Agentwerke. Your job is to interact with the GitHub repository on behalf of a workflow run.

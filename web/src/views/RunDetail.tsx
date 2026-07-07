@@ -15,11 +15,13 @@ import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
 import { ConversationTab } from '../components/ConversationTab';
-import type { AuthState, EvidencePack, RunEvent, RunInteraction, RunStatus, WorkflowRun } from '../types';
+import type { AgentSummary, AuthState, EvidencePack, RunEvent, RunInteraction, RunStatus, WorkflowRun } from '../types';
 import { formatTokenCount, sumRunTokens } from '../utils/tokens';
+import type { AgentIdentityConfig } from '../utils/agentIdentity';
+import { normalizeAgentIdentityKey } from '../utils/agentIdentity';
 import { extractAgentReasoningByStep, isLiveProgressEventType } from '../utils/visibleReasoning';
 
-const tabs = ['Summary', 'Conversation', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
+const tabs = ['Summary', 'Conversation', 'Evidence', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -78,6 +80,7 @@ export function RunDetail({ auth }: RunDetailProps) {
   const [evidencePack, setEvidencePack] = useState<EvidencePack | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
 
   // Workflow BPMN XML for the viewer + diff modal
   const [workflowXml, setWorkflowXml] = useState('');
@@ -142,6 +145,20 @@ export function RunDetail({ auth }: RunDetailProps) {
 
   useEffect(() => { void loadRun(); }, [loadRun]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient.getAgents()
+      .then((items) => {
+        if (!cancelled) {
+          setAgents(items);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleAnswerInteraction = useCallback(async (interactionId: string, answer: string) => {
     if (!runId) return;
     await apiClient.answerInteraction(runId, interactionId, answer);
@@ -162,6 +179,28 @@ export function RunDetail({ auth }: RunDetailProps) {
   const reasoningByStep = useMemo(
     () => extractAgentReasoningByStep(run?.events),
     [run?.events],
+  );
+
+  const agentIdentityLookup = useMemo(() => {
+    const map = new Map<string, AgentIdentityConfig>();
+    for (const agent of agents) {
+      const configuredIdentity = {
+        color: agent.identityColor,
+        icon: agent.identityIcon,
+      };
+      if (agent.agentId) {
+        map.set(normalizeAgentIdentityKey(agent.agentId), configuredIdentity);
+      }
+      if (agent.name) {
+        map.set(normalizeAgentIdentityKey(agent.name), configuredIdentity);
+      }
+    }
+    return map;
+  }, [agents]);
+
+  const resolveAgentIdentity = useCallback(
+    (name: string) => agentIdentityLookup.get(normalizeAgentIdentityKey(name)),
+    [agentIdentityLookup],
   );
 
   const loadEvidencePack = useCallback(async () => {
@@ -566,26 +605,12 @@ export function RunDetail({ auth }: RunDetailProps) {
             error={interactionError}
             canAnswer={canSubmitApprovals}
             onAnswer={handleAnswerInteraction}
+            resolveAgentIdentity={resolveAgentIdentity}
           />
         );
 
       case 'Evidence':
         return renderEvidencePack();
-
-      case 'Logs':
-        return run.events && run.events.length > 0 ? (
-          <ul className="event-list" role="list">
-            {run.events.map((event) => (
-              <li key={event.id}>
-                <strong>{event.type.replaceAll('_', ' ')}</strong>
-                <p>{event.message}</p>
-                <span className="cell-meta">{new Date(event.createdAt).toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No runtime logs have been persisted for this run.</p>
-        );
 
       case 'I/O':
         return selectedStep ? (
@@ -855,6 +880,7 @@ export function RunDetail({ auth }: RunDetailProps) {
             step={panelStep}
             events={run.events ?? []}
             reasoningByStep={reasoningByStep}
+            resolveAgentIdentity={resolveAgentIdentity}
             onClose={() => setPanelStepId(null)}
           />
 
@@ -862,6 +888,7 @@ export function RunDetail({ auth }: RunDetailProps) {
             steps={run.steps ?? []}
             interactionCountByStep={interactionCountByStep}
             reasoningByStep={reasoningByStep}
+            resolveAgentIdentity={resolveAgentIdentity}
             expandedStepId={expandedStepId}
             onToggleStep={(stepId) => {
               const next = expandedStepId === stepId ? null : stepId;
@@ -913,7 +940,7 @@ export function RunDetail({ auth }: RunDetailProps) {
             ))}
           </div>
 
-          <section role="tabpanel" className="tab-panel">
+          <section role="tabpanel" className="tab-panel run-detail-tab-panel">
             {renderTabContent()}
             {selectedStep?.policyDecision ? (
               <section className="policy-box">

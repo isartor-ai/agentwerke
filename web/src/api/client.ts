@@ -281,6 +281,9 @@ export const apiClient = {
     supportedEnvironments: string[];
     supportedPolicyTags: string[];
     secrets: string[];
+    sandboxProfiles?: string[];
+    identityColor?: string;
+    identityIcon?: string;
     systemPrompt?: string;
   }): Promise<AgentDetail> {
     return requestJson<AgentDetail>(`/api/agents/${encodeURIComponent(agent.agentId)}`, {
