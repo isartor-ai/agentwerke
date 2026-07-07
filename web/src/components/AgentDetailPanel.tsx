@@ -1,14 +1,21 @@
 import { useEffect, useRef } from 'react';
 import type { RunStep, RunEvent } from '../types';
+import {
+  getStepEventsForDisplay,
+  mergeVisibleReasoningEntries,
+  type VisibleReasoningEntry,
+} from '../utils/visibleReasoning';
 import { AgentIdentityBadge } from './AgentIdentityBadge';
 import { ModelActivityDetails } from './ModelActivityDetails';
 import { RiskBadge } from './RiskBadge';
 import { SandboxExecutionDetails } from './SandboxExecutionDetails';
 import { StatusBadge } from './StatusBadge';
+import { VisibleReasoningLog } from './VisibleReasoningLog';
 
 export interface AgentDetailPanelProps {
   step: RunStep | null;
   events: RunEvent[];
+  reasoningByStep?: Record<string, VisibleReasoningEntry[]>;
   onClose: () => void;
 }
 
@@ -16,7 +23,12 @@ function formatTs(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProps) {
+export function AgentDetailPanel({
+  step,
+  events,
+  reasoningByStep,
+  onClose,
+}: AgentDetailPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
 
   // Close on Escape
@@ -34,8 +46,19 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step?.id]);
 
-  const stepEvents = step
-    ? [...events].filter((e) => e.message.includes(step.name)).reverse()
+  const stepEvents = getStepEventsForDisplay(step, events);
+  const visibleReasoning = step
+    ? mergeVisibleReasoningEntries(
+      reasoningByStep?.[step.id] ?? [],
+      (step.runtimeSnapshot?.modelTraces ?? [])
+        .filter((trace) => Boolean(trace.reasoningSummary?.trim()))
+        .map((trace, index) => ({
+          id: `panel-trace-${step.id}-${index}`,
+          kind: 'recorded' as const,
+          summary: trace.reasoningSummary!.trim(),
+          createdAt: trace.completedAt ?? trace.startedAt,
+        })),
+    )
     : [];
 
   const duration =
@@ -82,6 +105,13 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
                 </dl>
               </section>
             )}
+
+            <VisibleReasoningLog
+              entries={visibleReasoning}
+              isRunning={step.status === 'running'}
+              sectionClassName="adp-section timeline-reasoning-log"
+              headingClassName="adp-section-label"
+            />
 
             {/* ── Output ── */}
             <section className="adp-section">

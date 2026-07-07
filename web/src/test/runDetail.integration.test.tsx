@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { AuthState, RunEvent } from '../types';
@@ -154,7 +154,37 @@ describe('RunDetail integration', () => {
     renderDetail();
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
-    expect(screen.getByText('Inspecting the issue, loading context, and preparing the model/tool loop.')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Inspecting the issue, loading context, and preparing the model/tool loop.').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows selected-step visible reasoning in the agent detail panel', async () => {
+    vi.mocked(apiClient.getRun).mockResolvedValue({
+      ...runsFixture[0],
+      events: [
+        ...(runsFixture[0].events ?? []),
+        {
+          id: 'evt-panel-reasoning',
+          type: 'agent_reasoning_delta',
+          message: JSON.stringify({
+            stepId: 'step-2',
+            summary: 'Inspecting the approval context before opening github.read_issue.',
+          }),
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+
+    const panel = screen.getByRole('region', { name: 'Step detail: Merge to main' });
+    expect(within(panel).getByText('Visible Reasoning')).toBeInTheDocument();
+    expect(
+      within(panel).getByText('Inspecting the approval context before opening github.read_issue.'),
+    ).toBeInTheDocument();
   });
 
   it('streams reasoning progress events without reloading the full run payload', async () => {
@@ -194,9 +224,11 @@ describe('RunDetail integration', () => {
       });
     });
 
-    expect(await screen.findByText('Inspecting the repository context before opening a tool call.')).toBeInTheDocument();
-    expect(screen.getByText('repo.inspect_files')).toBeInTheDocument();
-    expect(screen.getByText("Calling tool 'repo.inspect_files'.")).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText('Inspecting the repository context before opening a tool call.')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('repo.inspect_files').length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Calling tool 'repo.inspect_files'.").length).toBeGreaterThan(0);
     expect(vi.mocked(apiClient.getRun)).toHaveBeenCalledTimes(1);
   });
 
@@ -230,8 +262,8 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
     expect(
-      screen.getByText("Starting 'first-run.implement': assembling context, checking runtime constraints, and preparing the model/tool loop (attempt 1)."),
-    ).toBeInTheDocument();
+      screen.getAllByText("Starting 'first-run.implement': assembling context, checking runtime constraints, and preparing the model/tool loop (attempt 1).").length,
+    ).toBeGreaterThan(0);
   });
 
   it('does not fetch operator-only evidence or allow cancel for viewers', async () => {

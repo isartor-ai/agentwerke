@@ -13,7 +13,9 @@ export default defineConfig(({ mode }) => {
         ? undefined
         : {
             '/api': {
-              target: 'http://localhost:5232',
+              // Override with VITE_PROXY_TARGET to point the dev server at a
+              // different backend (e.g. the demo-nvidia stack on :8087).
+              target: env.VITE_PROXY_TARGET || 'http://localhost:5232',
               changeOrigin: true,
               secure: false,
             },

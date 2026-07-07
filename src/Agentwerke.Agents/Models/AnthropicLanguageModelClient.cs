@@ -68,6 +68,7 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
             {
                 Model = request.ModelOverride ?? _options.Model,
                 MaxTokens = request.MaxTokens,
+                Stream = true,
                 System = [new SystemMessage(request.SystemPrompt)],
                 Messages = messages,
                 Tools = tools.Count > 0 ? tools : null!,
@@ -78,10 +79,24 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     : PromptCacheType.None
             };
 
-            MessageResponse response;
+            List<MessageResponse> outputs = [];
+            var streamedReasoning = new StreamingReasoningSummaryAccumulator();
             try
             {
-                response = await client.Messages.GetClaudeMessageAsync(parameters, cancellationToken);
+                await foreach (var streamEvent in client.Messages.StreamClaudeMessageAsync(parameters, cancellationToken))
+                {
+                    outputs.Add(streamEvent);
+
+                    if (!string.IsNullOrWhiteSpace(streamEvent.Delta?.Text))
+                    {
+                        streamedReasoning.AppendText(streamEvent.Delta.Text);
+                        await ReportVisibleReasoningIfNewAsync(
+                            progressReporter,
+                            streamedReasoning.TakeNextSummary(),
+                            null,
+                            cancellationToken);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -98,11 +113,34 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     ModelId: modelId);
             }
 
-            totalInputTokens += response.Usage.InputTokens;
-            totalOutputTokens += response.Usage.OutputTokens;
-            totalCacheCreationTokens += response.Usage.CacheCreationInputTokens;
-            totalCacheReadTokens += response.Usage.CacheReadInputTokens;
-            modelId ??= response.Model;
+            if (outputs.Count == 0)
+            {
+                return new LanguageModelResponse(
+                    Succeeded: false,
+                    Output: null,
+                    FailureReason: "LLM response contained no stream events.",
+                    AllToolCalls: allToolCalls,
+                    Usage: new LanguageModelTokenUsage(
+                        totalInputTokens,
+                        totalOutputTokens,
+                        totalCacheCreationTokens,
+                        totalCacheReadTokens),
+                    ModelId: modelId);
+            }
+
+            var response = new Message(outputs);
+            var initialUsage = outputs
+                .Select(static output => output.StreamStartMessage?.Usage)
+                .FirstOrDefault(static usage => usage is not null);
+            var finalUsage = outputs
+                .Select(static output => output.Usage)
+                .LastOrDefault(static usage => usage is not null);
+
+            totalInputTokens += initialUsage?.InputTokens ?? 0;
+            totalOutputTokens += finalUsage?.OutputTokens ?? 0;
+            totalCacheCreationTokens += initialUsage?.CacheCreationInputTokens ?? 0;
+            totalCacheReadTokens += initialUsage?.CacheReadInputTokens ?? 0;
+            modelId ??= parameters.Model;
 
             var assistantText = string.Join(
                 "\n",
@@ -112,10 +150,14 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     .Where(static text => !string.IsNullOrWhiteSpace(text)));
             var toolUses = response.Content.OfType<ToolUseContent>().ToArray();
 
-            if (toolUses.Length == 0 || response.StopReason == "end_turn")
+            if (toolUses.Length == 0)
             {
                 var parsed = LanguageModelReasoningParser.Extract(assistantText);
-                await ReportVisibleReasoningAsync(progressReporter, parsed.ReasoningSummary, cancellationToken);
+                await ReportVisibleReasoningIfNewAsync(
+                    progressReporter,
+                    parsed.ReasoningSummary,
+                    streamedReasoning.LatestSummary,
+                    cancellationToken);
                 return new LanguageModelResponse(
                     Succeeded: true,
                     Output: parsed.Output,
@@ -130,13 +172,14 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                     ReasoningSummary: parsed.ReasoningSummary);
             }
 
-            await ReportVisibleReasoningAsync(
+            await ReportVisibleReasoningIfNewAsync(
                 progressReporter,
                 LanguageModelReasoningParser.ExtractVisibleSummary(assistantText, allowPlainTextFallback: true),
+                streamedReasoning.LatestSummary,
                 cancellationToken);
 
             // Append assistant turn to conversation
-            messages.Add(response.Message);
+            messages.Add(response);
 
             // Execute each tool call and collect results
             var toolResults = new List<ContentBase>();
@@ -272,6 +315,20 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
                 AgentExecutionProgressKinds.Reasoning,
                 summary),
             cancellationToken);
+    }
+
+    private static Task ReportVisibleReasoningIfNewAsync(
+        AgentExecutionProgressReporter? progressReporter,
+        string? summary,
+        string? alreadyReportedSummary,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(summary?.Trim(), alreadyReportedSummary?.Trim(), StringComparison.Ordinal))
+        {
+            return Task.CompletedTask;
+        }
+
+        return ReportVisibleReasoningAsync(progressReporter, summary, cancellationToken);
     }
 }
 

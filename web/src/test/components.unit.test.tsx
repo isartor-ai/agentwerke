@@ -278,4 +278,41 @@ describe('UI component unit tests', () => {
     expect(screen.getByText('repo.inspect_files')).toBeInTheDocument();
     expect(screen.getByText("Calling tool 'repo.inspect_files'.")).toBeInTheDocument();
   });
+
+  it('collapses cumulative live reasoning updates into the latest summary', () => {
+    render(
+      <StepTimeline
+        steps={[
+          {
+            id: 'step-live',
+            name: 'Inspect repository',
+            type: 'serviceTask',
+            status: 'running',
+            agentName: 'planner',
+          },
+        ]}
+        expandedStepId="step-live"
+        onToggleStep={vi.fn()}
+        reasoningByStep={{
+          'step-live': [
+            {
+              id: 'evt-1',
+              kind: 'reasoning',
+              summary: 'Inspecting the repo state.',
+            },
+            {
+              id: 'evt-2',
+              kind: 'reasoning',
+              summary: 'Inspecting the repo state. Comparing the changed files and tests next.',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('Inspecting the repo state.')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Inspecting the repo state. Comparing the changed files and tests next.'),
+    ).toBeInTheDocument();
+  });
 });
