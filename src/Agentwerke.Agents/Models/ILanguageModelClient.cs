@@ -23,7 +23,8 @@ public sealed record LanguageModelResponse(
     IReadOnlyList<LanguageModelToolCall> AllToolCalls,
     LanguageModelTokenUsage Usage,
     string? ModelId,
-    string? StepStatus = null);
+    string? StepStatus = null,
+    string? ReasoningSummary = null);
 
 public sealed record LanguageModelToolDefinition(
     string Name,

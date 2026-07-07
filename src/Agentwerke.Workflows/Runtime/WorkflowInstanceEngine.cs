@@ -568,8 +568,30 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     purposeType = metadata?.PurposeType, policyTag = metadata?.PolicyTag,
                     requiresEvidence = metadata?.RequiresEvidence
                 }), cancellationToken);
+            await store.AppendEventAsync(runId, "agent_reasoning_started",
+                Serialize(new
+                {
+                    runId,
+                    nodeId = node.Id,
+                    stepId = step.Id,
+                    agent = metadata?.Agent,
+                    summary = BuildAgentReasoningStartSummary(metadata, attempt)
+                }), cancellationToken);
 
             var outcome = await executor.ExecuteAsync(runId, step.Id, node, attempt, cancellationToken);
+            var visibleReasoning = FindVisibleReasoningSummary(outcome);
+            if (!string.IsNullOrWhiteSpace(visibleReasoning))
+            {
+                await store.AppendEventAsync(runId, "agent_reasoning_recorded",
+                    Serialize(new
+                    {
+                        runId,
+                        nodeId = node.Id,
+                        stepId = step.Id,
+                        agent = metadata?.Agent,
+                        summary = visibleReasoning
+                    }), cancellationToken);
+            }
 
             if (outcome.PolicyDecision is not null)
             {
@@ -678,6 +700,21 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
     private static bool IsNonFatalServiceTaskStatus(string? status) =>
         string.Equals(status, AgentTaskOutcomeStatuses.NeedsConfig, StringComparison.Ordinal);
+
+    private static string BuildAgentReasoningStartSummary(
+        AgentwerkeTaskMetadata? metadata,
+        int attempt)
+    {
+        var action = string.IsNullOrWhiteSpace(metadata?.Action)
+            ? "this step"
+            : $"'{metadata.Action}'";
+        return $"Starting {action}: assembling context, checking runtime constraints, and preparing the model/tool loop (attempt {attempt}).";
+    }
+
+    private static string? FindVisibleReasoningSummary(AgentTaskOutcome outcome) =>
+        outcome.RuntimeSnapshot?.ModelTraces
+            .LastOrDefault(static trace => !string.IsNullOrWhiteSpace(trace.ReasoningSummary))
+            ?.ReasoningSummary;
 
     private async Task<WorkflowExecutionState> ScheduleTimerAndPauseAsync(
         string runId,

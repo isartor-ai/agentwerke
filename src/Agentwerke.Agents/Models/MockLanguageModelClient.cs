@@ -48,7 +48,8 @@ public sealed class MockLanguageModelClient : ILanguageModelClient
             FailureReason: null,
             AllToolCalls: toolCalls,
             Usage: new LanguageModelTokenUsage(0, 0),
-            ModelId: MockModelId);
+            ModelId: MockModelId,
+            ReasoningSummary: "Reviewed the task prompt, checked available writable tools, and completed the deterministic mock action.");
     }
 
     private static bool IsWritableTool(LanguageModelToolDefinition tool) =>
