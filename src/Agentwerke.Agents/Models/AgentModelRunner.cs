@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Agentwerke.Agents.Tools;
 using Agentwerke.Application.Observability;
 using Agentwerke.Domain.AgentRuntime;
+using Agentwerke.Domain.Security;
 using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
@@ -60,8 +62,10 @@ public sealed class AgentModelRunner : IAgentModelRunner
             SystemPrompt: systemPrompt,
             UserPrompt: request.PromptSnapshot.FinalPrompt,
             Tools: toolDefinitions,
-            MaxTokens: _options.MaxTokens);
+            MaxTokens: _options.MaxTokens,
+            ModelOverride: request.Model);
 
+        var startedAt = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();
         var response = await _modelClient.RunAsync(
             llmRequest,
@@ -71,6 +75,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
         var elapsedMs = sw.Elapsed.TotalMilliseconds;
         var tokenUsage = ToTokenUsage(response, elapsedMs);
+        var trace = ToModelTrace(response, request, startedAt, elapsedMs);
         var costUsd = ModelCostCalculator.CalculateCostUsd(response.Usage, _options);
 
         // Record this step's spend so the run's cumulative budget is enforced on later steps (#175).
@@ -78,7 +83,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
 
         _metrics.ModelInvoked(
             request.AgentName,
-            response.ModelId ?? _options.Model,
+            response.ModelId ?? request.Model ?? _options.Model,
             response.Usage.InputTokens,
             response.Usage.OutputTokens,
             elapsedMs,
@@ -95,7 +100,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
                 Artifacts: artifacts.Count > 0 ? artifacts : null,
                 TokenUsage: tokenUsage,
                 ElapsedMs: elapsedMs,
-                StepStatus: response.StepStatus);
+                StepStatus: response.StepStatus,
+                ModelTrace: trace);
         }
 
         return new ModelRunResult(
@@ -105,7 +111,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
             ToolInvocations: invocations,
             Artifacts: artifacts.Count > 0 ? artifacts : null,
             TokenUsage: tokenUsage,
-            ElapsedMs: elapsedMs);
+            ElapsedMs: elapsedMs,
+            ModelTrace: trace);
     }
 
     private async Task<LanguageModelToolResult> ExecuteToolCallAsync(
@@ -205,5 +212,55 @@ public sealed class AgentModelRunner : IAgentModelRunner
             response.ModelId,
             elapsedMs);
     }
+
+    private AgentModelTraceRecord ToModelTrace(
+        LanguageModelResponse response,
+        ModelRunRequest request,
+        DateTimeOffset startedAt,
+        double elapsedMs)
+    {
+        var modelId = response.ModelId ?? request.Model ?? _options.Model;
+
+        return new AgentModelTraceRecord
+        {
+            Status = response.Succeeded ? "completed" : "failed",
+            ModelId = modelId,
+            StartedAt = startedAt.ToString("o"),
+            CompletedAt = DateTimeOffset.UtcNow.ToString("o"),
+            ElapsedMs = elapsedMs,
+            InputTokens = response.Usage.InputTokens,
+            OutputTokens = response.Usage.OutputTokens,
+            Output = RedactOptional(response.Output),
+            FailureReason = RedactOptional(response.FailureReason),
+            ToolCalls = response.AllToolCalls
+                .Select(static call => new AgentModelToolCallRecord
+                {
+                    Id = call.Id,
+                    Name = call.Name,
+                    InputSummary = RedactInput(call.Input)
+                })
+                .ToArray()
+        };
+    }
+
+    private static string? RedactOptional(string? value) =>
+        value is null ? null : SecretRedactor.Redact(value);
+
+    private static string RedactInput(IReadOnlyDictionary<string, string> input)
+    {
+        var redacted = input.ToDictionary(
+            static pair => pair.Key,
+            static pair => IsSensitiveKey(pair.Key) ? "[redacted]" : SecretRedactor.Redact(pair.Value),
+            StringComparer.OrdinalIgnoreCase);
+
+        return SecretRedactor.Redact(JsonSerializer.Serialize(redacted));
+    }
+
+    private static bool IsSensitiveKey(string key) =>
+        key.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("token", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("api_key", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("apikey", StringComparison.OrdinalIgnoreCase);
 
 }

@@ -65,7 +65,7 @@ public sealed class AnthropicLanguageModelClient : ILanguageModelClient
         {
             var parameters = new MessageParameters
             {
-                Model = _options.Model,
+                Model = request.ModelOverride ?? _options.Model,
                 MaxTokens = request.MaxTokens,
                 System = [new SystemMessage(request.SystemPrompt)],
                 Messages = messages,

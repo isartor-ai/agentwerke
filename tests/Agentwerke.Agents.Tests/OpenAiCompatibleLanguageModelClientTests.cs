@@ -52,6 +52,7 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
         using var doc = JsonDocument.Parse(server.ReceivedBodies[0]);
         var root = doc.RootElement;
         Assert.Equal("gpt-4o", root.GetProperty("model").GetString());
+        Assert.False(root.GetProperty("stream").GetBoolean());
         Assert.Equal("auto", root.GetProperty("tool_choice").GetString());
 
         var messages = root.GetProperty("messages");

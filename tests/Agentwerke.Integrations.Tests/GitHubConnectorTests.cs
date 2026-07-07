@@ -70,6 +70,81 @@ public sealed class GitHubConnectorTests
     }
 
     [Fact]
+    public async Task CommentIssueAsync_PostsIssueCommentPayload()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/issues/135/comments")
+            {
+                return Json(HttpStatusCode.Created, """
+                    {
+                      "id": 771,
+                      "html_url": "https://github.com/octo/agentwerke/issues/135#issuecomment-771",
+                      "body": "## Requirements\n\n- Add due dates."
+                    }
+                    """);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.CommentIssueAsync(
+            new CommentGitHubIssueCommand(135, "## Requirements\n\n- Add due dates."),
+            CancellationToken.None);
+
+        Assert.Equal(771, result.CommentId);
+        Assert.Equal(135, result.IssueNumber);
+        Assert.Equal("https://github.com/octo/agentwerke/issues/135#issuecomment-771", result.CommentUrl);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"body\":\"## Requirements\\n\\n- Add due dates.\"", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CloseIssueAsync_PatchesIssueClosed()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Patch &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/issues/135")
+            {
+                return Json(HttpStatusCode.OK, """
+                    {
+                      "number": 135,
+                      "state": "closed",
+                      "html_url": "https://github.com/octo/agentwerke/issues/135"
+                    }
+                    """);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var result = await connector.CloseIssueAsync(
+            new CloseGitHubIssueCommand(135, "completed"),
+            CancellationToken.None);
+
+        Assert.Equal(135, result.Number);
+        Assert.Equal("closed", result.State);
+        Assert.Equal("https://github.com/octo/agentwerke/issues/135", result.IssueUrl);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"state\":\"closed\"", payload, StringComparison.Ordinal);
+        Assert.Contains("\"state_reason\":\"completed\"", payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreateBranchAsync_UsesConfiguredRepositoryAndDefaultBaseBranch()
     {
         var requests = new List<HttpRequestMessage>();

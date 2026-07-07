@@ -13,6 +13,7 @@ const statuses: Array<'all' | RunStatus> = [
   'all',
   'running',
   'awaiting_approval',
+  'waiting_external',
   'failed',
   'completed',
   'blocked',

@@ -46,6 +46,7 @@ public sealed class WorkflowAuthoringService : IWorkflowAuthoringService
             CreatedAt = now,
             LastEditedAt = now,
             ValidationState = validation.IsValid ? ValidState : InvalidState,
+            Tags = NormalizeTags(command.Tags),
             BpmnXml = command.BpmnXml
         };
 
@@ -82,6 +83,11 @@ public sealed class WorkflowAuthoringService : IWorkflowAuthoringService
         workflow.Name = validation.ProcessName ?? workflow.Name;
         workflow.Description = command.Description ?? workflow.Description;
         workflow.Status = ActiveStatus;
+        if (command.Tags is not null)
+        {
+            workflow.Tags = NormalizeTags(command.Tags);
+        }
+
         workflow.LastEditedAt = now;
         workflow.ValidationState = ValidState;
         workflow.BpmnXml = command.BpmnXml;
@@ -91,4 +97,12 @@ public sealed class WorkflowAuthoringService : IWorkflowAuthoringService
 
         return new WorkflowPublishResult(workflow.Id, workflow.Version, now);
     }
+
+    private static List<string> NormalizeTags(IReadOnlyList<string>? tags) =>
+        tags?
+            .Where(static tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(static tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList()
+        ?? [];
 }

@@ -13,6 +13,7 @@ const statusLabel: Record<RunStatus, string> = {
   cancelled: 'Cancelled',
   blocked: 'Blocked',
   awaiting_approval: 'Awaiting Approval',
+  waiting_external: 'Waiting External',
   needs_config: 'Needs Config',
 };
 

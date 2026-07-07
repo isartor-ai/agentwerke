@@ -121,6 +121,96 @@ public sealed class WebhooksControllerTests
     }
 
     [Fact]
+    public async Task GitHub_IssueCommentApprovedEvent_WhenAWaitingRunMatchesTheIssueNumber_AutoResumesIt()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(
+            runId: "run_waiting_issue",
+            onlyMatchMessage: "github.issue_comment.approved");
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "issue_comment",
+            waitingExternalCorrelationRepository: waitingRepository);
+
+        var body = """
+            {
+              "action": "created",
+              "issue": {
+                "number": 42,
+                "html_url": "https://github.com/isartor-ai/agentwerke-demo/issues/42",
+                "title": "Build Todo app"
+              },
+              "comment": {
+                "id": 1001,
+                "html_url": "https://github.com/isartor-ai/agentwerke-demo/issues/42#issuecomment-1001",
+                "body": "approved",
+                "user": { "login": "human-reviewer" }
+              },
+              "repository": { "full_name": "isartor-ai/agentwerke-demo" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_waiting_issue", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("42", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("github-webhook", orchestration.ResumeExternalCommand.ResumedBy);
+        Assert.Equal("true", orchestration.ResumeExternalCommand.Payload["approved"]);
+        Assert.Equal("approved", orchestration.ResumeExternalCommand.Payload["comment_body"]);
+        Assert.Equal("human-reviewer", orchestration.ResumeExternalCommand.Payload["comment_author"]);
+
+        var recorded = Assert.Single(eventRepository.Added);
+        Assert.Equal("github.issue_comment.approved", recorded.Kind);
+        Assert.Equal("42", recorded.CorrelationHint);
+    }
+
+    [Fact]
+    public async Task GitHub_IssueCommentCreatedEvent_WithoutApprovalToken_RecordsButDoesNotResume()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(
+            runId: "run_waiting_issue",
+            onlyMatchMessage: "github.issue_comment.approved");
+        var controller = CreateController(
+            orchestration,
+            eventRepository,
+            eventHeader: "issue_comment",
+            waitingExternalCorrelationRepository: waitingRepository);
+
+        var body = """
+            {
+              "action": "created",
+              "issue": {
+                "number": 42,
+                "html_url": "https://github.com/isartor-ai/agentwerke-demo/issues/42"
+              },
+              "comment": {
+                "id": 1002,
+                "body": "I have one question before approval.",
+                "user": { "login": "human-reviewer" }
+              },
+              "repository": { "full_name": "isartor-ai/agentwerke-demo" }
+            }
+            """;
+        SetBody(controller, body);
+
+        var result = await controller.GitHub(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+        var recorded = Assert.Single(eventRepository.Added);
+        Assert.Equal("github.issue_comment.created", recorded.Kind);
+        Assert.Equal("42", recorded.CorrelationHint);
+        Assert.Contains("\"approved\":false", recorded.Payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GitHub_PullRequestMergedEvent_ForAnUnrelatedBranch_DoesNotResumeAnyRun()
     {
         var orchestration = new CapturingOrchestrationService();
@@ -410,6 +500,7 @@ public sealed class WebhooksControllerTests
         Assert.IsType<AcceptedResult>(result);
         Assert.NotNull(orchestration.StartCommand?.Trigger?.Inputs);
         Assert.Equal("isartor-ai/agentwerke", orchestration.StartCommand!.Trigger!.Inputs!["repository"]);
+        Assert.Equal("142", orchestration.StartCommand.Trigger.Inputs["issue_number"]);
         Assert.Equal(
             "https://github.com/isartor-ai/agentwerke/issues/142",
             orchestration.StartCommand.Trigger.Inputs["issue_url"]);
@@ -650,7 +741,10 @@ public sealed class WebhooksControllerTests
     /// Construct with <paramref name="onlyMatchKey"/> to simulate a run waiting on one *specific*
     /// correlation key (e.g. a commit sha) so multi-candidate lookups (#139) can be exercised.
     /// </summary>
-    private sealed class StubWaitingExternalCorrelationRepository(string? runId, string? onlyMatchKey = null) : IWaitingExternalCorrelationRepository
+    private sealed class StubWaitingExternalCorrelationRepository(
+        string? runId,
+        string? onlyMatchKey = null,
+        string? onlyMatchMessage = null) : IWaitingExternalCorrelationRepository
     {
         public Task UpsertAsync(WaitingExternalCorrelation correlation, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -658,8 +752,12 @@ public sealed class WebhooksControllerTests
         public Task RemoveAsync(string runId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<string?> FindWaitingRunIdAsync(string messageName, string correlationKey, CancellationToken cancellationToken) =>
-            Task.FromResult(onlyMatchKey is null || string.Equals(onlyMatchKey, correlationKey, StringComparison.Ordinal) ? runId : null);
+        public Task<string?> FindWaitingRunIdAsync(string messageName, string correlationKey, CancellationToken cancellationToken)
+        {
+            var keyMatches = onlyMatchKey is null || string.Equals(onlyMatchKey, correlationKey, StringComparison.Ordinal);
+            var messageMatches = onlyMatchMessage is null || string.Equals(onlyMatchMessage, messageName, StringComparison.Ordinal);
+            return Task.FromResult(keyMatches && messageMatches ? runId : null);
+        }
     }
 
     private sealed class StubTriggerRouter(string? workflowId) : ITriggerRouter

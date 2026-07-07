@@ -1,3 +1,6 @@
 namespace Agentwerke.Api.Contracts.Workflows;
 
-public sealed record PublishWorkflowRequest(string BpmnXml, string? Description = null);
+public sealed record PublishWorkflowRequest(
+    string BpmnXml,
+    string? Description = null,
+    IReadOnlyList<string>? Tags = null);

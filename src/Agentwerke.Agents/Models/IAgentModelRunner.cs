@@ -32,7 +32,9 @@ public sealed record ModelRunRequest(
     IReadOnlyList<string> RequiresEvidence,
     int Attempt,
     AgentPromptSnapshot PromptSnapshot,
-    AgentRuntimeContract Contract);
+    AgentRuntimeContract Contract,
+    /// <summary>Per-agent model id override from the agent profile; null uses the configured default.</summary>
+    string? Model = null);
 
 public sealed record ModelRunResult(
     bool Succeeded,
@@ -43,4 +45,5 @@ public sealed record ModelRunResult(
     AgentModelTokenUsage? TokenUsage,
     double ElapsedMs = 0,
     AgentSandboxExecutionRecord? SandboxExecution = null,
-    string? StepStatus = null);
+    string? StepStatus = null,
+    AgentModelTraceRecord? ModelTrace = null);

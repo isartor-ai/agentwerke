@@ -18,7 +18,8 @@ public sealed record RunStepRuntimeSnapshot(
     RunStepPermissionDecision? PermissionDecision,
     IReadOnlyList<RunStepArtifactRef> StepArtifacts,
     RunStepSandboxExecution? SandboxExecution,
-    RunStepTokenUsage? TokenUsage);
+    RunStepTokenUsage? TokenUsage,
+    IReadOnlyList<RunStepModelTrace> ModelTraces);
 
 public sealed record RunStepSkillUsage(
     string SkillId,
@@ -79,3 +80,20 @@ public sealed record RunStepTokenUsage(
     int OutputTokens,
     string? ModelId,
     double? ElapsedMs);
+
+public sealed record RunStepModelTrace(
+    string Status,
+    string? ModelId,
+    string StartedAt,
+    string? CompletedAt,
+    double? ElapsedMs,
+    int InputTokens,
+    int OutputTokens,
+    string? Output,
+    string? FailureReason,
+    IReadOnlyList<RunStepModelToolCall> ToolCalls);
+
+public sealed record RunStepModelToolCall(
+    string Id,
+    string Name,
+    string? InputSummary);

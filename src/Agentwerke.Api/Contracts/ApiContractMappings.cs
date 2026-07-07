@@ -352,6 +352,21 @@ internal static class ApiContractMappings
                 snapshot.TokenUsage.InputTokens,
                 snapshot.TokenUsage.OutputTokens,
                 snapshot.TokenUsage.ModelId,
-                snapshot.TokenUsage.ElapsedMs));
+                snapshot.TokenUsage.ElapsedMs),
+            ModelTraces: snapshot.ModelTraces
+                .Select(static trace => new RunStepModelTrace(
+                    trace.Status,
+                    trace.ModelId,
+                    trace.StartedAt,
+                    trace.CompletedAt,
+                    trace.ElapsedMs,
+                    trace.InputTokens,
+                    trace.OutputTokens,
+                    trace.Output,
+                    trace.FailureReason,
+                    trace.ToolCalls
+                        .Select(static call => new RunStepModelToolCall(call.Id, call.Name, call.InputSummary))
+                        .ToArray()))
+                .ToArray());
     }
 }

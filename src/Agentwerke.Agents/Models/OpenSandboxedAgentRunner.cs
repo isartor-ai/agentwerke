@@ -17,6 +17,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
     private const string ModelProviderEnvironmentVariable = "AGENTWERKE_MODEL_PROVIDER";
     private const string ModelIdEnvironmentVariable = "AGENTWERKE_MODEL_ID";
     private const string ModelApiBaseUrlEnvironmentVariable = "AGENTWERKE_MODEL_API_BASE_URL";
+    private const string ModelTimeoutSecondsEnvironmentVariable = "AGENTWERKE_MODEL_TIMEOUT_SECONDS";
+    private const string ModelMaxToolIterationsEnvironmentVariable = "AGENTWERKE_MODEL_MAX_TOOL_ITERATIONS";
 
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
@@ -195,7 +197,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             Artifacts: artifacts.Count == 0 ? null : artifacts,
             TokenUsage: runResult.TokenUsage,
             ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
-            SandboxExecution: sandboxExecution);
+            SandboxExecution: sandboxExecution,
+            ModelTrace: runResult.ModelTrace);
     }
 
     private async Task<ModelRuntimeResolution> ResolveModelRuntimeAsync(
@@ -232,10 +235,16 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        environment[ModelProviderEnvironmentVariable] = "anthropic";
+        environment[ModelProviderEnvironmentVariable] = ResolveModelProvider(_languageModelOptions.Provider);
         environment[ModelIdEnvironmentVariable] = modelRuntime.ModelId;
         environment[ModelApiBaseUrlEnvironmentVariable] = modelRuntime.ApiBaseUrl;
         environment[ModelApiKeyEnvironmentVariable] = modelRuntime.ApiKey!;
+        // The sandboxed runner builds its own HTTP client; without these it falls back to the
+        // LanguageModelOptions defaults (100s / 10 iterations) regardless of the API's config.
+        environment[ModelTimeoutSecondsEnvironmentVariable] =
+            _languageModelOptions.TimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        environment[ModelMaxToolIterationsEnvironmentVariable] =
+            _languageModelOptions.MaxToolIterations.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         foreach (var secretName in profile?.Secrets ?? [])
         {
@@ -253,6 +262,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
         if (resolvedTools.Any(static tool =>
                 string.Equals(tool.Name, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tool.Name, "github.comment_issue", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tool.Name, "github.close_issue", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tool.Name, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(tool.Name, "github.request_review", StringComparison.OrdinalIgnoreCase) ||
@@ -338,7 +349,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         {
             return new ToolResolution(
                 [],
-                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.read_issue, github.create_branch, github.create_pull_request, github.request_review, github.post_review, sandbox.file_read, sandbox.file_write, sandbox.file_edit, sandbox.git, sandbox.shell, sandbox.run_tests.");
+                $"Sandboxed agent runtime does not support tool(s): {string.Join(", ", unsupported)}. Supported tools: github.read_issue, github.comment_issue, github.close_issue, github.create_branch, github.create_pull_request, github.request_review, github.post_review, sandbox.file_read, sandbox.file_write, sandbox.file_edit, sandbox.git, sandbox.shell, sandbox.run_tests.");
         }
 
         return new ToolResolution(
@@ -414,14 +425,14 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             .Where(static item => !string.Equals(item.Key, ResultArtifactName, StringComparison.OrdinalIgnoreCase))
             .ToDictionary(static item => item.Key, static item => item.Value, StringComparer.OrdinalIgnoreCase);
 
-    private static AgentSandboxExecutionRecord ToSandboxExecutionRecord(
+    private AgentSandboxExecutionRecord ToSandboxExecutionRecord(
         SandboxExecutionResult result,
         ModelRuntimeResolution modelRuntime,
         SandboxExecutionProfile profile)
     {
         var diagnostics = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["model.provider"] = "anthropic",
+            ["model.provider"] = ResolveModelProvider(_languageModelOptions.Provider),
             ["model.id"] = modelRuntime.ModelId,
             ["model.api_base_url"] = modelRuntime.ApiBaseUrl,
             ["model.endpoint_host"] = modelRuntime.EndpointHost,
@@ -496,6 +507,17 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         return new Uri(LanguageModelOptions.DefaultApiBaseUrl, UriKind.Absolute).Host;
     }
 
+    private static string ResolveModelProvider(string? provider)
+    {
+        if (string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(provider, "litellm", StringComparison.OrdinalIgnoreCase))
+        {
+            return provider!.ToLowerInvariant();
+        }
+
+        return "anthropic";
+    }
+
     private static string? RedactOptional(string? value) =>
         value is null ? null : SecretRedactor.Redact(value);
 
@@ -504,6 +526,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         tool = toolName switch
         {
             "github.read_issue" => new SandboxedToolContract("github.read_issue", AgentToolCategories.Integration),
+            "github.comment_issue" => new SandboxedToolContract("github.comment_issue", AgentToolCategories.Integration),
+            "github.close_issue" => new SandboxedToolContract("github.close_issue", AgentToolCategories.Integration),
             "github.create_branch" => new SandboxedToolContract("github.create_branch", AgentToolCategories.Integration),
             "github.create_pull_request" => new SandboxedToolContract("github.create_pull_request", AgentToolCategories.Integration),
             "github.request_review" => new SandboxedToolContract("github.request_review", AgentToolCategories.Integration),

@@ -315,11 +315,13 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var allowedTools = ParseCsvAttribute(agentTask, "allowedTools");
         var deniedTools = ParseCsvAttribute(agentTask, "deniedTools");
         var prompt = ParsePromptContract(agentTask, agentwerkeNamespace);
+        var metadata = ParseMetadataContract(agentTask, agentwerkeNamespace, element, errors);
 
         if (prompt is null
             && string.IsNullOrWhiteSpace(permissionLevel)
             && allowedTools.Count == 0
-            && deniedTools.Count == 0)
+            && deniedTools.Count == 0
+            && metadata.Count == 0)
         {
             return null;
         }
@@ -344,8 +346,34 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 Level = normalizedPermissionLevel,
                 AllowedTools = allowedTools,
                 DeniedTools = deniedTools
-            }
+            },
+            Metadata = metadata
         };
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseMetadataContract(
+        XElement agentTask,
+        XNamespace agentwerkeNamespace,
+        XElement ownerElement,
+        ICollection<BpmnValidationError> errors)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var metadataElement in agentTask.Elements(agentwerkeNamespace + "metadata"))
+        {
+            var key = metadataElement.Attribute("key")?.Value.Trim();
+            var valueAttribute = metadataElement.Attribute("value")?.Value;
+            var value = valueAttribute is not null ? valueAttribute : metadataElement.Value;
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                errors.Add(CreateError(ownerElement, "agentwerke:metadata must define a non-empty 'key' attribute."));
+                continue;
+            }
+
+            metadata[key] = value?.Trim() ?? string.Empty;
+        }
+
+        return metadata;
     }
 
     /// <summary>

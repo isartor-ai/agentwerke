@@ -25,6 +25,8 @@ public static class DependencyInjection
         services.AddSingleton<IAgentRegistryEditor, FileAgentRegistryEditor>();
         services.AddSingleton<IAgentPromptAssembler, AgentPromptAssembler>();
         services.AddScoped<IAgentTool, GitHubReadIssueTool>();
+        services.AddScoped<IAgentTool, GitHubCommentIssueTool>();
+        services.AddScoped<IAgentTool, GitHubCloseIssueTool>();
         services.AddScoped<IAgentTool, GitHubCreateBranchTool>();
         services.AddScoped<IAgentTool, GitHubCreatePullRequestTool>();
         services.AddScoped<IAgentTool, GitHubRequestReviewTool>();

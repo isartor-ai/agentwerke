@@ -127,6 +127,8 @@ public sealed class AgentsDependencyInjectionTests
     private sealed class StubGitHubConnector : IGitHubConnector
     {
         public Task<GitHubIssueResult> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<GitHubIssueCommentPostResult> CommentIssueAsync(CommentGitHubIssueCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<GitHubIssueStateResult> CloseIssueAsync(CloseGitHubIssueCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubBranchResult> CreateBranchAsync(CreateGitHubBranchCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubPullRequestResult> CreatePullRequestAsync(CreateGitHubPullRequestCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubPullRequestStatusResult> GetPullRequestAsync(int pullNumber, CancellationToken cancellationToken = default) => throw new NotImplementedException();

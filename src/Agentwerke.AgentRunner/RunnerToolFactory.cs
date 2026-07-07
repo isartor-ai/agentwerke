@@ -22,6 +22,16 @@ internal static class RunnerToolFactory
                 tools.Add(new GitHubReadIssueTool(gitHubConnector));
             }
 
+            if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.comment_issue", StringComparison.OrdinalIgnoreCase)))
+            {
+                tools.Add(new GitHubCommentIssueTool(gitHubConnector));
+            }
+
+            if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.close_issue", StringComparison.OrdinalIgnoreCase)))
+            {
+                tools.Add(new GitHubCloseIssueTool(gitHubConnector));
+            }
+
             if (envelope.ResolvedTools.Any(static tool => string.Equals(tool.Name, "github.create_branch", StringComparison.OrdinalIgnoreCase)))
             {
                 tools.Add(new GitHubCreateBranchTool(gitHubConnector));
@@ -81,6 +91,8 @@ internal static class RunnerToolFactory
 
     private static bool IsGitHubTool(string toolName) =>
         string.Equals(toolName, "github.read_issue", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(toolName, "github.comment_issue", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(toolName, "github.close_issue", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(toolName, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(toolName, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(toolName, "github.request_review", StringComparison.OrdinalIgnoreCase) ||

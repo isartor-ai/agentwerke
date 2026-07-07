@@ -44,7 +44,11 @@ public sealed class WorkflowsController : ControllerBase
     public async Task<IActionResult> Import([FromBody] ImportWorkflowRequest request)
     {
         var result = await _workflowAuthoringService.ImportWorkflowAsync(
-            new ImportWorkflowCommand(request.FileName, request.BpmnXml));
+            new ImportWorkflowCommand(
+                request.FileName,
+                request.BpmnXml,
+                request.Description,
+                Tags: request.Tags));
 
         return Ok(ApiContractMappings.ToImportWorkflowResponse(result));
     }
@@ -81,7 +85,7 @@ public sealed class WorkflowsController : ControllerBase
         {
             var result = await _workflowAuthoringService.PublishWorkflowAsync(
                 workflowId,
-                new PublishWorkflowCommand(request.BpmnXml, request.Description));
+                new PublishWorkflowCommand(request.BpmnXml, request.Description, request.Tags));
 
             return Ok(ApiContractMappings.ToPublishWorkflowResponse(result));
         }

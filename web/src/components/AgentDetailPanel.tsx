@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { RunStep, RunEvent } from '../types';
+import { ModelActivityDetails } from './ModelActivityDetails';
 import { RiskBadge } from './RiskBadge';
 import { SandboxExecutionDetails } from './SandboxExecutionDetails';
 import { StatusBadge } from './StatusBadge';
@@ -302,6 +303,8 @@ export function AgentDetailPanel({ step, events, onClose }: AgentDetailPanelProp
               sandboxExecution={step.runtimeSnapshot?.sandboxExecution}
               tokenUsage={step.runtimeSnapshot?.tokenUsage}
             />
+
+            <ModelActivityDetails modelTraces={step.runtimeSnapshot?.modelTraces} />
 
             {/* ── Step events (conditional) ── */}
             {stepEvents.length > 0 && (

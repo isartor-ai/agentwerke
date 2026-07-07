@@ -1610,6 +1610,18 @@ public sealed class PolicyEvaluationServiceTests
             return Task.FromResult(new GitHubBranchResult(command.BranchName, "main", "sha", "https://example.test/branch", false));
         }
 
+        public Task<GitHubIssueCommentPostResult> CommentIssueAsync(CommentGitHubIssueCommand command, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new GitHubIssueCommentPostResult(
+                123,
+                command.IssueNumber,
+                $"https://example.test/issues/{command.IssueNumber}#issuecomment-123"));
+
+        public Task<GitHubIssueStateResult> CloseIssueAsync(CloseGitHubIssueCommand command, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new GitHubIssueStateResult(
+                command.IssueNumber,
+                "closed",
+                $"https://example.test/issues/{command.IssueNumber}"));
+
         public Task<GitHubPullRequestResult> CreatePullRequestAsync(CreateGitHubPullRequestCommand command, CancellationToken cancellationToken = default)
         {
             CreatePullRequestCalls++;

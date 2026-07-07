@@ -654,6 +654,7 @@ th {
 }
 
 .status-awaiting_approval,
+.status-waiting_external,
 .status-needs_config,
 .status-pending {
   border-color: rgb(217 176 106 / 0.45);
@@ -3380,7 +3381,7 @@ textarea {
 }
 .conversation-entry {
   border: 1px solid var(--color-border-soft);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 12px 14px;
   background: var(--color-surface-container);
 }
@@ -3428,4 +3429,47 @@ textarea {
   font-size: 0.72rem;
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.model-trace-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.model-trace {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.model-trace:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.model-trace-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.model-trace-block h4 {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.model-tool-call {
+  align-items: start;
+}
+
+.model-tool-call code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

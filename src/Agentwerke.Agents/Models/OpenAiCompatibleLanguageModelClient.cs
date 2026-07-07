@@ -54,8 +54,9 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
         {
             var body = new JsonObject
             {
-                ["model"] = _options.Model,
+                ["model"] = request.ModelOverride ?? _options.Model,
                 ["max_tokens"] = request.MaxTokens,
+                ["stream"] = false,
                 ["messages"] = messages.DeepClone(),
             };
             if (tools.Count > 0)

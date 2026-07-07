@@ -35,6 +35,7 @@ export default defineConfig({
           { text: 'Approvals And Evidence', link: '/manual/approvals-evidence' },
           { text: 'Model Providers', link: '/manual/model-providers' },
           { text: 'GitHub Issue Trigger', link: '/manual/github-issue-trigger' },
+          { text: 'NVIDIA Issue To PR Demo', link: '/manual/demo-issue-to-pr-nvidia' },
           { text: 'Workflow Authoring', link: '/manual/workflow-authoring' },
           { text: 'Agents And Skills', link: '/manual/agents-skills' },
         ],

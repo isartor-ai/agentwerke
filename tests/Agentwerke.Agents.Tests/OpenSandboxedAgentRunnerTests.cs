@@ -118,6 +118,46 @@ public sealed class OpenSandboxedAgentRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_WhenProfileUsesIssueLifecycleTools_EmbedsThemForSandboxRunner()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(
+            sandbox,
+            integrationOptions: new IntegrationOptions
+            {
+                GitHub = new GitHubOptions
+                {
+                    Enabled = true,
+                    RepositoryOwner = "isartor-ai",
+                    RepositoryName = "agentwerke-demo",
+                    PersonalAccessToken = "gh-test"
+                }
+            });
+
+        await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "issue-agent",
+                Runner = "claude-code",
+                Tools = ["github.comment_issue", "github.close_issue"]
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        var payload = sandbox.LastRequest!.EnvironmentVariables!["AGENTWERKE_AGENT_RUN_ENVELOPE_B64"];
+        var envelope = JsonSerializer.Deserialize<SandboxedAgentRunEnvelope>(
+            Encoding.UTF8.GetString(Convert.FromBase64String(payload)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(envelope);
+        Assert.Contains(envelope!.ResolvedTools, t => t.Name == "github.comment_issue");
+        Assert.Contains(envelope.ResolvedTools, t => t.Name == "github.close_issue");
+        Assert.Equal("isartor-ai", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryOwner"]);
+        Assert.Equal("agentwerke-demo", sandbox.LastRequest.EnvironmentVariables["Integrations__GitHub__RepositoryName"]);
+    }
+
+    [Fact]
     public async Task RunAsync_WhenProfileUsesSandboxCodeTools_ResolvesThemAllWithoutFailing()
     {
         var sandbox = new RecordingSandboxExecutor();
@@ -223,6 +263,37 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.Contains("[redacted]", result.SandboxExecution.Diagnostics["execd.last_error"]);
         Assert.DoesNotContain("sk-ant-api03-", Assert.Single(result.SandboxExecution.Logs).Message);
         Assert.Contains("[redacted]", Assert.Single(result.SandboxExecution.Logs).Message);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenLiteLlmProviderConfigured_EmbedsProviderForSandboxRunner()
+    {
+        var sandbox = new RecordingSandboxExecutor();
+        var runner = CreateRunner(
+            sandbox,
+            languageModelOptions: new LanguageModelOptions
+            {
+                Provider = "litellm",
+                ApiKey = "litellm-proxy-key",
+                ApiBaseUrl = "http://litellm:4000/v1",
+                Model = "z-ai/glm-5.2",
+                MaxTokens = 1024
+            });
+
+        var result = await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Runner = "claude-code"
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None);
+
+        Assert.Equal("litellm", sandbox.LastRequest!.EnvironmentVariables!["AGENTWERKE_MODEL_PROVIDER"]);
+        Assert.Equal("http://litellm:4000/v1", sandbox.LastRequest.EnvironmentVariables["AGENTWERKE_MODEL_API_BASE_URL"]);
+        Assert.Contains("litellm", sandbox.LastRequest.Profile!.NetworkPolicy!.AllowedHosts!);
+        Assert.Equal("litellm", result.SandboxExecution!.Diagnostics["model.provider"]);
     }
 
     [Fact]
