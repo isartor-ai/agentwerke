@@ -4,7 +4,8 @@ public interface ISandboxExecutor
 {
     Task<SandboxExecutionResult> ExecuteAsync(
         SandboxExecutionRequest request,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null);
 }
 
 public interface ISandboxProviderExecutor : ISandboxExecutor

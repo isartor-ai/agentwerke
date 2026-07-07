@@ -4,6 +4,7 @@ using Agentwerke.Agents.Mcp;
 using Agentwerke.Agents.Tools;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Security;
+using Agentwerke.Workflows.Runtime;
 
 namespace Agentwerke.Agents.Models;
 
@@ -27,12 +28,14 @@ public sealed class SandboxedAgentRuntimeExecutor
 
     public Task<SandboxedAgentRunResult> ExecuteAsync(
         SandboxedAgentRunEnvelope envelope,
-        CancellationToken cancellationToken) =>
-        ExecuteCoreAsync(envelope, cancellationToken);
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null) =>
+        ExecuteCoreAsync(envelope, cancellationToken, progressReporter);
 
     private async Task<SandboxedAgentRunResult> ExecuteCoreAsync(
         SandboxedAgentRunEnvelope envelope,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var contract = envelope.Contract ?? new AgentRuntimeContract();
 
@@ -67,8 +70,9 @@ public sealed class SandboxedAgentRuntimeExecutor
                 Tools: toolDefinitions,
                 MaxTokens: envelope.MaxTokens,
                 ModelOverride: envelope.Model),
-            (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, ct),
-            cancellationToken);
+            (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, progressReporter, ct),
+            cancellationToken,
+            progressReporter);
         sw.Stop();
 
         var tokenUsage = new AgentModelTokenUsage(
@@ -94,8 +98,19 @@ public sealed class SandboxedAgentRuntimeExecutor
         IReadOnlyDictionary<string, SandboxedToolDescriptor> descriptors,
         List<AgentToolInvocationRecord> invocations,
         Dictionary<string, string> artifacts,
+        AgentExecutionProgressReporter? progressReporter,
         CancellationToken cancellationToken)
     {
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.ToolStarted,
+                $"Calling tool '{call.Name}'.",
+                ToolName: call.Name,
+                ToolCallId: call.Id,
+                Status: "started"),
+            cancellationToken);
+
         if (!descriptors.TryGetValue(call.Name, out var descriptor))
         {
             var missingInvocation = CreateInvocation(
@@ -108,6 +123,15 @@ public sealed class SandboxedAgentRuntimeExecutor
                 DurationMs: 0,
                 ArtifactNames: []);
             invocations.Add(missingInvocation);
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.ToolFinished,
+                    BuildToolCompletionSummary(call.Name, missingInvocation.Status, missingInvocation.ErrorMessage),
+                    ToolName: call.Name,
+                    ToolCallId: call.Id,
+                    Status: missingInvocation.Status),
+                cancellationToken);
             return new LanguageModelToolResult(call.Id, missingInvocation.ErrorMessage!, IsError: true);
         }
 
@@ -116,13 +140,6 @@ public sealed class SandboxedAgentRuntimeExecutor
         try
         {
             descriptor.Validate(enrichedInput);
-
-            return descriptor.Kind switch
-            {
-                SandboxedToolKind.Direct => await ExecuteDirectToolAsync(descriptor, call, enrichedInput, envelope, invocations, artifacts, started, cancellationToken),
-                SandboxedToolKind.SubAgent => await ExecuteSubAgentToolAsync(descriptor, call, enrichedInput, envelope, invocations, artifacts, started, cancellationToken),
-                _ => throw new InvalidOperationException($"Unsupported sandboxed tool kind '{descriptor.Kind}'.")
-            };
         }
         catch (Exception ex)
         {
@@ -137,8 +154,24 @@ public sealed class SandboxedAgentRuntimeExecutor
                 DurationMs: (int)started.ElapsedMilliseconds,
                 ArtifactNames: []);
             invocations.Add(invalidInvocation);
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.ToolFinished,
+                    BuildToolCompletionSummary(descriptor.Name, invalidInvocation.Status, invalidInvocation.ErrorMessage),
+                    ToolName: descriptor.Name,
+                    ToolCallId: call.Id,
+                    Status: invalidInvocation.Status),
+                cancellationToken);
             return new LanguageModelToolResult(call.Id, ex.Message, IsError: true);
         }
+
+        return descriptor.Kind switch
+        {
+            SandboxedToolKind.Direct => await ExecuteDirectToolAsync(descriptor, call, enrichedInput, envelope, invocations, artifacts, started, progressReporter, cancellationToken),
+            SandboxedToolKind.SubAgent => await ExecuteSubAgentToolAsync(descriptor, call, enrichedInput, envelope, invocations, artifacts, started, progressReporter, cancellationToken),
+            _ => throw new InvalidOperationException($"Unsupported sandboxed tool kind '{descriptor.Kind}'.")
+        };
     }
 
     private static IReadOnlyDictionary<string, string> EnrichToolInput(
@@ -204,6 +237,30 @@ public sealed class SandboxedAgentRuntimeExecutor
         key.Contains("api_key", StringComparison.OrdinalIgnoreCase) ||
         key.Contains("apikey", StringComparison.OrdinalIgnoreCase);
 
+    private static Task ReportProgressAsync(
+        AgentExecutionProgressReporter? progressReporter,
+        AgentExecutionProgressUpdate update,
+        CancellationToken cancellationToken)
+    {
+        if (progressReporter is null || string.IsNullOrWhiteSpace(update.Summary))
+        {
+            return Task.CompletedTask;
+        }
+
+        return progressReporter(update, cancellationToken);
+    }
+
+    private static string BuildToolCompletionSummary(string toolName, string? status, string? failureReason)
+    {
+        if (string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Tool '{toolName}' completed.";
+        }
+
+        var reason = failureReason ?? "No additional details were provided.";
+        return $"Tool '{toolName}' failed: {reason}";
+    }
+
     private async Task<LanguageModelToolResult> ExecuteDirectToolAsync(
         SandboxedToolDescriptor descriptor,
         LanguageModelToolCall call,
@@ -212,20 +269,40 @@ public sealed class SandboxedAgentRuntimeExecutor
         List<AgentToolInvocationRecord> invocations,
         Dictionary<string, string> artifacts,
         Stopwatch started,
+        AgentExecutionProgressReporter? progressReporter,
         CancellationToken cancellationToken)
     {
-        var result = await descriptor.Tool!.ExecuteAsync(
-            new AgentToolExecutionContext(
-                RunId: envelope.RunId,
-                StepId: envelope.StepId,
-                AgentName: envelope.AgentName,
-                Action: call.Name,
-                Environment: envelope.Environment,
-                PurposeType: envelope.PurposeType,
-                PolicyTag: envelope.PolicyTag,
-                Attempt: envelope.Attempt),
-            input,
-            cancellationToken);
+        AgentToolExecutionResult result;
+        try
+        {
+            result = await descriptor.Tool!.ExecuteAsync(
+                new AgentToolExecutionContext(
+                    RunId: envelope.RunId,
+                    StepId: envelope.StepId,
+                    AgentName: envelope.AgentName,
+                    Action: call.Name,
+                    Environment: envelope.Environment,
+                    PurposeType: envelope.PurposeType,
+                    PolicyTag: envelope.PolicyTag,
+                    Attempt: envelope.Attempt),
+                input,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            started.Stop();
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.ToolFinished,
+                    BuildToolCompletionSummary(descriptor.Name, "failed", ex.Message),
+                    ToolName: descriptor.Name,
+                    ToolCallId: call.Id,
+                    Status: "failed"),
+                cancellationToken);
+            throw;
+        }
+
         started.Stop();
 
         var artifactNames = MergeArtifacts(result.Artifacts, artifacts);
@@ -239,6 +316,15 @@ public sealed class SandboxedAgentRuntimeExecutor
             DurationMs: (int)started.ElapsedMilliseconds,
             ArtifactNames: artifactNames);
         invocations.Add(invocation);
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.ToolFinished,
+                BuildToolCompletionSummary(descriptor.Name, invocation.Status, invocation.ErrorMessage),
+                ToolName: descriptor.Name,
+                ToolCallId: call.Id,
+                Status: invocation.Status),
+            cancellationToken);
 
         return new LanguageModelToolResult(
             call.Id,
@@ -254,6 +340,7 @@ public sealed class SandboxedAgentRuntimeExecutor
         List<AgentToolInvocationRecord> invocations,
         Dictionary<string, string> artifacts,
         Stopwatch started,
+        AgentExecutionProgressReporter? progressReporter,
         CancellationToken cancellationToken)
     {
         if (envelope.RemainingSubAgentDepth <= 0)
@@ -269,6 +356,15 @@ public sealed class SandboxedAgentRuntimeExecutor
                 DurationMs: (int)started.ElapsedMilliseconds,
                 ArtifactNames: []);
             invocations.Add(depthInvocation);
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.ToolFinished,
+                    BuildToolCompletionSummary(descriptor.Name, depthInvocation.Status, depthInvocation.ErrorMessage),
+                    ToolName: descriptor.Name,
+                    ToolCallId: call.Id,
+                    Status: depthInvocation.Status),
+                cancellationToken);
             return new LanguageModelToolResult(call.Id, depthInvocation.ErrorMessage!, IsError: true);
         }
 
@@ -300,7 +396,26 @@ public sealed class SandboxedAgentRuntimeExecutor
             envelope.SubAgents,
             Math.Max(0, envelope.RemainingSubAgentDepth - 1));
 
-        var subResult = await ExecuteCoreAsync(delegatedEnvelope, cancellationToken);
+        SandboxedAgentRunResult subResult;
+        try
+        {
+            subResult = await ExecuteCoreAsync(delegatedEnvelope, cancellationToken, progressReporter);
+        }
+        catch (Exception ex)
+        {
+            started.Stop();
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.ToolFinished,
+                    BuildToolCompletionSummary(descriptor.Name, "failed", ex.Message),
+                    ToolName: descriptor.Name,
+                    ToolCallId: call.Id,
+                    Status: "failed"),
+                cancellationToken);
+            throw;
+        }
+
         started.Stop();
 
         var artifactNames = MergeArtifacts(subResult.Artifacts, artifacts);
@@ -319,6 +434,15 @@ public sealed class SandboxedAgentRuntimeExecutor
         {
             invocations.AddRange(subResult.ToolInvocations);
         }
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.ToolFinished,
+                BuildToolCompletionSummary(descriptor.Name, invocation.Status, invocation.ErrorMessage),
+                ToolName: descriptor.Name,
+                ToolCallId: call.Id,
+                Status: invocation.Status),
+            cancellationToken);
 
         return new LanguageModelToolResult(
             call.Id,

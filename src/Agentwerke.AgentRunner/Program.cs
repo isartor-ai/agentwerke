@@ -3,6 +3,7 @@ using System.Text.Json;
 using Agentwerke.AgentRunner;
 using Agentwerke.Agents.Mcp;
 using Agentwerke.Agents.Models;
+using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 const string EnvelopeEnvironmentVariable = "AGENTWERKE_AGENT_RUN_ENVELOPE_B64";
@@ -96,9 +97,22 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         client,
         new McpToolSessionFactory(new McpClientFactory()),
         RunnerToolFactory.CreateRegistry(envelope));
-    return await executor.ExecuteAsync(envelope, CancellationToken.None);
+    return await executor.ExecuteAsync(envelope, CancellationToken.None, ReportProgressAsync);
 }
 
 static bool IsOpenAiCompatibleProvider(string? provider) =>
     string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(provider, "litellm", StringComparison.OrdinalIgnoreCase);
+
+static async Task ReportProgressAsync(AgentExecutionProgressUpdate update, CancellationToken cancellationToken)
+{
+    cancellationToken.ThrowIfCancellationRequested();
+
+    if (string.IsNullOrWhiteSpace(update.Summary))
+    {
+        return;
+    }
+
+    await Console.Out.WriteLineAsync(SandboxProgressMessageCodec.Encode(update));
+    await Console.Out.FlushAsync();
+}

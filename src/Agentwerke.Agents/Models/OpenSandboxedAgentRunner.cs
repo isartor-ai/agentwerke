@@ -5,6 +5,7 @@ using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Security;
 using Agentwerke.Integrations;
 using Agentwerke.Sandboxes;
+using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Agentwerke.Agents.Models;
@@ -47,7 +48,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         ModelRunRequest request,
         AgentProfile? profile,
         string sandboxProfileName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var toolResolution = ResolveTools(request, profile);
         if (toolResolution.FailureReason is not null)
@@ -109,6 +111,33 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;
+        var seenProgressKeys = new HashSet<string>(StringComparer.Ordinal);
+        var liveLogParser = new SandboxProgressMessageCodec.StreamParser();
+
+        async Task ForwardProgressAsync(AgentExecutionProgressUpdate update, CancellationToken ct)
+        {
+            if (progressReporter is null || string.IsNullOrWhiteSpace(update.Summary))
+            {
+                return;
+            }
+
+            var stableKey = SandboxProgressMessageCodec.BuildStableKey(update);
+            if (!seenProgressKeys.Add(stableKey))
+            {
+                return;
+            }
+
+            await progressReporter(update, ct);
+        }
+
+        async Task HandleSandboxLogAsync(SandboxLogEntry logEntry, CancellationToken ct)
+        {
+            var updates = liveLogParser.Read(logEntry.Message, out _);
+            foreach (var update in updates)
+            {
+                await ForwardProgressAsync(update, ct);
+            }
+        }
 
         var sandboxResult = await _sandboxExecutor.ExecuteAsync(
             new SandboxExecutionRequest(
@@ -132,7 +161,22 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                     WorkingDirectory: "/app"),
                 EnvironmentVariables: environmentVariables,
                 ArtifactPaths: ["/output"]),
-            cancellationToken);
+            cancellationToken,
+            progressReporter is null ? null : HandleSandboxLogAsync);
+
+        var recoveredUpdates = new List<AgentExecutionProgressUpdate>();
+        var cleanedStructuredLogs = SandboxProgressMessageCodec.RemoveMarkers(sandboxResult.StructuredLogs, recoveredUpdates.Add);
+        var cleanedLogs = SandboxProgressMessageCodec.RemoveMarkers(sandboxResult.Logs, recoveredUpdates.Add);
+        foreach (var update in recoveredUpdates)
+        {
+            await ForwardProgressAsync(update, cancellationToken);
+        }
+
+        sandboxResult = sandboxResult with
+        {
+            Logs = cleanedLogs,
+            StructuredLogs = cleanedStructuredLogs
+        };
 
         var sandboxExecution = ToSandboxExecutionRecord(sandboxResult, modelRuntime, effectiveProfile);
 

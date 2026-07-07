@@ -313,7 +313,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     modelRunRequest,
                     profile,
                     metadata.SandboxProfile ?? profile?.SandboxProfiles.FirstOrDefault() ?? SandboxProfileNames.Offline,
-                    cancellationToken);
+                    cancellationToken,
+                    progressReporter);
                 break;
             case AgentExecutionModes.ToolSandboxed:
             {

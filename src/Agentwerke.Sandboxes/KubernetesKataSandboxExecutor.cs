@@ -36,7 +36,8 @@ public sealed class KubernetesKataSandboxExecutor : ISandboxProviderExecutor
 
     public async Task<SandboxExecutionResult> ExecuteAsync(
         SandboxExecutionRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 

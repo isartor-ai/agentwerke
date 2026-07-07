@@ -34,7 +34,8 @@ public sealed class ConfiguredSandboxExecutor : ISandboxExecutor
 
     public Task<SandboxExecutionResult> ExecuteAsync(
         SandboxExecutionRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -47,6 +48,6 @@ public sealed class ConfiguredSandboxExecutor : ISandboxExecutor
                 $"Registered providers: {string.Join(", ", _providers.Keys.Select(kind => kind.ToConfigValue()))}.");
         }
 
-        return executor.ExecuteAsync(request, cancellationToken);
+        return executor.ExecuteAsync(request, cancellationToken, logReporter);
     }
 }

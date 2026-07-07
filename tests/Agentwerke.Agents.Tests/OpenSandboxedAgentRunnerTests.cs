@@ -6,6 +6,7 @@ using Agentwerke.Application.Secrets;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Integrations;
 using Agentwerke.Sandboxes;
+using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Agentwerke.Agents.Tests;
@@ -380,6 +381,84 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.Null(sandbox.LastRequest);
     }
 
+    [Fact]
+    public async Task RunAsync_WhenSandboxStreamsProgressMarkers_ForwardsUpdatesAndStripsThemFromLogs()
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        var reasoning = SandboxProgressMessageCodec.Encode(new AgentExecutionProgressUpdate(
+            AgentExecutionProgressKinds.Reasoning,
+            "Inspecting the repository state before opening the pull request."));
+        var toolStarted = SandboxProgressMessageCodec.Encode(new AgentExecutionProgressUpdate(
+            AgentExecutionProgressKinds.ToolStarted,
+            "Calling tool 'github.create_pull_request'.",
+            ToolName: "github.create_pull_request",
+            ToolCallId: "call-1",
+            Status: "started"));
+        var toolFinished = SandboxProgressMessageCodec.Encode(new AgentExecutionProgressUpdate(
+            AgentExecutionProgressKinds.ToolFinished,
+            "Tool 'github.create_pull_request' completed.",
+            ToolName: "github.create_pull_request",
+            ToolCallId: "call-1",
+            Status: "completed"));
+
+        var streamedLogs = new[]
+        {
+            new SandboxLogEntry("stdout", reasoning[..(reasoning.Length / 2)], timestamp),
+            new SandboxLogEntry("stdout", reasoning[(reasoning.Length / 2)..] + Environment.NewLine, timestamp),
+            new SandboxLogEntry("stdout", toolStarted + Environment.NewLine + toolFinished + Environment.NewLine, timestamp)
+        };
+        var sandbox = new RecordingSandboxExecutor(
+            logs: string.Concat(streamedLogs.Select(static entry => entry.Message)) + "sandbox logs\n",
+            streamedLogs: streamedLogs,
+            structuredLogs:
+            [
+                .. streamedLogs,
+                new SandboxLogEntry("stdout", "sandbox logs\n", timestamp)
+            ]);
+        var runner = CreateRunner(sandbox);
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        var result = await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Runner = "claude-code"
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None,
+            (update, _) =>
+            {
+                updates.Add(update);
+                return Task.CompletedTask;
+            });
+
+        Assert.True(result.Succeeded);
+        Assert.Collection(
+            updates,
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.Reasoning, update.Kind);
+                Assert.Equal("Inspecting the repository state before opening the pull request.", update.Summary);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.ToolStarted, update.Kind);
+                Assert.Equal("github.create_pull_request", update.ToolName);
+                Assert.Equal("started", update.Status);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.ToolFinished, update.Kind);
+                Assert.Equal("github.create_pull_request", update.ToolName);
+                Assert.Equal("completed", update.Status);
+            });
+
+        var combinedLogs = string.Concat(result.SandboxExecution!.Logs.Select(static entry => entry.Message));
+        Assert.Equal("sandbox logs\n", combinedLogs);
+        Assert.DoesNotContain("__AGENTWERKE_PROGRESS_B64__", combinedLogs, StringComparison.Ordinal);
+    }
+
     private static OpenSandboxedAgentRunner CreateRunner(
         RecordingSandboxExecutor sandbox,
         IAgentRegistry? registry = null,
@@ -441,24 +520,25 @@ public sealed class OpenSandboxedAgentRunnerTests
     {
         private readonly string _logs;
         private readonly IReadOnlyDictionary<string, string> _diagnostics;
+        private readonly IReadOnlyList<SandboxLogEntry> _streamedLogs;
+        private readonly IReadOnlyList<SandboxLogEntry> _structuredLogs;
+        private readonly SandboxedAgentRunResult _payload;
 
         public RecordingSandboxExecutor(
             string logs = "sandbox logs",
-            IReadOnlyDictionary<string, string>? diagnostics = null)
+            IReadOnlyDictionary<string, string>? diagnostics = null,
+            IReadOnlyList<SandboxLogEntry>? streamedLogs = null,
+            IReadOnlyList<SandboxLogEntry>? structuredLogs = null,
+            SandboxedAgentRunResult? payload = null)
         {
             _logs = logs;
             _diagnostics = diagnostics ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["provider"] = "opensandbox"
             };
-        }
-
-        public SandboxExecutionRequest? LastRequest { get; private set; }
-
-        public Task<SandboxExecutionResult> ExecuteAsync(SandboxExecutionRequest request, CancellationToken cancellationToken)
-        {
-            LastRequest = request;
-            var payload = new SandboxedAgentRunResult(
+            _streamedLogs = streamedLogs ?? [];
+            _structuredLogs = structuredLogs ?? [new SandboxLogEntry("stdout", logs, DateTimeOffset.UtcNow)];
+            _payload = payload ?? new SandboxedAgentRunResult(
                 Succeeded: true,
                 Output: "sandboxed spec",
                 FailureReason: null,
@@ -474,25 +554,46 @@ public sealed class OpenSandboxedAgentRunnerTests
                         OutputSummary = "Authorization: Bearer sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                     }
                 ]);
+        }
 
-            return Task.FromResult(new SandboxExecutionResult(
+        public SandboxExecutionRequest? LastRequest { get; private set; }
+
+        public Task<SandboxExecutionResult> ExecuteAsync(
+            SandboxExecutionRequest request,
+            CancellationToken cancellationToken,
+            SandboxLogReporter? logReporter = null)
+        {
+            LastRequest = request;
+            return ExecuteCoreAsync(cancellationToken, logReporter);
+        }
+
+        private async Task<SandboxExecutionResult> ExecuteCoreAsync(
+            CancellationToken cancellationToken,
+            SandboxLogReporter? logReporter)
+        {
+            if (logReporter is not null)
+            {
+                foreach (var logEntry in _streamedLogs)
+                {
+                    await logReporter(logEntry, cancellationToken);
+                }
+            }
+
+            return new SandboxExecutionResult(
                 Succeeded: true,
                 Logs: _logs,
                 FailureReason: null,
                 Artifacts: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["agent-run-result.json"] = JsonSerializer.Serialize(payload)
+                    ["agent-run-result.json"] = JsonSerializer.Serialize(_payload)
                 },
                 ExitCode: 0,
                 Duration: TimeSpan.FromSeconds(1),
                 ProviderSandboxId: "sbx-123",
                 CommandState: SandboxCommandState.Completed,
-                StructuredLogs:
-                [
-                    new SandboxLogEntry("stdout", _logs, DateTimeOffset.UtcNow)
-                ],
+                StructuredLogs: _structuredLogs,
                 ProviderDiagnostics: new Dictionary<string, string>(_diagnostics, StringComparer.OrdinalIgnoreCase),
-                Provider: SandboxProviderKind.OpenSandbox));
+                Provider: SandboxProviderKind.OpenSandbox);
         }
     }
 }

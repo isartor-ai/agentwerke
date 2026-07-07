@@ -113,7 +113,8 @@ public sealed class SandboxProviderSelectionTests
 
         public Task<SandboxExecutionResult> ExecuteAsync(
             SandboxExecutionRequest request,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            SandboxLogReporter? logReporter = null) =>
             Task.FromResult(new SandboxExecutionResult(
                 Succeeded: true,
                 Logs: string.Empty,
