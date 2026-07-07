@@ -1,16 +1,9 @@
 import type { RunStep } from '../types';
 import { formatTokenCount } from '../utils/tokens';
+import { mergeVisibleReasoningEntries, type VisibleReasoningEntry } from '../utils/visibleReasoning';
 import { AgentIdentityBadge } from './AgentIdentityBadge';
 import { ModelActivityDetails } from './ModelActivityDetails';
-
-export interface VisibleReasoningEntry {
-  id: string;
-  kind: 'started' | 'reasoning' | 'recorded' | 'tool_started' | 'tool_finished';
-  summary: string;
-  createdAt?: string;
-  toolName?: string;
-  status?: string;
-}
+import { VisibleReasoningLog } from './VisibleReasoningLog';
 
 interface StepTimelineProps {
   steps: RunStep[];
@@ -63,49 +56,6 @@ function cumulativeTokensByStep(steps: RunStep[]): Record<string, CumulativeToke
   return totals;
 }
 
-function mergeReasoningEntries(
-  eventEntries: VisibleReasoningEntry[],
-  modelTraceEntries: VisibleReasoningEntry[],
-): VisibleReasoningEntry[] {
-  const seen = new Set<string>();
-  const values: VisibleReasoningEntry[] = [];
-  for (const entry of [...eventEntries, ...modelTraceEntries]) {
-    const summary = entry.summary.trim();
-    if (!summary) continue;
-    const key = [
-      entry.kind,
-      entry.toolName ?? '',
-      entry.status ?? '',
-      summary,
-    ].join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    values.push({ ...entry, summary });
-  }
-  return values;
-}
-
-function reasoningEntryMeta(entry: VisibleReasoningEntry): { marker: string; label: string; tone: string } {
-  switch (entry.kind) {
-    case 'tool_started':
-      return { marker: '↗', label: entry.toolName ?? 'Tool', tone: 'tool-started' };
-    case 'tool_finished':
-      if (entry.status === 'blocked') {
-        return { marker: '!', label: entry.toolName ?? 'Tool', tone: 'tool-blocked' };
-      }
-      if (entry.status === 'failed') {
-        return { marker: '!', label: entry.toolName ?? 'Tool', tone: 'tool-failed' };
-      }
-      return { marker: '✓', label: entry.toolName ?? 'Tool', tone: 'tool-finished' };
-    case 'recorded':
-      return { marker: '✓', label: 'Final', tone: 'recorded' };
-    case 'started':
-      return { marker: '○', label: 'Start', tone: 'started' };
-    default:
-      return { marker: '•', label: 'Reasoning', tone: 'reasoning' };
-  }
-}
-
 export function StepTimeline({
   steps,
   expandedStepId,
@@ -127,7 +77,7 @@ export function StepTimeline({
           const agentName = step.agentName ?? step.runtimeSnapshot?.agentName;
           const modelTraces = step.runtimeSnapshot?.modelTraces ?? [];
           const modelTraceCount = modelTraces.length;
-          const reasoningItems = mergeReasoningEntries(
+          const reasoningItems = mergeVisibleReasoningEntries(
             reasoningByStep?.[step.id] ?? [],
             modelTraces
               .filter((trace) => Boolean(trace.reasoningSummary?.trim()))
@@ -207,33 +157,7 @@ export function StepTimeline({
                       {cumulative.outputTokens.toLocaleString()} out
                     </p>
                   ) : null}
-                  {reasoningItems.length > 0 ? (
-                    <section className="timeline-reasoning-log" aria-label="Visible agent reasoning">
-                      <h3>Visible Reasoning</h3>
-                      <ol role="list">
-                        {reasoningItems.map((item) => {
-                          const meta = reasoningEntryMeta(item);
-                          return (
-                            <li
-                              key={item.id}
-                              className={`timeline-reasoning-entry timeline-reasoning-entry-${meta.tone}`}
-                            >
-                              <div className="timeline-reasoning-head">
-                                <span className="timeline-reasoning-marker" aria-hidden="true">{meta.marker}</span>
-                                <span className="timeline-reasoning-label">{meta.label}</span>
-                              </div>
-                              <p>{item.summary}</p>
-                            </li>
-                          );
-                        })}
-                      </ol>
-                    </section>
-                  ) : step.status === 'running' ? (
-                    <section className="timeline-reasoning-log" aria-label="Visible agent reasoning" aria-live="polite">
-                      <h3>Visible Reasoning</h3>
-                      <p>Agent is preparing the model/tool loop for this step.</p>
-                    </section>
-                  ) : null}
+                  <VisibleReasoningLog entries={reasoningItems} isRunning={step.status === 'running'} />
                   <ModelActivityDetails
                     modelTraces={step.runtimeSnapshot?.modelTraces}
                     sectionClassName="timeline-model-work"

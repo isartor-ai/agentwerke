@@ -69,16 +69,23 @@ public sealed class AnthropicToolSchemaTests
     private sealed class BodyCapturingServer : IDisposable
     {
         private const string ResponseBody = """
-            {
-              "id": "msg_test",
-              "type": "message",
-              "role": "assistant",
-              "model": "claude-sonnet-4-6",
-              "content": [{ "type": "text", "text": "done" }],
-              "stop_reason": "end_turn",
-              "stop_sequence": null,
-              "usage": { "input_tokens": 5, "output_tokens": 2 }
-            }
+            event: message_start
+            data: {"type":"message_start","message":{"id":"msg_test","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":5,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}
+
+            event: content_block_stop
+            data: {"type":"content_block_stop","index":0}
+
+            event: message_delta
+            data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":2}}
+
+            event: message_stop
+            data: {"type":"message_stop"}
             """;
 
         private readonly HttpListener _listener;
@@ -116,7 +123,7 @@ public sealed class AnthropicToolSchemaTests
             }
 
             var bytes = Encoding.UTF8.GetBytes(ResponseBody);
-            context.Response.ContentType = "application/json";
+            context.Response.ContentType = "text/event-stream";
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes);
             context.Response.OutputStream.Close();
