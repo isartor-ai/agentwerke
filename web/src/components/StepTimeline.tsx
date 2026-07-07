@@ -9,6 +9,8 @@ interface StepTimelineProps {
   onToggleStep: (stepId: string) => void;
   /** Number of agent-conversation interactions produced by each step (#192). */
   interactionCountByStep?: Record<string, number>;
+  /** Visible reasoning/progress summaries emitted by each step while it runs. */
+  reasoningByStep?: Record<string, string[]>;
 }
 
 function stepStateClass(status: RunStep['status']): string {
@@ -52,7 +54,25 @@ function cumulativeTokensByStep(steps: RunStep[]): Record<string, CumulativeToke
   return totals;
 }
 
-export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionCountByStep }: StepTimelineProps) {
+function uniqueNonEmpty(items: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const values: string[] = [];
+  for (const item of items) {
+    const value = item?.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    values.push(value);
+  }
+  return values;
+}
+
+export function StepTimeline({
+  steps,
+  expandedStepId,
+  onToggleStep,
+  interactionCountByStep,
+  reasoningByStep,
+}: StepTimelineProps) {
   const cumulativeByStep = cumulativeTokensByStep(steps);
   return (
     <section className="panel timeline-panel" aria-label="Execution timeline">
@@ -66,6 +86,11 @@ export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionC
           const cumulativeTotal = cumulative.inputTokens + cumulative.outputTokens;
           const agentName = step.agentName ?? step.runtimeSnapshot?.agentName;
           const modelTraceCount = step.runtimeSnapshot?.modelTraces?.length ?? 0;
+          const reasoningItems = uniqueNonEmpty(reasoningByStep?.[step.id] ?? []);
+          const traceReasoningCount = uniqueNonEmpty(
+            (step.runtimeSnapshot?.modelTraces ?? []).map((trace) => trace.reasoningSummary),
+          ).length;
+          const reasoningCount = reasoningItems.length + traceReasoningCount;
           return (
             <li key={step.id} className="timeline-item">
               <button
@@ -103,6 +128,11 @@ export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionC
                     LLM {modelTraceCount} trace{modelTraceCount === 1 ? '' : 's'}
                   </span>
                 ) : null}
+                {reasoningCount > 0 ? (
+                  <span className="chip chip-static timeline-reasoning-badge">
+                    Reasoning {reasoningCount}
+                  </span>
+                ) : null}
                 {interactionCount > 0 ? (
                   <span className="chip chip-static timeline-interaction-badge">
                     {interactionCount} message{interactionCount === 1 ? '' : 's'}
@@ -128,6 +158,21 @@ export function StepTimeline({ steps, expandedStepId, onToggleStep, interactionC
                       Run total after this step: {cumulative.inputTokens.toLocaleString()} in ·{' '}
                       {cumulative.outputTokens.toLocaleString()} out
                     </p>
+                  ) : null}
+                  {reasoningItems.length > 0 ? (
+                    <section className="timeline-reasoning-log" aria-label="Visible agent reasoning">
+                      <h3>Visible Reasoning</h3>
+                      <ol role="list">
+                        {reasoningItems.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ol>
+                    </section>
+                  ) : step.status === 'running' ? (
+                    <section className="timeline-reasoning-log" aria-label="Visible agent reasoning" aria-live="polite">
+                      <h3>Visible Reasoning</h3>
+                      <p>Agent is preparing the model/tool loop for this step.</p>
+                    </section>
                   ) : null}
                   <ModelActivityDetails
                     modelTraces={step.runtimeSnapshot?.modelTraces}

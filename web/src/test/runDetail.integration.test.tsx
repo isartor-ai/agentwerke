@@ -134,6 +134,29 @@ describe('RunDetail integration', () => {
     expect(screen.getAllByText('github.read_issue').length).toBeGreaterThan(0);
   });
 
+  it('renders visible agent reasoning events on the selected timeline step', async () => {
+    vi.mocked(apiClient.getRun).mockResolvedValue({
+      ...runsFixture[0],
+      events: [
+        ...(runsFixture[0].events ?? []),
+        {
+          id: 'evt-reasoning',
+          type: 'agent_reasoning_started',
+          message: JSON.stringify({
+            stepId: 'step-2',
+            summary: 'Inspecting the issue, loading context, and preparing the model/tool loop.',
+          }),
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    expect(screen.getByText('Inspecting the issue, loading context, and preparing the model/tool loop.')).toBeInTheDocument();
+  });
+
   it('does not fetch operator-only evidence or allow cancel for viewers', async () => {
     renderDetail('run-0421', viewerAuthFixture);
 

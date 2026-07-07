@@ -230,6 +230,7 @@ public sealed class AgentModelRunner : IAgentModelRunner
             ElapsedMs = elapsedMs,
             InputTokens = response.Usage.InputTokens,
             OutputTokens = response.Usage.OutputTokens,
+            ReasoningSummary = RedactOptional(response.ReasoningSummary),
             Output = RedactOptional(response.Output),
             FailureReason = RedactOptional(response.FailureReason),
             ToolCalls = response.AllToolCalls

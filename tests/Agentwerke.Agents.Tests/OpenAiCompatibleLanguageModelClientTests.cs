@@ -70,6 +70,26 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
     }
 
     [Fact]
+    public async Task RunAsync_ExtractsVisibleReasoningBlockFromFinalOutput()
+    {
+        const string finalResponse = """
+            {"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"<agent_reasoning>Checked the issue, inspected available tools, and chose a minimal patch.</agent_reasoning>\nFinal answer only."}}],"usage":{"prompt_tokens":5,"completion_tokens":2}}
+            """;
+        using var server = QueuedHttpServer.Start(finalResponse);
+
+        var response = await Client(server).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None);
+
+        Assert.True(response.Succeeded, response.FailureReason);
+        Assert.Equal("Final answer only.", response.Output);
+        Assert.Equal(
+            "Checked the issue, inspected available tools, and chose a minimal patch.",
+            response.ReasoningSummary);
+    }
+
+    [Fact]
     public async Task RunAsync_ExecutesToolCallLoop_AndAppendsToolResult()
     {
         const string toolCallResponse = """

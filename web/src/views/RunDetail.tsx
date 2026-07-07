@@ -15,7 +15,7 @@ import { SandboxExecutionDetails } from '../components/SandboxExecutionDetails';
 import { StatusBadge } from '../components/StatusBadge';
 import { StepTimeline } from '../components/StepTimeline';
 import { ConversationTab } from '../components/ConversationTab';
-import type { AuthState, EvidencePack, RunInteraction, RunStatus, WorkflowRun } from '../types';
+import type { AuthState, EvidencePack, RunEvent, RunInteraction, RunStatus, WorkflowRun } from '../types';
 import { formatTokenCount, sumRunTokens } from '../utils/tokens';
 
 const tabs = ['Summary', 'Conversation', 'Evidence', 'Logs', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
@@ -49,6 +49,28 @@ function totalEvidenceTokens(pack: EvidencePack | null): number {
     (total, usage) => total + usage.inputTokens + usage.outputTokens,
     0,
   );
+}
+
+function extractAgentReasoningByStep(events: RunEvent[] | undefined): Record<string, string[]> {
+  const byStep: Record<string, string[]> = {};
+  for (const event of events ?? []) {
+    if (event.type !== 'agent_reasoning_started' && event.type !== 'agent_reasoning_recorded') {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(event.message) as { stepId?: unknown; summary?: unknown };
+      if (typeof parsed.stepId !== 'string' || typeof parsed.summary !== 'string') {
+        continue;
+      }
+      const summary = parsed.summary.trim();
+      if (!summary) continue;
+      byStep[parsed.stepId] = [...(byStep[parsed.stepId] ?? []), summary];
+    } catch {
+      // Older events may have plain-text messages; ignore anything that is not the expected shape.
+    }
+  }
+  return byStep;
 }
 
 interface RunDetailProps {
@@ -153,6 +175,11 @@ export function RunDetail({ auth }: RunDetailProps) {
     }
     return counts;
   }, [interactions]);
+
+  const reasoningByStep = useMemo(
+    () => extractAgentReasoningByStep(run?.events),
+    [run?.events],
+  );
 
   const loadEvidencePack = useCallback(async () => {
     if (!runId || !canControlRuns) return;
@@ -848,6 +875,7 @@ export function RunDetail({ auth }: RunDetailProps) {
           <StepTimeline
             steps={run.steps ?? []}
             interactionCountByStep={interactionCountByStep}
+            reasoningByStep={reasoningByStep}
             expandedStepId={expandedStepId}
             onToggleStep={(stepId) => {
               const next = expandedStepId === stepId ? null : stepId;
