@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src=".github/assets/agentwerke-logo.svg" alt="Agentwerke logo" width="96" />
+
 # Agentwerke
 
 ### Governed Lights-Out Software Factory
@@ -11,7 +13,7 @@
 [![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Agentwerke.Agents/Models/AnthropicLanguageModelClient.cs)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[Premise](#premise) | [Factory line](#factory-line) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
+[Premise](#premise) | [Factory line](#factory-line) | [Sample BPMN](#sample-bpmn-flow) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
 
 </div>
 
@@ -51,6 +53,70 @@ flowchart LR
 ```
 
 A run moves through the nodes of a BPMN model. When it reaches an agent task, the orchestrator assembles the agent profile, skill, run context, and available tools, then evaluates policy before the model receives work. Claude can request tool calls, but every call is brokered through the Tool Gateway, checked against policy, executed in the right boundary, and recorded. Approval tasks pause for a human. Wait states resume from external signals such as green CI or a merged PR. The final output is not just code; it is code plus the evidence of how it was produced.
+
+## Sample BPMN flow
+
+The tokenless quickstart ships a minimal Agentwerke BPMN workflow at
+[`docs/quickstart/hello-sdlc.bpmn`](docs/quickstart/hello-sdlc.bpmn):
+
+```mermaid
+flowchart LR
+    Start((Start)) --> Analyze[Analyze<br/>agent task]
+    Analyze --> Review[Review Approval<br/>human gate]
+    Review --> Done((Done))
+```
+
+The important part is the Agentwerke extension metadata inside normal BPMN 2.0.
+It turns a BPMN service task into an agent work cell and a BPMN user task into a
+governed approval gate. This excerpt omits BPMNDI layout for readability; the
+linked `.bpmn` file includes layout metadata for the UI.
+
+```xml
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
+  <bpmn:process id="HelloSdlc" name="Hello SDLC" isExecutable="true">
+    <bpmn:startEvent id="Start" name="Start">
+      <bpmn:outgoing>f1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Analyze" name="Analyze">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="analyst"
+          action="analyze"
+          executionMode="local"
+          purposeType="analysis"
+          policyTag="standard">
+          <agentwerke:prompt>
+            Summarize the requested change in two short bullet points.
+          </agentwerke:prompt>
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>f1</bpmn:incoming>
+      <bpmn:outgoing>f2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Review" name="Review Approval">
+      <bpmn:extensionElements>
+        <agentwerke:approvalTask
+          purposeType="human-approval"
+          policyTag="standard" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f2</bpmn:incoming>
+      <bpmn:outgoing>f3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End" name="Done">
+      <bpmn:incoming>f3</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="f1" sourceRef="Start" targetRef="Analyze" />
+    <bpmn:sequenceFlow id="f2" sourceRef="Analyze" targetRef="Review" />
+    <bpmn:sequenceFlow id="f3" sourceRef="Review" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>
+```
 
 ## What is built
 

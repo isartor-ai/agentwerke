@@ -137,6 +137,7 @@ export interface RunStepModelTrace {
   elapsedMs?: number | null;
   inputTokens: number;
   outputTokens: number;
+  reasoningSummary?: string | null;
   output?: string | null;
   failureReason?: string | null;
   toolCalls: RunStepModelToolCall[];

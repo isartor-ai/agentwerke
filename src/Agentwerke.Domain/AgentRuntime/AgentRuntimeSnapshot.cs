@@ -156,6 +156,8 @@ public sealed record AgentModelTraceRecord
 
     public int OutputTokens { get; init; }
 
+    public string? ReasoningSummary { get; init; }
+
     public string? Output { get; init; }
 
     public string? FailureReason { get; init; }

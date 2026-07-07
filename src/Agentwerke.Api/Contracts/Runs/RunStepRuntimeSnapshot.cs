@@ -89,6 +89,7 @@ public sealed record RunStepModelTrace(
     double? ElapsedMs,
     int InputTokens,
     int OutputTokens,
+    string? ReasoningSummary,
     string? Output,
     string? FailureReason,
     IReadOnlyList<RunStepModelToolCall> ToolCalls);

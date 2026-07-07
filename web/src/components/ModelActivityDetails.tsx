@@ -58,6 +58,13 @@ export function ModelActivityDetails({
                 </div>
               </div>
 
+              {trace.reasoningSummary ? (
+                <div className="model-trace-block">
+                  <h4>Visible Reasoning</h4>
+                  <pre className="adp-pre">{trace.reasoningSummary}</pre>
+                </div>
+              ) : null}
+
               {toolCalls.length > 0 ? (
                 <div className="model-trace-block">
                   <h4>Tool Calls</h4>
@@ -71,7 +78,6 @@ export function ModelActivityDetails({
                   </ul>
                 </div>
               ) : null}
-
               {trace.output ? (
                 <div className="model-trace-block">
                   <h4>Visible Output</h4>

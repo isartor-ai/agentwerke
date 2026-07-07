@@ -1975,6 +1975,36 @@ th {
   font-size: 0.86rem;
 }
 
+.timeline-reasoning-badge {
+  white-space: nowrap;
+}
+
+.timeline-reasoning-log {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.25rem;
+  background: var(--color-surface-low);
+}
+
+.timeline-reasoning-log h3 {
+  margin: 0;
+  color: var(--color-text-strong);
+  font-size: 0.86rem;
+}
+
+.timeline-reasoning-log ol,
+.timeline-reasoning-log p {
+  margin: 0;
+}
+
+.timeline-reasoning-log ol {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.2rem;
+}
 .policy-box {
   border: 1px solid rgb(255 180 171 / 0.45);
   background: rgb(255 180 171 / 0.08);

@@ -143,6 +143,7 @@ public sealed class ApiContractMappingsTests
                                 ElapsedMs = 1875,
                                 InputTokens = 512,
                                 OutputTokens = 256,
+                                ReasoningSummary = "Checked requirements and used the PR creation tool.",
                                 Output = "generated spec",
                                 ToolCalls =
                                 [
@@ -196,6 +197,7 @@ public sealed class ApiContractMappingsTests
         Assert.Equal(1875, step.RuntimeSnapshot.TokenUsage.ElapsedMs);
         var trace = Assert.Single(step.RuntimeSnapshot.ModelTraces);
         Assert.Equal("completed", trace.Status);
+        Assert.Equal("Checked requirements and used the PR creation tool.", trace.ReasoningSummary);
         Assert.Equal("generated spec", trace.Output);
         Assert.Equal("github.create_pull_request", Assert.Single(trace.ToolCalls).Name);
     }
