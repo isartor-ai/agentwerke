@@ -2003,7 +2003,67 @@ th {
 .timeline-reasoning-log ol {
   display: grid;
   gap: 0.35rem;
-  padding-left: 1.2rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+.timeline-reasoning-entry {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.25rem;
+  background: var(--color-surface);
+}
+
+.timeline-reasoning-entry p {
+  margin: 0;
+}
+
+.timeline-reasoning-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.timeline-reasoning-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  color: var(--color-text-strong);
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.timeline-reasoning-label {
+  color: var(--color-muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.timeline-reasoning-entry-started {
+  border-color: rgb(127 119 221 / 0.35);
+}
+
+.timeline-reasoning-entry-reasoning {
+  border-color: rgb(29 158 117 / 0.35);
+}
+
+.timeline-reasoning-entry-recorded,
+.timeline-reasoning-entry-tool-finished {
+  border-color: rgb(99 153 34 / 0.35);
+}
+
+.timeline-reasoning-entry-tool-started {
+  border-color: rgb(55 138 221 / 0.35);
+}
+
+.timeline-reasoning-entry-tool-blocked,
+.timeline-reasoning-entry-tool-failed {
+  border-color: rgb(216 90 48 / 0.35);
 }
 .policy-box {
   border: 1px solid rgb(255 180 171 / 0.45);

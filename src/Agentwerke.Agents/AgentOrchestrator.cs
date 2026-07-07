@@ -87,7 +87,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         string stepId,
         BpmnNodeDefinition node,
         int attempt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var metadata = node.Metadata;
         if (metadata is null)
@@ -312,7 +313,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     modelRunRequest,
                     profile,
                     metadata.SandboxProfile ?? profile?.SandboxProfiles.FirstOrDefault() ?? SandboxProfileNames.Offline,
-                    cancellationToken);
+                    cancellationToken,
+                    progressReporter);
                 break;
             case AgentExecutionModes.ToolSandboxed:
             {
@@ -343,7 +345,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             default:
                 try
                 {
-                    modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken);
+                    modelResult = await _modelRunner.RunAsync(modelRunRequest, cancellationToken, progressReporter);
                 }
                 catch (AgentInteractionRequiredException ex)
                 {

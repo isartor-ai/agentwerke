@@ -84,7 +84,8 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
     public async Task<OpenSandboxCommandResult> RunCommandAsync(
         string sandboxId,
         OpenSandboxRunCommandRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxId);
         ArgumentNullException.ThrowIfNull(request);
@@ -100,9 +101,9 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
             {
                 return request.Mode switch
                 {
-                    SandboxCommandExecutionMode.Background => await RunBackgroundCommandAsync(sandboxId, request, linkedCts.Token),
-                    SandboxCommandExecutionMode.Session => await RunInSessionAsync(sandboxId, request, linkedCts.Token),
-                    _ => await RunForegroundCommandAsync(sandboxId, request, linkedCts.Token)
+                    SandboxCommandExecutionMode.Background => await RunBackgroundCommandAsync(sandboxId, request, logReporter, linkedCts.Token),
+                    SandboxCommandExecutionMode.Session => await RunInSessionAsync(sandboxId, request, logReporter, linkedCts.Token),
+                    _ => await RunForegroundCommandAsync(sandboxId, request, logReporter, linkedCts.Token)
                 };
             }
             catch (OpenSandboxApiException ex) when (IsTransientApiFailure(ex))
@@ -250,6 +251,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
     private async Task<OpenSandboxCommandResult> RunForegroundCommandAsync(
         string sandboxId,
         OpenSandboxRunCommandRequest request,
+        SandboxLogReporter? logReporter,
         CancellationToken cancellationToken)
     {
         var response = await StreamExecdAsync(
@@ -266,6 +268,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
                     : null
             },
             "execd.run.request_id",
+            logReporter,
             cancellationToken);
 
         return ToForegroundCommandResult(sandboxId, response, sessionId: null, request.TimeoutSeconds);
@@ -274,6 +277,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
     private async Task<OpenSandboxCommandResult> RunBackgroundCommandAsync(
         string sandboxId,
         OpenSandboxRunCommandRequest request,
+        SandboxLogReporter? logReporter,
         CancellationToken cancellationToken)
     {
         var response = await StreamExecdAsync(
@@ -290,6 +294,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
                     : null
             },
             "execd.run.request_id",
+            logReporter,
             cancellationToken);
 
         var commandId = response.ExecutionId;
@@ -315,7 +320,12 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
                 }
 
                 combinedLogs.Append(logs.Content);
-                structuredLogs.Add(new SandboxLogEntry("stdout", logs.Content, DateTimeOffset.UtcNow));
+                var logEntry = new SandboxLogEntry("stdout", logs.Content, DateTimeOffset.UtcNow);
+                structuredLogs.Add(logEntry);
+                if (logReporter is not null)
+                {
+                    await logReporter(logEntry, cancellationToken);
+                }
             }
 
             cursor = logs.Cursor;
@@ -346,6 +356,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
     private async Task<OpenSandboxCommandResult> RunInSessionAsync(
         string sandboxId,
         OpenSandboxRunCommandRequest request,
+        SandboxLogReporter? logReporter,
         CancellationToken cancellationToken)
     {
         var sessionId = await CreateSessionAsync(sandboxId, request.WorkingDirectory, cancellationToken);
@@ -362,6 +373,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
                     Timeout = request.TimeoutSeconds > 0 ? request.TimeoutSeconds * 1000L : null
                 },
                 "execd.run.request_id",
+                logReporter,
                 cancellationToken);
 
             return ToForegroundCommandResult(sandboxId, response, sessionId, request.TimeoutSeconds);
@@ -712,6 +724,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
         string relativePath,
         object payload,
         string requestIdDiagnosticKey,
+        SandboxLogReporter? logReporter,
         CancellationToken cancellationToken)
     {
         var endpoint = await ResolveExecdEndpointAsync(sandboxId, cancellationToken);
@@ -735,7 +748,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
             throw await CreateApiExceptionAsync(response);
         }
 
-        return await ReadExecdStreamAsync(response, cancellationToken);
+        return await ReadExecdStreamAsync(response, logReporter, cancellationToken);
     }
 
     private async Task<OpenSandboxHttpResponse<T?>> SendLifecycleAsync<T>(
@@ -852,6 +865,7 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
 
     private static async Task<ExecdStreamResult> ReadExecdStreamAsync(
         HttpResponseMessage response,
+        SandboxLogReporter? logReporter,
         CancellationToken cancellationToken)
     {
         var combinedLogs = new StringBuilder();
@@ -894,10 +908,15 @@ public sealed class OpenSandboxApiClient : IOpenSandboxClient
                     if (!string.IsNullOrEmpty(@event.Text))
                     {
                         combinedLogs.Append(@event.Text);
-                        structuredLogs.Add(new SandboxLogEntry(
+                        var logEntry = new SandboxLogEntry(
                             @event.Type.ToLowerInvariant(),
                             @event.Text,
-                            ToTimestamp(@event.Timestamp)));
+                            ToTimestamp(@event.Timestamp));
+                        structuredLogs.Add(logEntry);
+                        if (logReporter is not null)
+                        {
+                            await logReporter(logEntry, cancellationToken);
+                        }
                     }
                     break;
 

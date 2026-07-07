@@ -223,6 +223,7 @@ public sealed class OpenSandboxApiClientTests
     [Fact]
     public async Task RunCommandAsync_SessionMode_StreamsOutputAndDeletesSession()
     {
+        var streamedLogs = new List<SandboxLogEntry>();
         var handler = new SequencedHttpMessageHandler();
         handler.Enqueue((request, _) =>
         {
@@ -285,7 +286,12 @@ data: {"type":"execution_complete","timestamp":3}
                 TimeoutSeconds: 30,
                 StandardInput: null,
                 StreamOutput: true),
-            CancellationToken.None);
+            CancellationToken.None,
+            (logEntry, _) =>
+            {
+                streamedLogs.Add(logEntry);
+                return Task.CompletedTask;
+            });
 
         Assert.Equal(SandboxCommandState.Completed, result.State);
         Assert.Equal(0, result.ExitCode);
@@ -295,6 +301,9 @@ data: {"type":"execution_complete","timestamp":3}
         Assert.Null(result.FailureReason);
         Assert.Single(result.StructuredLogs);
         Assert.Equal("stdout", result.StructuredLogs[0].Stream);
+        Assert.Single(streamedLogs);
+        Assert.Equal("stdout", streamedLogs[0].Stream);
+        Assert.Equal("hello\n", streamedLogs[0].Message);
         Assert.NotNull(result.Diagnostics);
         Assert.Equal("run-req", result.Diagnostics!["execd.run.request_id"]);
         handler.AssertCompleted();

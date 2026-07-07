@@ -2,6 +2,7 @@ using Agentwerke.Agents.Mcp;
 using Agentwerke.Agents.Models;
 using Agentwerke.Agents.Tools;
 using Agentwerke.Domain.AgentRuntime;
+using Agentwerke.Workflows.Runtime;
 
 namespace Agentwerke.Agents.Tests;
 
@@ -142,6 +143,61 @@ public sealed class SandboxedAgentRuntimeExecutorTests
         Assert.Equal("completed", result.ToolInvocations[1].Status);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WhenProgressReporterIsProvided_ForwardsReasoningAndToolLifecycle()
+    {
+        var tool = new StubDirectTool("github.create_pull_request", AgentToolCategories.Integration);
+        var executor = new SandboxedAgentRuntimeExecutor(
+            new StubLanguageModelClient(_ => new ToolCallingPlan(
+                "github.create_pull_request",
+                new Dictionary<string, string>
+                {
+                    ["head_branch"] = "agentwerke/run-1",
+                    ["title"] = "Agentwerke PR",
+                    ["body"] = "Body",
+                    ["commit_message"] = "Commit"
+                },
+                "PR ready.",
+                "Inspecting the repository state before opening the pull request.")),
+            new StubMcpToolSessionFactory(new StubMcpToolSession([])),
+            new ToolRegistry([tool]));
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        await executor.ExecuteAsync(
+            MakeEnvelope(
+                resolvedTools:
+                [
+                    new SandboxedToolContract("github.create_pull_request", AgentToolCategories.Integration)
+                ]),
+            CancellationToken.None,
+            (update, _) =>
+            {
+                updates.Add(update);
+                return Task.CompletedTask;
+            });
+
+        Assert.Collection(
+            updates,
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.Reasoning, update.Kind);
+                Assert.Equal("Inspecting the repository state before opening the pull request.", update.Summary);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.ToolStarted, update.Kind);
+                Assert.Equal("github.create_pull_request", update.ToolName);
+                Assert.Equal("started", update.Status);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.ToolFinished, update.Kind);
+                Assert.Equal("github.create_pull_request", update.ToolName);
+                Assert.Equal("completed", update.Status);
+                Assert.Equal("Tool 'github.create_pull_request' completed.", update.Summary);
+            });
+    }
+
     private static SandboxedAgentRunEnvelope MakeEnvelope(
         string agentName = "weather-agent",
         string action = "weather.plan",
@@ -180,9 +236,19 @@ public sealed class SandboxedAgentRuntimeExecutorTests
         public async Task<LanguageModelResponse> RunAsync(
             LanguageModelRequest request,
             Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
         {
             var plan = _planBuilder(request);
+            if (progressReporter is not null && !string.IsNullOrWhiteSpace(plan.ReasoningSummary))
+            {
+                await progressReporter(
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.Reasoning,
+                        plan.ReasoningSummary),
+                    cancellationToken);
+            }
+
             if (!string.IsNullOrWhiteSpace(plan.ToolName))
             {
                 await toolExecutor(
@@ -203,7 +269,8 @@ public sealed class SandboxedAgentRuntimeExecutorTests
     private sealed record ToolCallingPlan(
         string? ToolName,
         IReadOnlyDictionary<string, string>? Input,
-        string FinalOutput);
+        string FinalOutput,
+        string? ReasoningSummary = null);
 
     private sealed class StubMcpToolSessionFactory : IMcpToolSessionFactory
     {

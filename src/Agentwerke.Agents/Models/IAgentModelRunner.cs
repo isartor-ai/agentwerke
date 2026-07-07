@@ -5,7 +5,10 @@ namespace Agentwerke.Agents.Models;
 
 public sealed class NullAgentModelRunner : IAgentModelRunner
 {
-    public Task<ModelRunResult> RunAsync(ModelRunRequest request, CancellationToken cancellationToken) =>
+    public Task<ModelRunResult> RunAsync(
+        ModelRunRequest request,
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null) =>
         Task.FromResult(new ModelRunResult(
             Succeeded: false,
             Output: null,
@@ -18,7 +21,10 @@ public sealed class NullAgentModelRunner : IAgentModelRunner
 
 public interface IAgentModelRunner
 {
-    Task<ModelRunResult> RunAsync(ModelRunRequest request, CancellationToken cancellationToken);
+    Task<ModelRunResult> RunAsync(
+        ModelRunRequest request,
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null);
 }
 
 public sealed record ModelRunRequest(

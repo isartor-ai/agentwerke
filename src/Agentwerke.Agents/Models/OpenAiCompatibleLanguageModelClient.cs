@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Options;
 
 namespace Agentwerke.Agents.Models;
@@ -30,7 +31,8 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
     public async Task<LanguageModelResponse> RunAsync(
         LanguageModelRequest request,
         Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null)
     {
         var url = $"{_options.ApiBaseUrl.TrimEnd('/')}/chat/completions";
 
@@ -113,6 +115,7 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
                 {
                     var text = message.TryGetProperty("content", out var content) ? content.GetString() : null;
                     var parsed = LanguageModelReasoningParser.Extract(text);
+                    await ReportVisibleReasoningAsync(progressReporter, parsed.ReasoningSummary, cancellationToken);
                     return new LanguageModelResponse(
                         Succeeded: true,
                         Output: parsed.Output,
@@ -123,13 +126,20 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
                         ReasoningSummary: parsed.ReasoningSummary);
                 }
 
+                var assistantContent = message.TryGetProperty("content", out var assistantContentElement)
+                    && assistantContentElement.ValueKind == JsonValueKind.String
+                    ? assistantContentElement.GetString()
+                    : null;
+                await ReportVisibleReasoningAsync(
+                    progressReporter,
+                    LanguageModelReasoningParser.ExtractVisibleSummary(assistantContent, allowPlainTextFallback: true),
+                    cancellationToken);
+
                 // Append the assistant turn (verbatim tool_calls) so the model sees its own call.
                 messages.Add(new JsonObject
                 {
                     ["role"] = "assistant",
-                    ["content"] = message.TryGetProperty("content", out var ac) && ac.ValueKind == JsonValueKind.String
-                        ? ac.GetString()
-                        : null,
+                    ["content"] = assistantContent,
                     ["tool_calls"] = JsonNode.Parse(toolCalls.GetRawText()),
                 });
 
@@ -274,5 +284,22 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
         }
 
         return result;
+    }
+
+    private static Task ReportVisibleReasoningAsync(
+        AgentExecutionProgressReporter? progressReporter,
+        string? summary,
+        CancellationToken cancellationToken)
+    {
+        if (progressReporter is null || string.IsNullOrWhiteSpace(summary))
+        {
+            return Task.CompletedTask;
+        }
+
+        return progressReporter(
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.Reasoning,
+                summary),
+            cancellationToken);
     }
 }

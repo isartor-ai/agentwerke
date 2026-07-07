@@ -157,6 +157,49 @@ describe('RunDetail integration', () => {
     expect(screen.getByText('Inspecting the issue, loading context, and preparing the model/tool loop.')).toBeInTheDocument();
   });
 
+  it('streams reasoning progress events without reloading the full run payload', async () => {
+    let emitEvent: ((event: RunEvent) => void) | undefined;
+    vi.mocked(apiClient.streamRunEvents).mockImplementation((_runId, onEvent) => {
+      emitEvent = onEvent;
+      return undefined;
+    });
+
+    renderDetail();
+
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(apiClient.getRun)).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      emitEvent?.({
+        id: 'evt-live-reasoning',
+        type: 'agent_reasoning_delta',
+        message: JSON.stringify({
+          stepId: 'step-2',
+          summary: 'Inspecting the repository context before opening a tool call.',
+        }),
+        createdAt: new Date().toISOString(),
+      });
+      emitEvent?.({
+        id: 'evt-live-tool',
+        type: 'agent_tool_call_started',
+        message: JSON.stringify({
+          stepId: 'step-2',
+          toolName: 'repo.inspect_files',
+          status: 'started',
+          summary: "Calling tool 'repo.inspect_files'.",
+        }),
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    expect(await screen.findByText('Inspecting the repository context before opening a tool call.')).toBeInTheDocument();
+    expect(screen.getByText('repo.inspect_files')).toBeInTheDocument();
+    expect(screen.getByText("Calling tool 'repo.inspect_files'.")).toBeInTheDocument();
+    expect(vi.mocked(apiClient.getRun)).toHaveBeenCalledTimes(1);
+  });
+
   it('synthesizes a visible reasoning start summary from legacy service task events', async () => {
     vi.mocked(apiClient.getRun).mockResolvedValue({
       ...runsFixture[0],

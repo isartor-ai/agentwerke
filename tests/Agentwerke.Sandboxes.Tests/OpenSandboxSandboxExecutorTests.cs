@@ -90,6 +90,41 @@ public sealed class OpenSandboxSandboxExecutorTests
         Assert.Equal(0, client.DeleteCallCount);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ForwardsLiveLogsToReporter()
+    {
+        var client = new FakeOpenSandboxClient
+        {
+            CreateResult = new OpenSandboxSandboxHandle("sbx-3"),
+            EmitLogEntry = new SandboxLogEntry("stdout", "hello\n", DateTimeOffset.UtcNow)
+        };
+        var executor = CreateExecutor(client);
+        var streamedLogs = new List<SandboxLogEntry>();
+
+        var result = await executor.ExecuteAsync(
+            new SandboxExecutionRequest(
+                RunId: "run-126",
+                StepId: "step-9",
+                AgentName: "sandbox-agent",
+                Action: "execute",
+                Environment: "test",
+                PurposeType: "implementation",
+                PolicyTag: "issue-126",
+                Attempt: 1,
+                Command: new SandboxCommandSpec(["sh", "-c", "echo hello"])),
+            CancellationToken.None,
+            (logEntry, _) =>
+            {
+                streamedLogs.Add(logEntry);
+                return Task.CompletedTask;
+            });
+
+        Assert.True(result.Succeeded);
+        Assert.Single(streamedLogs);
+        Assert.Equal("stdout", streamedLogs[0].Stream);
+        Assert.Equal("hello\n", streamedLogs[0].Message);
+    }
+
     private static OpenSandboxSandboxExecutor CreateExecutor(FakeOpenSandboxClient client)
     {
         var options = Options.Create(new SandboxOptions());
@@ -116,6 +151,8 @@ public sealed class OpenSandboxSandboxExecutorTests
         public OpenSandboxDiagnosticsResult DiagnosticsResult { get; set; } = new(
             new Dictionary<string, string>());
 
+        public SandboxLogEntry? EmitLogEntry { get; set; }
+
         public int DeleteCallCount { get; private set; }
 
         public Task<OpenSandboxSandboxHandle> CreateAsync(
@@ -126,8 +163,21 @@ public sealed class OpenSandboxSandboxExecutorTests
         public Task<OpenSandboxCommandResult> RunCommandAsync(
             string sandboxId,
             OpenSandboxRunCommandRequest request,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(CommandResult);
+            CancellationToken cancellationToken,
+            SandboxLogReporter? logReporter = null) =>
+            RunCommandCoreAsync(cancellationToken, logReporter);
+
+        private async Task<OpenSandboxCommandResult> RunCommandCoreAsync(
+            CancellationToken cancellationToken,
+            SandboxLogReporter? logReporter)
+        {
+            if (EmitLogEntry is not null && logReporter is not null)
+            {
+                await logReporter(EmitLogEntry, cancellationToken);
+            }
+
+            return CommandResult;
+        }
 
         public Task<IReadOnlyList<OpenSandboxArtifactFile>> CollectArtifactsAsync(
             string sandboxId,

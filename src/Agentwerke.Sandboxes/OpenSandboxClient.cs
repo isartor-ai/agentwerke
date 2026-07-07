@@ -9,7 +9,8 @@ public interface IOpenSandboxClient
     Task<OpenSandboxCommandResult> RunCommandAsync(
         string sandboxId,
         OpenSandboxRunCommandRequest request,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null);
 
     Task<IReadOnlyList<OpenSandboxArtifactFile>> CollectArtifactsAsync(
         string sandboxId,
@@ -48,7 +49,8 @@ public sealed class UnimplementedOpenSandboxClient : IOpenSandboxClient
     public Task<OpenSandboxCommandResult> RunCommandAsync(
         string sandboxId,
         OpenSandboxRunCommandRequest request,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null) =>
         Task.FromException<OpenSandboxCommandResult>(NotImplemented());
 
     public Task<IReadOnlyList<OpenSandboxArtifactFile>> CollectArtifactsAsync(

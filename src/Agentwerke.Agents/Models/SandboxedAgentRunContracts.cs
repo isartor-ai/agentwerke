@@ -1,4 +1,5 @@
 using Agentwerke.Domain.AgentRuntime;
+using Agentwerke.Workflows.Runtime;
 
 namespace Agentwerke.Agents.Models;
 
@@ -46,5 +47,6 @@ public interface ISandboxedAgentRunner
         ModelRunRequest request,
         AgentProfile? profile,
         string sandboxProfileName,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null);
 }

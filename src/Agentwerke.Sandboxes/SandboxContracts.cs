@@ -1,5 +1,9 @@
 namespace Agentwerke.Sandboxes;
 
+public delegate Task SandboxLogReporter(
+    SandboxLogEntry logEntry,
+    CancellationToken cancellationToken);
+
 /// <summary>
 /// All inputs needed to run one agent task inside a sandbox container.
 /// </summary>

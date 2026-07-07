@@ -1664,7 +1664,10 @@ public sealed class PolicyEvaluationServiceTests
 
         public SandboxExecutionRequest? LastRequest { get; private set; }
 
-        public Task<SandboxExecutionResult> ExecuteAsync(SandboxExecutionRequest request, CancellationToken cancellationToken)
+        public Task<SandboxExecutionResult> ExecuteAsync(
+            SandboxExecutionRequest request,
+            CancellationToken cancellationToken,
+            SandboxLogReporter? logReporter = null)
         {
             ExecuteCalls++;
             LastRequest = request;
@@ -1686,7 +1689,8 @@ public sealed class PolicyEvaluationServiceTests
             ModelRunRequest request,
             AgentProfile? profile,
             string sandboxProfileName,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
         {
             ExecuteCalls++;
             return Task.FromResult(new ModelRunResult(

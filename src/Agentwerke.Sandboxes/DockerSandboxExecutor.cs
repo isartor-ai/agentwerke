@@ -29,7 +29,8 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
 
     public async Task<SandboxExecutionResult> ExecuteAsync(
         SandboxExecutionRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null)
     {
         var started = DateTimeOffset.UtcNow;
         var image = request.Image ?? _options.DefaultImage;

@@ -11,7 +11,8 @@ public interface IServiceTaskExecutor
         string stepId,
         BpmnNodeDefinition node,
         int attempt,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null);
 }
 
 public static class AgentTaskOutcomeStatuses

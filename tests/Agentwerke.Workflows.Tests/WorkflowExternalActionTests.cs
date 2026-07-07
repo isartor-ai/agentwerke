@@ -54,7 +54,8 @@ public sealed class WorkflowExternalActionTests
             string stepId,
             BpmnNodeDefinition node,
             int attempt,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
         {
             return Task.FromResult(new AgentTaskOutcome(
                 Succeeded: true,

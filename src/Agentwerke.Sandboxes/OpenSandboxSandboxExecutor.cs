@@ -22,7 +22,8 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
 
     public async Task<SandboxExecutionResult> ExecuteAsync(
         SandboxExecutionRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter = null)
     {
         var started = DateTimeOffset.UtcNow;
         string? sandboxId = null;
@@ -40,7 +41,7 @@ public sealed class OpenSandboxSandboxExecutor : ISandboxProviderExecutor
             sandboxId = sandbox.SandboxId;
             createDiagnostics = sandbox.Metadata;
 
-            var commandResult = await _client.RunCommandAsync(sandboxId, commandRequest, cancellationToken);
+            var commandResult = await _client.RunCommandAsync(sandboxId, commandRequest, cancellationToken, logReporter);
             commandState = commandResult.State;
 
             var artifacts = await _client.CollectArtifactsAsync(sandboxId, artifactRequest, cancellationToken);

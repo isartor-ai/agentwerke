@@ -1,3 +1,5 @@
+using Agentwerke.Workflows.Runtime;
+
 namespace Agentwerke.Agents.Models;
 
 public interface ILanguageModelClient
@@ -5,7 +7,8 @@ public interface ILanguageModelClient
     Task<LanguageModelResponse> RunAsync(
         LanguageModelRequest request,
         Func<LanguageModelToolCall, CancellationToken, Task<LanguageModelToolResult>> toolExecutor,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        AgentExecutionProgressReporter? progressReporter = null);
 }
 
 public sealed record LanguageModelRequest(
