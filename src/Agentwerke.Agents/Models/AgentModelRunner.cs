@@ -152,7 +152,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
                 $"Calling tool '{call.Name}'.",
                 ToolName: call.Name,
                 ToolCallId: call.Id,
-                Status: "started"),
+                Status: "started",
+                Detail: ToolActivityFormatter.DescribeInput(call.Name, call.Input)),
             cancellationToken);
 
         ToolGatewayResult result;
@@ -197,7 +198,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
                 BuildToolCompletionSummary(call.Name, result),
                 ToolName: call.Name,
                 ToolCallId: call.Id,
-                Status: result.Invocation.Status),
+                Status: result.Invocation.Status,
+                Detail: ToolActivityFormatter.DescribeResult(result.Invocation)),
             cancellationToken);
 
         return new LanguageModelToolResult(

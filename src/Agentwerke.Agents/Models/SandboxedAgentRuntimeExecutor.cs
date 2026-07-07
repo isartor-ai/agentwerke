@@ -108,7 +108,8 @@ public sealed class SandboxedAgentRuntimeExecutor
                 $"Calling tool '{call.Name}'.",
                 ToolName: call.Name,
                 ToolCallId: call.Id,
-                Status: "started"),
+                Status: "started",
+                Detail: ToolActivityFormatter.DescribeInput(call.Name, call.Input)),
             cancellationToken);
 
         if (!descriptors.TryGetValue(call.Name, out var descriptor))
@@ -323,7 +324,8 @@ public sealed class SandboxedAgentRuntimeExecutor
                 BuildToolCompletionSummary(descriptor.Name, invocation.Status, invocation.ErrorMessage),
                 ToolName: descriptor.Name,
                 ToolCallId: call.Id,
-                Status: invocation.Status),
+                Status: invocation.Status,
+                Detail: ToolActivityFormatter.DescribeResult(invocation)),
             cancellationToken);
 
         return new LanguageModelToolResult(
@@ -441,7 +443,8 @@ public sealed class SandboxedAgentRuntimeExecutor
                 BuildToolCompletionSummary(descriptor.Name, invocation.Status, invocation.ErrorMessage),
                 ToolName: descriptor.Name,
                 ToolCallId: call.Id,
-                Status: invocation.Status),
+                Status: invocation.Status,
+                Detail: ToolActivityFormatter.DescribeResult(invocation)),
             cancellationToken);
 
         return new LanguageModelToolResult(
