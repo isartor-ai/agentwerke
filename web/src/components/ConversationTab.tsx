@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { RunInteraction } from '../types';
+import { AgentIdentityBadge } from './AgentIdentityBadge';
 import { agentIdentity } from '../utils/agentIdentity';
 
 interface ConversationTabProps {
@@ -88,14 +89,7 @@ function ConversationEntry({ interaction, canAnswer, onAnswer }: ConversationEnt
   return (
     <li className="conversation-entry" style={{ borderLeftColor: identity.accent, borderLeftWidth: 3 }}>
       <div className="conversation-head">
-        <span
-          className="conversation-avatar"
-          style={{ backgroundColor: identity.accent, color: identity.onAccent }}
-          aria-hidden="true"
-        >
-          {identity.initials}
-        </span>
-        <strong className="conversation-from" style={{ color: identity.accent }}>{interaction.from}</strong>
+        <AgentIdentityBadge name={interaction.from} className="conversation-identity" />
         <span aria-hidden="true"> → </span>
         <span>{addresseeLabel(interaction)}</span>
         <span className="chip chip-static">{kindLabel(interaction)}</span>
