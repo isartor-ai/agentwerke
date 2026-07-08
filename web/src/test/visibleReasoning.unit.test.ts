@@ -30,4 +30,24 @@ describe('extractAgentReasoningByStep — tool activity detail (#activity-log)',
     const details = byStep['step-1'].map((entry) => entry.detail);
     expect(details).toEqual(['src/App.tsx (340 B)', 'src/theme.css (120 B)']);
   });
+
+  it('parses live sandbox log events as activity entries', () => {
+    const byStep = extractAgentReasoningByStep([
+      {
+        id: 'e3',
+        type: 'agent_sandbox_log',
+        createdAt: new Date(2026, 0, 1, 0, 0, 3).toISOString(),
+        message: JSON.stringify({
+          stepId: 'step-1',
+          summary: 'npm test -- --runInBand',
+          status: 'stdout',
+        }),
+      },
+    ]);
+
+    const entry = byStep['step-1'][0];
+    expect(entry.kind).toBe('sandbox_log');
+    expect(entry.status).toBe('stdout');
+    expect(entry.summary).toBe('npm test -- --runInBand');
+  });
 });

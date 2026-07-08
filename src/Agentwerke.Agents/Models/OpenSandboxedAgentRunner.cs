@@ -113,6 +113,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         environmentVariables[EnvelopeEnvironmentVariable] = payload;
         var seenProgressKeys = new HashSet<string>(StringComparer.Ordinal);
         var liveLogParser = new SandboxProgressMessageCodec.StreamParser();
+        var liveLogLines = new SandboxLiveLogAccumulator();
 
         async Task ForwardProgressAsync(AgentExecutionProgressUpdate update, CancellationToken ct)
         {
@@ -121,10 +122,13 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 return;
             }
 
-            var stableKey = SandboxProgressMessageCodec.BuildStableKey(update);
-            if (!seenProgressKeys.Add(stableKey))
+            if (!string.Equals(update.Kind, AgentExecutionProgressKinds.SandboxLog, StringComparison.Ordinal))
             {
-                return;
+                var stableKey = SandboxProgressMessageCodec.BuildStableKey(update);
+                if (!seenProgressKeys.Add(stableKey))
+                {
+                    return;
+                }
             }
 
             await progressReporter(update, ct);
@@ -132,8 +136,13 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
         async Task HandleSandboxLogAsync(SandboxLogEntry logEntry, CancellationToken ct)
         {
-            var updates = liveLogParser.Read(logEntry.Message, out _);
+            var updates = liveLogParser.Read(logEntry.Message, out var cleanedText);
             foreach (var update in updates)
+            {
+                await ForwardProgressAsync(update, ct);
+            }
+
+            foreach (var update in liveLogLines.Read(logEntry.Stream, cleanedText))
             {
                 await ForwardProgressAsync(update, ct);
             }
@@ -163,6 +172,11 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 ArtifactPaths: ["/output"]),
             cancellationToken,
             progressReporter is null ? null : HandleSandboxLogAsync);
+
+        foreach (var update in liveLogLines.Flush())
+        {
+            await ForwardProgressAsync(update, cancellationToken);
+        }
 
         var recoveredUpdates = new List<AgentExecutionProgressUpdate>();
         var cleanedStructuredLogs = SandboxProgressMessageCodec.RemoveMarkers(sandboxResult.StructuredLogs, recoveredUpdates.Add);
@@ -243,6 +257,99 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
             SandboxExecution: sandboxExecution,
             ModelTrace: runResult.ModelTrace);
+    }
+
+    private static AgentExecutionProgressUpdate? CreateSandboxLogUpdate(string stream, string line)
+    {
+        var redacted = SecretRedactor.Redact(line).Trim();
+        if (string.IsNullOrWhiteSpace(redacted))
+        {
+            return null;
+        }
+
+        const int maxLength = 320;
+        if (redacted.Length > maxLength)
+        {
+            redacted = redacted[..maxLength].TrimEnd() + "…";
+        }
+
+        return new AgentExecutionProgressUpdate(
+            AgentExecutionProgressKinds.SandboxLog,
+            redacted,
+            Status: string.IsNullOrWhiteSpace(stream) ? "stdout" : stream.Trim().ToLowerInvariant());
+    }
+
+    private sealed class SandboxLiveLogAccumulator
+    {
+        private readonly Dictionary<string, StringBuilder> _buffers = new(StringComparer.OrdinalIgnoreCase);
+
+        public IReadOnlyList<AgentExecutionProgressUpdate> Read(string stream, string? chunk)
+        {
+            if (string.IsNullOrEmpty(chunk))
+            {
+                return [];
+            }
+
+            if (!_buffers.TryGetValue(stream, out var buffer))
+            {
+                buffer = new StringBuilder();
+                _buffers[stream] = buffer;
+            }
+
+            buffer.Append(chunk);
+            return DrainCompletedLines(stream, buffer);
+        }
+
+        public IReadOnlyList<AgentExecutionProgressUpdate> Flush()
+        {
+            var updates = new List<AgentExecutionProgressUpdate>();
+            foreach (var (stream, buffer) in _buffers)
+            {
+                if (buffer.Length == 0)
+                {
+                    continue;
+                }
+
+                var update = CreateSandboxLogUpdate(stream, buffer.ToString());
+                if (update is not null)
+                {
+                    updates.Add(update);
+                }
+
+                buffer.Clear();
+            }
+
+            return updates;
+        }
+
+        private static IReadOnlyList<AgentExecutionProgressUpdate> DrainCompletedLines(string stream, StringBuilder buffer)
+        {
+            var updates = new List<AgentExecutionProgressUpdate>();
+            while (true)
+            {
+                var current = buffer.ToString();
+                var newlineIndex = current.IndexOf('\n');
+                if (newlineIndex < 0)
+                {
+                    break;
+                }
+
+                var line = current[..newlineIndex];
+                if (line.EndsWith('\r'))
+                {
+                    line = line[..^1];
+                }
+
+                buffer.Remove(0, newlineIndex + 1);
+                var update = CreateSandboxLogUpdate(stream, line);
+                if (update is not null)
+                {
+                    updates.Add(update);
+                }
+            }
+
+            return updates;
+        }
     }
 
     private async Task<ModelRuntimeResolution> ResolveModelRuntimeAsync(

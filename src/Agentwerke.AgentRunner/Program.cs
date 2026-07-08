@@ -16,7 +16,7 @@ const string ModelMaxToolIterationsEnvironmentVariable = "AGENTWERKE_MODEL_MAX_T
 const string OutputDirectory = "/output";
 const string ResultFileName = "agent-run-result.json";
 
-var result = await RunAsync();
+var result = await RunWithFallbackAsync();
 Directory.CreateDirectory(OutputDirectory);
 var resultPath = Path.Combine(OutputDirectory, ResultFileName);
 // Encoding.UTF8 (unlike the parameterless WriteAllTextAsync overload) writes a
@@ -34,8 +34,34 @@ if (!string.IsNullOrWhiteSpace(result.Output))
 
 return result.Succeeded ? 0 : 1;
 
+static async Task<SandboxedAgentRunResult> RunWithFallbackAsync()
+{
+    try
+    {
+        return await RunAsync();
+    }
+    catch (OperationCanceledException ex)
+    {
+        return new SandboxedAgentRunResult(
+            false,
+            null,
+            $"Sandboxed agent run timed out or was cancelled: {ex.Message}",
+            null);
+    }
+    catch (Exception ex)
+    {
+        return new SandboxedAgentRunResult(
+            false,
+            null,
+            $"Sandboxed agent runner crashed: {ex.Message}",
+            null);
+    }
+}
+
 static async Task<SandboxedAgentRunResult> RunAsync()
 {
+    await ReportSandboxStageAsync("Bootstrapping sandbox runner.");
+
     var envelopePayload = Environment.GetEnvironmentVariable(EnvelopeEnvironmentVariable);
     if (string.IsNullOrWhiteSpace(envelopePayload))
     {
@@ -57,6 +83,8 @@ static async Task<SandboxedAgentRunResult> RunAsync()
     {
         return new SandboxedAgentRunResult(false, null, "Sandboxed agent envelope was empty.", null);
     }
+
+    await ReportSandboxStageAsync($"Loaded sandbox envelope for agent '{envelope.AgentName}' action '{envelope.Action}'.");
 
     var apiKey = Environment.GetEnvironmentVariable(ModelApiKeyEnvironmentVariable)
         ?? Environment.GetEnvironmentVariable(LegacyModelApiKeyEnvironmentVariable);
@@ -83,6 +111,9 @@ static async Task<SandboxedAgentRunResult> RunAsync()
     }
     var modelOptions = Options.Create(languageModelOptions);
 
+    await ReportSandboxStageAsync(
+        $"Configured model provider '{languageModelOptions.Provider}' model '{languageModelOptions.Model}' via '{languageModelOptions.ApiBaseUrl}'.");
+
     // No DI container in the sandboxed runner, so build the resilient HTTP pipeline by hand:
     // retry handler (429/529/5xx) over the default handler, with the configured timeout.
     var httpClient = new HttpClient(new AnthropicRetryHandler(modelOptions) { InnerHandler = new HttpClientHandler() })
@@ -97,12 +128,21 @@ static async Task<SandboxedAgentRunResult> RunAsync()
         client,
         new McpToolSessionFactory(new McpClientFactory()),
         RunnerToolFactory.CreateRegistry(envelope));
+    await ReportSandboxStageAsync("Starting sandboxed agent execution.");
     return await executor.ExecuteAsync(envelope, CancellationToken.None, ReportProgressAsync);
 }
 
 static bool IsOpenAiCompatibleProvider(string? provider) =>
     string.Equals(provider, "openai", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(provider, "litellm", StringComparison.OrdinalIgnoreCase);
+
+static Task ReportSandboxStageAsync(string summary) =>
+    ReportProgressAsync(
+        new AgentExecutionProgressUpdate(
+            AgentExecutionProgressKinds.SandboxLog,
+            summary,
+            Status: "stdout"),
+        CancellationToken.None);
 
 static async Task ReportProgressAsync(AgentExecutionProgressUpdate update, CancellationToken cancellationToken)
 {

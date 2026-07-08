@@ -20,4 +20,7 @@ public sealed record AgentSummary(
     string? Fingerprint,
     IReadOnlyList<string> SandboxProfiles,
     string? IdentityColor,
+    string? AvatarStyle,
+    string? AvatarSeed,
+    string? IdentityIconKey,
     string? IdentityIcon);

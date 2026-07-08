@@ -522,6 +522,9 @@ export interface AgentSummary {
   fingerprint?: string;
   sandboxProfiles: string[];
   identityColor?: string;
+  avatarStyle?: string;
+  avatarSeed?: string;
+  identityIconKey?: string;
   identityIcon?: string;
 }
 

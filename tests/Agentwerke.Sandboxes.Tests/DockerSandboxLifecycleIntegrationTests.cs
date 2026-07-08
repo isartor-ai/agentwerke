@@ -138,6 +138,40 @@ public sealed class DockerSandboxLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_DefaultNetwork_InjectsHostDockerInternalAlias()
+    {
+        if (!IsEnabled) return;
+
+        using var docker = CreateDockerClient();
+        var artifactsRoot = CreateTempArtifactsRoot();
+        try
+        {
+            var executor = CreateExecutor(docker, artifactsRoot);
+            var request = new SandboxExecutionRequest(
+                RunId: "e2e-run",
+                StepId: $"lifecycle-host-alias-{Guid.NewGuid():N}",
+                AgentName: "developer",
+                Action: "implementation.build",
+                Environment: "ci",
+                PurposeType: "implementation",
+                PolicyTag: "agent-sandboxed-e2e",
+                Attempt: 1,
+                Image: "alpine:3.19",
+                Command: new SandboxCommandSpec(
+                    ["sh", "-c", "mkdir -p /output && cat /etc/hosts | tee /output/hosts.txt"]));
+
+            var result = await executor.ExecuteAsync(request, CancellationToken.None);
+
+            Assert.True(result.Succeeded, result.FailureReason);
+            Assert.Contains("host.docker.internal", result.Artifacts["hosts.txt"]);
+        }
+        finally
+        {
+            CleanupArtifactsRoot(artifactsRoot);
+        }
+    }
+
+    [Fact]
     public async Task ExecuteAsync_NonZeroExit_ReturnsFailureWithExitCodeAndKeepsArtifacts()
     {
         if (!IsEnabled) return;
@@ -169,6 +203,58 @@ public sealed class DockerSandboxLifecycleIntegrationTests
             Assert.Contains(result.Artifacts.Values, v => v.Contains("partial", StringComparison.Ordinal));
 
             await AssertContainerRemovedAsync(docker, result.ProviderSandboxId!);
+        }
+        finally
+        {
+            CleanupArtifactsRoot(artifactsRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RealContainer_StreamsLogsBeforeContainerCompletes()
+    {
+        if (!IsEnabled) return;
+
+        using var docker = CreateDockerClient();
+        var artifactsRoot = CreateTempArtifactsRoot();
+        try
+        {
+            var executor = CreateExecutor(docker, artifactsRoot);
+            var request = new SandboxExecutionRequest(
+                RunId: "e2e-run",
+                StepId: $"lifecycle-stream-{Guid.NewGuid():N}",
+                AgentName: "developer",
+                Action: "implementation.build",
+                Environment: "ci",
+                PurposeType: "implementation",
+                PolicyTag: "agent-sandboxed-e2e",
+                Attempt: 1,
+                Image: "alpine:3.19",
+                Command: new SandboxCommandSpec(
+                    ["sh", "-c", "echo live-start && sleep 2 && echo live-end && mkdir -p /output && echo done > /output/result.txt"]));
+
+            var firstLogSeen = new TaskCompletionSource<SandboxLogEntry>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var executionTask = executor.ExecuteAsync(
+                request,
+                CancellationToken.None,
+                (entry, _) =>
+                {
+                    if (entry.Message.Contains("live-start", StringComparison.Ordinal))
+                    {
+                        firstLogSeen.TrySetResult(entry);
+                    }
+
+                    return Task.CompletedTask;
+                });
+
+            var completed = await Task.WhenAny(firstLogSeen.Task, executionTask, Task.Delay(TimeSpan.FromSeconds(30)));
+            Assert.Same(firstLogSeen.Task, completed);
+            Assert.False(executionTask.IsCompleted, "The first log line should arrive before the container exits.");
+
+            var result = await executionTask;
+            Assert.True(result.Succeeded, result.FailureReason);
+            Assert.Contains(result.StructuredLogs ?? [], entry => entry.Message.Contains("live-start", StringComparison.Ordinal));
+            Assert.Contains(result.StructuredLogs ?? [], entry => entry.Message.Contains("live-end", StringComparison.Ordinal));
         }
         finally
         {

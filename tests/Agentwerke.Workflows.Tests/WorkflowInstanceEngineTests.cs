@@ -515,6 +515,9 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Contains(events, static e =>
             e.Type == "agent_tool_call_finished" &&
             e.Message.Contains("\"status\":\"completed\"", StringComparison.Ordinal));
+        Assert.Contains(events, static e =>
+            e.Type == "agent_sandbox_log" &&
+            e.Message.Contains("git status --short", StringComparison.Ordinal));
     }
 
     private static BpmnWorkflowDefinition CreateReferenceDefinition()
@@ -850,6 +853,12 @@ public sealed class WorkflowInstanceEngineTests
                         ToolName: "github.read_issue",
                         ToolCallId: "call-1",
                         Status: "completed"),
+                    cancellationToken);
+                await progressReporter(
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.SandboxLog,
+                        "git status --short",
+                        Status: "stdout"),
                     cancellationToken);
             }
 

@@ -5,6 +5,7 @@ interface VisibleReasoningLogProps {
   isRunning?: boolean;
   sectionClassName?: string;
   headingClassName?: string;
+  title?: string;
 }
 
 function isToolEntry(entry: VisibleReasoningEntry): boolean {
@@ -13,6 +14,10 @@ function isToolEntry(entry: VisibleReasoningEntry): boolean {
 
 function reasoningEntryMeta(entry: VisibleReasoningEntry): { marker: string; label: string; tone: string } {
   switch (entry.kind) {
+    case 'sandbox_log':
+      return entry.status === 'stderr'
+        ? { marker: '!', label: 'STDERR', tone: 'tool-failed' }
+        : { marker: '›', label: 'STDOUT', tone: 'reasoning' };
     case 'tool_started':
       return { marker: '↗', label: entry.toolName ?? 'Tool', tone: 'tool-started' };
     case 'tool_finished':
@@ -37,6 +42,7 @@ export function VisibleReasoningLog({
   isRunning = false,
   sectionClassName = 'timeline-reasoning-log',
   headingClassName,
+  title = 'Visible Reasoning',
 }: VisibleReasoningLogProps) {
   const visibleEntries = mergeVisibleReasoningEntries(entries);
 
@@ -50,7 +56,7 @@ export function VisibleReasoningLog({
       aria-label="Visible agent reasoning"
       aria-live={isRunning ? 'polite' : undefined}
     >
-      <h3 className={headingClassName}>Visible Reasoning</h3>
+      <h3 className={headingClassName}>{title}</h3>
       {visibleEntries.length > 0 ? (
         <ol role="list">
           {visibleEntries.map((item) => {

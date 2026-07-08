@@ -45,6 +45,15 @@ public sealed class AgentProfile
     /// <summary>Optional UI accent color for agent identity surfaces.</summary>
     public string? IdentityColor { get; init; }
 
+    /// <summary>Optional avatar family/style for generated agent avatars.</summary>
+    public string? AvatarStyle { get; init; }
+
+    /// <summary>Optional deterministic seed for the configured avatar family.</summary>
+    public string? AvatarSeed { get; init; }
+
+    /// <summary>Optional semantic role badge key for agent identity surfaces.</summary>
+    public string? IdentityIconKey { get; init; }
+
     /// <summary>Optional UI icon/glyph for agent identity surfaces.</summary>
     public string? IdentityIcon { get; init; }
 

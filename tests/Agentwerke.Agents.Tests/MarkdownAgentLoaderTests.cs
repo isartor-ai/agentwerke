@@ -27,6 +27,9 @@ public sealed class MarkdownAgentLoaderTests
             secrets: [ANTHROPIC_API_KEY]
             sandboxProfiles: [repo-read]
             identityColor: "#378ADD"
+            avatarStyle: "persona"
+            avatarSeed: "business-analyst:persona:3"
+            identityIconKey: "brain"
             identityIcon: "◫"
             ---
 
@@ -49,6 +52,9 @@ public sealed class MarkdownAgentLoaderTests
         Assert.Equal(["all"], profile.SupportedEnvironments);
         Assert.Equal(["repo-read"], profile.SandboxProfiles);
         Assert.Equal("#378ADD", profile.IdentityColor);
+        Assert.Equal("persona", profile.AvatarStyle);
+        Assert.Equal("business-analyst:persona:3", profile.AvatarSeed);
+        Assert.Equal("brain", profile.IdentityIconKey);
         Assert.Equal("◫", profile.IdentityIcon);
         Assert.Equal("file", profile.Source);
         Assert.NotNull(profile.SystemPrompt);

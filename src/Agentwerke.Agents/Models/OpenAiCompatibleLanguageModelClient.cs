@@ -76,6 +76,15 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
             {
                 turn = await StreamTurnAsync(url, body, progressReporter, cancellationToken);
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Failure(
+                    $"LLM call timed out after {_options.TimeoutSeconds}s.",
+                    allToolCalls,
+                    totalInput,
+                    totalOutput,
+                    modelId);
+            }
             catch (OperationCanceledException)
             {
                 throw;

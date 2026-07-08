@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
@@ -55,7 +57,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
         SandboxExecutionResult result;
         try
         {
-            result = await RunAndCollectAsync(request, containerId, artifactsDir, started, cancellationToken);
+            result = await RunAndCollectAsync(request, containerId, artifactsDir, started, cancellationToken, logReporter);
         }
         catch
         {
@@ -103,6 +105,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
                 CPUQuota = _options.CpuQuota,
                 CPUPeriod = 100_000,
                 NetworkMode = ResolveNetworkMode(request.Profile?.NetworkPolicy),
+                ExtraHosts = ResolveExtraHosts(request.Profile?.NetworkPolicy),
                 AutoRemove = false,
                 Binds = [$"{artifactsDir}:/output:rw"],
             },
@@ -117,14 +120,41 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
         return response.ID;
     }
 
+    private static IList<string>? ResolveExtraHosts(SandboxNetworkPolicy? networkPolicy)
+    {
+        if (networkPolicy?.Mode == SandboxNetworkAccessMode.None)
+        {
+            return null;
+        }
+
+        // Sandboxed agent runners call LiteLLM through host.docker.internal in the demo/local
+        // setup. Plain Docker containers on Linux do not receive that alias automatically, so
+        // inject the standard host-gateway mapping just like `docker run --add-host ...`.
+        return ["host.docker.internal:host-gateway"];
+    }
+
     private async Task<SandboxExecutionResult> RunAndCollectAsync(
         SandboxExecutionRequest request,
         string containerId,
         string artifactsDir,
         DateTimeOffset started,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SandboxLogReporter? logReporter)
     {
         await _docker.Containers.StartContainerAsync(containerId, new ContainerStartParameters(), cancellationToken);
+
+        var streamedLogs = new ConcurrentQueue<SandboxLogEntry>();
+        var logStreamingTask = StreamLogsAsync(
+            containerId,
+            async (entry, ct) =>
+            {
+                streamedLogs.Enqueue(entry);
+                if (logReporter is not null)
+                {
+                    await logReporter(entry, ct);
+                }
+            },
+            cancellationToken);
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
@@ -138,7 +168,9 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
         {
             _logger.LogWarning("Container {ContainerId} timed out after {Seconds}s", containerId, _options.TimeoutSeconds);
             await StopContainerQuietlyAsync(containerId);
+            await logStreamingTask;
             var logs = await CollectLogsAsync(containerId, CancellationToken.None);
+            var structuredLogs = BuildStructuredLogs(logs, streamedLogs, started);
             return new SandboxExecutionResult(
                 Succeeded: false,
                 Logs: logs,
@@ -148,7 +180,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
                 Duration: DateTimeOffset.UtcNow - started,
                 ProviderSandboxId: containerId,
                 CommandState: SandboxCommandState.TimedOut,
-                StructuredLogs: CreateStructuredLogs(logs, started),
+                StructuredLogs: structuredLogs,
                 ProviderDiagnostics: new Dictionary<string, string>
                 {
                     ["provider"] = ProviderKind.ToConfigValue(),
@@ -159,9 +191,11 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
         }
 
         var exitCode = (int)waitResponse.StatusCode;
+        await logStreamingTask;
         var logsOutput = await CollectLogsAsync(containerId, CancellationToken.None);
         var artifacts = CollectArtifacts(artifactsDir);
         var duration = DateTimeOffset.UtcNow - started;
+        var finalStructuredLogs = BuildStructuredLogs(logsOutput, streamedLogs, started);
 
         _logger.LogInformation(
             "Sandbox done step={StepId} exit={ExitCode} duration={Duration}ms artifacts={ArtifactCount}",
@@ -178,7 +212,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
                 Duration: duration,
                 ProviderSandboxId: containerId,
                 CommandState: SandboxCommandState.Failed,
-                StructuredLogs: CreateStructuredLogs(logsOutput, started),
+                StructuredLogs: finalStructuredLogs,
                 ProviderDiagnostics: new Dictionary<string, string>
                 {
                     ["provider"] = ProviderKind.ToConfigValue()
@@ -196,7 +230,7 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
             Duration: duration,
             ProviderSandboxId: containerId,
             CommandState: SandboxCommandState.Completed,
-            StructuredLogs: CreateStructuredLogs(logsOutput, started),
+            StructuredLogs: finalStructuredLogs,
             ProviderDiagnostics: new Dictionary<string, string>
             {
                 ["provider"] = ProviderKind.ToConfigValue()
@@ -235,6 +269,40 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
         }
     }
 
+    private async Task StreamLogsAsync(
+        string containerId,
+        SandboxLogReporter onLogEntry,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var multiplexed = await _docker.Containers.GetContainerLogsAsync(
+                containerId,
+                tty: false,
+                new ContainerLogsParameters
+                {
+                    Follow = true,
+                    ShowStdout = true,
+                    ShowStderr = true,
+                },
+                cancellationToken);
+
+            await using var stdout = new DockerLogRelayStream("stdout", onLogEntry);
+            await using var stderr = new DockerLogRelayStream("stderr", onLogEntry);
+            await multiplexed.CopyOutputToAsync(Stream.Null, stdout, stderr, cancellationToken);
+            await stdout.FlushPendingAsync(cancellationToken);
+            await stderr.FlushPendingAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The run itself was cancelled; no additional log forwarding is needed.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Live log streaming failed for Docker container {ContainerId}", containerId);
+        }
+    }
+
     private static IReadOnlyDictionary<string, string> CollectArtifacts(string artifactsDir)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -259,6 +327,12 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
 
         return result;
     }
+
+    private static IReadOnlyList<SandboxLogEntry> BuildStructuredLogs(
+        string logs,
+        ConcurrentQueue<SandboxLogEntry> streamedLogs,
+        DateTimeOffset started) =>
+        streamedLogs.IsEmpty ? CreateStructuredLogs(logs, started) : [.. streamedLogs];
 
     private string ResolveArtifactsDir(string stepId)
     {
@@ -350,5 +424,136 @@ public sealed class DockerSandboxExecutor : ISandboxProviderExecutor
         }
 
         return cleanupPolicy?.DeleteSandboxOnCompletion ?? true;
+    }
+
+    private sealed class DockerLogRelayStream : Stream
+    {
+        private readonly string _streamName;
+        private readonly SandboxLogReporter _reporter;
+        private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
+        private readonly StringBuilder _lineBuffer = new();
+        private readonly char[] _charBuffer = new char[4096];
+
+        public DockerLogRelayStream(string streamName, SandboxLogReporter reporter)
+        {
+            _streamName = streamName;
+            _reporter = reporter;
+        }
+
+        public Task FlushPendingAsync(CancellationToken cancellationToken) =>
+            FlushDecoderAsync(cancellationToken);
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            WriteAsync(buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var remaining = buffer;
+            while (!remaining.IsEmpty)
+            {
+                _decoder.Convert(remaining.Span, _charBuffer, flush: false, out var bytesUsed, out var charsUsed, out _);
+                remaining = remaining[bytesUsed..];
+                if (charsUsed > 0)
+                {
+                    await AppendTextAsync(new string(_charBuffer, 0, charsUsed), cancellationToken);
+                }
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                FlushPendingAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            await FlushPendingAsync(CancellationToken.None);
+            await base.DisposeAsync();
+        }
+
+        private async Task FlushDecoderAsync(CancellationToken cancellationToken)
+        {
+            _decoder.Convert(ReadOnlySpan<byte>.Empty, _charBuffer, flush: true, out _, out var charsUsed, out _);
+            if (charsUsed > 0)
+            {
+                await AppendTextAsync(new string(_charBuffer, 0, charsUsed), cancellationToken);
+            }
+
+            if (_lineBuffer.Length > 0)
+            {
+                var trailing = _lineBuffer.ToString();
+                _lineBuffer.Clear();
+                if (!string.IsNullOrWhiteSpace(trailing))
+                {
+                    await _reporter(new SandboxLogEntry(_streamName, trailing, DateTimeOffset.UtcNow), cancellationToken);
+                }
+            }
+        }
+
+        private async Task AppendTextAsync(string text, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            _lineBuffer.Append(text);
+            while (true)
+            {
+                var current = _lineBuffer.ToString();
+                var newlineIndex = current.IndexOf('\n');
+                if (newlineIndex < 0)
+                {
+                    break;
+                }
+
+                var line = current[..newlineIndex];
+                if (line.EndsWith('\r'))
+                {
+                    line = line[..^1];
+                }
+
+                _lineBuffer.Remove(0, newlineIndex + 1);
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    await _reporter(new SandboxLogEntry(_streamName, line, DateTimeOffset.UtcNow), cancellationToken);
+                }
+            }
+        }
     }
 }

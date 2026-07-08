@@ -2,7 +2,7 @@ import type { RunEvent, RunStep } from '../types';
 
 export interface VisibleReasoningEntry {
   id: string;
-  kind: 'started' | 'reasoning' | 'recorded' | 'tool_started' | 'tool_finished';
+  kind: 'started' | 'reasoning' | 'recorded' | 'tool_started' | 'tool_finished' | 'sandbox_log';
   summary: string;
   createdAt?: string;
   toolName?: string;
@@ -17,6 +17,7 @@ const LIVE_PROGRESS_EVENT_TYPES = new Set([
   'agent_reasoning_recorded',
   'agent_tool_call_started',
   'agent_tool_call_finished',
+  'agent_sandbox_log',
 ]);
 
 const REASONING_SOURCE_EVENT_TYPES = new Set([
@@ -136,7 +137,9 @@ export function extractAgentReasoningByStep(events: RunEvent[] | undefined): Rec
               ? 'recorded'
               : event.type === 'agent_tool_call_started'
                 ? 'tool_started'
-                : 'tool_finished',
+                : event.type === 'agent_tool_call_finished'
+                  ? 'tool_finished'
+                  : 'sandbox_log',
         summary,
         createdAt: event.createdAt,
         toolName: typeof payload?.toolName === 'string' ? payload.toolName : undefined,

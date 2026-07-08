@@ -134,6 +134,9 @@ public sealed class AgentsController : ControllerBase
             profile.Fingerprint,
             profile.SandboxProfiles.ToArray(),
             profile.IdentityColor,
+            profile.AvatarStyle,
+            profile.AvatarSeed,
+            profile.IdentityIconKey,
             profile.IdentityIcon);
 
     private AgentDetail ToDetail(ManagedAgentDocument document)
@@ -159,6 +162,9 @@ public sealed class AgentsController : ControllerBase
             profile.Fingerprint,
             profile.SandboxProfiles.ToArray(),
             profile.IdentityColor,
+            profile.AvatarStyle,
+            profile.AvatarSeed,
+            profile.IdentityIconKey,
             profile.IdentityIcon,
             profile.SystemPrompt,
             document.RawMarkdown,
@@ -211,7 +217,10 @@ public sealed class AgentsController : ControllerBase
             SupportedPolicyTags = NormalizeList(request.SupportedPolicyTags),
             SandboxProfiles = NormalizeSandboxProfiles(request.SandboxProfiles),
             IdentityColor = NormalizeOptionalScalar(request.IdentityColor),
-            IdentityIcon = NormalizeOptionalScalar(request.IdentityIcon),
+            AvatarStyle = NormalizeOptionalScalar(request.AvatarStyle),
+            AvatarSeed = NormalizeOptionalScalar(request.AvatarSeed),
+            IdentityIconKey = NormalizeOptionalScalar(request.IdentityIconKey),
+            IdentityIcon = NormalizeOptionalScalar(request.IdentityIcon) ?? LegacyIdentityIconForKey(request.IdentityIconKey),
             SystemPrompt = NormalizeOptionalMultiline(request.SystemPrompt),
             Source = "file"
         };
@@ -229,6 +238,22 @@ public sealed class AgentsController : ControllerBase
 
         return normalized;
     }
+
+    private static string? LegacyIdentityIconForKey(string? key) =>
+        NormalizeOptionalScalar(key) switch
+        {
+            "brain" => "✺",
+            "shield" => "⛨",
+            "cloud" => "☁",
+            "wrench" => "⚙",
+            "flask" => "⚗",
+            "git-branch" => "⎇",
+            "compass" => "⌖",
+            "chart-column" => "▥",
+            "search" => "⌕",
+            "sparkles" => "✦",
+            _ => null
+        };
 
     private static IReadOnlyList<string> NormalizeList(IReadOnlyList<string>? values) =>
         (values ?? [])

@@ -36,6 +36,9 @@ const agentsFixture: AgentSummary[] = [
     fingerprint: 'agent-fingerprint',
     sandboxProfiles: ['repo-write'],
     identityColor: '#7F77DD',
+    avatarStyle: 'bot',
+    avatarSeed: 'github-agent:bot:2',
+    identityIconKey: 'git-branch',
     identityIcon: '⌘',
   },
 ];
@@ -85,6 +88,9 @@ describe('AgentRegistry integration', () => {
       ...agentDetailFixture,
       name: 'GitHub Agent v2',
       identityColor: '#D85A30',
+      avatarStyle: 'persona',
+      avatarSeed: 'github-agent:persona:4',
+      identityIconKey: 'wrench',
       identityIcon: '⚙',
       skills: [
         {
@@ -113,6 +119,10 @@ describe('AgentRegistry integration', () => {
     fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: 'GitHub Agent v2' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Avatar family Persona' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose avatar option 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accent Coral' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Role badge Wrench' }));
     fireEvent.click(screen.getByRole('button', { name: 'Bind' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save Agent' }));
 
@@ -121,8 +131,11 @@ describe('AgentRegistry integration', () => {
         expect.objectContaining({
           agentId: 'github-agent',
           name: 'GitHub Agent v2',
-          identityColor: '#7F77DD',
-          identityIcon: '⌘',
+          identityColor: '#D85A30',
+          avatarStyle: 'persona',
+          avatarSeed: 'github-agent:persona:0:2',
+          identityIconKey: 'wrench',
+          identityIcon: '⚙',
           skills: [
             expect.objectContaining({
               skillId: 'skill.github-pr',
@@ -183,6 +196,9 @@ const uploadedAgentFixture: AgentDetail = {
   description: 'Coordinates operational workflows and rollback checks.',
   category: 'operations',
   identityColor: '#1D9E75',
+  avatarStyle: 'abstract',
+  avatarSeed: 'ops-agent:abstract:1',
+  identityIconKey: 'cloud',
   identityIcon: '△',
   rawMarkdown: `---
 id: ops-agent

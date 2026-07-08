@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { AgentAvatar } from './AgentAvatar';
 import { agentIdentity, type AgentIdentityConfig } from '../utils/agentIdentity';
 
 export interface AgentIdentityBadgeProps {
@@ -25,10 +26,7 @@ export function AgentIdentityBadge({
 
   return (
     <span className={classes} style={style} title={`Agent ${name}`} aria-busy={isRunning || undefined}>
-      <span className="agent-identity-avatar" aria-hidden="true">
-        {isRunning ? <span className="agent-identity-spinner" /> : null}
-        <span className="agent-identity-icon">{identity.icon}</span>
-      </span>
+      <AgentAvatar identity={identity} isRunning={isRunning} />
       {showName ? (
         <span className="agent-identity-name">{name}</span>
       ) : (

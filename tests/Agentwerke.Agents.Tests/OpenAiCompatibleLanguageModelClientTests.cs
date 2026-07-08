@@ -22,14 +22,18 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
             ]),
     ];
 
-    private static OpenAiCompatibleLanguageModelClient Client(QueuedHttpServer server) =>
-        new(new HttpClient(), Options.Create(new LanguageModelOptions
+    private static OpenAiCompatibleLanguageModelClient Client(
+        QueuedHttpServer server,
+        HttpClient? httpClient = null,
+        int timeoutSeconds = 100) =>
+        new(httpClient ?? new HttpClient(), Options.Create(new LanguageModelOptions
         {
             ApiKey = "test-key",
             ApiBaseUrl = server.BaseUrl,
             Model = "gpt-4o",
             MaxTokens = 128,
             MaxToolIterations = 5,
+            TimeoutSeconds = timeoutSeconds,
         }));
 
     /// <summary>Builds an SSE chat-completions stream from JSON chunk bodies, terminated by [DONE].</summary>
@@ -222,18 +226,43 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
         Assert.Contains(reasoningUpdates, u => u.Summary == "Loading repo context and preparing the review comment.");
     }
 
+    [Fact]
+    public async Task RunAsync_WhenRequestTimesOut_ReturnsFailureInsteadOfThrowing()
+    {
+        using var server = QueuedHttpServer.Start(responseDelay: TimeSpan.FromSeconds(2), "{}");
+        using var httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(1)
+        };
+
+        var response = await Client(server, httpClient, timeoutSeconds: 1).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None);
+
+        Assert.False(response.Succeeded);
+        Assert.Null(response.Output);
+        Assert.Contains("timed out after 1s", response.FailureReason, StringComparison.Ordinal);
+    }
+
     private sealed class QueuedHttpServer : IDisposable
     {
         private readonly HttpListener _listener;
         private readonly Queue<string> _responses;
         private readonly List<string> _bodies = [];
         private readonly object _gate = new();
+        private readonly TimeSpan _responseDelay;
 
-        private QueuedHttpServer(HttpListener listener, string baseUrl, IEnumerable<string> responses)
+        private QueuedHttpServer(
+            HttpListener listener,
+            string baseUrl,
+            IEnumerable<string> responses,
+            TimeSpan responseDelay)
         {
             _listener = listener;
             BaseUrl = baseUrl;
             _responses = new Queue<string>(responses);
+            _responseDelay = responseDelay;
         }
 
         public string BaseUrl { get; }
@@ -243,14 +272,17 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
             get { lock (_gate) { return _bodies.ToArray(); } }
         }
 
-        public static QueuedHttpServer Start(params string[] responses)
+        public static QueuedHttpServer Start(params string[] responses) =>
+            Start(responseDelay: TimeSpan.Zero, responses);
+
+        public static QueuedHttpServer Start(TimeSpan responseDelay, params string[] responses)
         {
             var port = FreeTcpPort();
             var baseUrl = $"http://127.0.0.1:{port}/";
             var listener = new HttpListener();
             listener.Prefixes.Add(baseUrl);
             listener.Start();
-            var server = new QueuedHttpServer(listener, baseUrl, responses);
+            var server = new QueuedHttpServer(listener, baseUrl, responses, responseDelay);
             _ = server.AcceptLoopAsync();
             return server;
         }
@@ -282,6 +314,11 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
                 lock (_gate)
                 {
                     payload = _responses.Count > 0 ? _responses.Dequeue() : "{}";
+                }
+
+                if (_responseDelay > TimeSpan.Zero)
+                {
+                    await Task.Delay(_responseDelay);
                 }
 
                 var bytes = Encoding.UTF8.GetBytes(payload);

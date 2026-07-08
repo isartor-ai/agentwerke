@@ -55,6 +55,21 @@ public static class AgentMarkdownSerializer
             sb.AppendLine($"identityColor: {profile.IdentityColor}");
         }
 
+        if (!string.IsNullOrWhiteSpace(profile.AvatarStyle))
+        {
+            sb.AppendLine($"avatarStyle: {Escape(profile.AvatarStyle)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.AvatarSeed))
+        {
+            sb.AppendLine($"avatarSeed: {Escape(profile.AvatarSeed)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.IdentityIconKey))
+        {
+            sb.AppendLine($"identityIconKey: {Escape(profile.IdentityIconKey)}");
+        }
+
         if (!string.IsNullOrWhiteSpace(profile.IdentityIcon))
         {
             sb.AppendLine($"identityIcon: {Escape(profile.IdentityIcon)}");
