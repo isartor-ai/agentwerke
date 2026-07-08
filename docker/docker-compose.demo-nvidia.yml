@@ -133,7 +133,7 @@ services:
       Integrations__GitHub__RepositoryOwner: "isartor-ai"
       Integrations__GitHub__RepositoryName: "agentwerke-demo"
       Integrations__GitHub__DefaultBaseBranch: "main"
-      Integrations__GitHub__BranchPrefix: "agentwerke/todo-"
+      Integrations__GitHub__BranchPrefix: "agentwerke/issue-"
       Integrations__GitHub__CreateDraftPullRequests: "false"
       Integrations__GitHub__RequiredLabel: "agentwerke"
       Integrations__GitHub__TriggerActions__0: "opened"

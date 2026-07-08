@@ -139,7 +139,7 @@ Human approval requested: comment approved on this issue to start implementation
       <bpmn:messageEventDefinition />
     </bpmn:intermediateCatchEvent>
 
-    <bpmn:serviceTask id="DevelopTodoApp" name="Implement Todo App">
+    <bpmn:serviceTask id="DevelopTodoApp" name="Implement Issue">
       <bpmn:extensionElements>
         <agentwerke:agentTask
           agent="developer"
@@ -152,16 +152,20 @@ Human approval requested: comment approved on this issue to start implementation
           permissionLevel="read-write"
           allowedTools="sandbox.git,sandbox.file_read,sandbox.file_write,sandbox.file_edit,sandbox.shell,github.comment_issue,github.create_pull_request">
           <agentwerke:prompt><![CDATA[
-Implement GitHub issue #{{input.issue_number}} on branch agentwerke/todo-{{input.issue_number}}.
+Implement GitHub issue #{{input.issue_number}} on branch agentwerke/issue-{{input.issue_number}}.
 
 Issue:
 {{input.title}}
+{{input.body}}
 
 Requirements:
 {{output.DraftRequirements}}
 
 Architecture:
 {{output.DraftArchitecture}}
+
+Build exactly what the requirements and architecture describe - the scope comes from
+these documents, not from any predefined application.
 
 The pull request body must include: Closes #{{input.issue_number}}
 Return the branch, PR number, PR URL, and validation performed.
@@ -208,7 +212,7 @@ Post a GitHub PR review with specific observations. Return the PR number and rev
       <bpmn:extensionElements>
         <agentwerke:externalEvent
           messageName="github.pull_request.merged"
-          correlationKeyTemplate="agentwerke/todo-{{input.issue_number}}" />
+          correlationKeyTemplate="agentwerke/issue-{{input.issue_number}}" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ReviewPullRequest_WaitPullRequestMerged</bpmn:incoming>
       <bpmn:outgoing>Flow_WaitPullRequestMerged_CloseIssue</bpmn:outgoing>
