@@ -74,7 +74,7 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
             StreamedTurn turn;
             try
             {
-                turn = await StreamTurnAsync(url, body, progressReporter, cancellationToken);
+                turn = await StreamTurnWithRetryAsync(url, body, progressReporter, cancellationToken);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -165,6 +165,39 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
         return Failure(
             $"Agent exceeded maximum tool iterations ({_options.MaxToolIterations}).",
             allToolCalls, totalInput, totalOutput, modelId);
+    }
+
+    private const int TransientStreamRetries = 2;
+
+    /// <summary>
+    /// Runs <see cref="StreamTurnAsync"/> with retries for mid-stream disconnects. Congested
+    /// free-tier endpoints regularly accept the request and then cut the SSE stream partway
+    /// ("The response ended prematurely"). No tool has executed yet when a stream dies — tool
+    /// calls are only dispatched after the turn parses completely — so re-requesting the same
+    /// turn is side-effect-free.
+    /// </summary>
+    private async Task<StreamedTurn> StreamTurnWithRetryAsync(
+        string url,
+        JsonObject body,
+        AgentExecutionProgressReporter? progressReporter,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await StreamTurnAsync(url, body, progressReporter, cancellationToken);
+            }
+            catch (Exception ex) when (
+                attempt < TransientStreamRetries
+                && ex is IOException or HttpRequestException
+                && !cancellationToken.IsCancellationRequested)
+            {
+                // Brief linear backoff; the worker-slot congestion behind these disconnects
+                // typically clears within seconds.
+                await Task.Delay(TimeSpan.FromSeconds(2 * (attempt + 1)), cancellationToken);
+            }
+        }
     }
 
     /// <summary>

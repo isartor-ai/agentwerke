@@ -26,10 +26,16 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
         QueuedHttpServer server,
         HttpClient? httpClient = null,
         int timeoutSeconds = 100) =>
+        Client(server.BaseUrl, httpClient, timeoutSeconds);
+
+    private static OpenAiCompatibleLanguageModelClient Client(
+        string baseUrl,
+        HttpClient? httpClient = null,
+        int timeoutSeconds = 100) =>
         new(httpClient ?? new HttpClient(), Options.Create(new LanguageModelOptions
         {
             ApiKey = "test-key",
-            ApiBaseUrl = server.BaseUrl,
+            ApiBaseUrl = baseUrl,
             Model = "gpt-4o",
             MaxTokens = 128,
             MaxToolIterations = 5,
@@ -152,6 +158,116 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
         Assert.Equal("The answer is 42.", response.Output);
         Assert.Equal("Consider the tradeoffs carefully.", response.ReasoningSummary);
         Assert.Contains(updates, u => u.Summary == "Consider the tradeoffs carefully.");
+    }
+
+    [Fact]
+    public async Task RunAsync_RetriesWhenStreamEndsPrematurely()
+    {
+        // First response dies mid-stream (congested worker cutting the connection): some deltas
+        // arrive, then the socket closes short of the declared length with no [DONE] terminator.
+        // The retry gets a complete stream. No tool has run at that point, so re-requesting is safe.
+        using var server = TruncatingThenHealthyServer.Start(
+            truncatedPayload:
+                "data: {\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"content\":\"partial answer that never fini\"}}]}\n\n",
+            healthyPayload: Sse(
+                """{"model":"gpt-4o","choices":[{"delta":{"content":"done"}}]}""",
+                UsageChunk));
+
+        var response = await Client(server.BaseUrl).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None);
+
+        Assert.True(response.Succeeded, response.FailureReason);
+        Assert.Equal("done", response.Output);
+        Assert.Equal(2, server.RequestCount);
+    }
+
+    /// <summary>
+    /// Raw TCP server whose first response promises more bytes (Content-Length) than it sends
+    /// before closing the socket — the reliable way to surface "the response ended prematurely"
+    /// in HttpClient. Subsequent requests get a complete response.
+    /// </summary>
+    private sealed class TruncatingThenHealthyServer : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly string _truncatedPayload;
+        private readonly string _healthyPayload;
+        private int _requestCount;
+
+        private TruncatingThenHealthyServer(TcpListener listener, string truncatedPayload, string healthyPayload)
+        {
+            _listener = listener;
+            _truncatedPayload = truncatedPayload;
+            _healthyPayload = healthyPayload;
+        }
+
+        public string BaseUrl => $"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}/";
+
+        public int RequestCount => _requestCount;
+
+        public static TruncatingThenHealthyServer Start(string truncatedPayload, string healthyPayload)
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var server = new TruncatingThenHealthyServer(listener, truncatedPayload, healthyPayload);
+            _ = server.AcceptLoopAsync();
+            return server;
+        }
+
+        private async Task AcceptLoopAsync()
+        {
+            while (true)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await _listener.AcceptTcpClientAsync();
+                }
+                catch
+                {
+                    return;
+                }
+
+                _ = HandleAsync(client);
+            }
+        }
+
+        private async Task HandleAsync(TcpClient client)
+        {
+            using (client)
+            {
+                var stream = client.GetStream();
+
+                // Read until the blank line ending the headers, then the JSON body (ignored).
+                var buffer = new byte[16384];
+                var received = new StringBuilder();
+                while (!received.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+                {
+                    var read = await stream.ReadAsync(buffer);
+                    if (read <= 0) return;
+                    received.Append(Encoding.UTF8.GetString(buffer, 0, read));
+                }
+
+                var attempt = Interlocked.Increment(ref _requestCount);
+                var payload = attempt == 1 ? _truncatedPayload : _healthyPayload;
+                var payloadBytes = Encoding.UTF8.GetBytes(payload);
+                var declaredLength = attempt == 1 ? payloadBytes.Length + 64 : payloadBytes.Length;
+
+                var headers =
+                    "HTTP/1.1 200 OK\r\n" +
+                    "Content-Type: text/event-stream\r\n" +
+                    $"Content-Length: {declaredLength}\r\n" +
+                    "Connection: close\r\n\r\n";
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(headers));
+                await stream.WriteAsync(payloadBytes);
+                await stream.FlushAsync();
+                // For attempt 1 the socket closes 64 bytes short of the declared length —
+                // HttpClient reports the premature end while reading the stream.
+            }
+        }
+
+        public void Dispose() => _listener.Stop();
     }
 
     [Fact]
