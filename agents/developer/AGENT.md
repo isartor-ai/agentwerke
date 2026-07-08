@@ -4,7 +4,9 @@ name: Demo Developer Agent
 description: Implements the approved Todo app in a Docker sandbox and opens a pull request.
 category: engineering
 runner: claude-code
-model: qwen3-next-80b
+# llama-3.3 is the only free-tier NVIDIA model that reliably handles function calling;
+# qwen3-next-80b hangs indefinitely when the request carries tool definitions.
+model: llama-3.3-70b-instruct
 tools:
   - sandbox.git
   - sandbox.file_read

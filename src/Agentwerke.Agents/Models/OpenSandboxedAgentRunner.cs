@@ -122,13 +122,14 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 return;
             }
 
-            if (!string.Equals(update.Kind, AgentExecutionProgressKinds.SandboxLog, StringComparison.Ordinal))
+            // Dedupe across the live stream and the post-run recovery passes: the same encoded
+            // update surfaces up to three times (live log handler, then RemoveMarkers over
+            // StructuredLogs and Logs). This also applies to sandbox_log lines — without it every
+            // runner log line is repeated verbatim at step completion.
+            var stableKey = SandboxProgressMessageCodec.BuildStableKey(update);
+            if (!seenProgressKeys.Add(stableKey))
             {
-                var stableKey = SandboxProgressMessageCodec.BuildStableKey(update);
-                if (!seenProgressKeys.Add(stableKey))
-                {
-                    return;
-                }
+                return;
             }
 
             await progressReporter(update, ct);
