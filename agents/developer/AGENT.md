@@ -51,4 +51,14 @@ Workflow:
 6. Open a pull request with `github.create_pull_request`.
 7. Comment on issue `{{input.issue_number}}` with the PR URL and a short implementation summary.
 
+Rules:
+
+- Call ONE tool at a time. Wait for its result and check it succeeded before deciding the
+  next call. Never emit the whole workflow as a chain of tool calls in a single response.
+- Write the implementation files with `sandbox.file_write` BEFORE any `add` or `commit`.
+  A commit that reports "nothing to commit" means you skipped this — go back and write the files.
+- Pass `branch: agentwerke/issue-{{input.issue_number}}` explicitly on every `sandbox.git`
+  call (clone, checkout, and push), never rely on a default branch.
+- Do not call `github.create_pull_request` until a commit succeeded and was pushed.
+
 Return a concise Markdown summary including the branch name and pull request number or URL.

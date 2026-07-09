@@ -343,7 +343,7 @@ public sealed class SandboxGitTool(
             "init" => await RunGitAsync(["init", "."], cancellationToken, configureIdentityAfter: true),
             "checkout" => await CheckoutAsync(branch, cancellationToken),
             "add" => await RunGitAsync(["add", SandboxWorkspace.ReadOptional(input, "path") ?? "."], cancellationToken),
-            "commit" => await RunGitAsync(["commit", "-m", input["message"]], cancellationToken),
+            "commit" => await CommitAsync(input["message"], cancellationToken),
             "push" => await RunGitAsync(["push", "origin", $"HEAD:{branch}"], cancellationToken),
             "pull" => await RunGitAsync(["pull"], cancellationToken),
             "status" => await RunGitAsync(["status", "--short"], cancellationToken),
@@ -409,6 +409,26 @@ public sealed class SandboxGitTool(
         return created.ExitCode == 0
             ? new AgentToolExecutionResult(true, created.CombinedOutput, null)
             : new AgentToolExecutionResult(false, null, created.CombinedOutput);
+    }
+
+    private async Task<AgentToolExecutionResult> CommitAsync(string message, CancellationToken cancellationToken)
+    {
+        var result = await SandboxWorkspace.RunProcessAsync("git", ["commit", "-m", message], workspaceRoot, cancellationToken);
+        if (result.ExitCode != 0 && result.CombinedOutput.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase))
+        {
+            // Weak models chain clone→add→commit→push without ever writing files; a bare git
+            // message doesn't steer them back. Spell out the recovery path.
+            return new AgentToolExecutionResult(
+                false,
+                null,
+                "Nothing to commit: the working tree has no changes. Create or edit the implementation "
+                + "files first (sandbox.file_write / sandbox.file_edit), then 'add' and retry the commit. "
+                + "Do not push or open a pull request until a commit succeeds.");
+        }
+
+        return result.ExitCode == 0
+            ? new AgentToolExecutionResult(true, result.CombinedOutput, null)
+            : new AgentToolExecutionResult(false, null, Redact(result.CombinedOutput, personalAccessToken));
     }
 
     private async Task ConfigureIdentityAsync(CancellationToken cancellationToken)

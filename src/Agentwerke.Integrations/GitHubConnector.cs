@@ -377,6 +377,7 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         EnsureConfigured();
 
         var baseBranch = ResolveBaseBranch(command.BaseBranch);
+        await EnsureHeadBranchHasCodeChangesAsync(command.HeadBranch, baseBranch, cancellationToken);
         var markerPath = $".agentwerke/runs/{SanitizePathSegment(command.RunId)}/{SanitizePathSegment(command.StepId)}-attempt-{command.Attempt}.md";
         var commitSha = await CommitMarkerFileAsync(command, markerPath, cancellationToken);
 
@@ -745,6 +746,44 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             ExternalId: result.WorkflowFileName);
     }
 
+    /// <summary>
+    /// Refuses to open a pull request from a branch that carries no real changes. Without this,
+    /// an agent that skipped implementation (clone → commit "nothing to commit" → PR) still gets
+    /// a confident-looking PR whose only content is the audit marker file committed below.
+    /// </summary>
+    private async Task EnsureHeadBranchHasCodeChangesAsync(
+        string headBranch,
+        string baseBranch,
+        CancellationToken cancellationToken)
+    {
+        using var request = await CreateRequestAsync(
+            HttpMethod.Get,
+            $"compare/{baseBranch}...{headBranch}",
+            json: null,
+            cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new InvalidOperationException(
+                $"Head branch '{headBranch}' was not found on the remote. Commit the implementation "
+                + $"and push it (sandbox.git operation=push, branch={headBranch}) before opening a pull request.");
+        }
+
+        await EnsureSuccessAsync(response, cancellationToken);
+        var compare = await DeserializeAsync<CompareResponse>(response, cancellationToken)
+            ?? throw new InvalidOperationException("GitHub did not return a branch comparison payload.");
+
+        var hasCodeChanges = (compare.Files ?? [])
+            .Any(file => !file.Filename.StartsWith(".agentwerke/", StringComparison.Ordinal));
+        if (!hasCodeChanges)
+        {
+            throw new InvalidOperationException(
+                $"Branch '{headBranch}' has no code changes compared to '{baseBranch}'. Write the "
+                + "implementation files (sandbox.file_write), commit them, and push to "
+                + $"'{headBranch}' before opening a pull request.");
+        }
+    }
+
     private async Task<string> CommitMarkerFileAsync(
         CreateGitHubPullRequestCommand command,
         string markerPath,
@@ -889,6 +928,12 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
     private sealed record CreateContentResponse(CreateContentCommit Commit);
 
     private sealed record CreateContentCommit(string Sha);
+
+    private sealed record CompareResponse(
+        [property: JsonPropertyName("files")] List<CompareFileResponse>? Files);
+
+    private sealed record CompareFileResponse(
+        [property: JsonPropertyName("filename")] string Filename);
 
     private sealed record PullRequestResponse(
         int Number,

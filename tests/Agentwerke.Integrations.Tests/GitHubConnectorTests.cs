@@ -209,6 +209,18 @@ public sealed class GitHubConnectorTests
         {
             requests.Add(await CloneAsync(request));
 
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/compare/main...agentwerke/run-123")
+            {
+                return Json(HttpStatusCode.OK, """
+                    {
+                      "files": [
+                        { "filename": "src/app.py" }
+                      ]
+                    }
+                    """);
+            }
+
             if (request.Method == HttpMethod.Put &&
                 request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/contents/.agentwerke/runs/run-123/step-456-attempt-2.md")
             {
@@ -268,23 +280,92 @@ public sealed class GitHubConnectorTests
         Assert.Equal("feedface1234", result.CommitSha);
         Assert.Equal(".agentwerke/runs/run-123/step-456-attempt-2.md", result.MarkerPath);
 
-        Assert.Equal(3, requests.Count);
-        Assert.Equal("/repos/octo/agentwerke/contents/.agentwerke/runs/run-123/step-456-attempt-2.md", requests[0].RequestUri?.AbsolutePath);
-        Assert.Equal("/repos/octo/agentwerke/pulls", requests[1].RequestUri?.AbsolutePath);
-        Assert.Contains("head=octo%3Aagentwerke%2Frun-123", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("base=main", requests[1].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(4, requests.Count);
+        Assert.Equal("/repos/octo/agentwerke/compare/main...agentwerke/run-123", requests[0].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/agentwerke/contents/.agentwerke/runs/run-123/step-456-attempt-2.md", requests[1].RequestUri?.AbsolutePath);
+        Assert.Equal("/repos/octo/agentwerke/pulls", requests[2].RequestUri?.AbsolutePath);
+        Assert.Contains("head=octo%3Aagentwerke%2Frun-123", requests[2].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("base=main", requests[2].RequestUri?.Query ?? string.Empty, StringComparison.Ordinal);
 
-        var commitPayload = await requests[0].Content!.ReadAsStringAsync();
+        var commitPayload = await requests[1].Content!.ReadAsStringAsync();
         Assert.Contains("\"message\":\"Agentwerke marker commit\"", commitPayload, StringComparison.Ordinal);
         Assert.Contains("\"branch\":\"agentwerke/run-123\"", commitPayload, StringComparison.Ordinal);
         Assert.Contains("\"content\":\"R2VuZXJhdGVkIGZyb20gd29ya2Zsb3cgZXhlY3V0aW9uLg==\"", commitPayload, StringComparison.Ordinal);
 
-        var pullPayload = await requests[2].Content!.ReadAsStringAsync();
+        var pullPayload = await requests[3].Content!.ReadAsStringAsync();
         Assert.Contains("\"title\":\"Agentwerke generated change\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"head\":\"agentwerke/run-123\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"base\":\"main\"", pullPayload, StringComparison.Ordinal);
         Assert.Contains("\"draft\":true", pullPayload, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task CreatePullRequestAsync_RefusesWhenHeadBranchIsMissing()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/compare/main...agentwerke/run-123")
+            {
+                return Task.FromResult(Json(HttpStatusCode.NotFound, """{"message":"Not Found"}"""));
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            connector.CreatePullRequestAsync(PullRequestCommand(), CancellationToken.None));
+
+        Assert.Contains("was not found on the remote", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("push", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreatePullRequestAsync_RefusesWhenBranchHasNoCodeChanges()
+    {
+        // The only diff vs base is a previous attempt's audit marker: no marker commit and no
+        // pull request may be created from it.
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/compare/main...agentwerke/run-123")
+            {
+                return Json(HttpStatusCode.OK, """
+                    {
+                      "files": [
+                        { "filename": ".agentwerke/runs/run-123/step-456-attempt-1.md" }
+                      ]
+                    }
+                    """);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            connector.CreatePullRequestAsync(PullRequestCommand(), CancellationToken.None));
+
+        Assert.Contains("has no code changes", ex.Message, StringComparison.Ordinal);
+        Assert.Single(requests);
+    }
+
+    private static CreateGitHubPullRequestCommand PullRequestCommand() =>
+        new(
+            RunId: "run-123",
+            StepId: "step-456",
+            Attempt: 2,
+            HeadBranch: "agentwerke/run-123",
+            BaseBranch: null,
+            Title: "Agentwerke generated change",
+            Body: "Generated from workflow execution.",
+            CommitMessage: "Agentwerke marker commit");
 
     [Fact]
     public async Task GetPullRequestAsync_ReturnsStateAndMergeDetails()
