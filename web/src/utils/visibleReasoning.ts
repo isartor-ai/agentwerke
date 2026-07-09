@@ -85,6 +85,20 @@ function appendReasoningEntry(entries: VisibleReasoningEntry[], entry: VisibleRe
     return [...entries.slice(0, -1), normalizedEntry];
   }
 
+  // The recorded final summary usually repeats what already streamed as reasoning deltas.
+  // Upgrade the streamed block to the final marker in place instead of showing the same
+  // text twice; a recorded entry with no streamed match (mock/non-streaming) still appends.
+  if (normalizedEntry.kind === 'recorded') {
+    const matchIndex = entries.findIndex(
+      (existing) => existing.kind === 'reasoning' && existing.summary === summary,
+    );
+    if (matchIndex >= 0) {
+      const upgraded = [...entries];
+      upgraded[matchIndex] = { ...entries[matchIndex], kind: 'recorded' };
+      return upgraded;
+    }
+  }
+
   const key = entryKey(normalizedEntry);
   if (entries.some((existing) => entryKey(existing) === key)) {
     return entries;

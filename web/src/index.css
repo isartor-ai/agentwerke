@@ -2795,6 +2795,45 @@ th {
   gap: 0.75rem;
 }
 
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.25rem;
+}
+
+.table-pagination p {
+  margin: 0;
+  color: var(--color-text-strong);
+  font-size: 0.8rem;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pagination-controls span {
+  min-width: 6rem;
+  color: var(--color-muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+@media (max-width: 40rem) {
+  .table-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-controls {
+    justify-content: space-between;
+  }
+}
+
 .approval-list {
   display: grid;
   gap: 0.75rem;

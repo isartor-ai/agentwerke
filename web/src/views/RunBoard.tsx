@@ -9,6 +9,7 @@ import { FilterBar } from '../components/FilterBar';
 import { KpiCard } from '../components/KpiCard';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
+import { Pagination } from '../components/Pagination';
 import { RiskBadge } from '../components/RiskBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { ToastRegion } from '../components/ToastRegion';
@@ -16,6 +17,7 @@ import { useToastQueue } from '../components/useToastQueue';
 import type { AuthState, RiskLevel, RunStatus, Workflow, WorkflowRun } from '../types';
 
 const FIRST_RUN_SAMPLE_WORKFLOW_ID = 'wf-first-run-sample';
+const RUN_LEDGER_PAGE_SIZE = 10;
 
 function toRelativeMinutes(iso: string): string {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
@@ -203,6 +205,35 @@ export function RunBoard({ auth }: RunBoardProps) {
       return statusMatch && riskMatch && searchMatch;
     });
   }, [runs, selectedRisk, selectedSearch, selectedStatus]);
+
+  const requestedPage = Number.parseInt(searchParams.get('page') ?? '1', 10);
+  const normalizedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const ledgerPageCount = Math.max(1, Math.ceil(filteredRuns.length / RUN_LEDGER_PAGE_SIZE));
+  const ledgerPage = Math.min(normalizedPage, ledgerPageCount);
+  const ledgerRuns = filteredRuns.slice(
+    (ledgerPage - 1) * RUN_LEDGER_PAGE_SIZE,
+    ledgerPage * RUN_LEDGER_PAGE_SIZE,
+  );
+
+  const setLedgerPage = useCallback((page: number) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (page <= 1) {
+        next.delete('page');
+      } else {
+        next.set('page', String(page));
+      }
+      return next;
+    });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (loading || filteredRuns.length === 0 || requestedPage === ledgerPage) {
+      return;
+    }
+
+    setLedgerPage(ledgerPage);
+  }, [filteredRuns.length, ledgerPage, loading, requestedPage, setLedgerPage]);
 
   const columns: DataTableColumn<WorkflowRun>[] = [
     { key: 'run', label: 'Run ID', render: (run) => run.id },
@@ -441,6 +472,7 @@ export function RunBoard({ auth }: RunBoardProps) {
           setSearchParams((previous) => {
             const next = new URLSearchParams(previous);
             next.set('status', status);
+            next.delete('page');
             return next;
           });
         }}
@@ -448,6 +480,7 @@ export function RunBoard({ auth }: RunBoardProps) {
           setSearchParams((previous) => {
             const next = new URLSearchParams(previous);
             next.set('risk', risk);
+            next.delete('page');
             return next;
           });
         }}
@@ -460,6 +493,7 @@ export function RunBoard({ auth }: RunBoardProps) {
             } else {
               next.delete('q');
             }
+            next.delete('page');
             return next;
           });
         }}
@@ -625,10 +659,17 @@ export function RunBoard({ auth }: RunBoardProps) {
             <DataTable
               caption="Workflow runs with status, risk, ownership, and approval state"
               columns={columns}
-              rows={filteredRuns}
+              rows={ledgerRuns}
               rowKey={(run) => run.id}
               onRowClick={(run) => navigate(`/runs/${run.id}`)}
               rowAriaLabel={(run) => `Open run ${run.id} for ${run.workflowName}`}
+            />
+            <Pagination
+              currentPage={ledgerPage}
+              pageSize={RUN_LEDGER_PAGE_SIZE}
+              totalItems={filteredRuns.length}
+              itemLabel="runs"
+              onPageChange={setLedgerPage}
             />
           </section>
         </>
