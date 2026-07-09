@@ -2795,6 +2795,11 @@ th {
   gap: 0.75rem;
 }
 
+.audit-records {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .table-pagination {
   display: flex;
   align-items: center;
