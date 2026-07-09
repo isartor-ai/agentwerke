@@ -613,42 +613,6 @@ export function RunBoard({ auth }: RunBoardProps) {
             })}
           </section>
 
-          <section className="panel log-stream-panel" aria-label="Global log stream">
-            <div className="panel-title-row">
-              <div>
-                <span className="panel-kicker">Global</span>
-                <h2>Log Stream</h2>
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={refreshing}
-                onClick={() => void loadRuns({ background: true })}
-              >
-                Refresh
-              </button>
-            </div>
-            <div className="global-log-stream">
-              {sortedEvents.length > 0 ? (
-                sortedEvents.map((event) => (
-                  <div key={`${event.runId}-${event.id}`}>
-                    <time dateTime={event.createdAt}>{formatTime(event.createdAt)}</time>
-                    <span>[{event.type.split('_')[0].toUpperCase()}]</span>
-                    <p>
-                      {event.workflowName}: {event.message}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div>
-                  <time>{formatTime(new Date().toISOString())}</time>
-                  <span>[SYS]</span>
-                  <p>No events match the current filters.</p>
-                </div>
-              )}
-            </div>
-          </section>
-
           <section id="run-ledger" className="run-ledger">
             <div className="section-heading-row">
               <div>
@@ -672,6 +636,35 @@ export function RunBoard({ auth }: RunBoardProps) {
               onPageChange={setLedgerPage}
             />
           </section>
+
+          <details className="panel log-stream-panel run-events-collapsible" aria-label="Global log stream">
+            <summary className="event-monitor-summary">
+              <h2>Log Stream</h2>
+              <span className="event-monitor-summary-actions">
+                <span className="chip chip-static">{sortedEvents.length} event(s)</span>
+                <span className="event-monitor-caret" aria-hidden="true">›</span>
+              </span>
+            </summary>
+            <div className="global-log-stream">
+              {sortedEvents.length > 0 ? (
+                sortedEvents.map((event) => (
+                  <div key={`${event.runId}-${event.id}`}>
+                    <time dateTime={event.createdAt}>{formatTime(event.createdAt)}</time>
+                    <span>[{event.type.split('_')[0].toUpperCase()}]</span>
+                    <p>
+                      {event.workflowName}: {event.message}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div>
+                  <time>{formatTime(new Date().toISOString())}</time>
+                  <span>[SYS]</span>
+                  <p>No events match the current filters.</p>
+                </div>
+              )}
+            </div>
+          </details>
         </>
       )}
     </section>
