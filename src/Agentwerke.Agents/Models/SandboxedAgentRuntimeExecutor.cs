@@ -146,7 +146,9 @@ public sealed class SandboxedAgentRuntimeExecutor
                 Status: "missing",
                 Input: call.Input,
                 OutputSummary: null,
-                ErrorMessage: $"Tool '{call.Name}' is not registered in the sandboxed runtime.",
+                ErrorMessage: $"Tool '{call.Name}' is not available in this step. Available tools: "
+                    + $"{string.Join(", ", descriptors.Keys.Order(StringComparer.Ordinal))}. Use one of "
+                    + "these; if none can do what you need, say so in your final answer instead of guessing.",
                 DurationMs: 0,
                 ArtifactNames: []);
             invocations.Add(missingInvocation);

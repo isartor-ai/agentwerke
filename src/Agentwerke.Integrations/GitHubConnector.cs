@@ -885,7 +885,19 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         }
 
         var message = await ReadErrorMessageAsync(response, cancellationToken);
-        throw new InvalidOperationException(message);
+        // A bare GitHub "Not Found" reads like a missing *tool* to the agent (and the operator).
+        // Name the request and, for 404s, point at the two realistic causes so the model can
+        // self-correct instead of retrying the same call.
+        var request = response.RequestMessage;
+        var resource = request is null
+            ? "GitHub API request"
+            : $"GitHub API {request.Method} {request.RequestUri?.AbsolutePath}";
+        var hint = response.StatusCode == HttpStatusCode.NotFound
+            ? " The referenced resource (issue/PR number or branch) may not exist — re-check the id "
+              + "against earlier step output — or the configured token lacks access to it."
+            : string.Empty;
+        throw new InvalidOperationException(
+            $"{resource} failed with {(int)response.StatusCode} {response.StatusCode}: {message}.{hint}");
     }
 
     private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)

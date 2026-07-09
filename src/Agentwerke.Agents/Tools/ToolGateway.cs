@@ -41,10 +41,12 @@ public sealed class ToolGateway : IToolGateway
         var tool = _toolRegistry.Find(request.ToolName);
         if (tool is null)
         {
+            var available = string.Join(", ", _toolRegistry.All().Select(t => t.Name).Order(StringComparer.Ordinal));
             return Failure(
                 request,
                 Category: AgentToolCategories.Read,
-                FailureReason: $"Tool '{request.ToolName}' is not registered.",
+                FailureReason: $"Tool '{request.ToolName}' is not available. Available tools: {available}. "
+                    + "Use one of these; if none can do what you need, say so in your final answer instead of guessing.",
                 Status: "missing");
         }
 
