@@ -186,6 +186,9 @@ export function RunDetail({ auth }: RunDetailProps) {
     for (const agent of agents) {
       const configuredIdentity = {
         color: agent.identityColor,
+        avatarStyle: agent.avatarStyle,
+        avatarSeed: agent.avatarSeed,
+        iconKey: agent.identityIconKey,
         icon: agent.identityIcon,
       };
       if (agent.agentId) {

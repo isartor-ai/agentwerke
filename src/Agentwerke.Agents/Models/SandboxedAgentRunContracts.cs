@@ -19,7 +19,8 @@ public sealed record SandboxedAgentRunEnvelope(
     AgentRuntimeContract Contract,
     IReadOnlyList<SandboxedToolContract> ResolvedTools,
     IReadOnlyList<SandboxedSubAgentProfile> SubAgents,
-    int RemainingSubAgentDepth);
+    int RemainingSubAgentDepth,
+    string? ReasoningEffort = null);
 
 public sealed record SandboxedToolContract(
     string Name,

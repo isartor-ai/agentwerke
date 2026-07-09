@@ -283,8 +283,12 @@ export const apiClient = {
     secrets: string[];
     sandboxProfiles?: string[];
     identityColor?: string;
+    avatarStyle?: string;
+    avatarSeed?: string;
+    identityIconKey?: string;
     identityIcon?: string;
     systemPrompt?: string;
+    reasoningEffort?: string;
   }): Promise<AgentDetail> {
     return requestJson<AgentDetail>(`/api/agents/${encodeURIComponent(agent.agentId)}`, {
       method: 'PUT',

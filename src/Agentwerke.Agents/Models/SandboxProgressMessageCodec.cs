@@ -62,8 +62,10 @@ public static class SandboxProgressMessageCodec
                 var prefixIndex = current.IndexOf(Prefix, StringComparison.Ordinal);
                 if (prefixIndex < 0)
                 {
-                    var keep = Math.Min(current.Length, Prefix.Length - 1);
-                    var emitLength = current.Length - keep;
+                    var tailStart = Math.Max(
+                        current.LastIndexOf('\n') + 1,
+                        Math.Max(0, current.Length - (Prefix.Length - 1)));
+                    var emitLength = tailStart;
                     if (emitLength > 0)
                     {
                         cleaned.Append(current.AsSpan(0, emitLength));

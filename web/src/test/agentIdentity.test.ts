@@ -36,6 +36,20 @@ describe('agentIdentity', () => {
     expect(identity.onAccent).toBe('#F8FAFC');
   });
 
+  it('resolves configured avatar family, seed, and semantic icon key', () => {
+    const identity = agentIdentity('planner', {
+      color: '#123456',
+      avatarStyle: 'pixel',
+      avatarSeed: 'planner:pixel:7',
+      iconKey: 'shield',
+    });
+
+    expect(identity.avatarStyle).toBe('pixel');
+    expect(identity.avatarSeed).toBe('planner:pixel:7');
+    expect(identity.iconKey).toBe('shield');
+    expect(identity.icon).toBe('⛨');
+  });
+
   it('falls back to the deterministic palette when configured color is invalid', () => {
     const configured = agentIdentity('planner', { color: 'teal-ish', icon: '⚙' });
     const fallback = agentIdentity('planner');

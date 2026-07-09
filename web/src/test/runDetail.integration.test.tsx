@@ -256,6 +256,16 @@ describe('RunDetail integration', () => {
         createdAt: new Date().toISOString(),
       });
       emitEvent?.({
+        id: 'evt-live-sandbox-log',
+        type: 'agent_sandbox_log',
+        message: JSON.stringify({
+          stepId: 'step-2',
+          status: 'stdout',
+          summary: 'npm test -- --runInBand',
+        }),
+        createdAt: new Date().toISOString(),
+      });
+      emitEvent?.({
         id: 'evt-live-tool',
         type: 'agent_tool_call_started',
         message: JSON.stringify({
@@ -273,6 +283,7 @@ describe('RunDetail integration', () => {
     ).toBeGreaterThan(0);
     expect(screen.getAllByText('repo.inspect_files').length).toBeGreaterThan(0);
     expect(screen.getAllByText("Calling tool 'repo.inspect_files'.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText('npm test -- --runInBand').length).toBeGreaterThan(0);
     expect(vi.mocked(apiClient.getRun)).toHaveBeenCalledTimes(1);
   });
 

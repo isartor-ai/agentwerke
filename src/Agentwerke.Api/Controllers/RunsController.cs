@@ -47,6 +47,10 @@ public sealed class RunsController : ControllerBase
         var runs = await _dbContext.WorkflowRuns
             .AsNoTracking()
             .Include(r => r.Events)
+            // Newest first. StartedAt is an ISO-8601 ("o") string, which sorts chronologically
+            // lexicographically — otherwise the list comes back in arbitrary row order and the
+            // most recent run is buried instead of at the top.
+            .OrderByDescending(r => r.StartedAt)
             .ToListAsync();
 
         return Ok(runs.Select(ApiContractMappings.ToRunSummary).ToList());
@@ -234,9 +238,6 @@ public sealed class RunsController : ControllerBase
     [HttpGet("{runId}/events/stream")]
     public async Task StreamEvents(string runId, CancellationToken cancellationToken)
     {
-        const int PollIntervalMs = 500;
-        const int HeartbeatEveryPolls = 30;
-
         var run = await _dbContext.WorkflowRuns
             .AsNoTracking()
             .Select(r => new { r.Id, r.Status })
@@ -254,19 +255,17 @@ public sealed class RunsController : ControllerBase
         HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
 
         var terminalStatuses = new[] { "completed", "failed", "cancelled" };
-        var seenIds = new HashSet<string>();
+        var streamState = new RunEventStreamState(runId);
 
-        var existing = await _dbContext.WorkflowEvents
-            .AsNoTracking()
-            .Where(e => e.RunId == runId)
-            .OrderBy(e => e.CreatedAt)
+        var existing = await streamState
+            .BuildFreshEventsQuery(_dbContext.WorkflowEvents.AsNoTracking())
             .ToListAsync(cancellationToken);
 
         foreach (var evt in existing)
         {
-            seenIds.Add(evt.Id);
             await WriteSseEventAsync(evt, cancellationToken);
         }
+        streamState.MarkDelivered(existing);
 
         if (Array.Exists(terminalStatuses, s => string.Equals(s, run.Status, StringComparison.Ordinal)))
         {
@@ -278,28 +277,30 @@ public sealed class RunsController : ControllerBase
         var pollCount = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(PollIntervalMs, cancellationToken);
+            await Task.Delay(RunEventStreamState.PollIntervalMs, cancellationToken);
             pollCount++;
 
             // Send a comment heartbeat every ~15 s to keep the connection alive
             // (browsers and proxies can close idle connections after ~30 s)
-            if (pollCount % HeartbeatEveryPolls == 0)
+            if (pollCount % RunEventStreamState.HeartbeatEveryPolls == 0)
             {
                 await Response.WriteAsync(":\n\n", cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);
             }
 
-            var seenList = seenIds.ToList();
-            var fresh = await _dbContext.WorkflowEvents
-                .AsNoTracking()
-                .Where(e => e.RunId == runId && !seenList.Contains(e.Id))
-                .OrderBy(e => e.CreatedAt)
+            var fresh = await streamState
+                .BuildFreshEventsQuery(_dbContext.WorkflowEvents.AsNoTracking())
                 .ToListAsync(cancellationToken);
 
             foreach (var evt in fresh)
             {
-                seenIds.Add(evt.Id);
                 await WriteSseEventAsync(evt, cancellationToken);
+            }
+            streamState.MarkDelivered(fresh);
+
+            if (!RunEventStreamState.ShouldCheckRunStatus(fresh.Count))
+            {
+                continue;
             }
 
             var current = await _dbContext.WorkflowRuns
@@ -307,8 +308,25 @@ public sealed class RunsController : ControllerBase
                 .Select(r => new { r.Id, r.Status })
                 .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
 
-            if (current == null || Array.Exists(terminalStatuses, s => string.Equals(s, current.Status, StringComparison.Ordinal)))
+            if (current == null)
             {
+                await Response.WriteAsync("event: done\ndata: {}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+                return;
+            }
+
+            if (Array.Exists(terminalStatuses, s => string.Equals(s, current.Status, StringComparison.Ordinal)))
+            {
+                var trailing = await streamState
+                    .BuildFreshEventsQuery(_dbContext.WorkflowEvents.AsNoTracking())
+                    .ToListAsync(cancellationToken);
+
+                foreach (var evt in trailing)
+                {
+                    await WriteSseEventAsync(evt, cancellationToken);
+                }
+                streamState.MarkDelivered(trailing);
+
                 await Response.WriteAsync("event: done\ndata: {}\n\n", cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);
                 return;

@@ -32,6 +32,9 @@ public sealed class AgentMarkdownSerializerTests
             SupportedEnvironments = ["all"],
             SupportedPolicyTags = ["requirement-design", "doc-generation"],
             IdentityColor = "#378ADD",
+            AvatarStyle = "persona",
+            AvatarSeed = "business-analyst:persona:3",
+            IdentityIconKey = "brain",
             IdentityIcon = "◫",
             SystemPrompt = "You are a senior Business Analyst.\nRead {{input.body}} and write a spec.",
         };
@@ -70,6 +73,9 @@ public sealed class AgentMarkdownSerializerTests
                 "  - doc-generation",
                 "sandboxProfiles: []",
                 "identityColor: #378ADD",
+                "avatarStyle: persona",
+                "avatarSeed: \"business-analyst:persona:3\"",
+                "identityIconKey: brain",
                 "identityIcon: ◫",
                 "---",
                 string.Empty,
@@ -152,6 +158,9 @@ public sealed class AgentMarkdownSerializerTests
             Runner = "agent-model",
             SandboxProfiles = ["deployment"],
             IdentityColor = "#378ADD",
+            AvatarStyle = "bot",
+            AvatarSeed = "deploy-agent:bot:5",
+            IdentityIconKey = "cloud",
             IdentityIcon = "⇪",
         };
 
@@ -161,6 +170,9 @@ public sealed class AgentMarkdownSerializerTests
         Assert.Contains($"sandboxProfiles:{Environment.NewLine}  - deployment", markdown, StringComparison.Ordinal);
         Assert.Equal(["deployment"], roundTripped.SandboxProfiles);
         Assert.Equal("#378ADD", roundTripped.IdentityColor);
+        Assert.Equal("bot", roundTripped.AvatarStyle);
+        Assert.Equal("deploy-agent:bot:5", roundTripped.AvatarSeed);
+        Assert.Equal("cloud", roundTripped.IdentityIconKey);
         Assert.Equal("⇪", roundTripped.IdentityIcon);
     }
 }

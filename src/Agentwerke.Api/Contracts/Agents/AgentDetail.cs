@@ -20,8 +20,12 @@ public sealed record AgentDetail(
     string? Fingerprint,
     IReadOnlyList<string> SandboxProfiles,
     string? IdentityColor,
+    string? AvatarStyle,
+    string? AvatarSeed,
+    string? IdentityIconKey,
     string? IdentityIcon,
     string? SystemPrompt,
     string RawMarkdown,
     string EffectiveFilePath,
-    string? SourceFilePath);
+    string? SourceFilePath,
+    string? ReasoningEffort = null);

@@ -39,6 +39,14 @@ public sealed class SandboxedAgentRuntimeExecutor
     {
         var contract = envelope.Contract ?? new AgentRuntimeContract();
 
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.SandboxLog,
+                "Preparing sandbox tool sessions.",
+                Status: "stdout"),
+            cancellationToken);
+
         await using var mcpSession = await PrepareMcpToolsAsync(contract.McpServers, cancellationToken);
         if (mcpSession.Result is not null && !mcpSession.Result.Succeeded)
         {
@@ -58,6 +66,13 @@ public sealed class SandboxedAgentRuntimeExecutor
             envelope.SubAgents,
             envelope.RemainingSubAgentDepth);
         var toolDefinitions = BuildToolDefinitions(contract.Permissions, descriptors);
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.SandboxLog,
+                $"Resolved {toolDefinitions.Count} sandbox tool(s); starting model loop.",
+                Status: "stdout"),
+            cancellationToken);
         var invocations = new List<AgentToolInvocationRecord>();
         var artifacts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -69,11 +84,22 @@ public sealed class SandboxedAgentRuntimeExecutor
                 UserPrompt: envelope.UserPrompt,
                 Tools: toolDefinitions,
                 MaxTokens: envelope.MaxTokens,
-                ModelOverride: envelope.Model),
+                ModelOverride: envelope.Model,
+                ReasoningEffort: envelope.ReasoningEffort),
             (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, progressReporter, ct),
             cancellationToken,
             progressReporter);
         sw.Stop();
+
+        await ReportProgressAsync(
+            progressReporter,
+            new AgentExecutionProgressUpdate(
+                AgentExecutionProgressKinds.SandboxLog,
+                response.Succeeded
+                    ? "Model loop completed; collecting sandbox result."
+                    : $"Model loop failed: {response.FailureReason ?? "unknown error"}.",
+                Status: response.Succeeded ? "stdout" : "stderr"),
+            cancellationToken);
 
         var tokenUsage = new AgentModelTokenUsage(
             response.Usage.InputTokens,
@@ -120,7 +146,9 @@ public sealed class SandboxedAgentRuntimeExecutor
                 Status: "missing",
                 Input: call.Input,
                 OutputSummary: null,
-                ErrorMessage: $"Tool '{call.Name}' is not registered in the sandboxed runtime.",
+                ErrorMessage: $"Tool '{call.Name}' is not available in this step. Available tools: "
+                    + $"{string.Join(", ", descriptors.Keys.Order(StringComparer.Ordinal))}. Use one of "
+                    + "these; if none can do what you need, say so in your final answer instead of guessing.",
                 DurationMs: 0,
                 ArtifactNames: []);
             invocations.Add(missingInvocation);

@@ -54,6 +54,9 @@ public sealed class AgentsControllerTests
             SupportedPolicyTags: ["implementation"],
             Secrets: ["GITHUB_TOKEN"],
             IdentityColor: "#D85A30",
+            AvatarStyle: "pixel",
+            AvatarSeed: "custom-agent:pixel:4",
+            IdentityIconKey: "wrench",
             IdentityIcon: "⚙",
             SystemPrompt: "Implement safely."));
 
@@ -63,9 +66,14 @@ public sealed class AgentsControllerTests
         Assert.Equal("custom-agent", detail.AgentId);
         Assert.Equal("bridge", detail.Network);
         Assert.Equal("#D85A30", detail.IdentityColor);
+        Assert.Equal("pixel", detail.AvatarStyle);
+        Assert.Equal("custom-agent:pixel:4", detail.AvatarSeed);
+        Assert.Equal("wrench", detail.IdentityIconKey);
         Assert.Equal("⚙", detail.IdentityIcon);
         Assert.Equal("test-driven-development", Assert.Single(detail.Skills).SkillManifestId);
         Assert.Contains("skillBindings:", detail.RawMarkdown, StringComparison.Ordinal);
+        Assert.Contains("avatarStyle: pixel", detail.RawMarkdown, StringComparison.Ordinal);
+        Assert.Contains("identityIconKey: wrench", detail.RawMarkdown, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(fixture.AgentsDirectory, "custom-agent", "AGENT.md")));
     }
 

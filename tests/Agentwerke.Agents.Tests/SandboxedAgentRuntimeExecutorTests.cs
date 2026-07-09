@@ -176,8 +176,14 @@ public sealed class SandboxedAgentRuntimeExecutorTests
                 return Task.CompletedTask;
             });
 
+        // Sandbox stdout is also forwarded as sandbox_log updates; this test covers the
+        // reasoning + tool lifecycle specifically, so filter those out.
+        var lifecycle = updates
+            .Where(update => !string.Equals(update.Kind, AgentExecutionProgressKinds.SandboxLog, StringComparison.Ordinal))
+            .ToList();
+
         Assert.Collection(
-            updates,
+            lifecycle,
             update =>
             {
                 Assert.Equal(AgentExecutionProgressKinds.Reasoning, update.Kind);

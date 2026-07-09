@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { RunBoard } from '../views/RunBoard';
@@ -59,6 +59,41 @@ describe('RunBoard integration', () => {
       expect(screen.getByText('run-0421')).toBeInTheDocument();
       expect(screen.queryByText('run-0420')).not.toBeInTheDocument();
     });
+  });
+
+  it('pages the run ledger without changing the other run summaries', async () => {
+    const pagedRuns = Array.from({ length: 12 }, (_, index) => ({
+      ...runsFixture[0],
+      id: `run-page-${String(index + 1).padStart(2, '0')}`,
+    }));
+    vi.mocked(apiClient.getRuns).mockResolvedValue(pagedRuns);
+
+    render(
+      <MemoryRouter initialEntries={['/runs']}>
+        <RunBoard auth={operatorAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    const ledger = await screen.findByRole('table', {
+      name: 'Workflow runs with status, risk, ownership, and approval state',
+    });
+
+    expect(within(ledger).getAllByRole('row')).toHaveLength(11);
+    expect(within(ledger).getByText('run-page-01')).toBeInTheDocument();
+    expect(within(ledger).queryByText('run-page-11')).not.toBeInTheDocument();
+    expect(screen.getByText('1–10 of 12 runs')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    await waitFor(() => {
+      expect(within(ledger).getAllByRole('row')).toHaveLength(3);
+      expect(within(ledger).getByText('run-page-11')).toBeInTheDocument();
+      expect(within(ledger).queryByText('run-page-01')).not.toBeInTheDocument();
+      expect(screen.getByText('11–12 of 12 runs')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
   });
 
   it('keeps existing run data visible and shows a toast when refresh fails', async () => {

@@ -459,6 +459,62 @@ public sealed class OpenSandboxedAgentRunnerTests
         Assert.DoesNotContain("__AGENTWERKE_PROGRESS_B64__", combinedLogs, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task RunAsync_WhenSandboxStreamsPlainLogs_ForwardsLiveSandboxLogUpdates()
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        var streamedLogs = new[]
+        {
+            new SandboxLogEntry("stdout", "Cloning repository...\n", timestamp),
+            new SandboxLogEntry("stderr", "warning: detached HEAD\n", timestamp),
+            new SandboxLogEntry("stdout", "Running validation", timestamp),
+            new SandboxLogEntry("stdout", " complete\n", timestamp),
+        };
+        var sandbox = new RecordingSandboxExecutor(
+            logs: string.Concat(streamedLogs.Select(static entry => entry.Message)),
+            streamedLogs: streamedLogs,
+            structuredLogs: streamedLogs);
+        var runner = CreateRunner(sandbox);
+        var updates = new List<AgentExecutionProgressUpdate>();
+
+        var result = await runner.RunAsync(
+            MakeRequest(),
+            new AgentProfile
+            {
+                AgentId = "spec-writer",
+                Runner = "claude-code"
+            },
+            SandboxProfileNames.Offline,
+            CancellationToken.None,
+            (update, _) =>
+            {
+                updates.Add(update);
+                return Task.CompletedTask;
+            });
+
+        Assert.True(result.Succeeded);
+        Assert.Collection(
+            updates,
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.SandboxLog, update.Kind);
+                Assert.Equal("stdout", update.Status);
+                Assert.Equal("Cloning repository...", update.Summary);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.SandboxLog, update.Kind);
+                Assert.Equal("stderr", update.Status);
+                Assert.Equal("warning: detached HEAD", update.Summary);
+            },
+            update =>
+            {
+                Assert.Equal(AgentExecutionProgressKinds.SandboxLog, update.Kind);
+                Assert.Equal("stdout", update.Status);
+                Assert.Equal("Running validation complete", update.Summary);
+            });
+    }
+
     private static OpenSandboxedAgentRunner CreateRunner(
         RecordingSandboxExecutor sandbox,
         IAgentRegistry? registry = null,

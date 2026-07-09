@@ -377,6 +377,7 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         EnsureConfigured();
 
         var baseBranch = ResolveBaseBranch(command.BaseBranch);
+        await EnsureHeadBranchHasCodeChangesAsync(command.HeadBranch, baseBranch, cancellationToken);
         var markerPath = $".agentwerke/runs/{SanitizePathSegment(command.RunId)}/{SanitizePathSegment(command.StepId)}-attempt-{command.Attempt}.md";
         var commitSha = await CommitMarkerFileAsync(command, markerPath, cancellationToken);
 
@@ -745,6 +746,44 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
             ExternalId: result.WorkflowFileName);
     }
 
+    /// <summary>
+    /// Refuses to open a pull request from a branch that carries no real changes. Without this,
+    /// an agent that skipped implementation (clone → commit "nothing to commit" → PR) still gets
+    /// a confident-looking PR whose only content is the audit marker file committed below.
+    /// </summary>
+    private async Task EnsureHeadBranchHasCodeChangesAsync(
+        string headBranch,
+        string baseBranch,
+        CancellationToken cancellationToken)
+    {
+        using var request = await CreateRequestAsync(
+            HttpMethod.Get,
+            $"compare/{baseBranch}...{headBranch}",
+            json: null,
+            cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new InvalidOperationException(
+                $"Head branch '{headBranch}' was not found on the remote. Commit the implementation "
+                + $"and push it (sandbox.git operation=push, branch={headBranch}) before opening a pull request.");
+        }
+
+        await EnsureSuccessAsync(response, cancellationToken);
+        var compare = await DeserializeAsync<CompareResponse>(response, cancellationToken)
+            ?? throw new InvalidOperationException("GitHub did not return a branch comparison payload.");
+
+        var hasCodeChanges = (compare.Files ?? [])
+            .Any(file => !file.Filename.StartsWith(".agentwerke/", StringComparison.Ordinal));
+        if (!hasCodeChanges)
+        {
+            throw new InvalidOperationException(
+                $"Branch '{headBranch}' has no code changes compared to '{baseBranch}'. Write the "
+                + "implementation files (sandbox.file_write), commit them, and push to "
+                + $"'{headBranch}' before opening a pull request.");
+        }
+    }
+
     private async Task<string> CommitMarkerFileAsync(
         CreateGitHubPullRequestCommand command,
         string markerPath,
@@ -846,7 +885,19 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
         }
 
         var message = await ReadErrorMessageAsync(response, cancellationToken);
-        throw new InvalidOperationException(message);
+        // A bare GitHub "Not Found" reads like a missing *tool* to the agent (and the operator).
+        // Name the request and, for 404s, point at the two realistic causes so the model can
+        // self-correct instead of retrying the same call.
+        var request = response.RequestMessage;
+        var resource = request is null
+            ? "GitHub API request"
+            : $"GitHub API {request.Method} {request.RequestUri?.AbsolutePath}";
+        var hint = response.StatusCode == HttpStatusCode.NotFound
+            ? " The referenced resource (issue/PR number or branch) may not exist — re-check the id "
+              + "against earlier step output — or the configured token lacks access to it."
+            : string.Empty;
+        throw new InvalidOperationException(
+            $"{resource} failed with {(int)response.StatusCode} {response.StatusCode}: {message}.{hint}");
     }
 
     private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -889,6 +940,12 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
     private sealed record CreateContentResponse(CreateContentCommit Commit);
 
     private sealed record CreateContentCommit(string Sha);
+
+    private sealed record CompareResponse(
+        [property: JsonPropertyName("files")] List<CompareFileResponse>? Files);
+
+    private sealed record CompareFileResponse(
+        [property: JsonPropertyName("filename")] string Filename);
 
     private sealed record PullRequestResponse(
         int Number,

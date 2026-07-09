@@ -756,6 +756,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             AgentExecutionProgressKinds.Reasoning => "agent_reasoning_delta",
             AgentExecutionProgressKinds.ToolStarted => "agent_tool_call_started",
             AgentExecutionProgressKinds.ToolFinished => "agent_tool_call_finished",
+            AgentExecutionProgressKinds.SandboxLog => "agent_sandbox_log",
             _ => null
         };
 

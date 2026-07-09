@@ -30,6 +30,11 @@ public static class AgentMarkdownSerializer
             sb.AppendLine($"model: {profile.Model}");
         }
 
+        if (!string.IsNullOrWhiteSpace(profile.ReasoningEffort))
+        {
+            sb.AppendLine($"reasoningEffort: {profile.ReasoningEffort}");
+        }
+
         if (!string.IsNullOrWhiteSpace(profile.DockerImage))
         {
             sb.AppendLine($"dockerImage: {profile.DockerImage}");
@@ -53,6 +58,21 @@ public static class AgentMarkdownSerializer
         if (!string.IsNullOrWhiteSpace(profile.IdentityColor))
         {
             sb.AppendLine($"identityColor: {profile.IdentityColor}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.AvatarStyle))
+        {
+            sb.AppendLine($"avatarStyle: {Escape(profile.AvatarStyle)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.AvatarSeed))
+        {
+            sb.AppendLine($"avatarSeed: {Escape(profile.AvatarSeed)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.IdentityIconKey))
+        {
+            sb.AppendLine($"identityIconKey: {Escape(profile.IdentityIconKey)}");
         }
 
         if (!string.IsNullOrWhiteSpace(profile.IdentityIcon))

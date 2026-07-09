@@ -1,6 +1,7 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { canAdmin } from '../auth/permissions';
+import { AgentAvatarPicker } from '../components/AgentAvatarPicker';
 import { AgentIdentityBadge } from '../components/AgentIdentityBadge';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
@@ -15,6 +16,7 @@ interface AgentFormState {
   category: string;
   runner: string;
   model: string;
+  reasoningEffort: string;
   dockerImage: string;
   network: string;
   tools: string;
@@ -25,6 +27,9 @@ interface AgentFormState {
   secrets: string;
   sandboxProfiles: string;
   identityColor: string;
+  avatarStyle: string;
+  avatarSeed: string;
+  identityIconKey: string;
   identityIcon: string;
   systemPrompt: string;
   skills: AgentSkillBinding[];
@@ -49,6 +54,7 @@ function toFormState(agent: AgentDetail): AgentFormState {
     category: agent.category,
     runner: agent.runner,
     model: agent.model ?? '',
+    reasoningEffort: agent.reasoningEffort ?? '',
     dockerImage: agent.dockerImage ?? '',
     network: agent.network,
     tools: formatList(agent.tools),
@@ -59,6 +65,9 @@ function toFormState(agent: AgentDetail): AgentFormState {
     secrets: formatList(agent.secrets),
     sandboxProfiles: formatList(agent.sandboxProfiles),
     identityColor: agent.identityColor ?? '',
+    avatarStyle: agent.avatarStyle ?? '',
+    avatarSeed: agent.avatarSeed ?? '',
+    identityIconKey: agent.identityIconKey ?? '',
     identityIcon: agent.identityIcon ?? '',
     systemPrompt: agent.systemPrompt ?? '',
     skills: agent.skills.map((skill) => ({ ...skill })),
@@ -290,6 +299,7 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
         category: form.category,
         runner: form.runner,
         model: form.model || undefined,
+        reasoningEffort: form.reasoningEffort || undefined,
         dockerImage: form.dockerImage || undefined,
         network: form.network,
         tools: parseList(form.tools),
@@ -308,6 +318,9 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
         secrets: parseList(form.secrets),
         sandboxProfiles: parseList(form.sandboxProfiles),
         identityColor: form.identityColor || undefined,
+        avatarStyle: form.avatarStyle || undefined,
+        avatarSeed: form.avatarSeed || undefined,
+        identityIconKey: form.identityIconKey || undefined,
         identityIcon: form.identityIcon || undefined,
         systemPrompt: form.systemPrompt || undefined,
       });
@@ -435,7 +448,13 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                     <div className="agent-list-identity">
                       <AgentIdentityBadge
                         name={agent.name}
-                        identity={{ color: agent.identityColor, icon: agent.identityIcon }}
+                        identity={{
+                          color: agent.identityColor,
+                          avatarStyle: agent.avatarStyle,
+                          avatarSeed: agent.avatarSeed,
+                          iconKey: agent.identityIconKey,
+                          icon: agent.identityIcon,
+                        }}
                       />
                     </div>
                     <span className="chip chip-static">{agent.source}</span>
@@ -477,7 +496,13 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
               <div className="agent-editor-identity-preview">
                 <AgentIdentityBadge
                   name={form.name || selectedAgent.name}
-                  identity={{ color: form.identityColor, icon: form.identityIcon }}
+                  identity={{
+                    color: form.identityColor,
+                    avatarStyle: form.avatarStyle,
+                    avatarSeed: form.avatarSeed,
+                    iconKey: form.identityIconKey,
+                    icon: form.identityIcon,
+                  }}
                 />
               </div>
 
@@ -532,6 +557,18 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                   />
                 </label>
                 <label>
+                  Reasoning Effort
+                  <select
+                    value={form.reasoningEffort}
+                    onChange={(event) => updateForm('reasoningEffort', event.target.value)}
+                  >
+                    <option value="">provider default</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </label>
+                <label>
                   Docker Image
                   <input
                     value={form.dockerImage}
@@ -548,22 +585,37 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                     <option value="bridge">bridge</option>
                   </select>
                 </label>
-                <label>
-                  Identity Color
-                  <input
-                    value={form.identityColor}
-                    placeholder="#378ADD"
-                    onChange={(event) => updateForm('identityColor', event.target.value)}
+                <div className="form-span-2">
+                  <AgentAvatarPicker
+                    agentId={form.agentId}
+                    name={form.name || selectedAgent.name}
+                    value={{
+                      color: form.identityColor,
+                      avatarStyle: form.avatarStyle,
+                      avatarSeed: form.avatarSeed,
+                      iconKey: form.identityIconKey,
+                      icon: form.identityIcon,
+                    }}
+                    disabled={!canManageAgents}
+                    onChange={(patch) => {
+                      if ('color' in patch) {
+                        updateForm('identityColor', patch.color ?? '');
+                      }
+                      if ('avatarStyle' in patch) {
+                        updateForm('avatarStyle', patch.avatarStyle ?? '');
+                      }
+                      if ('avatarSeed' in patch) {
+                        updateForm('avatarSeed', patch.avatarSeed ?? '');
+                      }
+                      if ('iconKey' in patch) {
+                        updateForm('identityIconKey', patch.iconKey ?? '');
+                      }
+                      if ('icon' in patch) {
+                        updateForm('identityIcon', patch.icon ?? '');
+                      }
+                    }}
                   />
-                </label>
-                <label>
-                  Identity Icon
-                  <input
-                    value={form.identityIcon}
-                    placeholder="⚙"
-                    onChange={(event) => updateForm('identityIcon', event.target.value)}
-                  />
-                </label>
+                </div>
                 <label className="form-span-2">
                   Supported Actions
                   <textarea

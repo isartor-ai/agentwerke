@@ -19,4 +19,5 @@ public static class AgentExecutionProgressKinds
     public const string Reasoning = "reasoning";
     public const string ToolStarted = "tool_started";
     public const string ToolFinished = "tool_finished";
+    public const string SandboxLog = "sandbox_log";
 }

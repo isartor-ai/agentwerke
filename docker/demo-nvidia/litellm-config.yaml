@@ -34,3 +34,15 @@ model_list:
 litellm_settings:
   drop_params: true
   set_verbose: false
+  # NVIDIA's free-tier workers intermittently saturate ("Worker local total request
+  # limit reached"); retry with backoff before failing a step.
+  num_retries: 3
+
+router_settings:
+  num_retries: 3
+  retry_after: 5
+  # When the 70B worker is congested, degrade to the smaller-but-responsive 8B model
+  # instead of failing the run. Quality dips; the pipeline keeps moving.
+  fallbacks:
+    - llama-3.3-70b-instruct:
+        - llama-3.1-8b-instruct

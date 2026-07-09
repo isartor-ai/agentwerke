@@ -2,7 +2,7 @@ import type { RunEvent, RunStep } from '../types';
 
 export interface VisibleReasoningEntry {
   id: string;
-  kind: 'started' | 'reasoning' | 'recorded' | 'tool_started' | 'tool_finished';
+  kind: 'started' | 'reasoning' | 'recorded' | 'tool_started' | 'tool_finished' | 'sandbox_log';
   summary: string;
   createdAt?: string;
   toolName?: string;
@@ -17,6 +17,7 @@ const LIVE_PROGRESS_EVENT_TYPES = new Set([
   'agent_reasoning_recorded',
   'agent_tool_call_started',
   'agent_tool_call_finished',
+  'agent_sandbox_log',
 ]);
 
 const REASONING_SOURCE_EVENT_TYPES = new Set([
@@ -84,6 +85,20 @@ function appendReasoningEntry(entries: VisibleReasoningEntry[], entry: VisibleRe
     return [...entries.slice(0, -1), normalizedEntry];
   }
 
+  // The recorded final summary usually repeats what already streamed as reasoning deltas.
+  // Upgrade the streamed block to the final marker in place instead of showing the same
+  // text twice; a recorded entry with no streamed match (mock/non-streaming) still appends.
+  if (normalizedEntry.kind === 'recorded') {
+    const matchIndex = entries.findIndex(
+      (existing) => existing.kind === 'reasoning' && existing.summary === summary,
+    );
+    if (matchIndex >= 0) {
+      const upgraded = [...entries];
+      upgraded[matchIndex] = { ...entries[matchIndex], kind: 'recorded' };
+      return upgraded;
+    }
+  }
+
   const key = entryKey(normalizedEntry);
   if (entries.some((existing) => entryKey(existing) === key)) {
     return entries;
@@ -136,7 +151,9 @@ export function extractAgentReasoningByStep(events: RunEvent[] | undefined): Rec
               ? 'recorded'
               : event.type === 'agent_tool_call_started'
                 ? 'tool_started'
-                : 'tool_finished',
+                : event.type === 'agent_tool_call_finished'
+                  ? 'tool_finished'
+                  : 'sandbox_log',
         summary,
         createdAt: event.createdAt,
         toolName: typeof payload?.toolName === 'string' ? payload.toolName : undefined,

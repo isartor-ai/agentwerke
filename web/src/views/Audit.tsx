@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
+import { Pagination } from '../components/Pagination';
 import type { AuditEntry } from '../types';
+
+const AUDIT_PAGE_SIZE = 10;
 
 function outcomeClass(outcome: string): string {
   switch (outcome.toLowerCase()) {
@@ -26,6 +30,7 @@ export function Audit() {
   const [error, setError] = useState<string | null>(null);
   const [runId, setRunId] = useState('');
   const [appliedRunId, setAppliedRunId] = useState<string | undefined>(undefined);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = async (filterRunId?: string) => {
     setLoading(true);
@@ -43,13 +48,42 @@ export function Audit() {
     void load(appliedRunId);
   }, [appliedRunId]);
 
-  const search = () => setAppliedRunId(runId.trim() || undefined);
+  const list = entries ?? [];
+  const requestedPage = Number.parseInt(searchParams.get('page') ?? '1', 10);
+  const normalizedPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageCount = Math.max(1, Math.ceil(list.length / AUDIT_PAGE_SIZE));
+  const page = Math.min(normalizedPage, pageCount);
+  const pageEntries = list.slice((page - 1) * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE);
+
+  const setPage = useCallback((nextPage: number) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (nextPage <= 1) {
+        next.delete('page');
+      } else {
+        next.set('page', String(nextPage));
+      }
+      return next;
+    });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    if (loading || list.length === 0 || requestedPage === page) {
+      return;
+    }
+
+    setPage(page);
+  }, [list.length, loading, page, requestedPage, setPage]);
+
+  const search = () => {
+    setAppliedRunId(runId.trim() || undefined);
+    setPage(1);
+  };
   const clear = () => {
     setRunId('');
     setAppliedRunId(undefined);
+    setPage(1);
   };
-
-  const list = entries ?? [];
 
   return (
     <section>
@@ -99,7 +133,7 @@ export function Audit() {
           description={appliedRunId ? `No audit records for run ${appliedRunId}.` : 'No audit records yet.'}
         />
       ) : (
-        <article className="panel">
+        <article className="panel audit-records">
           <h2>{appliedRunId ? `Decision trace — ${appliedRunId}` : 'Recent audit records'}</h2>
           <div className="table-wrap">
             <table className="table">
@@ -113,7 +147,7 @@ export function Audit() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((entry) => (
+                {pageEntries.map((entry) => (
                   <tr key={entry.id}>
                     <td>
                       <span className="muted">{entry.timestamp}</span>
@@ -137,6 +171,13 @@ export function Audit() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={page}
+            pageSize={AUDIT_PAGE_SIZE}
+            totalItems={list.length}
+            itemLabel="audit records"
+            onPageChange={setPage}
+          />
         </article>
       )}
     </section>

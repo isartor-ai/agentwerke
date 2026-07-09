@@ -1,6 +1,7 @@
 using Agentwerke.Api.Controllers;
 using Agentwerke.Api.Contracts.Runs;
 using Agentwerke.Application.Workflows;
+using Agentwerke.Domain.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -10,6 +11,44 @@ namespace Agentwerke.Api.Tests;
 
 public sealed class RunsControllerTests
 {
+    [Fact]
+    public void RunEventStreamState_BuildFreshEventsQuery_UsesStableOrderingAndDeliveredOffset()
+    {
+        var state = new RunEventStreamState("run_1");
+        var events = new[]
+        {
+            new WorkflowEvent { Id = "evt_2", RunId = "run_1", Type = "log", Message = "second", CreatedAt = "2026-07-08T11:00:00.0000000Z" },
+            new WorkflowEvent { Id = "evt_3", RunId = "run_1", Type = "log", Message = "third", CreatedAt = "2026-07-08T11:00:00.0000000Z" },
+            new WorkflowEvent { Id = "evt_1", RunId = "run_1", Type = "log", Message = "first", CreatedAt = "2026-07-08T10:59:59.0000000Z" },
+            new WorkflowEvent { Id = "evt_other", RunId = "run_2", Type = "log", Message = "other", CreatedAt = "2026-07-08T10:00:00.0000000Z" }
+        }.AsQueryable();
+
+        var ordered = state.BuildFreshEventsQuery(events).ToList();
+
+        Assert.Collection(
+            ordered,
+            evt => Assert.Equal("evt_1", evt.Id),
+            evt => Assert.Equal("evt_2", evt.Id),
+            evt => Assert.Equal("evt_3", evt.Id));
+
+        state.MarkDelivered(ordered.Take(2).ToList());
+
+        var remaining = state.BuildFreshEventsQuery(events).ToList();
+
+        Assert.Collection(
+            remaining,
+            evt => Assert.Equal("evt_3", evt.Id));
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(4, false)]
+    public void RunEventStreamState_ShouldCheckRunStatus_OnlyWhenStreamIsIdle(int freshEventCount, bool expected)
+    {
+        Assert.Equal(expected, RunEventStreamState.ShouldCheckRunStatus(freshEventCount));
+    }
+
     [Fact]
     public async Task Start_UsesAuthenticatedPrincipalAsInitiator()
     {

@@ -165,6 +165,24 @@ public sealed class SandboxCodeToolsTests
     }
 
     [Fact]
+    public async Task GitTool_CommitWithCleanTree_ReturnsInstructiveError()
+    {
+        using var workspace = new TempWorkspace();
+        var tool = new SandboxGitTool(null, null, null, workspace.Path);
+        await tool.ExecuteAsync(Context(), new Dictionary<string, string> { ["operation"] = "init" }, CancellationToken.None);
+        await SandboxTestProcess.RunAsync("git", ["commit", "--allow-empty", "-m", "root"], workspace.Path);
+
+        var committed = await tool.ExecuteAsync(
+            Context(),
+            new Dictionary<string, string> { ["operation"] = "commit", ["message"] = "no changes" },
+            CancellationToken.None);
+
+        Assert.False(committed.Succeeded);
+        Assert.Contains("Nothing to commit", committed.FailureReason, StringComparison.Ordinal);
+        Assert.Contains("sandbox.file_write", committed.FailureReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GitTool_Checkout_CreatesABranchWhenItDoesNotExist()
     {
         using var workspace = new TempWorkspace();

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { AuditEntry } from '../types';
 import { Audit } from '../views/Audit';
@@ -36,6 +37,14 @@ const entriesFixture: AuditEntry[] = [
   },
 ];
 
+function renderAudit(initialEntry = '/audit') {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Audit />
+    </MemoryRouter>,
+  );
+}
+
 describe('Audit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -43,7 +52,7 @@ describe('Audit', () => {
   });
 
   it('lists recent audit records', async () => {
-    render(<Audit />);
+    renderAudit();
 
     expect(await screen.findByText('approval.decision')).toBeInTheDocument();
     expect(screen.getByText('github.create_pull_request')).toBeInTheDocument();
@@ -51,7 +60,7 @@ describe('Audit', () => {
   });
 
   it('filters the decision trace by run id', async () => {
-    render(<Audit />);
+    renderAudit();
     await screen.findByText('approval.decision');
 
     fireEvent.change(screen.getByPlaceholderText('Filter by run to see its decision trace'), {
@@ -61,5 +70,34 @@ describe('Audit', () => {
 
     await waitFor(() => expect(apiClient.getAuditEntries).toHaveBeenCalledWith({ runId: 'run-42', limit: 200 }));
     expect(await screen.findByText('Decision trace — run-42')).toBeInTheDocument();
+  });
+
+  it('pages audit records ten rows at a time', async () => {
+    const pagedEntries = Array.from({ length: 12 }, (_, index) => ({
+      ...entriesFixture[0],
+      id: `aud-page-${String(index + 1).padStart(2, '0')}`,
+      action: `audit.action.${String(index + 1).padStart(2, '0')}`,
+    }));
+    vi.mocked(apiClient.getAuditEntries).mockResolvedValue(pagedEntries);
+
+    renderAudit();
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getAllByRole('row')).toHaveLength(11);
+    expect(within(table).getByText('audit.action.01')).toBeInTheDocument();
+    expect(within(table).queryByText('audit.action.11')).not.toBeInTheDocument();
+    expect(screen.getByText('1–10 of 12 audit records')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    await waitFor(() => {
+      expect(within(table).getAllByRole('row')).toHaveLength(3);
+      expect(within(table).getByText('audit.action.11')).toBeInTheDocument();
+      expect(within(table).queryByText('audit.action.01')).not.toBeInTheDocument();
+      expect(screen.getByText('11–12 of 12 audit records')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
   });
 });

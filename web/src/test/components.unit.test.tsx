@@ -172,10 +172,11 @@ describe('UI component unit tests', () => {
       />,
     );
 
-    // Step 1: 1.5K so far; step 2 carries it despite no own usage; step 3 reaches 5K.
-    expect(screen.getAllByText('Σ 1.5K')).toHaveLength(2);
-    expect(screen.getByText('Σ 5K')).toBeInTheDocument();
-    // Expanded step shows the running total including failed-step usage.
+    // The two completed steps collapse into a quiet history whose summary shows the cumulative.
+    expect(screen.getByText(/Σ 1\.5K tokens/)).toBeInTheDocument();
+    // The expanded failed step's footer shows the run total so far (includes its partial usage).
+    expect(screen.getByText('Σ 5K tokens')).toBeInTheDocument();
+    // Its Details tab (the default when there's no thinking/activity/output) shows the run total.
     expect(screen.getByText(/Run total after this step: 3,000 in · 2,000 out/)).toBeInTheDocument();
   });
 
@@ -231,13 +232,18 @@ describe('UI component unit tests', () => {
       />,
     );
 
+    // Agent identity (colour + icon) shows on the step row.
     expect(screen.getAllByTitle('Agent planner').length).toBeGreaterThan(0);
     expect(screen.getAllByText('⚙').length).toBeGreaterThan(0);
-    expect(screen.getByText('LLM 1 trace')).toBeInTheDocument();
+    // The Thinking tab is the default and shows the chain of thought.
+    expect(screen.getAllByText('Visible Reasoning').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('Read the issue, checked available tools, and picked a minimal change.'),
+    ).toBeInTheDocument();
+    // The model trace (LLM activity, tool calls, output) lives under the Activity tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
     expect(screen.getByText('LLM Activity')).toBeInTheDocument();
     expect(screen.getByText('Inference Signals')).toBeInTheDocument();
-    expect(screen.getAllByText('Visible Reasoning').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Read the issue, checked available tools, and picked a minimal change.').length).toBeGreaterThan(0);
     expect(screen.getByText('Visible Output')).toBeInTheDocument();
     expect(screen.getByText('Visible planning output.')).toBeInTheDocument();
     expect(screen.getByText('repo.search')).toBeInTheDocument();
@@ -277,8 +283,11 @@ describe('UI component unit tests', () => {
       />,
     );
 
+    // Thinking tab (default) shows the streamed chain of thought; the running agent badge pulses.
     expect(screen.getByText('Inspecting the repo state before deciding on the next tool call.')).toBeInTheDocument();
     expect(screen.getAllByTitle('Agent planner')[0]).toHaveAttribute('aria-busy', 'true');
+    // Tool activity lives under the Activity tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
     expect(screen.getByText('repo.inspect_files')).toBeInTheDocument();
     expect(screen.getByText("Calling tool 'repo.inspect_files'.")).toBeInTheDocument();
   });

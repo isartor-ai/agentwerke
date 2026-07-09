@@ -522,6 +522,9 @@ export interface AgentSummary {
   fingerprint?: string;
   sandboxProfiles: string[];
   identityColor?: string;
+  avatarStyle?: string;
+  avatarSeed?: string;
+  identityIconKey?: string;
   identityIcon?: string;
 }
 
@@ -534,6 +537,7 @@ export interface AgentSkillBinding {
 }
 
 export interface AgentDetail extends AgentSummary {
+  reasoningEffort?: string;
   systemPrompt?: string;
   rawMarkdown: string;
   effectiveFilePath: string;
