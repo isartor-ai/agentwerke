@@ -121,9 +121,13 @@ public sealed class SdlcTemplateSeedsValidationTests
         Assert.Equal("github.pull_request.merged", definition.Nodes.Single(static n => n.Id == "WaitPullRequestMerged").ExternalEventMetadata!.MessageName);
         Assert.Equal("local", definition.Nodes.Single(static n => n.Id == "DraftRequirements").Metadata!.ExecutionMode);
         Assert.Equal("local", definition.Nodes.Single(static n => n.Id == "DraftArchitecture").Metadata!.ExecutionMode);
-        Assert.Equal("agent_sandboxed", definition.Nodes.Single(static n => n.Id == "DevelopTodoApp").Metadata!.ExecutionMode);
-        Assert.Equal("repo-write", definition.Nodes.Single(static n => n.Id == "DevelopTodoApp").Metadata!.SandboxProfile);
-        Assert.Equal("repo-read", definition.Nodes.Single(static n => n.Id == "ReviewPullRequest").Metadata!.SandboxProfile);
+        var implementation = definition.Nodes.Single(static n => n.Id == "ImplementIssue");
+        Assert.Equal("agent_sandboxed", implementation.Metadata!.ExecutionMode);
+        Assert.Equal("repo-write", implementation.Metadata!.SandboxProfile);
+
+        var review = definition.Nodes.Single(static n => n.Id == "ReviewPullRequest");
+        Assert.Equal("repo-read", review.Metadata!.SandboxProfile);
+        Assert.True(review.Metadata.RuntimeContract!.Prompt!.StrictVariables);
     }
 
     private static string FindRepositoryFile(params string[] segments)

@@ -1,6 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using Agentwerke.Agents.Tools;
+using Agentwerke.Application.Agents;
 using Agentwerke.Application.Secrets;
+using Agentwerke.Domain.Persistence;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Security;
 using Agentwerke.Integrations;
@@ -24,6 +27,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
     private readonly ISandboxExecutor _sandboxExecutor;
     private readonly ISecretStore _secretStore;
     private readonly IAgentRegistry _agentRegistry;
+    private readonly IAgentInteractionRepository _interactions;
     private readonly IntegrationOptions _integrationOptions;
     private readonly LanguageModelOptions _languageModelOptions;
     private readonly SandboxOptions _sandboxOptions;
@@ -32,6 +36,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         ISandboxExecutor sandboxExecutor,
         ISecretStore secretStore,
         IAgentRegistry agentRegistry,
+        IAgentInteractionRepository interactions,
         IOptions<IntegrationOptions> integrationOptions,
         IOptions<LanguageModelOptions> languageModelOptions,
         IOptions<SandboxOptions> sandboxOptions)
@@ -39,6 +44,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         _sandboxExecutor = sandboxExecutor;
         _secretStore = secretStore;
         _agentRegistry = agentRegistry;
+        _interactions = interactions;
         _integrationOptions = integrationOptions.Value;
         _languageModelOptions = languageModelOptions.Value;
         _sandboxOptions = sandboxOptions.Value;
@@ -51,7 +57,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         CancellationToken cancellationToken,
         AgentExecutionProgressReporter? progressReporter = null)
     {
-        var toolResolution = ResolveTools(request, profile);
+        var toolAccess = await LoadToolAccessDecisionsAsync(request.RunId, cancellationToken);
+        var toolResolution = ResolveTools(request, profile, toolAccess.ApprovedTools);
         if (toolResolution.FailureReason is not null)
         {
             return new ModelRunResult(
@@ -108,7 +115,9 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             request.Contract.SubAgents?.Enabled == true
                 ? Math.Max(0, request.Contract.SubAgents.MaxDepth)
                 : 0,
-            profile?.ReasoningEffort);
+            profile?.ReasoningEffort,
+            BuildEscalatableTools(toolResolution.Tools, toolAccess.Guidance),
+            toolAccess.Guidance);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;
@@ -238,6 +247,23 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 TokenUsage: null,
                 ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
                 SandboxExecution: sandboxExecution);
+        }
+
+        if (string.Equals(runResult.StepStatus, AgentTaskOutcomeStatuses.WaitingUser, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(runResult.PendingToolAccessPrompt))
+        {
+            await EnsureToolAccessInteractionAsync(request, runResult.PendingToolAccessPrompt, cancellationToken);
+            return new ModelRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: RedactOptional(runResult.FailureReason) ?? $"Awaiting response to: {runResult.PendingToolAccessPrompt}",
+                ToolInvocations: SanitizeToolInvocations(runResult.ToolInvocations ?? []),
+                Artifacts: null,
+                TokenUsage: runResult.TokenUsage,
+                ElapsedMs: sandboxResult.Duration.TotalMilliseconds,
+                SandboxExecution: sandboxExecution,
+                StepStatus: AgentTaskOutcomeStatuses.WaitingUser,
+                ModelTrace: runResult.ModelTrace);
         }
 
         var artifacts = RemoveInternalArtifacts(sandboxResult.Artifacts);
@@ -443,9 +469,20 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         return environment;
     }
 
-    private static ToolResolution ResolveTools(ModelRunRequest request, AgentProfile? profile)
+    private static ToolResolution ResolveTools(
+        ModelRunRequest request,
+        AgentProfile? profile,
+        IReadOnlyCollection<string>? approvedTools = null)
     {
         var requestedToolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Operator-approved tool-access requests (#202): allowed for the rest of the run, even
+        // past the contract's allow/deny lists.
+        var operatorApproved = new HashSet<string>(approvedTools ?? [], StringComparer.OrdinalIgnoreCase);
+        foreach (var tool in operatorApproved)
+        {
+            requestedToolNames.Add(CanonicalizeToolName(tool));
+        }
 
         foreach (var tool in profile?.Tools ?? [])
         {
@@ -484,7 +521,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         var unsupported = new List<string>();
         foreach (var toolName in requestedToolNames)
         {
-            if (deniedToolNames.Contains(toolName))
+            if (deniedToolNames.Contains(toolName) && !operatorApproved.Contains(toolName))
             {
                 continue;
             }
@@ -510,6 +547,98 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 .OrderBy(static tool => tool.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
             null);
+    }
+
+    /// <summary>
+    /// Answered tool-access interactions for this run (#202): 'approve' responses become extra
+    /// allowed tools on the re-run; any other response becomes operator guidance the sandbox
+    /// returns to the model when it calls that tool again.
+    /// </summary>
+    private async Task<(IReadOnlyList<string> ApprovedTools, IReadOnlyDictionary<string, string> Guidance)> LoadToolAccessDecisionsAsync(
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        var approved = new List<string>();
+        var guidance = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var interactions = await _interactions.GetByRunAsync(runId, cancellationToken);
+        foreach (var interaction in interactions)
+        {
+            if (interaction.Kind != AgentInteractionKinds.ToolAccess ||
+                interaction.Status != AgentInteractionStatuses.Answered)
+            {
+                continue;
+            }
+
+            var toolName = ExtractToolNameFromPrompt(interaction.Prompt);
+            if (toolName is null)
+            {
+                continue;
+            }
+
+            if (ToolAccessEscalation.IsApproved(interaction.Response))
+            {
+                approved.Add(toolName);
+            }
+            else
+            {
+                guidance[toolName] = interaction.Response ?? ToolAccessEscalation.DenyOption;
+            }
+        }
+
+        return (approved, guidance);
+    }
+
+    /// <summary>Prompts are built by <see cref="ToolAccessEscalation.BuildPrompt"/>: the tool name is the second quoted token.</summary>
+    private static string? ExtractToolNameFromPrompt(string prompt)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(prompt, "needs tool '([^']+)'");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    /// <summary>
+    /// Tools the sandbox supports but this step does not allow: calling one pauses the run for a
+    /// human decision instead of failing. Tools with recorded guidance are excluded — the sandbox
+    /// answers those from the guidance map without re-escalating.
+    /// </summary>
+    private static IReadOnlyList<string> BuildEscalatableTools(
+        IReadOnlyList<SandboxedToolContract> resolvedTools,
+        IReadOnlyDictionary<string, string> guidance)
+    {
+        var resolved = new HashSet<string>(resolvedTools.Select(static t => t.Name), StringComparer.OrdinalIgnoreCase);
+        return SupportedSandboxToolNames
+            .Where(name => !resolved.Contains(name) && !guidance.ContainsKey(name))
+            .ToArray();
+    }
+
+    private async Task EnsureToolAccessInteractionAsync(
+        ModelRunRequest request,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        var existing = (await _interactions.GetByRunAsync(request.RunId, cancellationToken))
+            .LastOrDefault(i =>
+                i.Kind == AgentInteractionKinds.ToolAccess &&
+                string.Equals(i.Prompt, prompt, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return;
+        }
+
+        await _interactions.AddAsync(new AgentInteraction
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            RunId = request.RunId,
+            StepId = string.IsNullOrWhiteSpace(request.StepId) ? null : request.StepId,
+            FromAgent = request.AgentName,
+            Kind = AgentInteractionKinds.ToolAccess,
+            AddresseeType = AgentInteractionAddresseeTypes.Human,
+            Addressee = null,
+            Blocking = true,
+            Prompt = prompt,
+            Options = ToolAccessEscalation.Options.ToList(),
+            Status = AgentInteractionStatuses.Pending,
+            CreatedAt = DateTime.UtcNow.ToString("o")
+        }, cancellationToken);
     }
 
     private SubAgentResolution ResolveSubAgents(AgentSubAgentContract? contract)
@@ -673,6 +802,15 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     private static string? RedactOptional(string? value) =>
         value is null ? null : SecretRedactor.Redact(value);
+
+    /// <summary>Every tool the sandboxed runtime can execute — must match <see cref="TryResolveSupportedTool"/>.</summary>
+    private static readonly IReadOnlyList<string> SupportedSandboxToolNames =
+    [
+        "github.read_issue", "github.comment_issue", "github.close_issue", "github.create_branch",
+        "github.create_pull_request", "github.request_review", "github.post_review",
+        "sandbox.file_read", "sandbox.file_write", "sandbox.file_edit", "sandbox.git",
+        "sandbox.shell", "sandbox.run_tests",
+    ];
 
     private static bool TryResolveSupportedTool(string toolName, out SandboxedToolContract? tool)
     {

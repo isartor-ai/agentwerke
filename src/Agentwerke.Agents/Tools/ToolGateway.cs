@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Agentwerke.AgentSecOps;
+using Agentwerke.Application.Agents;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Persistence;
 using Agentwerke.Sandboxes;
@@ -23,15 +24,18 @@ public sealed class ToolGateway : IToolGateway
     private readonly IToolRegistry _toolRegistry;
     private readonly IPolicyEvaluationService _policyEvaluationService;
     private readonly ISandboxProfileSelector _sandboxProfileSelector;
+    private readonly IAgentInteractionRepository _interactions;
 
     public ToolGateway(
         IToolRegistry toolRegistry,
         IPolicyEvaluationService policyEvaluationService,
-        ISandboxProfileSelector sandboxProfileSelector)
+        ISandboxProfileSelector sandboxProfileSelector,
+        IAgentInteractionRepository interactions)
     {
         _toolRegistry = toolRegistry;
         _policyEvaluationService = policyEvaluationService;
         _sandboxProfileSelector = sandboxProfileSelector;
+        _interactions = interactions;
     }
 
     public async Task<ToolGatewayResult> ExecuteAsync(ToolGatewayRequest request, CancellationToken cancellationToken)
@@ -52,7 +56,19 @@ public sealed class ToolGateway : IToolGateway
 
         if (IsDenied(request, tool, out var permissionFailure))
         {
-            return Failure(request, tool.Category, permissionFailure, "blocked");
+            // The tool exists but is not allowed for this step (#202): escalate to a human
+            // instead of failing outright. Approve -> the tool is allowed for the rest of the
+            // run (fall through to execution); anything else -> the operator's reply is returned
+            // to the model as the tool result. No decision yet -> suspend the run (waiting_user).
+            var decision = await ResolveToolAccessDecisionAsync(request, cancellationToken);
+            if (!decision.Approved)
+            {
+                return Failure(
+                    request,
+                    tool.Category,
+                    ToolAccessEscalation.BuildDenialResult(request.ToolName, decision.Response),
+                    "blocked");
+            }
         }
 
         try
@@ -231,6 +247,45 @@ public sealed class ToolGateway : IToolGateway
                 ErrorMessage: rationale,
                 DurationMs: 0,
                 ArtifactNames: []));
+    }
+
+    private async Task<(bool Approved, string? Response)> ResolveToolAccessDecisionAsync(
+        ToolGatewayRequest request,
+        CancellationToken cancellationToken)
+    {
+        var prompt = ToolAccessEscalation.BuildPrompt(request.AgentName, request.ToolName);
+        var existing = (await _interactions.GetByRunAsync(request.RunId, cancellationToken))
+            .LastOrDefault(i =>
+                i.Kind == AgentInteractionKinds.ToolAccess &&
+                string.Equals(i.Prompt, prompt, StringComparison.Ordinal));
+
+        if (existing is null)
+        {
+            var interaction = new AgentInteraction
+            {
+                Id = Guid.NewGuid().ToString("n"),
+                RunId = request.RunId,
+                StepId = string.IsNullOrWhiteSpace(request.StepId) ? null : request.StepId,
+                FromAgent = request.AgentName,
+                Kind = AgentInteractionKinds.ToolAccess,
+                AddresseeType = AgentInteractionAddresseeTypes.Human,
+                Addressee = null,
+                Blocking = true,
+                Prompt = prompt,
+                Options = ToolAccessEscalation.Options.ToList(),
+                Status = AgentInteractionStatuses.Pending,
+                CreatedAt = DateTime.UtcNow.ToString("o")
+            };
+            await _interactions.AddAsync(interaction, cancellationToken);
+            throw new AgentInteractionRequiredException(interaction.Id, prompt);
+        }
+
+        if (existing.Status != AgentInteractionStatuses.Answered)
+        {
+            throw new AgentInteractionRequiredException(existing.Id, prompt);
+        }
+
+        return (ToolAccessEscalation.IsApproved(existing.Response), existing.Response);
     }
 
     private static bool IsDenied(ToolGatewayRequest request, IAgentTool tool, out string failureReason)

@@ -199,10 +199,13 @@ export function AgentDetailPanel({
 
             {/* ── Prompt ── */}
             {step.runtimeSnapshot?.promptInline && (
-              <section className="adp-section">
-                <h3 className="adp-section-label">Prompt</h3>
+              <details className="adp-section adp-collapsible" aria-label="Step prompt">
+                <summary className="adp-collapsible-summary">
+                  <span className="adp-section-label">Prompt</span>
+                  <span className="adp-collapsible-meta">collapsed by default</span>
+                </summary>
                 <pre className="adp-pre">{step.runtimeSnapshot.promptInline}</pre>
-              </section>
+              </details>
             )}
 
             {step.runtimeSnapshot && (
@@ -353,8 +356,11 @@ export function AgentDetailPanel({
 
             {/* ── Step events (conditional) ── */}
             {stepEvents.length > 0 && (
-              <section className="adp-section">
-                <h3 className="adp-section-label">Step Events</h3>
+              <details className="adp-section adp-collapsible" aria-label="Step events">
+                <summary className="adp-collapsible-summary">
+                  <span className="adp-section-label">Step Events</span>
+                  <span className="adp-collapsible-meta">{stepEvents.length} event(s)</span>
+                </summary>
                 <ul className="event-list" role="list">
                   {stepEvents.map((event) => (
                     <li key={event.id}>
@@ -364,7 +370,7 @@ export function AgentDetailPanel({
                     </li>
                   ))}
                 </ul>
-              </section>
+              </details>
             )}
           </article>
         )}

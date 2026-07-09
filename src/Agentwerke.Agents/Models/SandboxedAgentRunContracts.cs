@@ -20,7 +20,17 @@ public sealed record SandboxedAgentRunEnvelope(
     IReadOnlyList<SandboxedToolContract> ResolvedTools,
     IReadOnlyList<SandboxedSubAgentProfile> SubAgents,
     int RemainingSubAgentDepth,
-    string? ReasoningEffort = null);
+    string? ReasoningEffort = null,
+    /// <summary>
+    /// Tools the sandboxed runtime supports but that are NOT allowed for this step. A call to
+    /// one of these pauses the run on a tool-access interaction (#202) instead of failing.
+    /// </summary>
+    IReadOnlyList<string>? EscalatableTools = null,
+    /// <summary>
+    /// Operator guidance for tools whose access request was declined, keyed by tool name; the
+    /// guidance is returned to the model as the tool result on the step re-run.
+    /// </summary>
+    IReadOnlyDictionary<string, string>? ToolAccessGuidance = null);
 
 public sealed record SandboxedToolContract(
     string Name,
@@ -40,7 +50,11 @@ public sealed record SandboxedAgentRunResult(
     AgentModelTokenUsage? TokenUsage,
     IReadOnlyDictionary<string, string>? Artifacts = null,
     IReadOnlyList<AgentToolInvocationRecord>? ToolInvocations = null,
-    AgentModelTraceRecord? ModelTrace = null);
+    AgentModelTraceRecord? ModelTrace = null,
+    /// <summary><c>waiting_user</c> when the run must pause for a tool-access decision (#202).</summary>
+    string? StepStatus = null,
+    /// <summary>The interaction prompt the host must persist when <c>StepStatus</c> is waiting_user.</summary>
+    string? PendingToolAccessPrompt = null);
 
 public interface ISandboxedAgentRunner
 {

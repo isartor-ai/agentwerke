@@ -61,6 +61,13 @@ public static class AgentInteractionKinds
     public const string Notify = "notify";
     public const string AgentRequest = "agent_request";
     public const string Approval = "approval";
+
+    /// <summary>
+    /// An agent needs a tool that exists but is not allowed for its step (#202). Blocking; a
+    /// human replies "approve" to allow the tool for the rest of the run, or with guidance text
+    /// that is fed back to the agent as the tool result.
+    /// </summary>
+    public const string ToolAccess = "tool_access";
 }
 
 public static class AgentInteractionAddresseeTypes

@@ -106,12 +106,18 @@ describe('RunDetail integration', () => {
     );
   }
 
+  function clickRunDetailTab(name: string) {
+    const runTablist = screen.getByRole('tablist', { name: 'Run detail tabs' });
+    fireEvent.click(within(runTablist).getByRole('tab', { name }));
+  }
+
   it('renders live run detail with tabs, events, artifacts and approvals', async () => {
     renderDetail();
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Summary' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Logs' })).not.toBeInTheDocument();
+    const runTablist = screen.getByRole('tablist', { name: 'Run detail tabs' });
+    expect(within(runTablist).getByRole('tab', { name: 'Summary' })).toBeInTheDocument();
+    expect(within(runTablist).queryByRole('tab', { name: 'Logs' })).not.toBeInTheDocument();
     expect(screen.getByText('Evidence Pack')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Export Evidence Pack' }));
     await waitFor(() => {
@@ -121,15 +127,18 @@ describe('RunDetail integration', () => {
     const eventMonitor = screen.getByText('Runtime Events').closest('details') as HTMLDetailsElement | null;
     expect(eventMonitor).not.toBeNull();
     expect(eventMonitor?.open).toBe(false);
-    expect(screen.getByText('Retry scheduled after transient failure.')).toBeInTheDocument();
-    expect(screen.getByText('Timeout boundary triggered on security scan.')).toBeInTheDocument();
+    // Events are lazy-rendered: open the details first before checking for event text (Option 2)
     fireEvent.click(screen.getByText('Runtime Events').closest('summary')!);
-    expect(eventMonitor?.open).toBe(true);
+    await waitFor(() => {
+      expect(eventMonitor?.open).toBe(true);
+      expect(screen.getByText('Retry scheduled after transient failure.')).toBeInTheDocument();
+      expect(screen.getByText('Timeout boundary triggered on security scan.')).toBeInTheDocument();
+    });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Policy' }));
+    clickRunDetailTab('Policy');
     expect(screen.getAllByText('Requires human approval.').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    clickRunDetailTab('Artifacts');
     expect(screen.getByText('scan-report.json')).toBeInTheDocument();
     expect(
       screen.getAllByRole('link', { name: 'Download' }).some(
@@ -137,7 +146,7 @@ describe('RunDetail integration', () => {
       ),
     ).toBe(true);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Approvals' }));
+    clickRunDetailTab('Approvals');
     expect(screen.getByText('Merge branch feature/auth-refactor to main')).toBeInTheDocument();
 
     fireEvent.click(
@@ -150,11 +159,11 @@ describe('RunDetail integration', () => {
     renderDetail();
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    // Evidence pack is now lazy-loaded: click the Evidence tab to trigger the fetch (Option 1)
+    clickRunDetailTab('Evidence');
     await waitFor(() => {
       expect(vi.mocked(apiClient.getRunEvidencePack)).toHaveBeenCalledWith('run-0421');
     });
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
 
     expect(screen.getByText('Evidence Pack Viewer')).toBeInTheDocument();
     expect(screen.getByText('610 tokens')).toBeInTheDocument();
@@ -170,7 +179,7 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'I/O' }));
+    clickRunDetailTab('I/O');
 
     expect(screen.getAllByText('LLM Activity').length).toBeGreaterThan(0);
     expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0);
@@ -203,7 +212,7 @@ describe('RunDetail integration', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('shows selected-step visible reasoning in the agent detail panel', async () => {
+  it('shows selected-step visible reasoning in execution timeline tabs', async () => {
     vi.mocked(apiClient.getRun).mockResolvedValue({
       ...runsFixture[0],
       events: [
@@ -224,11 +233,8 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
 
-    const panel = screen.getByRole('region', { name: 'Step detail: Merge to main' });
-    expect(within(panel).getByText('Visible Reasoning')).toBeInTheDocument();
-    expect(
-      within(panel).getByText('Inspecting the approval context before opening github.read_issue.'),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText('Visible Reasoning').length).toBeGreaterThan(0);
+    expect(screen.getByText('Inspecting the approval context before opening github.read_issue.')).toBeInTheDocument();
   });
 
   it('streams reasoning progress events without reloading the full run payload', async () => {
@@ -277,6 +283,10 @@ describe('RunDetail integration', () => {
         createdAt: new Date().toISOString(),
       });
     });
+
+    // Timeline-only detail view: ensure the target step is expanded before checking streamed content.
+    fireEvent.click(screen.getByRole('button', { name: /Merge to main/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Merge to main/i }));
 
     expect(
       (await screen.findAllByText('Inspecting the repository context before opening a tool call.')).length,
@@ -327,7 +337,7 @@ describe('RunDetail integration', () => {
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
     expect(vi.mocked(apiClient.getRunEvidencePack)).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
+    clickRunDetailTab('Evidence');
     expect(screen.getByText('Operator role required to view and export evidence packs.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export Evidence Pack' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel run and stop further execution' })).toBeDisabled();
@@ -407,9 +417,10 @@ describe('RunDetail integration', () => {
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'I/O' }));
+    clickRunDetailTab('I/O');
     expect(screen.getAllByText('Specification generated successfully.').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Write a concise technical specification.').length).toBeGreaterThan(0);
+    const selectedStepPrompt = screen.getByLabelText('Selected step prompt') as HTMLDetailsElement;
+    expect(selectedStepPrompt.open).toBe(false);
     expect(screen.getByText('spec.generate')).toBeInTheDocument();
     expect(screen.getAllByText('agent_sandboxed').length).toBeGreaterThan(0);
     expect(screen.getAllByText('yes').length).toBeGreaterThan(0);
@@ -434,6 +445,10 @@ describe('RunDetail integration', () => {
       )).length,
     ).toBeGreaterThan(0);
     expect(screen.getAllByText('execd.run.request_id').length).toBeGreaterThan(0);
+
+    fireEvent.click(selectedStepPrompt.querySelector('summary')!);
+    expect(selectedStepPrompt.open).toBe(true);
+    expect(within(selectedStepPrompt).getByText('Write a concise technical specification.')).toBeInTheDocument();
   });
 
   it('loads workflow BPMN XML and renders the viewer with step statuses', async () => {
@@ -459,7 +474,7 @@ describe('RunDetail integration', () => {
     renderDetail();
 
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Approvals' }));
+    clickRunDetailTab('Approvals');
 
     const approveBtn = await screen.findByRole('button', {
       name: /Approve Merge branch feature\/auth-refactor/i,
@@ -534,7 +549,7 @@ describe('RunDetail integration', () => {
     renderDetail();
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }));
+    clickRunDetailTab('Conversation');
     expect(await screen.findByText('Ship as-is, or add tests first?')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add tests first' }));
@@ -553,7 +568,7 @@ describe('RunDetail integration', () => {
     renderDetail();
     expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }));
+    clickRunDetailTab('Conversation');
 
     expect(await screen.findByText('Conversation unavailable')).toBeInTheDocument();
   });

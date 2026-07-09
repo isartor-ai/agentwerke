@@ -135,11 +135,11 @@ Human approval requested: comment approved on this issue to start implementation
           correlationKeyTemplate="{{input.issue_number}}" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_PostArchitecture_WaitArchitectureApproval</bpmn:incoming>
-      <bpmn:outgoing>Flow_WaitArchitectureApproval_DevelopTodoApp</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WaitArchitectureApproval_ImplementIssue</bpmn:outgoing>
       <bpmn:messageEventDefinition />
     </bpmn:intermediateCatchEvent>
 
-    <bpmn:serviceTask id="DevelopTodoApp" name="Implement Issue">
+    <bpmn:serviceTask id="ImplementIssue" name="Implement Issue">
       <bpmn:extensionElements>
         <agentwerke:agentTask
           agent="developer"
@@ -172,8 +172,8 @@ Return the branch, PR number, PR URL, and validation performed.
           ]]></agentwerke:prompt>
         </agentwerke:agentTask>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_WaitArchitectureApproval_DevelopTodoApp</bpmn:incoming>
-      <bpmn:outgoing>Flow_DevelopTodoApp_ReviewPullRequest</bpmn:outgoing>
+      <bpmn:incoming>Flow_WaitArchitectureApproval_ImplementIssue</bpmn:incoming>
+      <bpmn:outgoing>Flow_ImplementIssue_ReviewPullRequest</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:serviceTask id="ReviewPullRequest" name="Senior Review">
@@ -187,12 +187,13 @@ Return the branch, PR number, PR URL, and validation performed.
           executionMode="agent_sandboxed"
           sandboxProfile="repo-read"
           permissionLevel="read-only"
+          strictVariables="true"
           allowedTools="sandbox.git,sandbox.file_read,sandbox.shell,github.post_review">
           <agentwerke:prompt><![CDATA[
 Review the pull request opened for GitHub issue #{{input.issue_number}}.
 
 Developer output:
-{{output.DevelopTodoApp}}
+{{output.ImplementIssue}}
 
 Requirements:
 {{output.DraftRequirements}}
@@ -204,7 +205,7 @@ Post a GitHub PR review with specific observations. Return the PR number and rev
           ]]></agentwerke:prompt>
         </agentwerke:agentTask>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_DevelopTodoApp_ReviewPullRequest</bpmn:incoming>
+      <bpmn:incoming>Flow_ImplementIssue_ReviewPullRequest</bpmn:incoming>
       <bpmn:outgoing>Flow_ReviewPullRequest_WaitPullRequestMerged</bpmn:outgoing>
     </bpmn:serviceTask>
 
@@ -247,8 +248,8 @@ Post a GitHub PR review with specific observations. Return the PR number and rev
     <bpmn:sequenceFlow id="Flow_WaitRequirementsApproval_DraftArchitecture" sourceRef="WaitRequirementsApproval" targetRef="DraftArchitecture" />
     <bpmn:sequenceFlow id="Flow_DraftArchitecture_PostArchitecture" sourceRef="DraftArchitecture" targetRef="PostArchitecture" />
     <bpmn:sequenceFlow id="Flow_PostArchitecture_WaitArchitectureApproval" sourceRef="PostArchitecture" targetRef="WaitArchitectureApproval" />
-    <bpmn:sequenceFlow id="Flow_WaitArchitectureApproval_DevelopTodoApp" sourceRef="WaitArchitectureApproval" targetRef="DevelopTodoApp" />
-    <bpmn:sequenceFlow id="Flow_DevelopTodoApp_ReviewPullRequest" sourceRef="DevelopTodoApp" targetRef="ReviewPullRequest" />
+    <bpmn:sequenceFlow id="Flow_WaitArchitectureApproval_ImplementIssue" sourceRef="WaitArchitectureApproval" targetRef="ImplementIssue" />
+    <bpmn:sequenceFlow id="Flow_ImplementIssue_ReviewPullRequest" sourceRef="ImplementIssue" targetRef="ReviewPullRequest" />
     <bpmn:sequenceFlow id="Flow_ReviewPullRequest_WaitPullRequestMerged" sourceRef="ReviewPullRequest" targetRef="WaitPullRequestMerged" />
     <bpmn:sequenceFlow id="Flow_WaitPullRequestMerged_CloseIssue" sourceRef="WaitPullRequestMerged" targetRef="CloseIssue" />
     <bpmn:sequenceFlow id="Flow_CloseIssue_End" sourceRef="CloseIssue" targetRef="End" />
@@ -263,7 +264,7 @@ Post a GitHub PR review with specific observations. Return the PR number and rev
       <bpmndi:BPMNShape id="DraftArchitecture_di" bpmnElement="DraftArchitecture"><dc:Bounds x="728" y="120" width="132" height="80" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="PostArchitecture_di" bpmnElement="PostArchitecture"><dc:Bounds x="920" y="120" width="132" height="80" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="WaitArchitectureApproval_di" bpmnElement="WaitArchitectureApproval"><dc:Bounds x="1120" y="142" width="36" height="36" /></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="DevelopTodoApp_di" bpmnElement="DevelopTodoApp"><dc:Bounds x="1216" y="120" width="132" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ImplementIssue_di" bpmnElement="ImplementIssue"><dc:Bounds x="1216" y="120" width="132" height="80" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="ReviewPullRequest_di" bpmnElement="ReviewPullRequest"><dc:Bounds x="1408" y="120" width="132" height="80" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="WaitPullRequestMerged_di" bpmnElement="WaitPullRequestMerged"><dc:Bounds x="1608" y="142" width="36" height="36" /></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="CloseIssue_di" bpmnElement="CloseIssue"><dc:Bounds x="1704" y="120" width="132" height="80" /></bpmndi:BPMNShape>
@@ -274,8 +275,8 @@ Post a GitHub PR review with specific observations. Return the PR number and rev
       <bpmndi:BPMNEdge id="Flow_WaitRequirementsApproval_DraftArchitecture_di" bpmnElement="Flow_WaitRequirementsApproval_DraftArchitecture"><di:waypoint x="668" y="160" /><di:waypoint x="728" y="160" /></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_DraftArchitecture_PostArchitecture_di" bpmnElement="Flow_DraftArchitecture_PostArchitecture"><di:waypoint x="860" y="160" /><di:waypoint x="920" y="160" /></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_PostArchitecture_WaitArchitectureApproval_di" bpmnElement="Flow_PostArchitecture_WaitArchitectureApproval"><di:waypoint x="1052" y="160" /><di:waypoint x="1120" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_WaitArchitectureApproval_DevelopTodoApp_di" bpmnElement="Flow_WaitArchitectureApproval_DevelopTodoApp"><di:waypoint x="1156" y="160" /><di:waypoint x="1216" y="160" /></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_DevelopTodoApp_ReviewPullRequest_di" bpmnElement="Flow_DevelopTodoApp_ReviewPullRequest"><di:waypoint x="1348" y="160" /><di:waypoint x="1408" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WaitArchitectureApproval_ImplementIssue_di" bpmnElement="Flow_WaitArchitectureApproval_ImplementIssue"><di:waypoint x="1156" y="160" /><di:waypoint x="1216" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ImplementIssue_ReviewPullRequest_di" bpmnElement="Flow_ImplementIssue_ReviewPullRequest"><di:waypoint x="1348" y="160" /><di:waypoint x="1408" y="160" /></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_ReviewPullRequest_WaitPullRequestMerged_di" bpmnElement="Flow_ReviewPullRequest_WaitPullRequestMerged"><di:waypoint x="1540" y="160" /><di:waypoint x="1608" y="160" /></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_WaitPullRequestMerged_CloseIssue_di" bpmnElement="Flow_WaitPullRequestMerged_CloseIssue"><di:waypoint x="1644" y="160" /><di:waypoint x="1704" y="160" /></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_CloseIssue_End_di" bpmnElement="Flow_CloseIssue_End"><di:waypoint x="1836" y="160" /><di:waypoint x="1896" y="160" /></bpmndi:BPMNEdge>

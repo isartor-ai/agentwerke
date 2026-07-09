@@ -391,6 +391,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Artifacts: modelResult.Artifacts,
             StepStatus: modelResult.StepStatus);
 
+        outcome = ValidateRequiredImplementationHandoff(metadata, outcome);
+
         return await MaybeOffloadOutputAsync(
             runId,
             stepId,
@@ -442,7 +444,23 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             return await FinalizeOutcomeAsync(node, metadata, attempt, beforeToolOutcome, cancellationToken);
         }
 
-        var result = await _toolGateway.ExecuteAsync(request, cancellationToken);
+        ToolGatewayResult result;
+        try
+        {
+            result = await _toolGateway.ExecuteAsync(request, cancellationToken);
+        }
+        catch (AgentInteractionRequiredException ex)
+        {
+            // The gateway escalated a denied tool to a human (#202): suspend the run; the step
+            // re-runs on answer, when the gateway finds the decision.
+            return await FinalizeOutcomeAsync(node, metadata, attempt, new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: $"Awaiting response to: {ex.Prompt}",
+                RuntimeSnapshot: runtimeSnapshot,
+                StepStatus: AgentTaskOutcomeStatuses.WaitingUser), cancellationToken);
+        }
+
         var updatedSnapshot = runtimeSnapshot with
         {
             ToolInvocations = runtimeSnapshot.ToolInvocations.Concat([result.Invocation]).ToArray(),
@@ -872,6 +890,46 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             PolicyDecision = updated.PolicyDecision ?? original.PolicyDecision,
             RuntimeSnapshot = runtimeSnapshot
         };
+
+    private static AgentTaskOutcome ValidateRequiredImplementationHandoff(
+        AgentwerkeTaskMetadata metadata,
+        AgentTaskOutcome outcome)
+    {
+        if (!outcome.Succeeded ||
+            !string.Equals(metadata.Action, "implementation.build", StringComparison.OrdinalIgnoreCase) ||
+            !AllowsTool(metadata, "github.create_pull_request"))
+        {
+            return outcome;
+        }
+
+        if (string.IsNullOrWhiteSpace(outcome.Output))
+        {
+            return outcome with
+            {
+                Succeeded = false,
+                FailureReason = "Implementation step completed without returning a summary. Expected branch name, pull request number or URL, and validation details."
+            };
+        }
+
+        var prCreated = outcome.RuntimeSnapshot?.ToolInvocations.Any(static invocation =>
+            string.Equals(invocation.ToolName, "github.create_pull_request", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(invocation.Status, "completed", StringComparison.OrdinalIgnoreCase)) == true;
+
+        if (!prCreated)
+        {
+            return outcome with
+            {
+                Succeeded = false,
+                FailureReason = "Implementation step completed without opening a pull request. Expected a successful 'github.create_pull_request' tool call before review handoff."
+            };
+        }
+
+        return outcome;
+    }
+
+    private static bool AllowsTool(AgentwerkeTaskMetadata metadata, string toolName) =>
+        metadata.RuntimeContract?.Permissions.AllowedTools.Any(allowed =>
+            string.Equals(allowed, toolName, StringComparison.OrdinalIgnoreCase)) == true;
 
     private static bool TryCreateOutcomeFromHookDecision(
         HookEvaluationResult result,

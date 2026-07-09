@@ -105,6 +105,34 @@ public sealed class PolicyEvaluationServiceTests
     }
 
     [Fact]
+    public async Task GitHubPostReviewTool_ExecuteAsync_AcceptsHashPrefixedPullNumber()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new GitHubPostReviewTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run-1",
+                StepId: "step-1",
+                AgentName: "reviewer",
+                Action: "review.pr",
+                Environment: "sandbox",
+                PurposeType: "code_review",
+                PolicyTag: "demo-review",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["pull_number"] = "#28",
+                ["body"] = "Looks fine.",
+                ["event"] = "COMMENT"
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(28, gitHub.LastPostReviewCommand!.PullNumber);
+    }
+
+    [Fact]
     public async Task AgentOrchestrator_WhenPolicyRejects_DoesNotInvokeGitHubConnector()
     {
         var skills = new SkillRepository(CreateKnownSkills());
@@ -567,8 +595,9 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.False(outcome.Succeeded);
         Assert.Equal(0, gitHub.CreatePullRequestCalls);
-        Assert.NotNull(outcome.RuntimeSnapshot);
-        Assert.Equal("blocked", Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations).Status);
+        // Denied tools escalate to a human instead of failing outright (#202).
+        Assert.Equal(AgentTaskOutcomeStatuses.WaitingUser, outcome.StepStatus);
+        Assert.Contains("Awaiting response to:", outcome.FailureReason, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -613,10 +642,9 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal(0, gitHub.RequestReviewersCalls);
         Assert.Equal(0, gitHub.PostReviewCalls);
         Assert.Equal(0, gitHub.TriggerWorkflowDispatchCalls);
-        Assert.NotNull(outcome.RuntimeSnapshot);
-        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
-        Assert.Equal(action, invocation.ToolName);
-        Assert.Equal("blocked", invocation.Status);
+        // Denied tools escalate to a human instead of failing outright (#202).
+        Assert.Equal(AgentTaskOutcomeStatuses.WaitingUser, outcome.StepStatus);
+        Assert.Contains($"tool '{action}'", outcome.FailureReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -649,10 +677,9 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.False(outcome.Succeeded);
         Assert.Equal(0, sandbox.ExecuteCalls);
-        Assert.NotNull(outcome.RuntimeSnapshot);
-        var invocation = Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations);
-        Assert.Equal("sandbox.execute", invocation.ToolName);
-        Assert.Equal("blocked", invocation.Status);
+        // Read-only permission denials also escalate (#202): an operator may approve.
+        Assert.Equal(AgentTaskOutcomeStatuses.WaitingUser, outcome.StepStatus);
+        Assert.Contains("sandbox.execute", outcome.FailureReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -813,6 +840,113 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal(1, sandboxedRunner.ExecuteCalls);
         Assert.Equal(AgentExecutionModes.AgentSandboxed, outcome.RuntimeSnapshot!.ExecutionMode);
         Assert.NotNull(outcome.RuntimeSnapshot.SandboxExecution);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_ImplementationBuildWithoutOutput_FailsBeforeReviewHandoff()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var sandboxedRunner = new StubSandboxedAgentRunner
+        {
+            ResultFactory = _ => new ModelRunResult(
+                Succeeded: true,
+                Output: null,
+                FailureReason: null,
+                ToolInvocations:
+                [
+                    new AgentToolInvocationRecord
+                    {
+                        ToolName = "sandbox.file_write",
+                        Status = "completed"
+                    }
+                ],
+                Artifacts: null,
+                TokenUsage: null)
+        };
+
+        var orchestrator = CreateImplementationOrchestrator(gitHub, sandbox, sandboxedRunner);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            CreateImplementationNode(),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("without returning a summary", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_ImplementationBuildWithoutPullRequestToolCall_FailsBeforeReviewHandoff()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var sandboxedRunner = new StubSandboxedAgentRunner
+        {
+            ResultFactory = _ => new ModelRunResult(
+                Succeeded: true,
+                Output: "Branch: agentwerke/issue-26",
+                FailureReason: null,
+                ToolInvocations:
+                [
+                    new AgentToolInvocationRecord
+                    {
+                        ToolName = "sandbox.file_write",
+                        Status = "completed"
+                    }
+                ],
+                Artifacts: null,
+                TokenUsage: null)
+        };
+
+        var orchestrator = CreateImplementationOrchestrator(gitHub, sandbox, sandboxedRunner);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            CreateImplementationNode(),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("without opening a pull request", outcome.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentOrchestrator_ImplementationBuildWithPullRequestToolCallAndSummary_Succeeds()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var sandbox = new StubSandboxExecutor();
+        var sandboxedRunner = new StubSandboxedAgentRunner
+        {
+            ResultFactory = _ => new ModelRunResult(
+                Succeeded: true,
+                Output: "Branch: agentwerke/issue-26\nPR: #24 https://github.com/example/repo/pull/24",
+                FailureReason: null,
+                ToolInvocations:
+                [
+                    new AgentToolInvocationRecord
+                    {
+                        ToolName = "github.create_pull_request",
+                        Status = "completed"
+                    }
+                ],
+                Artifacts: null,
+                TokenUsage: null)
+        };
+
+        var orchestrator = CreateImplementationOrchestrator(gitHub, sandbox, sandboxedRunner);
+
+        var outcome = await orchestrator.ExecuteAsync(
+            "run-123",
+            "step-456",
+            CreateImplementationNode(),
+            attempt: 1,
+            CancellationToken.None);
+
+        Assert.True(outcome.Succeeded);
     }
 
     [Fact]
@@ -1086,8 +1220,9 @@ public sealed class PolicyEvaluationServiceTests
 
         Assert.False(outcome.Succeeded);
         Assert.Equal(0, tool.ExecuteCalls);
-        Assert.NotNull(outcome.RuntimeSnapshot);
-        Assert.Equal("blocked", Assert.Single(outcome.RuntimeSnapshot!.ToolInvocations).Status);
+        // Denied tools escalate to a human instead of failing outright (#202).
+        Assert.Equal(AgentTaskOutcomeStatuses.WaitingUser, outcome.StepStatus);
+        Assert.Contains("mcp.weather.lookup", outcome.FailureReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1418,7 +1553,7 @@ public sealed class PolicyEvaluationServiceTests
             CreateHookGateway(),
             mcpSessionFactory ?? new StubMcpToolSessionFactory(),
             toolRegistry,
-            new ToolGateway(toolRegistry, policyService, new SandboxProfileSelector()),
+            new ToolGateway(toolRegistry, policyService, new SandboxProfileSelector(), new InMemoryInteractionRepository()),
             new NullAgentModelRunner(),
             sandboxedAgentRunner ?? new StubSandboxedAgentRunner(),
             new NullArtifactStorage(),
@@ -1436,6 +1571,68 @@ public sealed class PolicyEvaluationServiceTests
                 }
             }));
     }
+
+    private static AgentOrchestrator CreateImplementationOrchestrator(
+        RecordingGitHubConnector gitHub,
+        StubSandboxExecutor sandbox,
+        ISandboxedAgentRunner sandboxedRunner)
+    {
+        var registry = new FileAgentRegistry(
+        [
+            new AgentProfile
+            {
+                AgentId = "developer",
+                Name = "Developer",
+                Runner = "claude-code",
+                SupportedActions = ["implementation.build"],
+                SandboxProfiles = ["repo-write"]
+            }
+        ]);
+
+        return CreateOrchestrator(
+            CreateKnownSkills(),
+            "allow",
+            gitHub,
+            sandbox,
+            sandboxEnabled: true,
+            registry: registry,
+            sandboxedAgentRunner: sandboxedRunner);
+    }
+
+    private static BpmnNodeDefinition CreateImplementationNode() =>
+        new(
+            "ImplementIssue",
+            "Implement Issue",
+            "serviceTask",
+            new AgentwerkeTaskMetadata(
+                Agent: "developer",
+                Action: "implementation.build",
+                Environment: "sandbox",
+                PurposeType: "implementation",
+                PolicyTag: "demo-implementation",
+                RequiresEvidence: [],
+                SandboxProfile: "repo-write",
+                RuntimeContract: new Domain.AgentRuntime.AgentRuntimeContract
+                {
+                    Prompt = new Domain.AgentRuntime.AgentPromptContract
+                    {
+                        Inline = "Implement exactly what the architecture describes and return branch, PR number, PR URL, and validation performed."
+                    },
+                    Permissions = new Domain.AgentRuntime.AgentPermissionContract
+                    {
+                        Level = Domain.AgentRuntime.AgentPermissionLevels.ReadWrite,
+                        AllowedTools =
+                        [
+                            "sandbox.git",
+                            "sandbox.file_read",
+                            "sandbox.file_write",
+                            "sandbox.file_edit",
+                            "sandbox.shell",
+                            "github.comment_issue",
+                            "github.create_pull_request"
+                        ]
+                    }
+                }));
 
     private static IAgentHookGateway CreateHookGateway() =>
         new HookGateway(
@@ -1460,7 +1657,7 @@ public sealed class PolicyEvaluationServiceTests
             new SandboxExecutionTool(sandbox)
         ]);
 
-        return new ToolGateway(registry, policyService, new SandboxProfileSelector());
+        return new ToolGateway(registry, policyService, new SandboxProfileSelector(), new InMemoryInteractionRepository());
     }
 
     private static SkillManifest[] CreateKnownSkills() =>
@@ -1590,6 +1787,7 @@ public sealed class PolicyEvaluationServiceTests
         public int CreatePullRequestCalls { get; private set; }
         public int RequestReviewersCalls { get; private set; }
         public int PostReviewCalls { get; private set; }
+        public PostGitHubReviewCommand? LastPostReviewCommand { get; private set; }
 
         public Task<GitHubIssueResult> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default)
         {
@@ -1643,6 +1841,7 @@ public sealed class PolicyEvaluationServiceTests
         public Task<GitHubReviewResult> PostReviewAsync(PostGitHubReviewCommand command, CancellationToken cancellationToken = default)
         {
             PostReviewCalls++;
+            LastPostReviewCommand = command;
             return Task.FromResult(new GitHubReviewResult(7, command.PullNumber, $"https://example.test/pr/{command.PullNumber}#review-7", "COMMENTED", command.Event));
         }
 
@@ -1685,6 +1884,8 @@ public sealed class PolicyEvaluationServiceTests
     {
         public int ExecuteCalls { get; private set; }
 
+        public Func<ModelRunRequest, ModelRunResult>? ResultFactory { get; init; }
+
         public Task<ModelRunResult> RunAsync(
             ModelRunRequest request,
             AgentProfile? profile,
@@ -1693,6 +1894,11 @@ public sealed class PolicyEvaluationServiceTests
             AgentExecutionProgressReporter? progressReporter = null)
         {
             ExecuteCalls++;
+            if (ResultFactory is not null)
+            {
+                return Task.FromResult(ResultFactory(request));
+            }
+
             return Task.FromResult(new ModelRunResult(
                 Succeeded: true,
                 Output: "sandboxed-output",
