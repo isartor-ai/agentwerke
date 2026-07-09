@@ -18,6 +18,13 @@ public sealed class AgentProfile
     /// <summary>Optional model id override.</summary>
     public string? Model { get; init; }
 
+    /// <summary>
+    /// Optional reasoning effort ("low" | "medium" | "high") forwarded as
+    /// <c>reasoning_effort</c> on OpenAI-compatible requests. Providers that emit reasoning
+    /// only on request (OpenAI o-series, Gemini thinking) need this; others ignore or drop it.
+    /// </summary>
+    public string? ReasoningEffort { get; init; }
+
     /// <summary>Sandbox base image (used by the claude-code runner).</summary>
     public string? DockerImage { get; init; }
 

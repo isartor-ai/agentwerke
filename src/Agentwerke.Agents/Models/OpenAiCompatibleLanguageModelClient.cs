@@ -65,6 +65,12 @@ public sealed class OpenAiCompatibleLanguageModelClient : ILanguageModelClient
                 ["stream_options"] = new JsonObject { ["include_usage"] = true },
                 ["messages"] = messages.DeepClone(),
             };
+            if (!string.IsNullOrWhiteSpace(request.ReasoningEffort))
+            {
+                // Providers that emit reasoning only on request (OpenAI o-series, Gemini thinking)
+                // need this; LiteLLM's drop_params discards it where unsupported.
+                body["reasoning_effort"] = request.ReasoningEffort;
+            }
             if (tools.Count > 0)
             {
                 body["tools"] = new JsonArray(tools.Select(t => t.DeepClone()).ToArray());

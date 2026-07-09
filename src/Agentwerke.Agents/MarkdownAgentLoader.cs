@@ -64,6 +64,7 @@ public static class MarkdownAgentLoader
             Category = meta.Scalar("category") ?? string.Empty,
             Runner = meta.Scalar("runner") ?? "agent-model",
             Model = meta.Scalar("model"),
+            ReasoningEffort = meta.Scalar("reasoningEffort"),
             DockerImage = meta.Scalar("dockerImage"),
             Network = meta.Scalar("network") ?? "none",
             Skills = skills,

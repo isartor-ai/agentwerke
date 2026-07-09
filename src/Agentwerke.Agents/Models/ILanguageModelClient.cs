@@ -17,7 +17,9 @@ public sealed record LanguageModelRequest(
     IReadOnlyList<LanguageModelToolDefinition> Tools,
     int MaxTokens = 4096,
     /// <summary>Per-agent model id override; falls back to the configured default when null.</summary>
-    string? ModelOverride = null);
+    string? ModelOverride = null,
+    /// <summary>Optional reasoning effort sent as <c>reasoning_effort</c> on OpenAI-compatible requests.</summary>
+    string? ReasoningEffort = null);
 
 public sealed record LanguageModelResponse(
     bool Succeeded,

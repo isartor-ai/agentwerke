@@ -30,6 +30,11 @@ public static class AgentMarkdownSerializer
             sb.AppendLine($"model: {profile.Model}");
         }
 
+        if (!string.IsNullOrWhiteSpace(profile.ReasoningEffort))
+        {
+            sb.AppendLine($"reasoningEffort: {profile.ReasoningEffort}");
+        }
+
         if (!string.IsNullOrWhiteSpace(profile.DockerImage))
         {
             sb.AppendLine($"dockerImage: {profile.DockerImage}");

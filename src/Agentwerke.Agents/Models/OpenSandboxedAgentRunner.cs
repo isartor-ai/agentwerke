@@ -107,7 +107,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             subAgentResolution.Profiles,
             request.Contract.SubAgents?.Enabled == true
                 ? Math.Max(0, request.Contract.SubAgents.MaxDepth)
-                : 0);
+                : 0,
+            profile?.ReasoningEffort);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;

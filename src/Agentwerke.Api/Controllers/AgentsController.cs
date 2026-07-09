@@ -169,7 +169,8 @@ public sealed class AgentsController : ControllerBase
             profile.SystemPrompt,
             document.RawMarkdown,
             document.EffectiveFilePath,
-            document.SourceFilePath);
+            document.SourceFilePath,
+            profile.ReasoningEffort);
     }
 
     private AgentSkillBinding ResolveSkillBinding(AgentSkillRef skill)
@@ -199,6 +200,7 @@ public sealed class AgentsController : ControllerBase
             Category = NormalizeRequiredScalar(request.Category, "Agent category"),
             Runner = NormalizeRequiredScalar(request.Runner, "Agent runner"),
             Model = NormalizeOptionalScalar(request.Model),
+            ReasoningEffort = NormalizeOptionalScalar(request.ReasoningEffort),
             DockerImage = NormalizeOptionalScalar(request.DockerImage),
             Network = NormalizeOptionalScalar(request.Network) ?? "none",
             Skills = (request.Skills ?? [])

@@ -22,4 +22,5 @@ public sealed record UpsertAgentRequest(
     string? AvatarSeed = null,
     string? IdentityIconKey = null,
     string? IdentityIcon = null,
-    string? SystemPrompt = null);
+    string? SystemPrompt = null,
+    string? ReasoningEffort = null);

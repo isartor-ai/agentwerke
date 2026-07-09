@@ -84,7 +84,8 @@ public sealed class SandboxedAgentRuntimeExecutor
                 UserPrompt: envelope.UserPrompt,
                 Tools: toolDefinitions,
                 MaxTokens: envelope.MaxTokens,
-                ModelOverride: envelope.Model),
+                ModelOverride: envelope.Model,
+                ReasoningEffort: envelope.ReasoningEffort),
             (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, progressReporter, ct),
             cancellationToken,
             progressReporter);

@@ -27,4 +27,5 @@ public sealed record AgentDetail(
     string? SystemPrompt,
     string RawMarkdown,
     string EffectiveFilePath,
-    string? SourceFilePath);
+    string? SourceFilePath,
+    string? ReasoningEffort = null);

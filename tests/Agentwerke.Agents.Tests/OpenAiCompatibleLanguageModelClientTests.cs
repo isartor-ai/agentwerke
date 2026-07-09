@@ -161,6 +161,39 @@ public sealed class OpenAiCompatibleLanguageModelClientTests
     }
 
     [Fact]
+    public async Task RunAsync_SendsReasoningEffortWhenConfigured()
+    {
+        using var server = QueuedHttpServer.Start(Sse(
+            """{"model":"gpt-4o","choices":[{"delta":{"content":"done"}}]}""",
+            UsageChunk));
+
+        var response = await Client(server).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128, ReasoningEffort: "high"),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None);
+
+        Assert.True(response.Succeeded, response.FailureReason);
+        using var doc = JsonDocument.Parse(server.ReceivedBodies[0]);
+        Assert.Equal("high", doc.RootElement.GetProperty("reasoning_effort").GetString());
+    }
+
+    [Fact]
+    public async Task RunAsync_OmitsReasoningEffortByDefault()
+    {
+        using var server = QueuedHttpServer.Start(Sse(
+            """{"model":"gpt-4o","choices":[{"delta":{"content":"done"}}]}""",
+            UsageChunk));
+
+        await Client(server).RunAsync(
+            new LanguageModelRequest("system", "review the PR", Tools(), MaxTokens: 128),
+            (_, _) => throw new InvalidOperationException("No tool calls expected."),
+            CancellationToken.None);
+
+        using var doc = JsonDocument.Parse(server.ReceivedBodies[0]);
+        Assert.False(doc.RootElement.TryGetProperty("reasoning_effort", out _));
+    }
+
+    [Fact]
     public async Task RunAsync_RetriesWhenStreamEndsPrematurely()
     {
         // First response dies mid-stream (congested worker cutting the connection): some deltas

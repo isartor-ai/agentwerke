@@ -537,6 +537,7 @@ export interface AgentSkillBinding {
 }
 
 export interface AgentDetail extends AgentSummary {
+  reasoningEffort?: string;
   systemPrompt?: string;
   rawMarkdown: string;
   effectiveFilePath: string;

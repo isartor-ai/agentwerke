@@ -40,7 +40,9 @@ public sealed record ModelRunRequest(
     AgentPromptSnapshot PromptSnapshot,
     AgentRuntimeContract Contract,
     /// <summary>Per-agent model id override from the agent profile; null uses the configured default.</summary>
-    string? Model = null);
+    string? Model = null,
+    /// <summary>Per-agent reasoning effort from the agent profile; null sends nothing.</summary>
+    string? ReasoningEffort = null);
 
 public sealed record ModelRunResult(
     bool Succeeded,

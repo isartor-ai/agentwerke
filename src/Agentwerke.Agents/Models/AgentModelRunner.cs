@@ -64,7 +64,8 @@ public sealed class AgentModelRunner : IAgentModelRunner
             UserPrompt: request.PromptSnapshot.FinalPrompt,
             Tools: toolDefinitions,
             MaxTokens: _options.MaxTokens,
-            ModelOverride: request.Model);
+            ModelOverride: request.Model,
+            ReasoningEffort: request.ReasoningEffort);
 
         var startedAt = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();

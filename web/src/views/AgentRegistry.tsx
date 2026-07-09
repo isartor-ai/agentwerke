@@ -16,6 +16,7 @@ interface AgentFormState {
   category: string;
   runner: string;
   model: string;
+  reasoningEffort: string;
   dockerImage: string;
   network: string;
   tools: string;
@@ -53,6 +54,7 @@ function toFormState(agent: AgentDetail): AgentFormState {
     category: agent.category,
     runner: agent.runner,
     model: agent.model ?? '',
+    reasoningEffort: agent.reasoningEffort ?? '',
     dockerImage: agent.dockerImage ?? '',
     network: agent.network,
     tools: formatList(agent.tools),
@@ -297,6 +299,7 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
         category: form.category,
         runner: form.runner,
         model: form.model || undefined,
+        reasoningEffort: form.reasoningEffort || undefined,
         dockerImage: form.dockerImage || undefined,
         network: form.network,
         tools: parseList(form.tools),
@@ -552,6 +555,18 @@ export function AgentRegistry({ auth }: AgentRegistryProps) {
                     value={form.model}
                     onChange={(event) => updateForm('model', event.target.value)}
                   />
+                </label>
+                <label>
+                  Reasoning Effort
+                  <select
+                    value={form.reasoningEffort}
+                    onChange={(event) => updateForm('reasoningEffort', event.target.value)}
+                  >
+                    <option value="">provider default</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
                 </label>
                 <label>
                   Docker Image

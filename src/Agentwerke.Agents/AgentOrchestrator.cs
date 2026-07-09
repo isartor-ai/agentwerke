@@ -285,7 +285,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             Attempt: attempt,
             PromptSnapshot: promptAssembly.PromptSnapshot,
             Contract: metadata.RuntimeContract ?? new AgentRuntimeContract(),
-            Model: profile?.Model);
+            Model: profile?.Model,
+            ReasoningEffort: profile?.ReasoningEffort);
 
         ModelRunResult modelResult;
         switch (executionMode)
