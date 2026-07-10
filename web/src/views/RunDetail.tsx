@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { canApprove, canOperate } from '../auth/permissions';
-import { AgentDetailPanel } from '../components/AgentDetailPanel';
 import { BpmnViewer } from '../components/BpmnViewer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
@@ -70,7 +69,6 @@ export function RunDetail({ auth }: RunDetailProps) {
   const [interactionError, setInteractionError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
-  const [panelStepId, setPanelStepId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -87,6 +85,9 @@ export function RunDetail({ auth }: RunDetailProps) {
 
   // Diff modal
   const [diffOpen, setDiffOpen] = useState(false);
+
+  // Track whether runtime events disclosure is expanded (for Option 2 lazy-render optimization)
+  const [runtimeEventsExpanded, setRuntimeEventsExpanded] = useState(false);
 
   // Inline approval decisions
   const [decisionComment, setDecisionComment] = useState('');
@@ -119,7 +120,6 @@ export function RunDetail({ auth }: RunDetailProps) {
         isFirstLoad.current = false;
         const initialStepId = data.steps?.[data.steps.length - 1]?.id ?? null;
         setExpandedStepId(initialStepId);
-        setPanelStepId(initialStepId);
         prevCurrentStep.current = data.currentStep;
       }
       setRun(data);
@@ -220,14 +220,15 @@ export function RunDetail({ auth }: RunDetailProps) {
     }
   }, [canControlRuns, runId]);
 
+  // Evidence pack is now lazy-loaded on demand (when Evidence tab is clicked)
+  // to improve first-load performance for operators who may not need it.
   useEffect(() => {
     if (!canControlRuns) {
       setEvidencePack(null);
       return;
     }
-
-    void loadEvidencePack();
-  }, [canControlRuns, loadEvidencePack]);
+    // Intentionally do NOT load evidence pack on mount
+  }, [canControlRuns]);
 
   // Polling: 10s while in-flight (fallback when SSE stream is unavailable)
   useEffect(() => {
@@ -276,7 +277,7 @@ export function RunDetail({ auth }: RunDetailProps) {
     if (!newStep) return;
     if (Date.now() - lastManualSelectAt.current > MANUAL_OVERRIDE_MS) {
       const stepId = run.steps?.find((s) => s.name === newStep)?.id ?? null;
-      if (stepId) { setPanelStepId(stepId); setExpandedStepId(stepId); }
+      if (stepId) { setExpandedStepId(stepId); }
     }
   }, [run]);
 
@@ -301,11 +302,6 @@ export function RunDetail({ auth }: RunDetailProps) {
     if (!run?.steps || !expandedStepId) return null;
     return run.steps.find((s) => s.id === expandedStepId) ?? null;
   }, [expandedStepId, run]);
-
-  const panelStep = useMemo(() => {
-    if (!run?.steps || !panelStepId) return null;
-    return run.steps.find((s) => s.id === panelStepId) ?? null;
-  }, [panelStepId, run]);
 
   const policySteps = useMemo(
     () => (run?.steps ?? []).filter((s) => Boolean(s.policyDecision)),
@@ -626,10 +622,13 @@ export function RunDetail({ auth }: RunDetailProps) {
               <div><dt>Error</dt><dd>{selectedStep.error ?? 'No error captured.'}</dd></div>
             </dl>
             {selectedStep.runtimeSnapshot?.promptInline ? (
-              <section className="policy-box">
-                <h3>Prompt</h3>
+              <details className="policy-box adp-collapsible" aria-label="Selected step prompt">
+                <summary className="adp-collapsible-summary">
+                  <h3>Prompt</h3>
+                  <span className="adp-collapsible-meta">collapsed by default</span>
+                </summary>
                 <pre className="adp-pre">{selectedStep.runtimeSnapshot.promptInline}</pre>
-              </section>
+              </details>
             ) : null}
             {selectedStep.runtimeSnapshot ? (
               <section className="policy-box">
@@ -856,11 +855,11 @@ export function RunDetail({ auth }: RunDetailProps) {
               <BpmnViewer
                 xml={workflowXml}
                 stepStatuses={stepStatuses}
-                selectedStepName={panelStep?.name ?? null}
+                selectedStepName={selectedStep?.name ?? null}
                 onSelectStep={(name) => {
                   const next = name ? run.steps?.find((s) => s.name === name)?.id ?? null : null;
-                  setPanelStepId(next);
-                  if (next) { setExpandedStepId(next); lastManualSelectAt.current = Date.now(); }
+                  setExpandedStepId(next);
+                  if (next) { lastManualSelectAt.current = Date.now(); }
                 }}
               />
               <div className="graph-legend">
@@ -879,16 +878,9 @@ export function RunDetail({ auth }: RunDetailProps) {
             </section>
           )}
 
-          <AgentDetailPanel
-            step={panelStep}
-            events={run.events ?? []}
-            reasoningByStep={reasoningByStep}
-            resolveAgentIdentity={resolveAgentIdentity}
-            onClose={() => setPanelStepId(null)}
-          />
-
           <StepTimeline
             steps={run.steps ?? []}
+            events={run.events ?? []}
             interactionCountByStep={interactionCountByStep}
             reasoningByStep={reasoningByStep}
             resolveAgentIdentity={resolveAgentIdentity}
@@ -896,14 +888,17 @@ export function RunDetail({ auth }: RunDetailProps) {
             onToggleStep={(stepId) => {
               const next = expandedStepId === stepId ? null : stepId;
               setExpandedStepId(next);
-              setPanelStepId(next);
               if (next) {
                 lastManualSelectAt.current = Date.now();
               }
             }}
           />
 
-          <details className="panel event-monitor-panel run-events-collapsible" aria-label="Run event monitor">
+          <details
+            className="panel event-monitor-panel run-events-collapsible"
+            aria-label="Run event monitor"
+            onToggle={(e) => setRuntimeEventsExpanded(e.currentTarget.open)}
+          >
             <summary className="event-monitor-summary">
               <h2>Runtime Events</h2>
               <span className="event-monitor-summary-actions">
@@ -911,7 +906,8 @@ export function RunDetail({ auth }: RunDetailProps) {
                 <span className="event-monitor-caret" aria-hidden="true">›</span>
               </span>
             </summary>
-            {run.events && run.events.length > 0 ? (
+            {/* Option 2 optimization: defer rendering event list items until disclosure is expanded */}
+            {runtimeEventsExpanded && run.events && run.events.length > 0 ? (
               <ul className="event-list" role="list">
                 {run.events.map((event) => (
                   <li key={event.id}>
@@ -921,9 +917,9 @@ export function RunDetail({ auth }: RunDetailProps) {
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : runtimeEventsExpanded && (!run.events || run.events.length === 0) ? (
               <p>No runtime events available.</p>
-            )}
+            ) : null}
           </details>
         </div>
 
@@ -936,7 +932,13 @@ export function RunDetail({ auth }: RunDetailProps) {
                 role="tab"
                 aria-selected={activeTab === tab}
                 className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  // Lazy-load evidence pack only when Evidence tab is opened (Option 1)
+                  if (tab === 'Evidence' && !evidencePack && !evidenceLoading && canControlRuns) {
+                    void loadEvidencePack();
+                  }
+                }}
               >
                 {tab}
               </button>

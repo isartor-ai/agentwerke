@@ -78,17 +78,44 @@ public sealed class SandboxedAgentRuntimeExecutor
 
         var startedAt = DateTimeOffset.UtcNow;
         var sw = Stopwatch.StartNew();
-        var response = await _modelClient.RunAsync(
-            new LanguageModelRequest(
-                SystemPrompt: envelope.SystemPrompt,
-                UserPrompt: envelope.UserPrompt,
-                Tools: toolDefinitions,
-                MaxTokens: envelope.MaxTokens,
-                ModelOverride: envelope.Model,
-                ReasoningEffort: envelope.ReasoningEffort),
-            (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, progressReporter, ct),
-            cancellationToken,
-            progressReporter);
+        LanguageModelResponse response;
+        try
+        {
+            response = await _modelClient.RunAsync(
+                new LanguageModelRequest(
+                    SystemPrompt: envelope.SystemPrompt,
+                    UserPrompt: envelope.UserPrompt,
+                    Tools: toolDefinitions,
+                    MaxTokens: envelope.MaxTokens,
+                    ModelOverride: envelope.Model,
+                    ReasoningEffort: envelope.ReasoningEffort),
+                (call, ct) => ExecuteToolCallAsync(call, envelope, descriptors, invocations, artifacts, progressReporter, ct),
+                cancellationToken,
+                progressReporter);
+        }
+        catch (AgentInteractionRequiredException ex)
+        {
+            // The agent needs a tool that isn't allowed for this step (#202). The sandbox has no
+            // database access, so signal the host via the result payload; it persists the
+            // tool-access interaction and suspends the run.
+            await ReportProgressAsync(
+                progressReporter,
+                new AgentExecutionProgressUpdate(
+                    AgentExecutionProgressKinds.SandboxLog,
+                    $"Pausing for operator decision: {ex.Prompt}",
+                    Status: "stdout"),
+                cancellationToken);
+            return new SandboxedAgentRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: $"Awaiting response to: {ex.Prompt}",
+                TokenUsage: null,
+                Artifacts: artifacts.Count == 0 ? null : artifacts,
+                ToolInvocations: invocations,
+                StepStatus: AgentTaskOutcomeStatuses.WaitingUser,
+                PendingToolAccessPrompt: ex.Prompt);
+        }
+
         sw.Stop();
 
         await ReportProgressAsync(
@@ -140,6 +167,41 @@ public sealed class SandboxedAgentRuntimeExecutor
 
         if (!descriptors.TryGetValue(call.Name, out var descriptor))
         {
+            // A previous escalation for this tool was declined: return the operator's guidance
+            // as the tool result so the model adapts instead of re-escalating.
+            if (envelope.ToolAccessGuidance is not null &&
+                envelope.ToolAccessGuidance.TryGetValue(call.Name, out var operatorGuidance))
+            {
+                var deniedInvocation = CreateInvocation(
+                    ToolName: call.Name,
+                    Category: AgentToolCategories.Read,
+                    Status: "blocked",
+                    Input: call.Input,
+                    OutputSummary: null,
+                    ErrorMessage: ToolAccessEscalation.BuildDenialResult(call.Name, operatorGuidance),
+                    DurationMs: 0,
+                    ArtifactNames: []);
+                invocations.Add(deniedInvocation);
+                await ReportProgressAsync(
+                    progressReporter,
+                    new AgentExecutionProgressUpdate(
+                        AgentExecutionProgressKinds.ToolFinished,
+                        BuildToolCompletionSummary(call.Name, deniedInvocation.Status, deniedInvocation.ErrorMessage),
+                        ToolName: call.Name,
+                        ToolCallId: call.Id,
+                        Status: deniedInvocation.Status),
+                    cancellationToken);
+                return new LanguageModelToolResult(call.Id, deniedInvocation.ErrorMessage!, IsError: true);
+            }
+
+            // The tool is real but not allowed for this step: pause for a human decision (#202).
+            if (envelope.EscalatableTools?.Contains(call.Name, StringComparer.OrdinalIgnoreCase) == true)
+            {
+                throw new AgentInteractionRequiredException(
+                    interactionId: string.Empty,
+                    prompt: ToolAccessEscalation.BuildPrompt(envelope.AgentName, call.Name));
+            }
+
             var missingInvocation = CreateInvocation(
                 ToolName: call.Name,
                 Category: AgentToolCategories.Read,

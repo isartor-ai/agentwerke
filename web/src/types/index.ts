@@ -197,7 +197,7 @@ export interface RunInteraction {
   runId: string;
   stepId?: string | null;
   from: string;
-  kind: 'post' | 'question' | 'choice' | 'notify' | 'agent_request' | 'approval';
+  kind: 'post' | 'question' | 'choice' | 'notify' | 'agent_request' | 'approval' | 'tool_access';
   addresseeType: 'human' | 'agent';
   addressee?: string | null;
   blocking: boolean;

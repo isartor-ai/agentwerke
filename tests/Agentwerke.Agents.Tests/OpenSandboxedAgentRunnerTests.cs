@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Agentwerke.Agents;
 using Agentwerke.Agents.Models;
+using Agentwerke.Application.Agents;
 using Agentwerke.Application.Secrets;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Integrations;
@@ -520,11 +521,13 @@ public sealed class OpenSandboxedAgentRunnerTests
         IAgentRegistry? registry = null,
         IntegrationOptions? integrationOptions = null,
         LanguageModelOptions? languageModelOptions = null,
-        ISecretStore? secretStore = null) =>
+        ISecretStore? secretStore = null,
+        IAgentInteractionRepository? interactions = null) =>
         new(
             sandbox,
             secretStore ?? new StubSecretStore(),
             registry ?? new FileAgentRegistry([]),
+            interactions ?? new InMemoryInteractionRepository(),
             Options.Create(integrationOptions ?? new IntegrationOptions()),
             Options.Create(languageModelOptions ?? new LanguageModelOptions
             {

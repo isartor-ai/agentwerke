@@ -569,7 +569,13 @@ internal static class GitHubToolInput
     public static int ParseInt(IReadOnlyDictionary<string, string> input, string key)
     {
         Require(input, key);
-        return int.TryParse(input[key], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+        var raw = input[key].Trim();
+        if (raw.StartsWith('#'))
+        {
+            raw = raw[1..].Trim();
+        }
+
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             ? value
             : throw new InvalidOperationException($"Tool input field '{key}' must be an integer.");
     }

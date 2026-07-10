@@ -196,6 +196,40 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_WhenPromptDeclaresStrictVariables_ParsesPromptContract()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
+              <bpmn:process id="ReviewWorkflow" name="Review Workflow">
+                <bpmn:serviceTask id="ReviewTask" name="Review">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="reviewer"
+                      action="review.pr"
+                      environment="sandbox"
+                      purposeType="code_review"
+                      policyTag="demo-review"
+                      strictVariables="true">
+                      <agentwerke:prompt><![CDATA[
+                        Review {{output.ImplementIssue}}
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.Empty(result.Errors);
+        var reviewNode = Assert.Single(result.Definition!.Nodes, node => node.Id == "ReviewTask");
+        Assert.True(reviewNode.Metadata!.RuntimeContract!.Prompt!.StrictVariables);
+    }
+
+    [Fact]
     public void Validate_WhenSandboxProfileAttributeIsAbsent_MetadataSandboxProfileIsNull()
     {
         var xml = """

@@ -29,6 +29,8 @@ function kindLabel(interaction: RunInteraction): string {
       return 'note';
     case 'approval':
       return 'approval';
+    case 'tool_access':
+      return 'needs tool access';
     default:
       return interaction.kind;
   }

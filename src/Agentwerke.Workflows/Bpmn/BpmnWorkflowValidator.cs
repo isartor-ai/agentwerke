@@ -314,7 +314,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var permissionLevel = agentTask.Attribute("permissionLevel")?.Value;
         var allowedTools = ParseCsvAttribute(agentTask, "allowedTools");
         var deniedTools = ParseCsvAttribute(agentTask, "deniedTools");
-        var prompt = ParsePromptContract(agentTask, agentwerkeNamespace);
+        var prompt = ParsePromptContract(agentTask, agentwerkeNamespace, element, errors);
         var metadata = ParseMetadataContract(agentTask, agentwerkeNamespace, element, errors);
 
         if (prompt is null
@@ -384,9 +384,14 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
     /// <c>{{output.*}}</c>, and other run-context placeholders, which the prompt assembler
     /// renders at execution time. Returns null when no prompt is declared.
     /// </summary>
-    private static AgentPromptContract? ParsePromptContract(XElement agentTask, XNamespace agentwerkeNamespace)
+    private static AgentPromptContract? ParsePromptContract(
+        XElement agentTask,
+        XNamespace agentwerkeNamespace,
+        XElement element,
+        ICollection<BpmnValidationError> errors)
     {
         var promptFile = agentTask.Attribute("promptFile")?.Value;
+        var strictVariablesText = agentTask.Attribute("strictVariables")?.Value;
 
         var inlineElement = agentTask.Element(agentwerkeNamespace + "prompt")?.Value;
         var inline = !string.IsNullOrWhiteSpace(inlineElement)
@@ -398,10 +403,20 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             return null;
         }
 
+        var strictVariables = false;
+        if (!string.IsNullOrWhiteSpace(strictVariablesText) &&
+            !bool.TryParse(strictVariablesText, out strictVariables))
+        {
+            errors.Add(CreateError(
+                element,
+                "strictVariables must be either 'true' or 'false'."));
+        }
+
         return new AgentPromptContract
         {
             Inline = string.IsNullOrWhiteSpace(inline) ? null : inline,
-            File = string.IsNullOrWhiteSpace(promptFile) ? null : promptFile.Trim()
+            File = string.IsNullOrWhiteSpace(promptFile) ? null : promptFile.Trim(),
+            StrictVariables = strictVariables
         };
     }
 
