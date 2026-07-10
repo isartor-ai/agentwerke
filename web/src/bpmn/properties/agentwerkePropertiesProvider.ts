@@ -2,6 +2,7 @@ import { getBusinessObject, is } from 'bpmn-js/lib/util/ModelUtil';
 import { Group } from '@bpmn-io/properties-panel';
 import { agentTaskEntries } from './AgentTaskProps';
 import { approvalEntries } from './ApprovalProps';
+import { conditionEntries, isConditionalFlow } from './ConditionProps';
 import { externalEventEntries } from './ExternalEventProps';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -56,6 +57,15 @@ function AgentwerkePropertiesProvider(
           id: 'agentwerkeExternalEvent',
           label: translate('Agentwerke — External Wait'),
           entries: externalEventEntries(element),
+          component: Group,
+        });
+      }
+
+      if (isConditionalFlow(element)) {
+        groups.push({
+          id: 'agentwerkeCondition',
+          label: translate('Agentwerke — Condition'),
+          entries: conditionEntries(element),
           component: Group,
         });
       }

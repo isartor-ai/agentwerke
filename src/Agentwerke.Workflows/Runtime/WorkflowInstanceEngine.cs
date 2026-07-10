@@ -16,6 +16,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
     private const string WaitingExternalStatus = "waiting_external";
     private const string CompletedStatus = "completed";
     private const string FailedStatus = "failed";
+    /// <summary>Max executions of one node within a single advance before the run fails (runaway loop protection).</summary>
+    private const int MaxNodeVisitsPerAdvance = 25;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly Regex TemplateVariablePattern = new("{{\\s*([a-zA-Z0-9_.-]+)\\s*}}", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
@@ -236,6 +238,9 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
     {
         var graph = FlowGraph.Build(definition);
         var currentNodeId = startNodeId ?? definition.Nodes[0].Id;
+        // Bounds conditional-gateway loop-backs within one advance; waits (user/timer/
+        // external) return from this method, so each resume gets a fresh budget.
+        var nodeVisits = new Dictionary<string, int>(StringComparer.Ordinal);
 
         await _store.UpdateRunStatusAsync(runId, RunningStatus, completedAt: null, cancellationToken);
 
@@ -246,6 +251,18 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
             if (!IsSupportedRuntimeNode(node.ElementName))
                 throw new InvalidOperationException($"Node '{node.Id}' type '{node.ElementName}' is not supported by the in-process engine.");
+
+            var visits = nodeVisits.GetValueOrDefault(currentNodeId) + 1;
+            nodeVisits[currentNodeId] = visits;
+            if (visits > MaxNodeVisitsPerAdvance)
+            {
+                await _store.AppendEventAsync(runId, "loop_guard_triggered",
+                    Serialize(new { runId, nodeId = node.Id, visits, maxNodeVisits = MaxNodeVisitsPerAdvance }),
+                    cancellationToken);
+                await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
+                await SaveCheckpointAsync(runId, FailedStatus, null, null, null, cancellationToken);
+                return new WorkflowExecutionState(runId, FailedStatus, null, null, null);
+            }
 
             await _store.AppendEventAsync(runId, "node_entered",
                 Serialize(new { runId, nodeId = node.Id, nodeType = node.ElementName }),
@@ -303,13 +320,25 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     return new WorkflowExecutionState(runId, WaitingUserStatus, nextAfterUser, node.Id, null, WaitingApprovalArtifactName: artifactName);
 
                 case "exclusiveGateway":
+                    var gatewayVariables = await BuildRunVariableMapAsync(runId, cancellationToken);
+                    var decision = graph.GetConditionalSuccessor(
+                        node.Id,
+                        key => gatewayVariables.TryGetValue(key, out var value) ? value : null);
                     await _store.AppendEventAsync(runId, "gateway_evaluated",
-                        Serialize(new { runId, gatewayId = node.Id, gatewayType = "exclusive" }),
+                        Serialize(new
+                        {
+                            runId,
+                            gatewayId = node.Id,
+                            gatewayType = "exclusive",
+                            chosenFlowId = decision.FlowId,
+                            chosenTargetId = decision.TargetRef,
+                            usedDefaultFlow = decision.UsedDefaultFlow,
+                            conditions = decision.EvaluatedConditions
+                        }),
                         cancellationToken);
                     await CompleteNodeAsync(runId, node, cancellationToken);
-                    var exclusiveNext = graph.GetConditionalSuccessor(node.Id);
-                    await SaveCheckpointAsync(runId, RunningStatus, exclusiveNext, null, null, cancellationToken);
-                    currentNodeId = exclusiveNext;
+                    await SaveCheckpointAsync(runId, RunningStatus, decision.TargetRef, null, null, cancellationToken);
+                    currentNodeId = decision.TargetRef;
                     break;
 
                 case "parallelGateway":
@@ -918,9 +947,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         return precedingStep?.RuntimeSnapshot?.Artifacts.FirstOrDefault()?.Name;
     }
 
-    private async Task<string> RenderCorrelationKeyAsync(
+    private async Task<Dictionary<string, string>> BuildRunVariableMapAsync(
         string runId,
-        string template,
         CancellationToken cancellationToken)
     {
         var entries = await _runContext.GetAllAsync(runId, cancellationToken);
@@ -930,6 +958,16 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             variables[entry.Key] = entry.Value;
             variables[$"run_context.{entry.Key}"] = entry.Value;
         }
+
+        return variables;
+    }
+
+    private async Task<string> RenderCorrelationKeyAsync(
+        string runId,
+        string template,
+        CancellationToken cancellationToken)
+    {
+        var variables = await BuildRunVariableMapAsync(runId, cancellationToken);
 
         return TemplateVariablePattern.Replace(template, match =>
         {
@@ -1000,6 +1038,12 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
     private enum ServiceExecutionResult { Completed, Failed, WaitingUser }
 
+    private sealed record GatewayConditionResult(
+        string FlowId, string TargetRef, string Expression, bool Result, string? Detail);
+
+    private sealed record GatewayDecision(
+        string FlowId, string TargetRef, bool UsedDefaultFlow, IReadOnlyList<GatewayConditionResult> EvaluatedConditions);
+
     // ── Flow graph ────────────────────────────────────────────────────────────
 
     private sealed class FlowGraph
@@ -1055,23 +1099,30 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             return flows.Count > 0 ? flows[0].TargetRef : null;
         }
 
-        public string GetConditionalSuccessor(string nodeId)
+        public GatewayDecision GetConditionalSuccessor(string nodeId, Func<string, string?> resolveVariable)
         {
             var flows = GetOutgoing(nodeId);
             if (flows.Count == 0)
                 throw new InvalidOperationException($"Exclusive gateway '{nodeId}' has no outgoing sequence flows.");
 
-            // Prefer a flow whose condition evaluates to true; fall back to first unconditional flow
+            // First flow whose condition evaluates to true wins; unconditional flows are the default path
+            var evaluated = new List<GatewayConditionResult>();
             foreach (var flow in flows)
             {
-                if (EvaluateCondition(flow.ConditionExpression))
-                    return flow.TargetRef;
+                if (flow.ConditionExpression is null)
+                    continue;
+
+                var evaluation = ConditionExpressionEvaluator.Evaluate(flow.ConditionExpression, resolveVariable);
+                evaluated.Add(new GatewayConditionResult(
+                    flow.Id, flow.TargetRef, flow.ConditionExpression, evaluation.Result, evaluation.Detail));
+
+                if (evaluation.Result)
+                    return new GatewayDecision(flow.Id, flow.TargetRef, UsedDefaultFlow: false, evaluated);
             }
 
-            // Return the first flow with no condition as the default path
             var defaultFlow = flows.FirstOrDefault(static f => f.ConditionExpression is null)
                 ?? flows[0];
-            return defaultFlow.TargetRef;
+            return new GatewayDecision(defaultFlow.Id, defaultFlow.TargetRef, UsedDefaultFlow: true, evaluated);
         }
 
         public string FindJoin(IReadOnlyList<string> branchStartIds)
@@ -1103,16 +1154,6 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             }
 
             throw new InvalidOperationException("Could not locate parallel join gateway.");
-        }
-
-        private static bool EvaluateCondition(string? expression)
-        {
-            if (string.IsNullOrWhiteSpace(expression)) return false;
-            var expr = expression.Trim();
-            if (expr is "true" or "${true}" or "yes") return true;
-            if (expr is "false" or "${false}" or "no") return false;
-            // Unknown condition — treat as truthy (matches first defined path)
-            return true;
         }
 
         private static IReadOnlyDictionary<string, IReadOnlyList<BpmnSequenceFlow>> InferFlows(

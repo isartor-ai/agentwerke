@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { canApprove, canOperate } from '../auth/permissions';
 import { BpmnViewer } from '../components/BpmnViewer';
+import { GatewayDecisionList } from '../components/GatewayDecisionList';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -893,6 +894,8 @@ export function RunDetail({ auth }: RunDetailProps) {
               }
             }}
           />
+
+          <GatewayDecisionList events={run.events ?? []} />
 
           <details
             className="panel event-monitor-panel run-events-collapsible"

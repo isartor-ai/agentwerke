@@ -191,6 +191,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         }
 
         ValidateSequenceFlows(nodes, sequenceFlows, errors);
+        ValidateExclusiveGateways(nodes, sequenceFlows, errors, warnings);
 
         var definition = new BpmnWorkflowDefinition(
             ProcessId: process.Attribute("id")?.Value ?? "unknown-process",
@@ -618,6 +619,59 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
                 errors.Add(new BpmnValidationError(
                     $"Sequence flow '{flow.Id}' references unknown target node '{flow.TargetRef}'.",
                     ElementId: flow.Id, ElementName: "sequenceFlow",
+                    LineNumber: null, LinePosition: null));
+            }
+        }
+    }
+
+    private static void ValidateExclusiveGateways(
+        IReadOnlyList<BpmnNodeDefinition> nodes,
+        IReadOnlyList<BpmnSequenceFlow> sequenceFlows,
+        ICollection<BpmnValidationError> errors,
+        ICollection<BpmnValidationWarning> warnings)
+    {
+        foreach (var flow in sequenceFlows)
+        {
+            if (flow.ConditionExpression is not null &&
+                !Runtime.ConditionExpressionEvaluator.TryParse(flow.ConditionExpression, out var syntaxError))
+            {
+                errors.Add(new BpmnValidationError(
+                    $"Sequence flow '{flow.Id}' has an invalid condition expression: {syntaxError}",
+                    ElementId: flow.Id, ElementName: "sequenceFlow",
+                    LineNumber: null, LinePosition: null));
+            }
+        }
+
+        foreach (var node in nodes)
+        {
+            if (node.ElementName != "exclusiveGateway")
+                continue;
+
+            var outgoing = sequenceFlows
+                .Where(flow => string.Equals(flow.SourceRef, node.Id, StringComparison.Ordinal))
+                .ToList();
+
+            // A gateway with one outgoing flow is a join/pass-through — nothing to route.
+            if (outgoing.Count <= 1)
+                continue;
+
+            var unconditional = outgoing.Where(static flow => flow.ConditionExpression is null).ToList();
+
+            if (unconditional.Count == outgoing.Count)
+            {
+                // Legacy diagrams without conditions stay publishable; the runtime takes the first flow.
+                warnings.Add(new BpmnValidationWarning(
+                    $"Exclusive gateway '{node.Id}' has no conditions on any outgoing flow; " +
+                    "the runtime will always take the first flow. Add bpmn:conditionExpression to route on run data.",
+                    ElementId: node.Id, ElementName: "exclusiveGateway",
+                    LineNumber: null, LinePosition: null));
+            }
+            else if (unconditional.Count > 1)
+            {
+                errors.Add(new BpmnValidationError(
+                    $"Exclusive gateway '{node.Id}' has {unconditional.Count} outgoing flows without a condition. " +
+                    "At most one unconditional flow is allowed; it acts as the default branch.",
+                    ElementId: node.Id, ElementName: "exclusiveGateway",
                     LineNumber: null, LinePosition: null));
             }
         }
