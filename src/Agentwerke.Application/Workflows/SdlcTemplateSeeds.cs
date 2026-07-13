@@ -562,6 +562,462 @@ public static class SdlcTemplateSeeds
             """,
     };
 
+    public static readonly SdlcTemplate VModel = new()
+    {
+        Id = "v-model",
+        Name = "V-model Verification & Validation",
+        Description =
+            "Decomposition phases (requirements, architecture, component design) mirrored by "
+            + "verification phases (unit, integration, system, acceptance) with explicit traceability "
+            + "gates and external test-result waits. Two human gates: requirements baseline and "
+            + "acceptance sign-off.",
+        Trigger = "manual",
+        RequiredInputs = ["change_id", "build_id", "repository"],
+        AgentRoles = ["analyst", "architect", "developer", "tester"],
+        ApprovalRoles = ["requirements-owner", "release-manager"],
+        EvidenceExpectations =
+        [
+            "requirements_baseline",
+            "architecture_baseline",
+            "component_design_baseline",
+            "unit_test_results",
+            "integration_test_results",
+            "system_test_results",
+            "acceptance_signoff",
+        ],
+        PolicyLevel = "elevated",
+        Tags = ["sdlc", "v-model", "verification", "traceability"],
+        BpmnXml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1">
+              <bpmn:process id="VModelProcessEvaluation" name="V-model Process Evaluation" isExecutable="true">
+                <bpmn:startEvent id="Start" name="Change Request">
+                  <bpmn:outgoing>Flow_Start_DraftRequirements</bpmn:outgoing>
+                </bpmn:startEvent>
+
+                <bpmn:serviceTask id="DraftRequirements" name="Requirements Analysis">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="analyst"
+                      action="vmodel.requirements.draft"
+                      environment="github"
+                      purposeType="requirements_analysis"
+                      policyTag="vmodel-requirements"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="github.read_issue,artifact.read">
+                      <agentwerke:metadata key="phase" value="requirements" />
+                      <agentwerke:metadata key="traceability.produces" value="requirements_baseline" />
+                      <agentwerke:prompt><![CDATA[
+            Draft the V-model requirements baseline for change {{input.change_id}}.
+
+            Include:
+            - functional requirements
+            - non-functional requirements
+            - acceptance criteria
+            - requirement IDs suitable for traceability
+
+            Return Markdown with a "## Requirements Baseline" heading.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_Start_DraftRequirements</bpmn:incoming>
+                  <bpmn:outgoing>Flow_DraftRequirements_ApproveRequirementsBaseline</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:userTask id="ApproveRequirementsBaseline" name="Approve Requirements Baseline">
+                  <bpmn:extensionElements>
+                    <agentwerke:approvalTask
+                      purposeType="requirements_baseline"
+                      policyTag="vmodel-requirements-approval" />
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_DraftRequirements_ApproveRequirementsBaseline</bpmn:incoming>
+                  <bpmn:outgoing>Flow_ApproveRequirementsBaseline_DraftSystemArchitecture</bpmn:outgoing>
+                </bpmn:userTask>
+
+                <bpmn:serviceTask id="DraftSystemArchitecture" name="System Architecture Design">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="architect"
+                      action="vmodel.architecture.draft"
+                      environment="github"
+                      purposeType="system_architecture"
+                      policyTag="vmodel-architecture"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read">
+                      <agentwerke:metadata key="phase" value="system_architecture" />
+                      <agentwerke:metadata key="traceability.consumes" value="requirements_baseline" />
+                      <agentwerke:metadata key="traceability.produces" value="architecture_baseline" />
+                      <agentwerke:prompt><![CDATA[
+            Create the system architecture for change {{input.change_id}}.
+
+            Use the approved requirements:
+            {{output.DraftRequirements}}
+
+            Map architecture decisions back to requirement IDs and identify the system tests
+            that should verify each architectural requirement.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_ApproveRequirementsBaseline_DraftSystemArchitecture</bpmn:incoming>
+                  <bpmn:outgoing>Flow_DraftSystemArchitecture_DraftComponentDesign</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:serviceTask id="DraftComponentDesign" name="Component Design">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="architect"
+                      action="vmodel.component_design.draft"
+                      environment="github"
+                      purposeType="component_design"
+                      policyTag="vmodel-component-design"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read">
+                      <agentwerke:metadata key="phase" value="component_design" />
+                      <agentwerke:metadata key="traceability.consumes" value="architecture_baseline" />
+                      <agentwerke:metadata key="traceability.produces" value="component_design_baseline" />
+                      <agentwerke:prompt><![CDATA[
+            Decompose the system architecture into component designs.
+
+            Architecture:
+            {{output.DraftSystemArchitecture}}
+
+            For each component, list design obligations and the unit/integration tests that
+            will verify them.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_DraftSystemArchitecture_DraftComponentDesign</bpmn:incoming>
+                  <bpmn:outgoing>Flow_DraftComponentDesign_ImplementComponents</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:serviceTask id="ImplementComponents" name="Implementation">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="developer"
+                      action="vmodel.implementation.build"
+                      environment="sandbox"
+                      purposeType="implementation"
+                      policyTag="vmodel-implementation"
+                      executionMode="agent_sandboxed"
+                      sandboxProfile="repo-write"
+                      permissionLevel="read-write"
+                      allowedTools="sandbox.git,sandbox.file_read,sandbox.file_write,sandbox.file_edit,sandbox.shell"
+                      requiresEvidence="requirements_baseline,architecture_baseline,component_design_baseline">
+                      <agentwerke:metadata key="phase" value="implementation" />
+                      <agentwerke:prompt><![CDATA[
+            Implement the approved component design for change {{input.change_id}}.
+
+            Requirements:
+            {{output.DraftRequirements}}
+
+            Architecture:
+            {{output.DraftSystemArchitecture}}
+
+            Component design:
+            {{output.DraftComponentDesign}}
+
+            Return the branch name, changed files, and local validation commands executed.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_DraftComponentDesign_ImplementComponents</bpmn:incoming>
+                  <bpmn:outgoing>Flow_ImplementComponents_GenerateUnitTestPlan</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:serviceTask id="GenerateUnitTestPlan" name="Generate Unit Test Plan">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="tester"
+                      action="vmodel.tests.unit.generate"
+                      environment="sandbox"
+                      purposeType="unit_verification"
+                      policyTag="vmodel-unit-tests"
+                      executionMode="agent_sandboxed"
+                      sandboxProfile="repo-read"
+                      permissionLevel="read-only"
+                      allowedTools="sandbox.file_read,sandbox.shell"
+                      requiresEvidence="component_design_baseline">
+                      <agentwerke:metadata key="phase" value="unit_test" />
+                      <agentwerke:metadata key="traceability.verifies" value="component_design_baseline" />
+                      <agentwerke:prompt><![CDATA[
+            Generate the unit-test plan for the implemented components.
+
+            Implementation summary:
+            {{output.ImplementComponents}}
+
+            Map each unit test back to component design obligations.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_ImplementComponents_GenerateUnitTestPlan</bpmn:incoming>
+                  <bpmn:outgoing>Flow_GenerateUnitTestPlan_WaitUnitTestResults</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:intermediateCatchEvent id="WaitUnitTestResults" name="Wait Unit Test Results">
+                  <bpmn:extensionElements>
+                    <agentwerke:externalEvent
+                      messageName="test.unit.completed"
+                      correlationKeyTemplate="{{input.build_id}}:unit" />
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_GenerateUnitTestPlan_WaitUnitTestResults</bpmn:incoming>
+                  <bpmn:outgoing>Flow_WaitUnitTestResults_ValidateComponentTraceability</bpmn:outgoing>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+
+                <bpmn:serviceTask id="ValidateComponentTraceability" name="Component Traceability Gate">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="tester"
+                      action="vmodel.traceability.component_gate"
+                      environment="sandbox"
+                      purposeType="traceability_gate"
+                      policyTag="vmodel-component-traceability"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read"
+                      requiresEvidence="component_design_baseline,unit_test_results">
+                      <agentwerke:metadata key="phase" value="component_traceability" />
+                      <agentwerke:metadata key="traceability.connects" value="component_design_baseline:unit_test_results" />
+                      <agentwerke:prompt><![CDATA[
+            Check that every component design obligation has a matching passing unit test.
+
+            Unit test event:
+            {{event.payload}}
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_WaitUnitTestResults_ValidateComponentTraceability</bpmn:incoming>
+                  <bpmn:outgoing>Flow_ValidateComponentTraceability_GenerateIntegrationTestPlan</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:serviceTask id="GenerateIntegrationTestPlan" name="Generate Integration Test Plan">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="tester"
+                      action="vmodel.tests.integration.generate"
+                      environment="sandbox"
+                      purposeType="integration_verification"
+                      policyTag="vmodel-integration-tests"
+                      executionMode="agent_sandboxed"
+                      sandboxProfile="repo-read"
+                      permissionLevel="read-only"
+                      allowedTools="sandbox.file_read,sandbox.shell"
+                      requiresEvidence="architecture_baseline,component_design_baseline,unit_test_results">
+                      <agentwerke:metadata key="phase" value="integration_test" />
+                      <agentwerke:metadata key="traceability.verifies" value="component_interfaces" />
+                      <agentwerke:prompt><![CDATA[
+            Generate integration tests for component interfaces and data contracts.
+
+            Component traceability gate:
+            {{output.ValidateComponentTraceability}}
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_ValidateComponentTraceability_GenerateIntegrationTestPlan</bpmn:incoming>
+                  <bpmn:outgoing>Flow_GenerateIntegrationTestPlan_WaitIntegrationTestResults</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:intermediateCatchEvent id="WaitIntegrationTestResults" name="Wait Integration Test Results">
+                  <bpmn:extensionElements>
+                    <agentwerke:externalEvent
+                      messageName="test.integration.completed"
+                      correlationKeyTemplate="{{input.build_id}}:integration" />
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_GenerateIntegrationTestPlan_WaitIntegrationTestResults</bpmn:incoming>
+                  <bpmn:outgoing>Flow_WaitIntegrationTestResults_ValidateArchitectureTraceability</bpmn:outgoing>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+
+                <bpmn:serviceTask id="ValidateArchitectureTraceability" name="Architecture Traceability Gate">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="architect"
+                      action="vmodel.traceability.architecture_gate"
+                      environment="sandbox"
+                      purposeType="traceability_gate"
+                      policyTag="vmodel-architecture-traceability"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read"
+                      requiresEvidence="architecture_baseline,integration_test_results">
+                      <agentwerke:metadata key="phase" value="architecture_traceability" />
+                      <agentwerke:metadata key="traceability.connects" value="architecture_baseline:integration_test_results" />
+                      <agentwerke:prompt><![CDATA[
+            Check that integration test results verify the architecture and component interfaces.
+
+            Integration test event:
+            {{event.payload}}
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_WaitIntegrationTestResults_ValidateArchitectureTraceability</bpmn:incoming>
+                  <bpmn:outgoing>Flow_ValidateArchitectureTraceability_AnalyzeSystemTestResults</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:serviceTask id="AnalyzeSystemTestResults" name="Analyze System Test Scope">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="tester"
+                      action="vmodel.tests.system.analyze"
+                      environment="sandbox"
+                      purposeType="system_verification"
+                      policyTag="vmodel-system-tests"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read"
+                      requiresEvidence="requirements_baseline,architecture_baseline,integration_test_results">
+                      <agentwerke:metadata key="phase" value="system_test" />
+                      <agentwerke:metadata key="traceability.verifies" value="system_requirements" />
+                      <agentwerke:prompt><![CDATA[
+            Prepare the system-test execution checklist from requirements and architecture.
+
+            Architecture traceability:
+            {{output.ValidateArchitectureTraceability}}
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_ValidateArchitectureTraceability_AnalyzeSystemTestResults</bpmn:incoming>
+                  <bpmn:outgoing>Flow_AnalyzeSystemTestResults_WaitSystemTestResults</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:intermediateCatchEvent id="WaitSystemTestResults" name="Wait System Test Results">
+                  <bpmn:extensionElements>
+                    <agentwerke:externalEvent
+                      messageName="test.system.completed"
+                      correlationKeyTemplate="{{input.build_id}}:system" />
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_AnalyzeSystemTestResults_WaitSystemTestResults</bpmn:incoming>
+                  <bpmn:outgoing>Flow_WaitSystemTestResults_SummarizeVerificationFailures</bpmn:outgoing>
+                  <bpmn:messageEventDefinition />
+                </bpmn:intermediateCatchEvent>
+
+                <bpmn:serviceTask id="SummarizeVerificationFailures" name="Summarize Verification Failures">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="tester"
+                      action="vmodel.failures.summarize"
+                      environment="sandbox"
+                      purposeType="verification_summary"
+                      policyTag="vmodel-failure-summary"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read"
+                      requiresEvidence="unit_test_results,integration_test_results,system_test_results">
+                      <agentwerke:metadata key="phase" value="failure_summary" />
+                      <agentwerke:prompt><![CDATA[
+            Summarize failed or flaky verification results across unit, integration, and system tests.
+
+            System test event:
+            {{event.payload}}
+
+            Return a concise remediation list and trace failed tests back to requirements.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_WaitSystemTestResults_SummarizeVerificationFailures</bpmn:incoming>
+                  <bpmn:outgoing>Flow_SummarizeVerificationFailures_PrepareAcceptanceTest</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:serviceTask id="PrepareAcceptanceTest" name="Prepare Acceptance Test">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="analyst"
+                      action="vmodel.tests.acceptance.prepare"
+                      environment="github"
+                      purposeType="acceptance_verification"
+                      policyTag="vmodel-acceptance-tests"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read"
+                      requiresEvidence="requirements_baseline,system_test_results">
+                      <agentwerke:metadata key="phase" value="acceptance_test" />
+                      <agentwerke:metadata key="traceability.verifies" value="requirements_baseline" />
+                      <agentwerke:prompt><![CDATA[
+            Prepare the acceptance-test evidence package for human sign-off.
+
+            Requirements:
+            {{output.DraftRequirements}}
+
+            System-test summary:
+            {{output.SummarizeVerificationFailures}}
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_SummarizeVerificationFailures_PrepareAcceptanceTest</bpmn:incoming>
+                  <bpmn:outgoing>Flow_PrepareAcceptanceTest_ApproveAcceptanceSignoff</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:userTask id="ApproveAcceptanceSignoff" name="Acceptance Sign-off">
+                  <bpmn:extensionElements>
+                    <agentwerke:approvalTask
+                      purposeType="acceptance_signoff"
+                      policyTag="vmodel-acceptance-signoff" />
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_PrepareAcceptanceTest_ApproveAcceptanceSignoff</bpmn:incoming>
+                  <bpmn:outgoing>Flow_ApproveAcceptanceSignoff_PrepareTraceabilityReport</bpmn:outgoing>
+                </bpmn:userTask>
+
+                <bpmn:serviceTask id="PrepareTraceabilityReport" name="Prepare Traceability Report">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="analyst"
+                      action="vmodel.traceability.report"
+                      environment="github"
+                      purposeType="traceability_report"
+                      policyTag="vmodel-traceability-report"
+                      executionMode="local"
+                      permissionLevel="read-only"
+                      allowedTools="artifact.read,github.comment_issue"
+                      requiresEvidence="requirements_baseline,component_design_baseline,unit_test_results,integration_test_results,system_test_results,acceptance_signoff">
+                      <agentwerke:metadata key="phase" value="traceability_report" />
+                      <agentwerke:metadata key="traceability.produces" value="vmodel_traceability_matrix" />
+                      <agentwerke:prompt><![CDATA[
+            Prepare the final V-model traceability report.
+
+            Include a matrix that maps:
+            - requirements to acceptance tests
+            - architecture decisions to system and integration tests
+            - component designs to unit tests
+
+            Also include approval and test-event evidence references.
+                      ]]></agentwerke:prompt>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                  <bpmn:incoming>Flow_ApproveAcceptanceSignoff_PrepareTraceabilityReport</bpmn:incoming>
+                  <bpmn:outgoing>Flow_PrepareTraceabilityReport_End</bpmn:outgoing>
+                </bpmn:serviceTask>
+
+                <bpmn:endEvent id="End" name="Evaluated">
+                  <bpmn:incoming>Flow_PrepareTraceabilityReport_End</bpmn:incoming>
+                </bpmn:endEvent>
+
+                <bpmn:sequenceFlow id="Flow_Start_DraftRequirements" sourceRef="Start" targetRef="DraftRequirements" />
+                <bpmn:sequenceFlow id="Flow_DraftRequirements_ApproveRequirementsBaseline" sourceRef="DraftRequirements" targetRef="ApproveRequirementsBaseline" />
+                <bpmn:sequenceFlow id="Flow_ApproveRequirementsBaseline_DraftSystemArchitecture" sourceRef="ApproveRequirementsBaseline" targetRef="DraftSystemArchitecture" />
+                <bpmn:sequenceFlow id="Flow_DraftSystemArchitecture_DraftComponentDesign" sourceRef="DraftSystemArchitecture" targetRef="DraftComponentDesign" />
+                <bpmn:sequenceFlow id="Flow_DraftComponentDesign_ImplementComponents" sourceRef="DraftComponentDesign" targetRef="ImplementComponents" />
+                <bpmn:sequenceFlow id="Flow_ImplementComponents_GenerateUnitTestPlan" sourceRef="ImplementComponents" targetRef="GenerateUnitTestPlan" />
+                <bpmn:sequenceFlow id="Flow_GenerateUnitTestPlan_WaitUnitTestResults" sourceRef="GenerateUnitTestPlan" targetRef="WaitUnitTestResults" />
+                <bpmn:sequenceFlow id="Flow_WaitUnitTestResults_ValidateComponentTraceability" sourceRef="WaitUnitTestResults" targetRef="ValidateComponentTraceability" />
+                <bpmn:sequenceFlow id="Flow_ValidateComponentTraceability_GenerateIntegrationTestPlan" sourceRef="ValidateComponentTraceability" targetRef="GenerateIntegrationTestPlan" />
+                <bpmn:sequenceFlow id="Flow_GenerateIntegrationTestPlan_WaitIntegrationTestResults" sourceRef="GenerateIntegrationTestPlan" targetRef="WaitIntegrationTestResults" />
+                <bpmn:sequenceFlow id="Flow_WaitIntegrationTestResults_ValidateArchitectureTraceability" sourceRef="WaitIntegrationTestResults" targetRef="ValidateArchitectureTraceability" />
+                <bpmn:sequenceFlow id="Flow_ValidateArchitectureTraceability_AnalyzeSystemTestResults" sourceRef="ValidateArchitectureTraceability" targetRef="AnalyzeSystemTestResults" />
+                <bpmn:sequenceFlow id="Flow_AnalyzeSystemTestResults_WaitSystemTestResults" sourceRef="AnalyzeSystemTestResults" targetRef="WaitSystemTestResults" />
+                <bpmn:sequenceFlow id="Flow_WaitSystemTestResults_SummarizeVerificationFailures" sourceRef="WaitSystemTestResults" targetRef="SummarizeVerificationFailures" />
+                <bpmn:sequenceFlow id="Flow_SummarizeVerificationFailures_PrepareAcceptanceTest" sourceRef="SummarizeVerificationFailures" targetRef="PrepareAcceptanceTest" />
+                <bpmn:sequenceFlow id="Flow_PrepareAcceptanceTest_ApproveAcceptanceSignoff" sourceRef="PrepareAcceptanceTest" targetRef="ApproveAcceptanceSignoff" />
+                <bpmn:sequenceFlow id="Flow_ApproveAcceptanceSignoff_PrepareTraceabilityReport" sourceRef="ApproveAcceptanceSignoff" targetRef="PrepareTraceabilityReport" />
+                <bpmn:sequenceFlow id="Flow_PrepareTraceabilityReport_End" sourceRef="PrepareTraceabilityReport" targetRef="End" />
+              </bpmn:process>
+            </bpmn:definitions>
+            """,
+    };
+
     public static IReadOnlyList<SdlcTemplate> All { get; } =
     [
         IssueToPr,
@@ -571,5 +1027,6 @@ public static class SdlcTemplateSeeds
         SecurityReview,
         ReleaseApproval,
         AutonomousSdlc,
+        VModel,
     ];
 }
