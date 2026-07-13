@@ -68,6 +68,8 @@ declare module '@bpmn-io/properties-panel' {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export const Group: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export const ListGroup: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function isTextFieldEntryEdited(node: any): boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function isTextAreaEntryEdited(node: any): boolean;
@@ -91,6 +93,19 @@ declare module 'htm/preact' {
   export const html: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function render(...args: any[]): any;
+}
+
+declare module 'bpmn-moddle' {
+  export default class BpmnModdle {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(extensions?: Record<string, any>);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fromXML(xml: string, ...args: any[]): Promise<{ rootElement: any; [key: string]: any }>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    toXML(element: any, options?: any): Promise<{ xml: string }>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    create(type: string, attrs?: Record<string, any>): any;
+  }
 }
 
 // CSS side-effect imports from the bpmn-js / properties-panel packages.

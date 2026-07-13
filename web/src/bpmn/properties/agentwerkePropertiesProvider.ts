@@ -4,6 +4,7 @@ import { agentTaskEntries } from './AgentTaskProps';
 import { approvalEntries } from './ApprovalProps';
 import { conditionEntries, isConditionalFlow } from './ConditionProps';
 import { externalEventEntries } from './ExternalEventProps';
+import { metadataGroup } from './MetadataProps';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -31,6 +32,7 @@ function AgentwerkePropertiesProvider(
   this: any,
   propertiesPanel: any,
   translate: any,
+  injector: any,
 ) {
   this.getGroups = function (element: any) {
     return function (groups: any[]) {
@@ -41,6 +43,7 @@ function AgentwerkePropertiesProvider(
           entries: agentTaskEntries(element),
           component: Group,
         });
+        groups.push(metadataGroup(element, injector));
       }
 
       if (is(element, 'bpmn:UserTask')) {
@@ -77,7 +80,7 @@ function AgentwerkePropertiesProvider(
   propertiesPanel.registerProvider(LOW_PRIORITY, this);
 }
 
-AgentwerkePropertiesProvider.$inject = ['propertiesPanel', 'translate'];
+AgentwerkePropertiesProvider.$inject = ['propertiesPanel', 'translate', 'injector'];
 
 export const AgentwerkePropertiesProviderModule = {
   __init__: ['agentwerkePropertiesProvider'],
