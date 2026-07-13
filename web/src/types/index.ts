@@ -208,6 +208,25 @@ export interface RunInteraction {
   respondedBy?: string | null;
   respondedAt?: string | null;
   createdAt: string;
+  /** For tool_access interactions (#202): the tool the agent asked for. */
+  toolName?: string | null;
+  /** For tool_access interactions (#202): the model's stated intent (truncated tool input). */
+  intent?: string | null;
+}
+
+/** A pending tool-access escalation (#202) shown on the Approvals dashboard. */
+export interface ToolAccessRequest {
+  interactionId: string;
+  runId: string;
+  workflowName?: string | null;
+  stepId?: string | null;
+  stepName?: string | null;
+  agent: string;
+  toolName?: string | null;
+  intent?: string | null;
+  prompt: string;
+  options: string[];
+  createdAt: string;
 }
 
 export interface RunArtifact {

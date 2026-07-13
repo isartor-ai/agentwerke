@@ -168,6 +168,8 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
             entity.Property(e => e.AddresseeType).HasMaxLength(32).IsRequired();
             entity.Property(e => e.Addressee).HasMaxLength(128);
             entity.Property(e => e.Prompt).HasMaxLength(8192).IsRequired();
+            entity.Property(e => e.ToolName).HasMaxLength(256);
+            entity.Property(e => e.Intent).HasMaxLength(4096);
             entity.Property(e => e.Options)
                 .HasConversion(
                     list => SerializeStringList(list),

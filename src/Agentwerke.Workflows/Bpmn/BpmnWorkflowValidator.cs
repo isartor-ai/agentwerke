@@ -315,13 +315,26 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var permissionLevel = agentTask.Attribute("permissionLevel")?.Value;
         var allowedTools = ParseCsvAttribute(agentTask, "allowedTools");
         var deniedTools = ParseCsvAttribute(agentTask, "deniedTools");
+        var toolEscalation = agentTask.Attribute("toolEscalation")?.Value?.Trim();
         var prompt = ParsePromptContract(agentTask, agentwerkeNamespace, element, errors);
         var metadata = ParseMetadataContract(agentTask, agentwerkeNamespace, element, errors);
+
+        if (!string.IsNullOrWhiteSpace(toolEscalation) &&
+            !toolEscalation.Equals("escalate", StringComparison.OrdinalIgnoreCase) &&
+            !toolEscalation.Equals("fail", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(CreateError(
+                element,
+                "agentwerke:agentTask toolEscalation must be 'escalate' (ask a human when a denied "
+                + "tool is called; default) or 'fail' (fail the tool call immediately)."));
+            return null;
+        }
 
         if (prompt is null
             && string.IsNullOrWhiteSpace(permissionLevel)
             && allowedTools.Count == 0
             && deniedTools.Count == 0
+            && string.IsNullOrWhiteSpace(toolEscalation)
             && metadata.Count == 0)
         {
             return null;
@@ -346,7 +359,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             {
                 Level = normalizedPermissionLevel,
                 AllowedTools = allowedTools,
-                DeniedTools = deniedTools
+                DeniedTools = deniedTools,
+                ToolEscalation = string.IsNullOrWhiteSpace(toolEscalation) ? null : toolEscalation.ToLowerInvariant()
             },
             Metadata = metadata
         };

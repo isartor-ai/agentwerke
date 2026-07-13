@@ -176,6 +176,12 @@ const PERMISSION_LEVEL_OPTIONS = [
   { value: 'full', label: 'full' },
 ] as const;
 
+const TOOL_ESCALATION_OPTIONS = [
+  { value: '', label: 'Default (escalate — ask a human)' },
+  { value: 'escalate', label: 'escalate — ask a human when a denied tool is called' },
+  { value: 'fail', label: 'fail — fail the tool call immediately' },
+] as const;
+
 /**
  * Property entries for the "Agent Task" group, shown for service/script tasks.
  * Mirrors the attributes the backend `BpmnWorkflowValidator` requires.
@@ -192,6 +198,7 @@ export function agentTaskEntries(element: any) {
     { id: 'agentwerke-permissionLevel', component: selectField('permissionLevel', 'Permission level', PERMISSION_LEVEL_OPTIONS), isEdited: isSelectEntryEdited, element },
     { id: 'agentwerke-allowedTools', component: textField('allowedTools', 'Allowed tools', 'comma-separated, e.g. sandbox.execute'), isEdited: isTextFieldEntryEdited, element },
     { id: 'agentwerke-deniedTools', component: textField('deniedTools', 'Denied tools', 'comma-separated, e.g. web_search'), isEdited: isTextFieldEntryEdited, element },
+    { id: 'agentwerke-toolEscalation', component: selectField('toolEscalation', 'On denied tool call', TOOL_ESCALATION_OPTIONS), isEdited: isSelectEntryEdited, element },
     { id: 'agentwerke-requiresEvidence', component: textField('requiresEvidence', 'Required evidence', 'comma-separated'), isEdited: isTextFieldEntryEdited, element },
     { id: 'agentwerke-maxRetries', component: numberField('maxRetries', 'Max retries'), isEdited: isNumberFieldEntryEdited, element },
     { id: 'agentwerke-retryBackoffSeconds', component: numberField('retryBackoffSeconds', 'Retry backoff (s)'), isEdited: isNumberFieldEntryEdited, element },

@@ -31,7 +31,10 @@ public sealed class ToolAccessEscalationTests
         Assert.Equal(AgentInteractionKinds.ToolAccess, interaction.Kind);
         Assert.Equal(AgentInteractionStatuses.Pending, interaction.Status);
         Assert.True(interaction.Blocking);
-        Assert.Equal(["approve", "deny"], interaction.Options);
+        Assert.Equal(["approve", "deny", "fail"], interaction.Options);
+        // Operator context (#202): tool name and the model's stated intent are recorded.
+        Assert.Equal("github.post_review", interaction.ToolName);
+        Assert.Contains("pull_number", interaction.Intent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -77,6 +80,38 @@ public sealed class ToolAccessEscalationTests
     }
 
     [Fact]
+    public async Task Gateway_FailAnswer_ThrowsStepFailure()
+    {
+        var interactions = new InMemoryInteractionRepository();
+        var gateway = CreateGateway(interactions, out var tool);
+        interactions.Items.Add(AnsweredInteraction("fail", respondedBy: "ops@example.com"));
+
+        var ex = await Assert.ThrowsAsync<ToolAccessStepFailedException>(() =>
+            gateway.ExecuteAsync(Request(allowedTools: ["github.read_issue"]), CancellationToken.None));
+
+        Assert.Equal("github.post_review", ex.ToolName);
+        Assert.Contains("ops@example.com", ex.Message, StringComparison.Ordinal);
+        Assert.Null(tool.LastInput);
+    }
+
+    [Fact]
+    public async Task Gateway_FailFastMode_FailsWithoutEscalating()
+    {
+        var interactions = new InMemoryInteractionRepository();
+        var gateway = CreateGateway(interactions, out var tool);
+
+        var result = await gateway.ExecuteAsync(
+            Request(allowedTools: ["github.read_issue"]) with { ToolEscalation = "fail" },
+            CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("blocked", result.Invocation.Status);
+        Assert.Contains("not included in the runtime contract allowlist", result.FailureReason, StringComparison.Ordinal);
+        Assert.Empty(interactions.Items);
+        Assert.Null(tool.LastInput);
+    }
+
+    [Fact]
     public async Task SandboxExecutor_EscalatableTool_PausesWithWaitingUserResult()
     {
         var executor = CreateExecutor(planToolName: "github.post_review");
@@ -89,6 +124,9 @@ public sealed class ToolAccessEscalationTests
         Assert.Equal(AgentTaskOutcomeStatuses.WaitingUser, result.StepStatus);
         Assert.Contains("github.post_review", result.PendingToolAccessPrompt, StringComparison.Ordinal);
         Assert.Contains("Awaiting response to:", result.FailureReason, StringComparison.Ordinal);
+        // Operator context (#202) survives the sandbox boundary via the result payload.
+        Assert.Equal("github.post_review", result.PendingToolAccessToolName);
+        Assert.Contains("pull_number", result.PendingToolAccessIntent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -167,7 +205,7 @@ public sealed class ToolAccessEscalationTests
             EscalatableTools: escalatableTools,
             ToolAccessGuidance: toolAccessGuidance);
 
-    private static AgentInteraction AnsweredInteraction(string response) =>
+    private static AgentInteraction AnsweredInteraction(string response, string? respondedBy = null) =>
         new()
         {
             Id = "int-1",
@@ -179,6 +217,7 @@ public sealed class ToolAccessEscalationTests
             Prompt = ToolAccessEscalation.BuildPrompt("senior-reviewer", "github.post_review"),
             Status = AgentInteractionStatuses.Answered,
             Response = response,
+            RespondedBy = respondedBy,
             CreatedAt = DateTime.UtcNow.ToString("o"),
         };
 

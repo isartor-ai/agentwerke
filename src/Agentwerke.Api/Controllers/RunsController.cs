@@ -414,5 +414,6 @@ public sealed class RunsController : ControllerBase
     private static InteractionSummary ToInteractionSummary(AgentInteraction i) =>
         new(
             i.Id, i.RunId, i.StepId, i.FromAgent, i.Kind, i.AddresseeType, i.Addressee,
-            i.Blocking, i.Prompt, i.Options, i.Status, i.Response, i.RespondedBy, i.RespondedAt, i.CreatedAt);
+            i.Blocking, i.Prompt, i.Options, i.Status, i.Response, i.RespondedBy, i.RespondedAt, i.CreatedAt,
+            i.ToolName, i.Intent);
 }

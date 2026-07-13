@@ -35,6 +35,15 @@ public sealed class AgentInteraction
     /// <summary>The message / question text.</summary>
     public string Prompt { get; set; } = string.Empty;
 
+    /// <summary>For tool_access interactions (#202): the tool the agent asked for.</summary>
+    public string? ToolName { get; set; }
+
+    /// <summary>
+    /// For tool_access interactions (#202): the model's stated intent — a truncated JSON
+    /// summary of the tool input it attempted — so an operator can judge the request.
+    /// </summary>
+    public string? Intent { get; set; }
+
     /// <summary>Optional choices offered to the responder.</summary>
     public List<string> Options { get; set; } = new();
 

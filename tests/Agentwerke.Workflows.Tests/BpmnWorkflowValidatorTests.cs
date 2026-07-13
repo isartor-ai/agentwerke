@@ -447,6 +447,65 @@ public sealed class BpmnWorkflowValidatorTests
     }
 
     [Fact]
+    public void Validate_ToolEscalationAttribute_ParsesIntoPermissionContract()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
+              <bpmn:process id="EscalationWorkflow" name="Escalation Workflow">
+                <bpmn:serviceTask id="ReviewTask" name="Senior review">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="senior-reviewer"
+                      action="review.pr"
+                      purposeType="code_review"
+                      policyTag="demo-review"
+                      allowedTools="github.read_issue"
+                      toolEscalation="FAIL" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.True(result.IsValid);
+        var node = Assert.Single(result.Definition!.Nodes, n => n.Id == "ReviewTask");
+        Assert.Equal("fail", node.Metadata!.RuntimeContract!.Permissions.ToolEscalation);
+    }
+
+    [Fact]
+    public void Validate_WhenToolEscalationIsUnknown_ReturnsActionableError()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
+              <bpmn:process id="EscalationWorkflow" name="Escalation Workflow">
+                <bpmn:serviceTask id="ReviewTask" name="Senior review">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="senior-reviewer"
+                      action="review.pr"
+                      purposeType="code_review"
+                      policyTag="demo-review"
+                      toolEscalation="ask-nicely" />
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("ReviewTask", error.ElementId);
+        Assert.Contains("toolEscalation must be", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_WhenExecutionModeIsUnknown_ReturnsActionableError()
     {
         var xml = """

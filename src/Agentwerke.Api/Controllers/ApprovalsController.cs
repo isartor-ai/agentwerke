@@ -2,6 +2,7 @@ using Agentwerke.Api.Auth;
 using Agentwerke.Api.Contracts;
 using Agentwerke.Api.Contracts.Approvals;
 using Agentwerke.Application.Workflows;
+using Agentwerke.Domain.Persistence;
 using Agentwerke.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,6 +34,41 @@ public sealed class ApprovalsController : ControllerBase
             .ToListAsync();
 
         return Ok(approvals.Select(ApiContractMappings.ToApprovalSummary).ToList());
+    }
+
+    /// <summary>
+    /// Pending tool-access escalations (#202) across all runs: an agent asked for a tool its
+    /// step does not allow. Decisions go through the run's interaction-answer endpoint.
+    /// </summary>
+    [HttpGet("tool-access")]
+    public async Task<IActionResult> ListToolAccessRequests(CancellationToken cancellationToken)
+    {
+        var requests = await (
+            from interaction in _dbContext.AgentInteractions.AsNoTracking()
+            where interaction.Kind == AgentInteractionKinds.ToolAccess &&
+                  interaction.Status == AgentInteractionStatuses.Pending
+            join run in _dbContext.WorkflowRuns.AsNoTracking()
+                on interaction.RunId equals run.Id into runs
+            from run in runs.DefaultIfEmpty()
+            join step in _dbContext.WorkflowRunSteps.AsNoTracking()
+                on interaction.StepId equals step.Id into steps
+            from step in steps.DefaultIfEmpty()
+            orderby interaction.CreatedAt
+            select new ToolAccessRequestSummary(
+                interaction.Id,
+                interaction.RunId,
+                run != null ? run.WorkflowName : null,
+                interaction.StepId,
+                step != null ? step.Name : null,
+                interaction.FromAgent,
+                interaction.ToolName,
+                interaction.Intent,
+                interaction.Prompt,
+                interaction.Options,
+                interaction.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return Ok(requests);
     }
 
     [HttpGet("{approvalId}")]

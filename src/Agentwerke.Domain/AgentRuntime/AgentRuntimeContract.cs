@@ -138,6 +138,12 @@ public sealed record AgentPermissionContract
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
 
     public IReadOnlyList<string> DeniedTools { get; init; } = [];
+
+    /// <summary>
+    /// How a contract-denied tool call is handled (#202): "escalate" (default; asks a human via
+    /// a blocking tool_access interaction) or "fail" (fail the tool call immediately).
+    /// </summary>
+    public string? ToolEscalation { get; init; }
 }
 
 public static class AgentPermissionLevels
