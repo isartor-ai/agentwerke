@@ -27,8 +27,8 @@ describe('RunBoard integration', () => {
     );
 
     expect(await screen.findByText('Runs')).toBeInTheDocument();
-    expect(screen.getByText('Governance Posture')).toBeInTheDocument();
-    expect(screen.getByText('Prod EU-West')).toBeInTheDocument();
+    expect(screen.getByText('Performance Metrics')).toBeInTheDocument();
+    expect(screen.getByText(/% captured/)).toBeInTheDocument();
     expect(screen.getByText('run-0421')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Running' }));
