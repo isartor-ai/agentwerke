@@ -16,4 +16,8 @@ public sealed record InteractionSummary(
     string? Response,
     string? RespondedBy,
     string? RespondedAt,
-    string CreatedAt);
+    string CreatedAt,
+    /// <summary>For tool_access interactions (#202): the tool the agent asked for.</summary>
+    string? ToolName = null,
+    /// <summary>For tool_access interactions (#202): the model's stated intent (truncated tool input).</summary>
+    string? Intent = null);

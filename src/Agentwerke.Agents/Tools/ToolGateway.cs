@@ -56,10 +56,18 @@ public sealed class ToolGateway : IToolGateway
 
         if (IsDenied(request, tool, out var permissionFailure))
         {
+            // The workflow opted out of escalation for this task (#202): fail the tool call
+            // immediately with the contract-denial reason (pre-escalation behavior).
+            if (ToolAccessEscalation.IsFailFastMode(request.ToolEscalation))
+            {
+                return Failure(request, tool.Category, permissionFailure, "blocked");
+            }
+
             // The tool exists but is not allowed for this step (#202): escalate to a human
             // instead of failing outright. Approve -> the tool is allowed for the rest of the
-            // run (fall through to execution); anything else -> the operator's reply is returned
-            // to the model as the tool result. No decision yet -> suspend the run (waiting_user).
+            // run (fall through to execution); 'fail' -> the step fails; anything else -> the
+            // operator's reply is returned to the model as the tool result. No decision yet ->
+            // suspend the run (waiting_user).
             var decision = await ResolveToolAccessDecisionAsync(request, cancellationToken);
             if (!decision.Approved)
             {
@@ -272,6 +280,8 @@ public sealed class ToolGateway : IToolGateway
                 Addressee = null,
                 Blocking = true,
                 Prompt = prompt,
+                ToolName = request.ToolName,
+                Intent = ToolAccessEscalation.BuildIntent(request.Input),
                 Options = ToolAccessEscalation.Options.ToList(),
                 Status = AgentInteractionStatuses.Pending,
                 CreatedAt = DateTime.UtcNow.ToString("o")
@@ -283,6 +293,11 @@ public sealed class ToolGateway : IToolGateway
         if (existing.Status != AgentInteractionStatuses.Answered)
         {
             throw new AgentInteractionRequiredException(existing.Id, prompt);
+        }
+
+        if (ToolAccessEscalation.IsStepFailure(existing.Response))
+        {
+            throw new ToolAccessStepFailedException(request.ToolName, existing.RespondedBy);
         }
 
         return (ToolAccessEscalation.IsApproved(existing.Response), existing.Response);

@@ -58,6 +58,20 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         AgentExecutionProgressReporter? progressReporter = null)
     {
         var toolAccess = await LoadToolAccessDecisionsAsync(request.RunId, cancellationToken);
+        if (toolAccess.FailedTool is not null)
+        {
+            // An operator answered a tool-access escalation with 'fail' (#202): fail the step
+            // instead of re-entering the sandbox with a denial.
+            return new ModelRunResult(
+                Succeeded: false,
+                Output: null,
+                FailureReason: new ToolAccessStepFailedException(
+                    toolAccess.FailedTool, toolAccess.FailedBy).Message,
+                ToolInvocations: [],
+                Artifacts: null,
+                TokenUsage: null);
+        }
+
         var toolResolution = ResolveTools(request, profile, toolAccess.ApprovedTools);
         if (toolResolution.FailureReason is not null)
         {
@@ -116,7 +130,9 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 ? Math.Max(0, request.Contract.SubAgents.MaxDepth)
                 : 0,
             profile?.ReasoningEffort,
-            BuildEscalatableTools(toolResolution.Tools, toolAccess.Guidance),
+            ToolAccessEscalation.IsFailFastMode(request.Contract.Permissions.ToolEscalation)
+                ? []
+                : BuildEscalatableTools(toolResolution.Tools, toolAccess.Guidance),
             toolAccess.Guidance);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
@@ -252,7 +268,12 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
         if (string.Equals(runResult.StepStatus, AgentTaskOutcomeStatuses.WaitingUser, StringComparison.Ordinal) &&
             !string.IsNullOrWhiteSpace(runResult.PendingToolAccessPrompt))
         {
-            await EnsureToolAccessInteractionAsync(request, runResult.PendingToolAccessPrompt, cancellationToken);
+            await EnsureToolAccessInteractionAsync(
+                request,
+                runResult.PendingToolAccessPrompt,
+                runResult.PendingToolAccessToolName,
+                runResult.PendingToolAccessIntent,
+                cancellationToken);
             return new ModelRunResult(
                 Succeeded: false,
                 Output: null,
@@ -551,10 +572,10 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
 
     /// <summary>
     /// Answered tool-access interactions for this run (#202): 'approve' responses become extra
-    /// allowed tools on the re-run; any other response becomes operator guidance the sandbox
-    /// returns to the model when it calls that tool again.
+    /// allowed tools on the re-run; 'fail' fails the step; any other response becomes operator
+    /// guidance the sandbox returns to the model when it calls that tool again.
     /// </summary>
-    private async Task<(IReadOnlyList<string> ApprovedTools, IReadOnlyDictionary<string, string> Guidance)> LoadToolAccessDecisionsAsync(
+    private async Task<(IReadOnlyList<string> ApprovedTools, IReadOnlyDictionary<string, string> Guidance, string? FailedTool, string? FailedBy)> LoadToolAccessDecisionsAsync(
         string runId,
         CancellationToken cancellationToken)
     {
@@ -569,10 +590,15 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
                 continue;
             }
 
-            var toolName = ExtractToolNameFromPrompt(interaction.Prompt);
+            var toolName = interaction.ToolName ?? ExtractToolNameFromPrompt(interaction.Prompt);
             if (toolName is null)
             {
                 continue;
+            }
+
+            if (ToolAccessEscalation.IsStepFailure(interaction.Response))
+            {
+                return ([], new Dictionary<string, string>(), toolName, interaction.RespondedBy);
             }
 
             if (ToolAccessEscalation.IsApproved(interaction.Response))
@@ -585,7 +611,7 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             }
         }
 
-        return (approved, guidance);
+        return (approved, guidance, null, null);
     }
 
     /// <summary>Prompts are built by <see cref="ToolAccessEscalation.BuildPrompt"/>: the tool name is the second quoted token.</summary>
@@ -613,6 +639,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
     private async Task EnsureToolAccessInteractionAsync(
         ModelRunRequest request,
         string prompt,
+        string? toolName,
+        string? intent,
         CancellationToken cancellationToken)
     {
         var existing = (await _interactions.GetByRunAsync(request.RunId, cancellationToken))
@@ -635,6 +663,8 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             Addressee = null,
             Blocking = true,
             Prompt = prompt,
+            ToolName = toolName ?? ExtractToolNameFromPrompt(prompt),
+            Intent = intent,
             Options = ToolAccessEscalation.Options.ToList(),
             Status = AgentInteractionStatuses.Pending,
             CreatedAt = DateTime.UtcNow.ToString("o")

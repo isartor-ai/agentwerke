@@ -10,6 +10,7 @@ import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
 import { RiskBadge } from '../components/RiskBadge';
 import { ToastRegion } from '../components/ToastRegion';
+import { ToolAccessRequests } from '../components/ToolAccessRequests';
 import { useToastQueue } from '../components/useToastQueue';
 import type { ApprovalRequest, AuthState } from '../types';
 
@@ -32,6 +33,7 @@ export function ApprovalsDashboard({ auth }: ApprovalsDashboardProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [toolAccessCount, setToolAccessCount] = useState(0);
   const [artifactContent, setArtifactContent] = useState<string | null>(null);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [artifactLoading, setArtifactLoading] = useState(false);
@@ -213,9 +215,16 @@ export function ApprovalsDashboard({ auth }: ApprovalsDashboardProps) {
       <section className="kpi-grid" aria-label="Approval summary metrics">
         <KpiCard label="Pending" value={pending.length} accent="awaiting" />
         <KpiCard label="High/Critical" value={highCritical} accent="failed" />
+        <KpiCard label="Tool Requests" value={toolAccessCount} accent="blocked" />
         <KpiCard label="SLA Breached" value={breached} accent="blocked" />
         <KpiCard label="Total" value={approvals.length} accent="pending" />
       </section>
+
+      <ToolAccessRequests
+        canDecide={canSubmitDecisions}
+        onToast={pushToast}
+        onCountChange={setToolAccessCount}
+      />
 
       <section className="filter-bar" aria-label="Approval filters">
         <div>

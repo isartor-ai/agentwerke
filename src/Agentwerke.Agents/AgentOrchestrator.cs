@@ -360,6 +360,17 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                         RuntimeSnapshot: runtimeSnapshot with { ExecutionMode = executionMode },
                         StepStatus: AgentTaskOutcomeStatuses.WaitingUser);
                 }
+                catch (ToolAccessStepFailedException ex)
+                {
+                    // An operator answered the tool-access escalation with 'fail' (#202): the
+                    // step fails instead of feeding a denial back into the model loop.
+                    return new AgentTaskOutcome(
+                        Succeeded: false,
+                        Output: null,
+                        FailureReason: ex.Message,
+                        PolicyDecision: policyDecision,
+                        RuntimeSnapshot: runtimeSnapshot with { ExecutionMode = executionMode });
+                }
 
                 break;
         }
@@ -459,6 +470,15 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 FailureReason: $"Awaiting response to: {ex.Prompt}",
                 RuntimeSnapshot: runtimeSnapshot,
                 StepStatus: AgentTaskOutcomeStatuses.WaitingUser), cancellationToken);
+        }
+        catch (ToolAccessStepFailedException ex)
+        {
+            // An operator answered the tool-access escalation with 'fail' (#202).
+            return await FinalizeOutcomeAsync(node, metadata, attempt, new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: ex.Message,
+                RuntimeSnapshot: runtimeSnapshot), cancellationToken);
         }
 
         var updatedSnapshot = runtimeSnapshot with

@@ -19,6 +19,7 @@ import type {
   RuntimeMode,
   SettingsSnapshot,
   SettingsTestResponse,
+  ToolAccessRequest,
   SettingsUpdateRequest,
   SettingsUpdateResponse,
   SkillSummary,
@@ -414,6 +415,10 @@ export const apiClient = {
 
   async getApprovals(): Promise<ApprovalRequest[]> {
     return requestJson<ApprovalRequest[]>('/api/approvals');
+  },
+
+  async getToolAccessRequests(): Promise<ToolAccessRequest[]> {
+    return requestJson<ToolAccessRequest[]>('/api/approvals/tool-access');
   },
 
   async getApproval(id: string): Promise<ApprovalRequest | undefined> {

@@ -54,7 +54,33 @@ public sealed record SandboxedAgentRunResult(
     /// <summary><c>waiting_user</c> when the run must pause for a tool-access decision (#202).</summary>
     string? StepStatus = null,
     /// <summary>The interaction prompt the host must persist when <c>StepStatus</c> is waiting_user.</summary>
-    string? PendingToolAccessPrompt = null);
+    string? PendingToolAccessPrompt = null,
+    /// <summary>The requested tool, so the host can record it on the interaction (#202).</summary>
+    string? PendingToolAccessToolName = null,
+    /// <summary>The model's stated intent (truncated tool input) for the operator (#202).</summary>
+    string? PendingToolAccessIntent = null);
+
+/// <summary>
+/// Raised inside the sandboxed model loop when the agent calls an escalatable tool (#202). The
+/// sandbox has no database access, so the executor converts this into result-payload fields the
+/// host persists as a tool-access interaction.
+/// </summary>
+public sealed class SandboxToolAccessRequiredException : Exception
+{
+    public SandboxToolAccessRequiredException(string prompt, string toolName, string intent)
+        : base(prompt)
+    {
+        Prompt = prompt;
+        ToolName = toolName;
+        Intent = intent;
+    }
+
+    public string Prompt { get; }
+
+    public string ToolName { get; }
+
+    public string Intent { get; }
+}
 
 public interface ISandboxedAgentRunner
 {

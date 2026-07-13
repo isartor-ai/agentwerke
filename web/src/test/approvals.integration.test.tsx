@@ -9,14 +9,32 @@ vi.mock('../api/client', () => ({
     getApprovals: vi.fn(),
     decideApproval: vi.fn(),
     getRunArtifactContent: vi.fn(),
+    getToolAccessRequests: vi.fn(),
+    answerInteraction: vi.fn(),
   },
 }));
+
+const toolAccessFixture = {
+  interactionId: 'int-42',
+  runId: 'run-0430',
+  workflowName: 'Demo NVIDIA Issue to PR',
+  stepId: 'step-9',
+  stepName: 'Senior Review',
+  agent: 'senior-reviewer',
+  toolName: 'github.post_review',
+  intent: '{"pull_number":"23"}',
+  prompt: "Tool access request: agent 'senior-reviewer' needs tool 'github.post_review'…",
+  options: ['approve', 'deny', 'fail'],
+  createdAt: '2026-07-12T08:00:00Z',
+};
 
 describe('ApprovalsDashboard integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiClient.getApprovals).mockResolvedValue(approvalsFixture);
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
+    vi.mocked(apiClient.getToolAccessRequests).mockResolvedValue([]);
+    vi.mocked(apiClient.answerInteraction).mockResolvedValue(undefined);
   });
 
   it('opens review drawer and submits approval decision', async () => {
@@ -149,5 +167,77 @@ describe('ApprovalsDashboard integration', () => {
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Approver role required to submit a decision.')).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
+  it('lists tool access requests with agent, tool, step, and intent (#202)', async () => {
+    vi.mocked(apiClient.getToolAccessRequests).mockResolvedValue([toolAccessFixture]);
+
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard auth={adminAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    const section = await screen.findByRole('region', { name: 'Tool access requests' });
+    expect(within(section).getByText('Agent senior-reviewer needs tool github.post_review')).toBeInTheDocument();
+    expect(within(section).getByText(/step: Senior Review/)).toBeInTheDocument();
+    expect(within(section).getByText('{"pull_number":"23"}')).toBeInTheDocument();
+  });
+
+  it('approves a tool access request through the interaction answer endpoint', async () => {
+    vi.mocked(apiClient.getToolAccessRequests).mockResolvedValue([toolAccessFixture]);
+
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard auth={adminAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    const section = await screen.findByRole('region', { name: 'Tool access requests' });
+    fireEvent.click(within(section).getByRole('button', { name: 'Approve for this run' }));
+
+    await waitFor(() => {
+      expect(apiClient.answerInteraction).toHaveBeenCalledWith('run-0430', 'int-42', 'approve');
+    });
+  });
+
+  it('requires guidance text before denying, and sends it as the answer', async () => {
+    vi.mocked(apiClient.getToolAccessRequests).mockResolvedValue([toolAccessFixture]);
+
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard auth={adminAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    const section = await screen.findByRole('region', { name: 'Tool access requests' });
+    const denyButton = within(section).getByRole('button', { name: 'Deny with guidance' });
+    expect(denyButton).toBeDisabled();
+
+    fireEvent.change(within(section).getByLabelText('Guidance for the agent (sent as a denial)'), {
+      target: { value: 'Comment on the issue instead.' },
+    });
+    fireEvent.click(denyButton);
+
+    await waitFor(() => {
+      expect(apiClient.answerInteraction).toHaveBeenCalledWith('run-0430', 'int-42', 'Comment on the issue instead.');
+    });
+  });
+
+  it('fails the step when the operator chooses Fail step', async () => {
+    vi.mocked(apiClient.getToolAccessRequests).mockResolvedValue([toolAccessFixture]);
+
+    render(
+      <MemoryRouter>
+        <ApprovalsDashboard auth={adminAuthFixture} />
+      </MemoryRouter>,
+    );
+
+    const section = await screen.findByRole('region', { name: 'Tool access requests' });
+    fireEvent.click(within(section).getByRole('button', { name: 'Fail step' }));
+
+    await waitFor(() => {
+      expect(apiClient.answerInteraction).toHaveBeenCalledWith('run-0430', 'int-42', 'fail');
+    });
   });
 });

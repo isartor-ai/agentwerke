@@ -70,7 +70,12 @@ public sealed record ToolGatewayRequest(
     /// agent is declared allowed to use. Empty means offline-only. Only consulted for the
     /// "sandbox.execute" tool.
     /// </summary>
-    IReadOnlyList<string>? AllowedSandboxProfiles = null);
+    IReadOnlyList<string>? AllowedSandboxProfiles = null,
+    /// <summary>
+    /// How a contract-denied tool call is handled (#202): "escalate" (default; asks a human via
+    /// a blocking tool_access interaction) or "fail" (fail the tool call immediately).
+    /// </summary>
+    string? ToolEscalation = null);
 
 public sealed record ToolGatewayResult(
     bool Succeeded,

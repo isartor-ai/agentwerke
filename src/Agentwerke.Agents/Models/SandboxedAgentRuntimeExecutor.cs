@@ -93,11 +93,11 @@ public sealed class SandboxedAgentRuntimeExecutor
                 cancellationToken,
                 progressReporter);
         }
-        catch (AgentInteractionRequiredException ex)
+        catch (SandboxToolAccessRequiredException ex)
         {
             // The agent needs a tool that isn't allowed for this step (#202). The sandbox has no
             // database access, so signal the host via the result payload; it persists the
-            // tool-access interaction and suspends the run.
+            // tool-access interaction (with tool name + intent) and suspends the run.
             await ReportProgressAsync(
                 progressReporter,
                 new AgentExecutionProgressUpdate(
@@ -113,7 +113,9 @@ public sealed class SandboxedAgentRuntimeExecutor
                 Artifacts: artifacts.Count == 0 ? null : artifacts,
                 ToolInvocations: invocations,
                 StepStatus: AgentTaskOutcomeStatuses.WaitingUser,
-                PendingToolAccessPrompt: ex.Prompt);
+                PendingToolAccessPrompt: ex.Prompt,
+                PendingToolAccessToolName: ex.ToolName,
+                PendingToolAccessIntent: ex.Intent);
         }
 
         sw.Stop();
@@ -197,9 +199,10 @@ public sealed class SandboxedAgentRuntimeExecutor
             // The tool is real but not allowed for this step: pause for a human decision (#202).
             if (envelope.EscalatableTools?.Contains(call.Name, StringComparer.OrdinalIgnoreCase) == true)
             {
-                throw new AgentInteractionRequiredException(
-                    interactionId: string.Empty,
-                    prompt: ToolAccessEscalation.BuildPrompt(envelope.AgentName, call.Name));
+                throw new SandboxToolAccessRequiredException(
+                    prompt: ToolAccessEscalation.BuildPrompt(envelope.AgentName, call.Name),
+                    toolName: call.Name,
+                    intent: ToolAccessEscalation.BuildIntent(call.Input));
             }
 
             var missingInvocation = CreateInvocation(

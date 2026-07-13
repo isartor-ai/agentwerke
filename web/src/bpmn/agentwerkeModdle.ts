@@ -35,6 +35,7 @@ export const agentwerkeModdleDescriptor = {
         { name: 'permissionLevel', isAttr: true, type: 'String' },
         { name: 'allowedTools', isAttr: true, type: 'String' },
         { name: 'deniedTools', isAttr: true, type: 'String' },
+        { name: 'toolEscalation', isAttr: true, type: 'String' },
         { name: 'requiresEvidence', isAttr: true, type: 'String' },
         { name: 'maxRetries', isAttr: true, type: 'Integer' },
         { name: 'retryBackoffSeconds', isAttr: true, type: 'Integer' },
