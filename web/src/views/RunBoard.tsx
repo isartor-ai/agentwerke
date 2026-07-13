@@ -277,12 +277,8 @@ export function RunBoard({ auth }: RunBoardProps) {
     (run) => (run.events?.length ?? 0) > 0 || (run.artifacts?.length ?? 0) > 0 || (run.approvals?.length ?? 0) > 0,
   ).length;
   const evidenceCoverage = toPercent(evidenceReadyCount, runs.length);
-  const policyGateCount = runs.filter(
-    (run) => run.pendingApprovals > 0 || run.riskLevel === 'critical' || run.riskLevel === 'high',
-  ).length;
+  // Only signals derived from real run data belong here — no hardcoded posture claims.
   const readinessSignals = [
-    { label: 'Environment', value: 'Prod EU-West', detail: 'Tenant isolated', tone: 'healthy' },
-    { label: 'Access', value: 'SSO + RBAC', detail: auth.user?.roles.join(', ') ?? 'Guest', tone: 'healthy' },
     {
       label: 'Audit',
       value: `${evidenceCoverage}% captured`,
@@ -344,7 +340,7 @@ export function RunBoard({ auth }: RunBoardProps) {
         }
       />
 
-      <section className="readiness-strip" aria-label="Enterprise readiness summary">
+      <section className="readiness-strip" aria-label="Run governance summary">
         {readinessSignals.map((signal) => (
           <article key={signal.label} className={`readiness-item readiness-${signal.tone}`}>
             <span className={`status-dot ${signal.tone}`} aria-hidden="true" />
@@ -357,104 +353,36 @@ export function RunBoard({ auth }: RunBoardProps) {
         ))}
       </section>
 
-      <section className="ops-hero-grid" aria-label="Execution monitoring overview">
-        <article className="panel performance-panel">
-          <div className="panel-title-row">
-            <div>
-              <span className="panel-kicker">Real-time cohort</span>
-              <h2>Performance Metrics</h2>
-            </div>
-            <span className="live-chip">
-              <span aria-hidden="true" />
-              Last 24h
-            </span>
+      <article className="panel performance-panel" aria-label="Execution monitoring overview">
+        <div className="panel-title-row">
+          <div>
+            <span className="panel-kicker">Real-time cohort</span>
+            <h2>Performance Metrics</h2>
           </div>
+        </div>
 
-          <dl className="metric-strip">
-            <div>
-              <dt>Active Runs</dt>
-              <dd>{activeCount}</dd>
-              <span>running + approvals</span>
-            </div>
-            <div>
-              <dt>Agent Success</dt>
-              <dd>{successRate}%</dd>
-              <span>resolved runs</span>
-            </div>
-            <div>
-              <dt>P95 Duration</dt>
-              <dd>{toP95Duration(runs)}</dd>
-              <span>observed run duration</span>
-            </div>
-          </dl>
-
-          <a className="panel-link" href="#run-ledger">
-            View run ledger detail
-          </a>
-        </article>
-
-        <article className="panel health-panel">
-          <div className="panel-title-row">
-            <div>
-              <span className="panel-kicker">Runtime fabric</span>
-              <h2>System Health</h2>
-            </div>
+        <dl className="metric-strip">
+          <div>
+            <dt>Active Runs</dt>
+            <dd>{activeCount}</dd>
+            <span>running + approvals</span>
           </div>
-          <ul className="health-list" aria-label="System health">
-            <li>
-              <span className="status-dot healthy" aria-hidden="true" />
-              <strong>workflow-engine-prod</strong>
-              <span className="mini-badge healthy">HEALTHY</span>
-            </li>
-            <li>
-              <span className="status-dot healthy" aria-hidden="true" />
-              <strong>agent-registry-01</strong>
-              <span className="mini-badge healthy">HEALTHY</span>
-            </li>
-            <li>
-              <span className="status-dot healthy" aria-hidden="true" />
-              <strong>evidence-store</strong>
-              <span className="mini-badge healthy">SYNCED</span>
-            </li>
-            <li>
-              <span className={criticalCount > 0 ? 'status-dot warning' : 'status-dot healthy'} aria-hidden="true" />
-              <strong>approval-policy-gate</strong>
-              <span className={criticalCount > 0 ? 'mini-badge warning' : 'mini-badge healthy'}>
-                {criticalCount > 0 ? 'ATTENTION' : 'HEALTHY'}
-              </span>
-            </li>
-          </ul>
-        </article>
-
-        <article className="panel governance-panel">
-          <div className="panel-title-row">
-            <div>
-              <span className="panel-kicker">Enterprise control</span>
-              <h2>Governance Posture</h2>
-            </div>
-            <span className={criticalCount > 0 ? 'mini-badge warning' : 'mini-badge healthy'}>
-              {criticalCount > 0 ? 'REVIEW' : 'READY'}
-            </span>
+          <div>
+            <dt>Agent Success</dt>
+            <dd>{successRate}%</dd>
+            <span>resolved runs</span>
           </div>
-          <dl className="governance-list">
-            <div>
-              <dt>Policy gates</dt>
-              <dd>{policyGateCount}</dd>
-              <span>approval or elevated risk</span>
-            </div>
-            <div>
-              <dt>Evidence coverage</dt>
-              <dd>{evidenceCoverage}%</dd>
-              <span>events, artifacts, approvals</span>
-            </div>
-            <div>
-              <dt>High risk</dt>
-              <dd>{criticalCount}</dd>
-              <span>critical + high runs</span>
-            </div>
-          </dl>
-        </article>
-      </section>
+          <div>
+            <dt>P95 Duration</dt>
+            <dd>{toP95Duration(runs)}</dd>
+            <span>observed run duration</span>
+          </div>
+        </dl>
+
+        <a className="panel-link" href="#run-ledger">
+          View run ledger detail
+        </a>
+      </article>
 
       <section className="kpi-grid" aria-label="Run summary metrics">
         <KpiCard label="Running" value={stats.running} accent="running" hint="Live workers" />

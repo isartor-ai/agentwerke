@@ -19,12 +19,6 @@ const navItems = [
   { label: 'Settings', path: '/settings' },
 ];
 
-const enterpriseSignals = [
-  { label: 'Tenant', value: 'Acme Platform' },
-  { label: 'Region', value: 'EU-West' },
-  { label: 'SSO', value: 'Enforced' },
-];
-
 export function AppShell({ auth }: AppShellProps) {
   const user = auth.user;
   const navigate = useNavigate();
@@ -53,21 +47,6 @@ export function AppShell({ auth }: AppShellProps) {
         <NavLink to="/workflows" className="sidebar-cta">
           Deploy Workflow
         </NavLink>
-
-        <section className="sidebar-readiness" aria-label="Enterprise readiness posture">
-          <div>
-            <span className="status-dot healthy" aria-hidden="true" />
-            <strong>Prod control plane</strong>
-          </div>
-          <dl>
-            {enterpriseSignals.map((signal) => (
-              <div key={signal.label}>
-                <dt>{signal.label}</dt>
-                <dd>{signal.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
 
         <nav aria-label="Primary navigation">
           <ul role="list" className="nav-list">
@@ -118,11 +97,6 @@ export function AppShell({ auth }: AppShellProps) {
               Search
             </button>
           </form>
-          <div className="top-context" aria-label="Environment context">
-            <span className="mini-badge healthy">PROD</span>
-            <span className="mini-badge neutral">EU-WEST</span>
-            <span className="mini-badge neutral">AUDIT ON</span>
-          </div>
           <div className="top-operator">
             <span className="operator-pulse" aria-hidden="true" />
             <span className="avatar top-avatar">{user?.avatarInitials ?? 'GU'}</span>

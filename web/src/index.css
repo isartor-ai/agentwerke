@@ -175,55 +175,6 @@ textarea {
   color: var(--color-canvas);
 }
 
-.sidebar-readiness {
-  display: grid;
-  gap: 0.75rem;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 0.25rem;
-  background: var(--color-surface-low);
-  padding: 0.75rem;
-}
-
-.sidebar-readiness > div {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-text-strong);
-  font-size: 0.82rem;
-}
-
-.sidebar-readiness dl {
-  display: grid;
-  gap: 0.4rem;
-  margin: 0;
-}
-
-.sidebar-readiness dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.sidebar-readiness dt,
-.sidebar-readiness dd {
-  margin: 0;
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.68rem;
-}
-
-.sidebar-readiness dt {
-  color: var(--color-muted);
-  text-transform: uppercase;
-}
-
-.sidebar-readiness dd {
-  overflow: hidden;
-  color: var(--color-text);
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .nav-link {
   display: block;
   color: var(--color-nav-text);
@@ -320,14 +271,6 @@ textarea {
 
 .top-search-submit {
   flex: 0 0 auto;
-}
-
-.top-context {
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  justify-content: flex-end;
 }
 
 .top-user {
@@ -2395,12 +2338,6 @@ th {
   white-space: nowrap;
 }
 
-.ops-hero-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.85fr) minmax(18rem, 0.85fr);
-  gap: 1.5rem;
-}
-
 .first-run-onboarding {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 1fr) auto;
@@ -2471,8 +2408,6 @@ th {
 }
 
 .performance-panel,
-.health-panel,
-.governance-panel,
 .log-stream-panel {
   display: grid;
   gap: 1rem;
@@ -2600,77 +2535,6 @@ th {
 
 .panel-link {
   justify-self: end;
-}
-
-.health-list {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.health-list li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 0.25rem;
-  background: var(--color-surface-low);
-}
-
-.health-list strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-text-strong);
-  font-size: 0.875rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.governance-list {
-  display: grid;
-  gap: 0.65rem;
-  margin: 0;
-}
-
-.governance-list div {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 0.25rem;
-  background: var(--color-surface-low);
-}
-
-.governance-list dt,
-.governance-list span {
-  color: var(--color-muted);
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.governance-list dd {
-  margin: 0;
-  color: var(--color-text-strong);
-  font-size: 1.35rem;
-  font-weight: 700;
-  line-height: 1.15;
-}
-
-.governance-list span {
-  overflow: hidden;
-  font-size: 0.64rem;
-  font-weight: 400;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .run-card-grid {
@@ -3181,7 +3045,6 @@ textarea {
 
   .agent-registry-grid,
   .first-run-onboarding,
-  .ops-hero-grid,
   .readiness-strip,
   .run-card-grid,
   .settings-grid {
@@ -3264,7 +3127,6 @@ textarea {
     min-width: 0;
   }
 
-  .top-context,
   .top-operator {
     justify-content: flex-start;
   }
@@ -3307,7 +3169,6 @@ textarea {
     flex-direction: column;
   }
 
-  .ops-hero-grid,
   .first-run-onboarding,
   .first-run-steps,
   .metric-strip,
