@@ -102,7 +102,7 @@ Use `autofac:externalEvent` on a `receiveTask` or message `intermediateCatchEven
 
 ### Correlating a wait with a CI build
 
-A key the workflow author has to invent up front — `{{input.build_id}}` — only matches if something
+A key the workflow author has to invent up front — <code v-pre>{{input.build_id}}</code> — only matches if something
 downstream happens to produce that exact value. For a wait on a build that Agentwerke itself
 dispatches, key it on the run instead:
 
