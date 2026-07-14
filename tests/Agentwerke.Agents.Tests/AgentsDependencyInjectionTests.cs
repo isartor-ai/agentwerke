@@ -126,6 +126,7 @@ public sealed class AgentsDependencyInjectionTests
     // never invoked (the test only resolves/constructs the graph), so they throw.
     private sealed class StubGitHubConnector : IGitHubConnector
     {
+        public string? RepositorySlug => throw new NotImplementedException();
         public Task<GitHubIssueResult> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubIssueCommentPostResult> CommentIssueAsync(CommentGitHubIssueCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubIssueStateResult> CloseIssueAsync(CloseGitHubIssueCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
