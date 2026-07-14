@@ -58,6 +58,55 @@ public static class WebhookSignatureValidator
     }
 
     /// <summary>
+    /// Validates a generic event-ingress signature from the X-Agentwerke-Signature-256 header
+    /// (format: "sha256=&lt;hex&gt;"), for <c>POST /webhooks/events</c> (#206).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately stricter than <see cref="ValidateGitHub"/>: a missing secret fails instead of
+    /// skipping validation. The connector webhooks skip-on-empty because an unsigned GitHub payload
+    /// can at worst start a run that GitHub was going to trigger anyway, whereas this endpoint
+    /// resumes an arbitrary waiting run by correlation key — an unauthenticated caller could
+    /// satisfy a verification gate. Misconfiguration must fail closed.
+    /// </remarks>
+    public static WebhookValidationResult ValidateEventIngress(
+        byte[] requestBody,
+        string? signatureHeader,
+        string secret)
+    {
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            return WebhookValidationResult.Fail("Event ingress source has no configured secret.");
+        }
+
+        if (string.IsNullOrWhiteSpace(signatureHeader))
+        {
+            return WebhookValidationResult.Fail("Missing X-Agentwerke-Signature-256 header.");
+        }
+
+        const string prefix = "sha256=";
+        if (!signatureHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return WebhookValidationResult.Fail("Signature header must start with 'sha256='.");
+        }
+
+        var expected = ComputeHmacSha256Hex(requestBody, secret);
+        var provided = signatureHeader[prefix.Length..];
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(expected),
+            Encoding.ASCII.GetBytes(provided))
+            ? WebhookValidationResult.Ok()
+            : WebhookValidationResult.Fail("Signature mismatch.");
+    }
+
+    /// <summary>
+    /// The HMAC-SHA256 hex digest of a body under a secret. Exposed so the event ingress can
+    /// derive a stable idempotency key for senders that deliver no explicit delivery id.
+    /// </summary>
+    public static string ComputeSignatureDigest(byte[] requestBody, string secret) =>
+        ComputeHmacSha256Hex(requestBody, secret);
+
+    /// <summary>
     /// Validates a Slack request signature: <c>X-Slack-Signature</c> is
     /// <c>v0=&lt;hex&gt;</c> where the HMAC-SHA256 is computed over
     /// <c>v0:{X-Slack-Request-Timestamp}:{raw body}</c> with the app signing secret.

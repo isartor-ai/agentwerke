@@ -9,6 +9,46 @@ public sealed class IntegrationOptions
     public SlackOptions Slack { get; set; } = new();
     public TeamsOptions Teams { get; set; } = new();
     public NotificationOptions Notifications { get; set; } = new();
+    public EventIngressOptions EventIngress { get; set; } = new();
+}
+
+/// <summary>
+/// Generic signed event ingress (#206). Lets any CI or test system deliver a domain event
+/// (<c>test.unit.completed</c>, <c>deploy.staging.succeeded</c>, …) to <c>POST /webhooks/events</c>
+/// without Agentwerke needing a first-class connector for it, keeping BPMN message names
+/// decoupled from GitHub's event taxonomy.
+/// </summary>
+public sealed class EventIngressOptions
+{
+    /// <summary>
+    /// Disabled by default: the endpoint can resume runs, so it must be turned on deliberately.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Registered senders, keyed by the value each sends in the X-Agentwerke-Source header.
+    /// A request naming an unregistered source is rejected — there is no anonymous ingress.
+    /// </summary>
+    public List<EventIngressSourceOptions> Sources { get; set; } = [];
+}
+
+public sealed class EventIngressSourceOptions
+{
+    /// <summary>Source identifier the sender presents in the X-Agentwerke-Source header.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Shared secret for this source's HMAC-SHA256 signature. Unlike the connector webhooks,
+    /// an empty secret does not skip validation — it disables the source (see
+    /// <c>WebhookSignatureValidator.ValidateEventIngress</c>).
+    /// </summary>
+    public string Secret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional allowlist of message names this source may deliver. Empty means any message name.
+    /// Narrow this in production so a compromised CI token cannot resume unrelated waits.
+    /// </summary>
+    public List<string> AllowedMessageNames { get; set; } = [];
 }
 
 public sealed class NotificationOptions

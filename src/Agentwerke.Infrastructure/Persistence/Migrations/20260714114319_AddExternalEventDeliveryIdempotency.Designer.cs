@@ -3,6 +3,7 @@ using System;
 using Agentwerke.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Agentwerke.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgentwerkeDbContext))]
-    partial class AgentwerkeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714114319_AddExternalEventDeliveryIdempotency")]
+    partial class AddExternalEventDeliveryIdempotency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
