@@ -80,6 +80,29 @@ public sealed class SdlcTemplateSeedsValidationTests
     }
 
     [Fact]
+    public void VModelTemplate_MatchesEvaluationArtifactStructure()
+    {
+        // The shippable V-model seed embeds a process-only copy of the curated evaluation artifact
+        // (examples/v-model-process.bpmn); the designer auto-lays-out on import, so the seed omits
+        // the artifact's BPMNDI. Guard against the two drifting: same process id, same node graph,
+        // and both human gates preserved.
+        var seed = new BpmnWorkflowValidator().Validate(SdlcTemplateSeeds.VModel.BpmnXml).Definition;
+        Assert.NotNull(seed);
+
+        var artifactXml = File.ReadAllText(FindRepositoryFile("examples", "v-model-process.bpmn"));
+        var artifact = new BpmnWorkflowValidator().Validate(artifactXml).Definition;
+        Assert.NotNull(artifact);
+
+        Assert.Equal(artifact!.ProcessId, seed!.ProcessId);
+        Assert.Equal(
+            artifact.Nodes.Select(static n => n.Id).ToArray(),
+            seed.Nodes.Select(static n => n.Id).ToArray());
+        Assert.Equal(
+            ["ApproveRequirementsBaseline", "ApproveAcceptanceSignoff"],
+            seed.Nodes.Where(static n => n.ApprovalMetadata is not null).Select(static n => n.Id));
+    }
+
+    [Fact]
     public void FirstRunDockerSeedWorkflow_ValidatesWithoutErrors()
     {
         var seedSql = File.ReadAllText(FindRepositoryFile("docker", "seed-first-run.sql"));
