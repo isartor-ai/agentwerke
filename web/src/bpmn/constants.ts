@@ -14,6 +14,7 @@ export const AGENTWERKE_NS_URI = 'https://agentwerke.de/bpmn/extensions/v1';
 export const AGENT_TASK_TYPE = 'agentwerke:AgentTask';
 export const APPROVAL_TASK_TYPE = 'agentwerke:ApprovalTask';
 export const EXTERNAL_EVENT_TYPE = 'agentwerke:ExternalEvent';
+export const METADATA_TYPE = 'agentwerke:Metadata';
 
 /**
  * A blank, DI-complete BPMN 2.0 document used when the user starts a new

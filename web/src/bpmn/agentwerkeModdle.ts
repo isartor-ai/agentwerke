@@ -11,6 +11,11 @@ import { AGENTWERKE_NS_PREFIX, AGENTWERKE_NS_URI } from './constants';
  * `xml.tagAlias: 'lowerCase'` makes the `AgentTask` type serialize as
  * `<agentwerke:agentTask>` — matching the lower-camel element names the backend
  * validator looks for.
+ *
+ * The `Metadata` and `Prompt` child types are load-bearing: bpmn-js only preserves
+ * extension children it can model, so without these the `<agentwerke:metadata>` and
+ * `<agentwerke:prompt>` elements are silently dropped on the first import→export,
+ * corrupting authored workflows.
  */
 export const agentwerkeModdleDescriptor = {
   name: 'Agentwerke',
@@ -40,6 +45,24 @@ export const agentwerkeModdleDescriptor = {
         { name: 'maxRetries', isAttr: true, type: 'Integer' },
         { name: 'retryBackoffSeconds', isAttr: true, type: 'Integer' },
         { name: 'timeoutSeconds', isAttr: true, type: 'Integer' },
+        // Child elements. Order matters for serialization; keep after the attributes.
+        { name: 'metadata', isMany: true, type: 'Metadata' },
+        { name: 'prompt', type: 'Prompt' },
+      ],
+    },
+    {
+      name: 'Metadata',
+      superClass: ['Element'],
+      properties: [
+        { name: 'key', isAttr: true, type: 'String' },
+        { name: 'value', isAttr: true, type: 'String' },
+      ],
+    },
+    {
+      name: 'Prompt',
+      superClass: ['Element'],
+      properties: [
+        { name: 'body', isBody: true, type: 'String' },
       ],
     },
     {
