@@ -579,7 +579,9 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 });
         }
 
-        if (IsDirectGitHubToolAction(metadata.Action) || IsDirectCicdToolAction(metadata.Action))
+        if (IsDirectGitHubToolAction(metadata.Action)
+            || IsDirectCicdToolAction(metadata.Action)
+            || IsDirectVerificationToolAction(metadata.Action))
         {
             return CreateToolRequest(
                 ToolName: metadata.Action,
@@ -757,6 +759,14 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     /// </summary>
     private static bool IsDirectCicdToolAction(string action) =>
         string.Equals(action, "cicd.trigger_deploy", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Test-result ingestion (#210) is deterministic for the same reason as the tools above, and for
+    /// one more: routing a test report through a model to be summarised is precisely what structured
+    /// ingestion exists to avoid.
+    /// </summary>
+    private static bool IsDirectVerificationToolAction(string action) =>
+        string.Equals(action, "verification.ingest_test_results", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsGitHubAction(string action) =>
         string.Equals(action, "github.create_branch", StringComparison.OrdinalIgnoreCase) ||
