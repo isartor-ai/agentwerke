@@ -197,7 +197,8 @@ public sealed class GitHubReadIssueTool : IAgentTool, IToolSchemaProvider
 
     public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
     [
-        new("issue_number", "string", "The GitHub issue number to load.", Required: true)
+        new("issue_number", "string", "The GitHub issue number to load.", Required: true),
+        new("repository", "string", "Expected \"owner/name\". Rejected if it isn't the configured repository.", Required: false)
     ];
 
     public void Validate(IReadOnlyDictionary<string, string> input)
@@ -205,11 +206,44 @@ public sealed class GitHubReadIssueTool : IAgentTool, IToolSchemaProvider
         GitHubToolInput.Require(input, "issue_number");
     }
 
+    /// <summary>
+    /// Rejects a read against a repository this connector is not configured for, rather than
+    /// reading the same issue number out of the configured one (#210). Issue numbers are per-repo
+    /// and dense, so a mismatch almost always resolves to a real but *different* issue — the run
+    /// would then implement someone else's requirement and cite it as evidence. Advisory: the
+    /// caller has to pass the repository for the check to happen at all.
+    /// </summary>
+    private void EnsureRepositoryMatches(IReadOnlyDictionary<string, string> input)
+    {
+        var requested = GitHubToolInput.ReadOptional(input, "repository");
+        if (requested is null)
+        {
+            return;
+        }
+
+        var configured = _connector.RepositorySlug;
+        if (configured is null)
+        {
+            throw new InvalidOperationException(
+                $"Tool input requested repository '{requested}', but no GitHub repository is configured.");
+        }
+
+        if (!string.Equals(requested.Trim(), configured, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Tool input requested repository '{requested}', but this Agentwerke instance is configured "
+                + $"for '{configured}'. The GitHub connector targets a single repository, so the read would "
+                + "have silently returned that issue number from the configured repository instead.");
+        }
+    }
+
     public async Task<AgentToolExecutionResult> ExecuteAsync(
         AgentToolExecutionContext context,
         IReadOnlyDictionary<string, string> input,
         CancellationToken cancellationToken)
     {
+        EnsureRepositoryMatches(input);
+
         var issue = await _connector.GetIssueAsync(GitHubToolInput.ParseInt(input, "issue_number"), cancellationToken);
         return new AgentToolExecutionResult(
             Succeeded: true,

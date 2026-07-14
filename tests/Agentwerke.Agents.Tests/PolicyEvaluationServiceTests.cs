@@ -82,6 +82,96 @@ public sealed class PolicyEvaluationServiceTests
     }
 
     /// <summary>
+    /// Issue numbers are per-repository and dense, so reading #42 from the wrong repository almost
+    /// always finds a real but different issue. The run would implement someone else's requirement
+    /// and cite it as evidence — worse than failing (#210).
+    /// </summary>
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WhenRepositoryIsNotTheConfiguredOne_FailsInsteadOfReadingTheWrongRepo()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = "octo/agentwerke" };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["issue_number"] = "42",
+                ["repository"] = "someone-else/other-repo",
+            },
+            CancellationToken.None));
+
+        Assert.Contains("someone-else/other-repo", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("octo/agentwerke", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, gitHub.GetIssueCalls);
+    }
+
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WhenRepositoryMatchesTheConfiguredOne_Reads()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = "octo/agentwerke" };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["issue_number"] = "42",
+                // Case and surrounding space come from run input, not a careful author.
+                ["repository"] = " Octo/Agentwerke ",
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, gitHub.GetIssueCalls);
+    }
+
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WithoutARepositoryInput_ReadsTheConfiguredRepo()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = "octo/agentwerke" };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["issue_number"] = "42" },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, gitHub.GetIssueCalls);
+    }
+
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WhenNoRepositoryIsConfigured_RejectsARequestedOne()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = null };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["issue_number"] = "42",
+                ["repository"] = "octo/agentwerke",
+            },
+            CancellationToken.None));
+
+        Assert.Contains("no GitHub repository is configured", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, gitHub.GetIssueCalls);
+    }
+
+    private static AgentToolExecutionContext CreateToolContext(string action) =>
+        new(
+            RunId: "run_abc123",
+            StepId: "step-1",
+            AgentName: "analyst",
+            Action: action,
+            Environment: "github",
+            PurposeType: "requirement_read",
+            PolicyTag: "vmodel-pilot-requirement",
+            Attempt: 1);
+
+    /// <summary>
     /// The dispatch API returns no run id, so the workflow has to echo back a key chosen up front.
     /// Defaulting it to the run id is what lets a waiting node derive the same value via {{run.id}}
     /// without the two nodes exchanging data.
@@ -1952,6 +2042,8 @@ public sealed class PolicyEvaluationServiceTests
 
     private sealed class RecordingGitHubConnector : IGitHubConnector
     {
+        public string? RepositorySlug { get; init; } = "octo/agentwerke";
+
         public int GetIssueCalls { get; private set; }
         public int CreateBranchCalls { get; private set; }
         public int CreatePullRequestCalls { get; private set; }

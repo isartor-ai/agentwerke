@@ -12,6 +12,14 @@ namespace Agentwerke.Integrations;
 
 public interface IGitHubConnector
 {
+    /// <summary>
+    /// The single repository this connector is configured against, as "owner/name", or null when
+    /// unconfigured. Every operation targets it — there is no per-call repository — so callers that
+    /// accept a repository from run input need this to reject a mismatch rather than silently act
+    /// on the wrong repository (#210).
+    /// </summary>
+    string? RepositorySlug { get; }
+
     Task<GitHubIssueResult> GetIssueAsync(
         int issueNumber,
         CancellationToken cancellationToken = default);
@@ -224,6 +232,11 @@ public sealed class GitHubConnector : ConnectorBase, IGitHubConnector
     public override string ConnectorId => "github";
 
     public override string DisplayName => "GitHub";
+
+    public string? RepositorySlug =>
+        string.IsNullOrWhiteSpace(_options.RepositoryOwner) || string.IsNullOrWhiteSpace(_options.RepositoryName)
+            ? null
+            : $"{_options.RepositoryOwner}/{_options.RepositoryName}";
 
     public override bool Enabled => _options.Enabled;
 
