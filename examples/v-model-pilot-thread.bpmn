@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pilot artifact for ONE V-model thread executed against real systems (#210).
+
+  This is deliberately not the V-model. examples/v-model-process.bpmn draws all eight phases and
+  proves Agentwerke can *represent* them; it cannot execute, because its three external waits are
+  keyed on {{input.build_id}} — a value nothing produces — and nothing dispatches a build. This
+  artifact proves the opposite property on the smallest possible shape: one requirement, read from
+  a real system of record, through one real CI dispatch, resumed by one real callback.
+
+  What it deliberately leaves out, until the thread is proven:
+  - the other seven phases, and the approval gates around them
+  - test-result ingestion and the traceability row (blocked on the format decision, #211)
+
+  Required run inputs:
+    requirement_provider   "github" — the only provider with a read tool today
+    requirement_id         the GitHub issue number holding the requirement
+    repository             "owner/name" — must match the configured connector repository
+    ref                    branch or commit sha the verification build runs against
+    verification_workflow  the Actions workflow file to dispatch, e.g. "verify.yml"
+-->
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:agentwerke="https://agentwerke.de/bpmn/extensions/v1"
+    id="v-model-pilot-thread-defs"
+    targetNamespace="https://agentwerke.de/examples/v-model-pilot">
+  <bpmn:process id="VModelPilotThread" name="V-model Pilot Thread" isExecutable="true">
+    <bpmn:startEvent id="Start" name="Requirement Selected">
+      <bpmn:outgoing>Flow_Start_ReadRequirement</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!--
+      Deterministic: github.read_issue is a direct tool action, so this node dispatches straight to
+      the Tool Gateway with no model call. The requirement is therefore whatever the system of record
+      actually says, not an agent's paraphrase of it — the distinction #210 exists to enforce.
+    -->
+    <bpmn:serviceTask id="ReadRequirement" name="Read Requirement">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="analyst"
+          action="github.read_issue"
+          environment="github"
+          purposeType="requirement_read"
+          policyTag="vmodel-pilot-requirement"
+          executionMode="local"
+          permissionLevel="read-only"
+          allowedTools="github.read_issue">
+          <agentwerke:metadata key="phase" value="requirements" />
+          <agentwerke:metadata key="traceability.produces" value="requirement_record" />
+          <agentwerke:metadata key="tool.input.issue_number" value="{{input.requirement_id}}" />
+          <!--
+            Passed so the tool can reject a mismatch. The connector is configured with a single
+            repository, so without this check a requirement_id naming a different repo would read
+            issue #N from the *configured* repo instead — a different requirement, silently.
+          -->
+          <agentwerke:metadata key="tool.input.repository" value="{{input.repository}}" />
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Start_ReadRequirement</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReadRequirement_ImplementChange</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="ImplementChange" name="Implement Change">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="developer"
+          action="vmodel.pilot.implement"
+          environment="github"
+          purposeType="implementation"
+          policyTag="vmodel-pilot-implementation"
+          executionMode="agent_sandboxed"
+          sandboxProfile="repo-write"
+          permissionLevel="read-write"
+          maxRetries="1">
+          <agentwerke:metadata key="phase" value="implementation" />
+          <agentwerke:metadata key="traceability.consumes" value="requirement_record" />
+          <agentwerke:metadata key="traceability.produces" value="implementation_change" />
+          <agentwerke:prompt><![CDATA[
+Implement the change required by requirement {{input.requirement_id}} in {{input.repository}},
+on ref {{input.ref}}.
+
+The requirement record, as read from the system of record:
+
+{{output.ReadRequirement}}
+
+Work only within the sandbox. Add or update tests covering the requirement so the verification
+build has something to verify — a build that tests nothing proves nothing.
+
+Report the files you changed and the tests you added.
+          ]]></agentwerke:prompt>
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReadRequirement_ImplementChange</bpmn:incoming>
+      <bpmn:outgoing>Flow_ImplementChange_DispatchVerificationCi</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!--
+      Deterministic, like ReadRequirement: cicd.trigger_deploy is a direct tool action. correlate
+      makes the dispatch carry agentwerke_correlation_key, which the workflow must echo back. The key
+      is left to its default (the run id) so it matches WaitForVerificationResult below without
+      either node passing data to the other — workflow_dispatch returns no run id, so the key has to
+      be agreed up front rather than discovered afterwards.
+
+      The dispatched workflow MUST declare agentwerke_run_id, agentwerke_correlation_key,
+      agentwerke_requirement_id and commit_sha under on.workflow_dispatch.inputs, or GitHub rejects
+      the whole dispatch with 422 "Unexpected inputs provided".
+    -->
+    <bpmn:serviceTask id="DispatchVerificationCi" name="Dispatch Verification CI">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="ci"
+          action="cicd.trigger_deploy"
+          environment="github"
+          purposeType="verification_dispatch"
+          policyTag="vmodel-pilot-verification"
+          executionMode="local"
+          permissionLevel="read-write"
+          allowedTools="cicd.trigger_deploy">
+          <agentwerke:metadata key="phase" value="unit_test" />
+          <agentwerke:metadata key="traceability.verifies" value="requirement_record" />
+          <agentwerke:metadata key="tool.input.correlate" value="true" />
+          <agentwerke:metadata key="tool.input.workflow_file" value="{{input.verification_workflow}}" />
+          <agentwerke:metadata key="tool.input.requirement_id" value="{{input.requirement_id}}" />
+          <agentwerke:metadata key="tool.input.ref" value="{{input.ref}}" />
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ImplementChange_DispatchVerificationCi</bpmn:incoming>
+      <bpmn:outgoing>Flow_DispatchVerificationCi_WaitForVerificationResult</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!--
+      Keyed on {{run_id}} to match the dispatch's default correlation key. The CI job resumes this
+      by POSTing the key back to the signed event ingress; no operator calls resume-external.
+    -->
+    <bpmn:intermediateCatchEvent id="WaitForVerificationResult" name="Wait for Verification Result">
+      <bpmn:extensionElements>
+        <agentwerke:externalEvent
+          messageName="test.unit.completed"
+          correlationKeyTemplate="{{run_id}}" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DispatchVerificationCi_WaitForVerificationResult</bpmn:incoming>
+      <bpmn:outgoing>Flow_WaitForVerificationResult_End</bpmn:outgoing>
+      <!-- Deliberately id-less: BpmnWorkflowValidator rejects any BPMN-namespace element that
+           carries an id but isn't a supported node type, and event definitions are not in that
+           list. Camunda Modeler assigns ids to these, so a round-tripped file fails validation. -->
+      <bpmn:messageEventDefinition />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:endEvent id="End" name="Thread Verified">
+      <bpmn:incoming>Flow_WaitForVerificationResult_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_Start_ReadRequirement" sourceRef="Start" targetRef="ReadRequirement" />
+    <bpmn:sequenceFlow id="Flow_ReadRequirement_ImplementChange" sourceRef="ReadRequirement" targetRef="ImplementChange" />
+    <bpmn:sequenceFlow id="Flow_ImplementChange_DispatchVerificationCi" sourceRef="ImplementChange" targetRef="DispatchVerificationCi" />
+    <bpmn:sequenceFlow id="Flow_DispatchVerificationCi_WaitForVerificationResult" sourceRef="DispatchVerificationCi" targetRef="WaitForVerificationResult" />
+    <bpmn:sequenceFlow id="Flow_WaitForVerificationResult_End" sourceRef="WaitForVerificationResult" targetRef="End" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_VModelPilotThread">
+    <bpmndi:BPMNPlane id="BPMNPlane_VModelPilotThread" bpmnElement="VModelPilotThread">
+      <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
+        <dc:Bounds x="120" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ReadRequirement_di" bpmnElement="ReadRequirement">
+        <dc:Bounds x="220" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ImplementChange_di" bpmnElement="ImplementChange">
+        <dc:Bounds x="430" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DispatchVerificationCi_di" bpmnElement="DispatchVerificationCi">
+        <dc:Bounds x="640" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="WaitForVerificationResult_di" bpmnElement="WaitForVerificationResult">
+        <dc:Bounds x="852" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_di" bpmnElement="End">
+        <dc:Bounds x="960" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_Start_ReadRequirement_di" bpmnElement="Flow_Start_ReadRequirement">
+        <di:waypoint x="156" y="200" />
+        <di:waypoint x="220" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ReadRequirement_ImplementChange_di" bpmnElement="Flow_ReadRequirement_ImplementChange">
+        <di:waypoint x="370" y="200" />
+        <di:waypoint x="430" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ImplementChange_DispatchVerificationCi_di" bpmnElement="Flow_ImplementChange_DispatchVerificationCi">
+        <di:waypoint x="580" y="200" />
+        <di:waypoint x="640" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DispatchVerificationCi_WaitForVerificationResult_di" bpmnElement="Flow_DispatchVerificationCi_WaitForVerificationResult">
+        <di:waypoint x="790" y="200" />
+        <di:waypoint x="852" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_WaitForVerificationResult_End_di" bpmnElement="Flow_WaitForVerificationResult_End">
+        <di:waypoint x="888" y="200" />
+        <di:waypoint x="960" y="200" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

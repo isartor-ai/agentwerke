@@ -162,6 +162,51 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Equal("github.pull_request.merged", state.WaitingExternalMessageName);
     }
 
+    /// <summary>
+    /// {{run_id}} is the other half of the dispatch tool's correlation contract (#210): the tool
+    /// defaults its key to the run id, so a wait templated on {{run_id}} resolves to the same value
+    /// without either node passing data to the other.
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_WhenCorrelationTemplateUsesRunId_RendersTheRunsOwnId()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContext = new InMemoryRunContextRepository();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), runContext, NullLogger<WorkflowInstanceEngine>.Instance);
+        var preCreatedRun = await store.CreateRunAsync("ExternalFlow", "system", CancellationToken.None);
+
+        var state = await engine.StartAsync(
+            new WorkflowEngineStartRequest(
+                "ExternalFlow",
+                CreateExternalWaitDefinition("{{run_id}}:unit"),
+                "system",
+                ExistingRunId: preCreatedRun.Id),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal($"{preCreatedRun.Id}:unit", state.WaitingExternalCorrelationKey);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenRunContextDefinesRunId_ThatValueWinsOverTheRunsOwnId()
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContext = new InMemoryRunContextRepository();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), runContext, NullLogger<WorkflowInstanceEngine>.Instance);
+        var preCreatedRun = await store.CreateRunAsync("ExternalFlow", "system", CancellationToken.None);
+        await runContext.SetAsync(preCreatedRun.Id, "run_id", "explicit-override", RunContextKinds.Input, CancellationToken.None);
+
+        var state = await engine.StartAsync(
+            new WorkflowEngineStartRequest(
+                "ExternalFlow",
+                CreateExternalWaitDefinition("{{run_id}}"),
+                "system",
+                ExistingRunId: preCreatedRun.Id),
+            CancellationToken.None);
+
+        Assert.Equal("explicit-override", state.WaitingExternalCorrelationKey);
+    }
+
     [Fact]
     public async Task ResumeAsync_WhenWaitingExternalAndCorrelationKeyMatches_CompletesRunAndMergesPayload()
     {
@@ -540,7 +585,8 @@ public sealed class WorkflowInstanceEngineTests
             ]);
     }
 
-    private static BpmnWorkflowDefinition CreateExternalWaitDefinition()
+    private static BpmnWorkflowDefinition CreateExternalWaitDefinition(
+        string correlationKeyTemplate = "{{run_context.branch_name}}")
     {
         return new BpmnWorkflowDefinition(
             ProcessId: "ExternalFlow",
@@ -556,7 +602,7 @@ public sealed class WorkflowInstanceEngineTests
                     TimerDuration: null,
                     ExternalEventMetadata: new AgentwerkeExternalEventMetadata(
                         "github.pull_request.merged",
-                        "{{run_context.branch_name}}")),
+                        correlationKeyTemplate)),
                 new BpmnNodeDefinition("End", "End", "endEvent", null)
             ]);
     }

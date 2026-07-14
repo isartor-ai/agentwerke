@@ -100,19 +100,46 @@ Use `autofac:externalEvent` on a `receiveTask` or message `intermediateCatchEven
 | `messageName` | Yes | Event type to wait for. |
 | `correlationKeyTemplate` | Yes | Templated key matched against the inbound event. |
 
+### Correlating a wait with a CI build
+
+A key the workflow author has to invent up front — <code v-pre>{{input.build_id}}</code> — only matches if something
+downstream happens to produce that exact value. For a wait on a build that Agentwerke itself
+dispatches, key it on the run instead:
+
+```xml
+<autofac:externalEvent messageName="test.unit.completed"
+                       correlationKeyTemplate="{{run_id}}" />
+```
+
+`cicd.trigger_deploy` with `correlate` defaults its correlation key to the same run id and passes it
+to the workflow as `agentwerke_correlation_key`. The CI job echoes that value back when it reports
+its result, so both sides agree on the key without either guessing.
+
+A run can hold only one external wait at a time, so the run id alone is sufficient to identify it.
+
 ## Timers
 
 An intermediate catch event with a BPMN timer event definition pauses the run for the configured duration.
 
 ## Run-context variables
 
+Available in prompts and in `correlationKeyTemplate`:
+
 | Variable | Description |
 | --- | --- |
 | <code v-pre>{{input.*}}</code> | Values seeded at run start. |
-| <code v-pre>{{output.&lt;NodeId&gt;}}</code> | Output of a prior step. |
+| <code v-pre>{{output.&lt;NodeId&gt;}}</code> | Output of a prior step, as its raw text. |
 | <code v-pre>{{event.*}}</code> | Payload from a resumed external event. |
 | <code v-pre>{{run_id}}</code> | Current run id. |
+
+Available in prompts only — these describe the executing task, which an external wait has no notion of:
+
+| Variable | Description |
+| --- | --- |
 | <code v-pre>{{step_id}}</code> | Current step id. |
 | <code v-pre>{{node_name}}</code> | Current BPMN node name. |
 | <code v-pre>{{agent_name}}</code> | Current agent name. |
 | <code v-pre>{{action}}</code> | Current task action. |
+
+An unresolved variable is left as-is rather than blanked, so a typo shows up in the rendered value
+instead of silently producing an empty key.

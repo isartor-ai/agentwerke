@@ -680,7 +680,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         runId, nodeId = node.Id, stepId = step.Id,
                         provider = action.Provider, action = action.Action,
                         status = action.Status, resourceId = action.ResourceId,
-                        resourceUrl = action.ResourceUrl, summary = action.Summary, attempt
+                        resourceUrl = action.ResourceUrl, summary = action.Summary,
+                        correlationKey = action.CorrelationKey, attempt
                     }), cancellationToken);
             }
 
@@ -957,6 +958,18 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         {
             variables[entry.Key] = entry.Value;
             variables[$"run_context.{entry.Key}"] = entry.Value;
+        }
+
+        // The run's own id, so an external wait can be keyed on something the run always has and
+        // that a dispatching task can derive independently (#210). A task's output only reaches
+        // run context as the opaque blob "output.{nodeId}", which templating cannot index into, so
+        // without this a correlation key has to be guessed up front — the "{{input.build_id}}"
+        // problem. Named to match the prompt vocabulary in AgentPromptAssembler, where {{run_id}}
+        // already means this; the docs promised it worked here too, which until now it did not.
+        // Run context wins on collision: an explicit input stays authoritative.
+        if (!variables.ContainsKey("run_id"))
+        {
+            variables["run_id"] = runId;
         }
 
         return variables;
