@@ -217,8 +217,15 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
             entity.Property(e => e.CorrelationHint).HasMaxLength(256).IsRequired();
             entity.Property(e => e.Payload).HasColumnType("text").IsRequired();
             entity.Property(e => e.ReceivedAt).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Source).HasMaxLength(64);
+            entity.Property(e => e.DeliveryId).HasMaxLength(256);
             entity.HasIndex(e => e.CorrelationHint)
                 .HasDatabaseName("ix_external_workflow_events_correlation_hint");
+            // Unique so a concurrent redelivery loses the insert race rather than resuming twice.
+            entity.HasIndex(e => e.DeliveryId)
+                .IsUnique()
+                .HasFilter("\"DeliveryId\" IS NOT NULL")
+                .HasDatabaseName("ix_external_workflow_events_delivery_id");
         });
 
         modelBuilder.Entity<WaitingExternalCorrelation>(entity =>

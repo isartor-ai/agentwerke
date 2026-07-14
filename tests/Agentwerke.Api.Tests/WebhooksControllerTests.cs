@@ -648,6 +648,338 @@ public sealed class WebhooksControllerTests
         request.Headers["X-Slack-Request-Timestamp"] = ts;
     }
 
+    [Fact]
+    public async Task Events_SignedEventMatchingAWaitingRun_AutoResumesIt()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(
+            runId: "run_waiting_unit",
+            onlyMatchKey: "build-vmodel-001:unit",
+            onlyMatchMessage: "test.unit.completed");
+        var controller = CreateEventsController(orchestration, eventRepository, waitingRepository);
+
+        // The wait armed by examples/v-model-process.bpmn: messageName "test.unit.completed",
+        // correlationKeyTemplate "{{input.build_id}}:unit". Neither dimension was reachable
+        // through the GitHub-taxonomy ingress (#206).
+        var body = """
+            {
+              "messageName": "test.unit.completed",
+              "correlationKey": "build-vmodel-001:unit",
+              "payload": {
+                "conclusion": "success",
+                "total": 42,
+                "failed": 0,
+                "report_url": "https://ci.example/runs/9/junit.xml"
+              }
+            }
+            """;
+        SetSignedEventBody(controller, body);
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_waiting_unit", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("build-vmodel-001:unit", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("event-ingress:ci", orchestration.ResumeExternalCommand.ResumedBy);
+        Assert.Equal("success", orchestration.ResumeExternalCommand.Payload["conclusion"]);
+        Assert.Equal("42", orchestration.ResumeExternalCommand.Payload["total"]);
+        Assert.Equal(
+            "https://ci.example/runs/9/junit.xml",
+            orchestration.ResumeExternalCommand.Payload["report_url"]);
+
+        var recorded = Assert.Single(eventRepository.Added);
+        Assert.Equal("test.unit.completed", recorded.Kind);
+        Assert.Equal("build-vmodel-001:unit", recorded.CorrelationHint);
+        Assert.Equal("ci", recorded.Source);
+    }
+
+    [Fact]
+    public async Task Events_RedeliveredEvent_IsRecordedOnceAndResumesOnce()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit");
+        var controller = CreateEventsController(orchestration, eventRepository, waitingRepository);
+
+        var body = """
+            {
+              "messageName": "test.unit.completed",
+              "correlationKey": "build-vmodel-001:unit",
+              "payload": { "conclusion": "success" }
+            }
+            """;
+
+        SetSignedEventBody(controller, body, deliveryId: "delivery-1");
+        var first = await controller.Events(CancellationToken.None);
+
+        SetSignedEventBody(controller, body, deliveryId: "delivery-1");
+        var second = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(first);
+        Assert.IsType<OkObjectResult>(second);
+        Assert.Single(eventRepository.Added);
+        Assert.Equal(1, orchestration.ResumeExternalCount);
+    }
+
+    [Fact]
+    public async Task Events_RedeliveredEventWithoutADeliveryHeader_IsStillDeduplicatedByBodyDigest()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit");
+        var controller = CreateEventsController(orchestration, eventRepository, waitingRepository);
+
+        var body = """
+            {
+              "messageName": "test.unit.completed",
+              "correlationKey": "build-vmodel-001:unit",
+              "payload": { "conclusion": "success" }
+            }
+            """;
+
+        SetSignedEventBody(controller, body);
+        await controller.Events(CancellationToken.None);
+        SetSignedEventBody(controller, body);
+        await controller.Events(CancellationToken.None);
+
+        Assert.Single(eventRepository.Added);
+        Assert.Equal(1, orchestration.ResumeExternalCount);
+    }
+
+    [Fact]
+    public async Task Events_WrongSignature_IsRejectedAndNotRecorded()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var controller = CreateEventsController(
+            orchestration,
+            eventRepository,
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        var body = """
+            { "messageName": "test.unit.completed", "correlationKey": "build-vmodel-001:unit" }
+            """;
+        SetBody(controller, body);
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Signature-256"] =
+            "sha256=0000000000000000000000000000000000000000000000000000000000000000";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+        Assert.Empty(eventRepository.Added);
+    }
+
+    [Fact]
+    public async Task Events_UnsignedRequest_IsRejected()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    [Fact]
+    public async Task Events_UnknownSource_IsRejected()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetSignedEventBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "not-registered";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    /// <summary>
+    /// The connector webhooks treat an empty secret as "skip validation" (dev convenience). This
+    /// endpoint can resume a verification gate, so a misconfigured source must fail closed instead.
+    /// </summary>
+    [Fact]
+    public async Task Events_SourceWithNoConfiguredSecret_IsRejectedRatherThanSkippingValidation()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"),
+            sources: [new EventIngressSourceOptions { Id = "ci", Secret = string.Empty }]);
+
+        SetBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    [Fact]
+    public async Task Events_MessageNameOutsideTheSourceAllowlist_IsForbidden()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"),
+            sources:
+            [
+                new EventIngressSourceOptions
+                {
+                    Id = "ci",
+                    Secret = IngressSecret,
+                    AllowedMessageNames = ["test.unit.completed"],
+                }
+            ]);
+
+        SetSignedEventBody(controller, """{ "messageName": "deploy.prod.approved", "correlationKey": "k" }""");
+
+        var result = await controller.Events(CancellationToken.None);
+
+        var statusResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status403Forbidden, statusResult.StatusCode);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    [Fact]
+    public async Task Events_WhenNoRunIsWaiting_RecordsTheEventAndReportsNotResumed()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var controller = CreateEventsController(
+            orchestration,
+            eventRepository,
+            new StubWaitingExternalCorrelationRepository(runId: null));
+
+        SetSignedEventBody(controller, """
+            { "messageName": "test.unit.completed", "correlationKey": "nobody-waits-on-this" }
+            """);
+
+        var result = await controller.Events(CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Contains("resumed = False", ok.Value!.ToString(), StringComparison.Ordinal);
+        Assert.Null(orchestration.ResumeExternalCommand);
+        Assert.Single(eventRepository.Added);
+    }
+
+    /// <summary>
+    /// A form/urlencoded content type makes ASP.NET consume the body before the controller reads it,
+    /// which would otherwise surface as a confusing "Signature mismatch" for a correctly signed event.
+    /// </summary>
+    [Fact]
+    public async Task Events_EmptyBody_ReportsTheBodyRatherThanTheSignature()
+    {
+        var controller = CreateEventsController(
+            new CapturingOrchestrationService(),
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetSignedEventBody(controller, string.Empty);
+
+        var result = await controller.Events(CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Empty request body", badRequest.Value!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Events_WhenIngressIsDisabled_TheEndpointIsNotFound()
+    {
+        var controller = CreateEventsController(
+            new CapturingOrchestrationService(),
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"),
+            enabled: false);
+
+        SetSignedEventBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+
+        Assert.IsType<NotFoundObjectResult>(await controller.Events(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("""{ "correlationKey": "k" }""")]
+    [InlineData("""{ "messageName": "test.unit.completed" }""")]
+    [InlineData("""{ "messageName": "", "correlationKey": "k" }""")]
+    public async Task Events_MissingRequiredFields_IsRejected(string body)
+    {
+        var controller = CreateEventsController(
+            new CapturingOrchestrationService(),
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetSignedEventBody(controller, body);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Events(CancellationToken.None));
+    }
+
+    private const string IngressSecret = "ci-shared-secret";
+
+    private static WebhooksController CreateEventsController(
+        IWorkflowRunOrchestrationService orchestration,
+        IExternalWorkflowEventRepository eventRepository,
+        IWaitingExternalCorrelationRepository waitingExternalCorrelationRepository,
+        IReadOnlyList<EventIngressSourceOptions>? sources = null,
+        bool enabled = true)
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+
+        return new WebhooksController(
+            orchestration,
+            new StubTriggerRouter(null),
+            eventRepository,
+            waitingExternalCorrelationRepository,
+            Options.Create(new IntegrationOptions
+            {
+                EventIngress = new EventIngressOptions
+                {
+                    Enabled = enabled,
+                    Sources = [.. sources ?? [new EventIngressSourceOptions { Id = "ci", Secret = IngressSecret }]],
+                },
+            }),
+            NullLogger<WebhooksController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext },
+        };
+    }
+
+    private static void SetSignedEventBody(WebhooksController controller, string json, string? deliveryId = null)
+    {
+        SetBody(controller, json);
+
+        var signature = Convert.ToHexString(
+            System.Security.Cryptography.HMACSHA256.HashData(
+                Encoding.UTF8.GetBytes(IngressSecret),
+                Encoding.UTF8.GetBytes(json)))
+            .ToLowerInvariant();
+
+        var headers = controller.ControllerContext.HttpContext.Request.Headers;
+        headers["X-Agentwerke-Signature-256"] = $"sha256={signature}";
+        if (deliveryId is not null)
+        {
+            headers["X-Agentwerke-Delivery"] = deliveryId;
+        }
+    }
+
     private static WebhooksController CreateController(
         IWorkflowRunOrchestrationService orchestration,
         IExternalWorkflowEventRepository eventRepository,
@@ -698,6 +1030,9 @@ public sealed class WebhooksControllerTests
 
         public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
 
+        /// <summary>How many times a run was resumed — the assertion that dedup (#206) actually holds.</summary>
+        public int ResumeExternalCount { get; private set; }
+
         public ResumeRunCommand? ResumeCommand { get; private set; }
 
         public Task<StartRunResult> StartRunAsync(StartRunCommand command, CancellationToken cancellationToken = default)
@@ -715,6 +1050,7 @@ public sealed class WebhooksControllerTests
         public Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default)
         {
             ResumeExternalCommand = command;
+            ResumeExternalCount++;
             return Task.FromResult(new ResumeExternalRunResult(command.RunId, "pending"));
         }
 
@@ -733,6 +1069,19 @@ public sealed class WebhooksControllerTests
         {
             Added.Add(@event);
             return Task.CompletedTask;
+        }
+
+        /// <summary>Mirrors the real unique-index dedup on DeliveryId so redelivery tests are meaningful.</summary>
+        public Task<bool> TryAddAsync(ExternalWorkflowEvent @event, CancellationToken cancellationToken)
+        {
+            if (@event.DeliveryId is { Length: > 0 }
+                && Added.Any(e => e.DeliveryId == @event.DeliveryId))
+            {
+                return Task.FromResult(false);
+            }
+
+            Added.Add(@event);
+            return Task.FromResult(true);
         }
     }
 

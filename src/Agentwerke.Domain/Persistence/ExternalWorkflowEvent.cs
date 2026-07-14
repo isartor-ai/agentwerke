@@ -23,4 +23,17 @@ public sealed class ExternalWorkflowEvent
     public string Payload { get; set; } = string.Empty;
 
     public string ReceivedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which ingress delivered this event: "github", "jira", or a registered generic event-ingress
+    /// source id (#206). Null for events recorded before the column existed.
+    /// </summary>
+    public string? Source { get; set; }
+
+    /// <summary>
+    /// Idempotency key for the delivery, unique when set. A redelivery of the same event carries
+    /// the same key, so it is recorded once and resumes a run at most once. Null for the connector
+    /// webhooks, which do not yet deduplicate.
+    /// </summary>
+    public string? DeliveryId { get; set; }
 }
