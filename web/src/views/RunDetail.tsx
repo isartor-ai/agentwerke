@@ -4,6 +4,7 @@ import { apiClient } from '../api/client';
 import { canApprove, canOperate } from '../auth/permissions';
 import { BpmnViewer } from '../components/BpmnViewer';
 import { GatewayDecisionList } from '../components/GatewayDecisionList';
+import { TraceabilityMatrix } from '../components/TraceabilityMatrix';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -21,7 +22,7 @@ import type { AgentIdentityConfig } from '../utils/agentIdentity';
 import { normalizeAgentIdentityKey } from '../utils/agentIdentity';
 import { extractAgentReasoningByStep, isLiveProgressEventType } from '../utils/visibleReasoning';
 
-const tabs = ['Summary', 'Conversation', 'Evidence', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
+const tabs = ['Summary', 'Traceability', 'Conversation', 'Evidence', 'I/O', 'Policy', 'Artifacts', 'Approvals'];
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -597,6 +598,9 @@ export function RunDetail({ auth }: RunDetailProps) {
             ) : null}
           </>
         );
+
+      case 'Traceability':
+        return <TraceabilityMatrix workflowXml={workflowXml} steps={run.steps ?? []} />;
 
       case 'Conversation':
         return (

@@ -513,6 +513,36 @@ main {
   background: var(--color-surface-low);
 }
 
+.chip-success {
+  border-color: rgb(129 201 149 / 0.45);
+  color: var(--color-success);
+  background: rgb(129 201 149 / 0.12);
+}
+
+.chip-pending {
+  color: var(--color-muted);
+  background: var(--color-surface-low);
+}
+
+.traceability-summary {
+  margin-bottom: 0.75rem;
+}
+
+.traceability-matrix {
+  min-width: 44rem;
+}
+
+.traceability-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.traceability-require-count {
+  font-weight: 600;
+}
+
 .table-wrap {
   overflow: auto;
   background: var(--color-surface-container);
