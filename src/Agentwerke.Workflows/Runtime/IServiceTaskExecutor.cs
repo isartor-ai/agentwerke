@@ -48,4 +48,12 @@ public sealed record ExternalActionRecord(
     string Status,
     string? ResourceId = null,
     string? ResourceUrl = null,
-    string? Summary = null);
+    string? Summary = null,
+    /// <summary>
+    /// The key by which this action's outcome will be correlated back to the run, for actions whose
+    /// result arrives later as an external event (#210). A CI dispatch has no external id to record —
+    /// GitHub's workflow_dispatch answers 204 with no run id — so the correlation key is the only
+    /// identifier tying the dispatch to the callback that resumes the run. Structured rather than
+    /// prose in Summary, so evidence can be audited on it.
+    /// </summary>
+    string? CorrelationKey = null);

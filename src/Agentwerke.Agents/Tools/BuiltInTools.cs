@@ -491,6 +491,19 @@ public sealed class GitHubPostReviewTool : IAgentTool, IToolSchemaProvider
 /// rather than "github." since a future connector swap (Phase E5, #87) shouldn't rename the
 /// tool agents call — only GitHub Actions is wired up today via <see cref="IGitHubConnector"/>.
 /// </summary>
+/// <remarks>
+/// With <c>correlate</c>, the dispatch carries correlation inputs so the run that fires it can be
+/// resumed by the CI job's callback (#210). GitHub's workflow_dispatch API answers 204 with no run
+/// id, so there is no external identifier to correlate on afterwards: the workflow must echo back a
+/// key Agentwerke chose up front. That key defaults to the run id, which both this tool and a
+/// waiting node can derive independently — the node templates <c>{{run_id}}</c> — so neither has to
+/// guess it the way <c>{{input.build_id}}</c> did, and no data has to pass between them.
+///
+/// Correlation is opt-in because workflow_dispatch rejects the whole call with 422 "Unexpected
+/// inputs provided" when handed an input the workflow does not declare. Sending the agentwerke_*
+/// inputs unconditionally would break every deploy workflow written against #139, which declares
+/// at most "sha". Set correlate only when the target workflow declares the inputs below.
+/// </remarks>
 public sealed class CicdTriggerDeployTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IGitHubConnector _connector;
@@ -507,25 +520,77 @@ public sealed class CicdTriggerDeployTool : IAgentTool, IToolSchemaProvider
     public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
     [
         new("ref", "string", "The commit sha or branch to deploy. Defaults to the repository default branch.", Required: false),
-        new("workflow_file", "string", "The Actions workflow file name to dispatch. Defaults to the configured deploy workflow.", Required: false)
+        new("workflow_file", "string", "The Actions workflow file name to dispatch. Defaults to the configured deploy workflow.", Required: false),
+        new("correlate", "string", "\"true\" to send the agentwerke_* correlation inputs. Only for workflows that declare them — GitHub rejects the dispatch otherwise.", Required: false),
+        new("requirement_id", "string", "Requirement this build verifies, passed to the workflow for traceability. Requires correlate.", Required: false),
+        new("correlation_key", "string", "Key the workflow must echo back when reporting its result. Defaults to the run id. Requires correlate.", Required: false)
     ];
 
     public void Validate(IReadOnlyDictionary<string, string> input)
     {
-        // Both fields are optional — the connector falls back to configured defaults.
+        // Every field is optional — the connector falls back to configured defaults, and the
+        // correlation key falls back to the run id.
+        if (!ShouldCorrelate(input)
+            && (GitHubToolInput.ReadOptional(input, "correlation_key") is not null
+                || GitHubToolInput.ReadOptional(input, "requirement_id") is not null))
+        {
+            // Otherwise the dispatch looks correlated and silently isn't: the workflow never receives
+            // the key, so the callback can never resume the run and the wait times out with no clue.
+            throw new InvalidOperationException(
+                "Tool input 'correlation_key'/'requirement_id' requires 'correlate' to be \"true\".");
+        }
     }
+
+    private static bool ShouldCorrelate(IReadOnlyDictionary<string, string> input) =>
+        string.Equals(GitHubToolInput.ReadOptional(input, "correlate"), "true", StringComparison.OrdinalIgnoreCase);
 
     public async Task<AgentToolExecutionResult> ExecuteAsync(
         AgentToolExecutionContext context,
         IReadOnlyDictionary<string, string> input,
         CancellationToken cancellationToken)
     {
+        Validate(input);
+
         var @ref = GitHubToolInput.ReadOptional(input, "ref");
+        var correlate = ShouldCorrelate(input);
+        var requirementId = correlate ? GitHubToolInput.ReadOptional(input, "requirement_id") : null;
+
+        // Defaulted rather than required: this tool is called by an agent, and a correlation key the
+        // model invented would not match what the waiting node computed. The run id is the one value
+        // both sides already agree on.
+        var correlationKey = correlate
+            ? GitHubToolInput.ReadOptional(input, "correlation_key") ?? context.RunId
+            : null;
+
+        var inputs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (@ref is not null)
+        {
+            // "sha" predates the correlation inputs and is what existing deploy workflows read (#139).
+            inputs["sha"] = @ref;
+        }
+
+        if (correlate)
+        {
+            inputs["agentwerke_run_id"] = context.RunId;
+            inputs["agentwerke_correlation_key"] = correlationKey!;
+
+            if (@ref is not null)
+            {
+                inputs["commit_sha"] = @ref;
+            }
+
+            if (requirementId is not null)
+            {
+                inputs["agentwerke_requirement_id"] = requirementId;
+            }
+        }
+
         var result = await _connector.TriggerWorkflowDispatchAsync(
             new TriggerGitHubWorkflowDispatchCommand(
                 WorkflowFileName: GitHubToolInput.ReadOptional(input, "workflow_file"),
                 Ref: @ref,
-                Inputs: @ref is null ? null : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["sha"] = @ref }),
+                Inputs: inputs),
             cancellationToken);
 
         return new AgentToolExecutionResult(
@@ -537,7 +602,10 @@ public sealed class CicdTriggerDeployTool : IAgentTool, IToolSchemaProvider
                 status = "dispatched",
                 workflow_file = result.WorkflowFileName,
                 @ref = result.Ref,
-                triggered_at = result.TriggeredAt
+                triggered_at = result.TriggeredAt,
+                correlation_key = correlationKey,
+                requirement_id = requirementId,
+                run_id = context.RunId
             }),
             FailureReason: null,
             ExternalActions:
@@ -548,7 +616,10 @@ public sealed class CicdTriggerDeployTool : IAgentTool, IToolSchemaProvider
                     Status: "dispatched",
                     ResourceId: result.WorkflowFileName,
                     ResourceUrl: null,
-                    Summary: $"Dispatched GitHub workflow '{result.WorkflowFileName}' on ref '{result.Ref}'")
+                    Summary: correlationKey is null
+                        ? $"Dispatched GitHub workflow '{result.WorkflowFileName}' on ref '{result.Ref}'."
+                        : $"Dispatched GitHub workflow '{result.WorkflowFileName}' on ref '{result.Ref}' with correlation key '{correlationKey}'.",
+                    CorrelationKey: correlationKey)
             ]);
     }
 }

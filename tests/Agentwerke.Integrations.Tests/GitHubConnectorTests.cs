@@ -590,6 +590,77 @@ public sealed class GitHubConnectorTests
         Assert.Contains("\"sha\":\"abc123\"", payload, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The dispatch tool now always hands over an Inputs dictionary, where it used to pass null when
+    /// there was no ref (#210). Both must put the same bytes on the wire, or the opt-out path would
+    /// not be the no-op it claims to be.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TriggerWorkflowDispatchAsync_NullAndEmptyInputs_SerializeIdentically(bool useEmptyDictionary)
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var connector = CreateConnector(handler);
+
+        await connector.TriggerWorkflowDispatchAsync(
+            new TriggerGitHubWorkflowDispatchCommand(
+                Inputs: useEmptyDictionary ? new Dictionary<string, string>() : null),
+            CancellationToken.None);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"inputs\":{}", payload, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The correlation inputs (#210) have to survive as real properties of the dispatch body — that
+    /// is the only channel by which the CI job learns the key it must echo back to resume the run.
+    /// </summary>
+    [Fact]
+    public async Task TriggerWorkflowDispatchAsync_SerializesCorrelationInputsIntoTheDispatchBody()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var handler = new StubHttpMessageHandler(async request =>
+        {
+            requests.Add(await CloneAsync(request));
+
+            if (request.Method == HttpMethod.Post &&
+                request.RequestUri?.AbsolutePath == "/repos/octo/agentwerke/actions/workflows/verify.yml/dispatches")
+            {
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+
+        var connector = CreateConnector(handler);
+
+        await connector.TriggerWorkflowDispatchAsync(
+            new TriggerGitHubWorkflowDispatchCommand(
+                WorkflowFileName: "verify.yml",
+                Ref: "abc123",
+                Inputs: new Dictionary<string, string>
+                {
+                    ["agentwerke_run_id"] = "run_abc123",
+                    ["agentwerke_correlation_key"] = "run_abc123",
+                    ["agentwerke_requirement_id"] = "42",
+                    ["commit_sha"] = "abc123",
+                }),
+            CancellationToken.None);
+
+        var payload = await requests[0].Content!.ReadAsStringAsync();
+        Assert.Contains("\"agentwerke_run_id\":\"run_abc123\"", payload, StringComparison.Ordinal);
+        Assert.Contains("\"agentwerke_correlation_key\":\"run_abc123\"", payload, StringComparison.Ordinal);
+        Assert.Contains("\"agentwerke_requirement_id\":\"42\"", payload, StringComparison.Ordinal);
+        Assert.Contains("\"commit_sha\":\"abc123\"", payload, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TriggerWorkflowDispatchAsync_WhenNoOverridesGiven_FallsBackToConfiguredDefaults()
     {

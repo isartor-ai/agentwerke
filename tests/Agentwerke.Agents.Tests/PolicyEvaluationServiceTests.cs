@@ -81,6 +81,176 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal("dispatched", action.Status);
     }
 
+    /// <summary>
+    /// The dispatch API returns no run id, so the workflow has to echo back a key chosen up front.
+    /// Defaulting it to the run id is what lets a waiting node derive the same value via {{run.id}}
+    /// without the two nodes exchanging data.
+    /// </summary>
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_PassesCorrelationInputsToTheWorkflow()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["correlate"] = "true",
+                ["ref"] = "abc123",
+                ["requirement_id"] = "42",
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+
+        var inputs = gitHub.LastWorkflowDispatchCommand!.Inputs!;
+        Assert.Equal("run_abc123", inputs["agentwerke_run_id"]);
+        Assert.Equal("run_abc123", inputs["agentwerke_correlation_key"]);
+        Assert.Equal("42", inputs["agentwerke_requirement_id"]);
+        Assert.Equal("abc123", inputs["commit_sha"]);
+        // Predates the correlation inputs; existing deploy workflows read it (#139).
+        Assert.Equal("abc123", inputs["sha"]);
+
+        Assert.Contains("\"correlation_key\":\"run_abc123\"", result.Output, StringComparison.Ordinal);
+        Assert.Contains("\"requirement_id\":\"42\"", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_RecordsTheCorrelationKeyAsStructuredEvidence()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["correlate"] = "true" },
+            CancellationToken.None);
+
+        var action = Assert.Single(result.ExternalActions!);
+        Assert.Equal("run_abc123", action.CorrelationKey);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_AnExplicitCorrelationKeyOverridesTheRunId()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["correlate"] = "true",
+                ["correlation_key"] = "build-vmodel-001:unit",
+            },
+            CancellationToken.None);
+
+        Assert.Equal(
+            "build-vmodel-001:unit",
+            gitHub.LastWorkflowDispatchCommand!.Inputs!["agentwerke_correlation_key"]);
+        Assert.Equal("build-vmodel-001:unit", Assert.Single(result.ExternalActions!).CorrelationKey);
+        // The run id still travels, so CI can link back even when the key is something else.
+        Assert.Equal("run_abc123", gitHub.LastWorkflowDispatchCommand.Inputs!["agentwerke_run_id"]);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_WhenCorrelatingWithoutARef_SendsNoShaInput()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["correlate"] = "true" },
+            CancellationToken.None);
+
+        var inputs = gitHub.LastWorkflowDispatchCommand!.Inputs!;
+        Assert.False(inputs.ContainsKey("sha"));
+        Assert.False(inputs.ContainsKey("commit_sha"));
+        Assert.False(inputs.ContainsKey("agentwerke_requirement_id"));
+        Assert.Equal("run_abc123", inputs["agentwerke_correlation_key"]);
+    }
+
+    /// <summary>
+    /// workflow_dispatch rejects the whole call with 422 "Unexpected inputs provided" when handed an
+    /// input the workflow does not declare, and deploy workflows written against #139 declare at most
+    /// "sha". So without correlate, the payload must stay exactly what it was before #210.
+    /// </summary>
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_WithoutCorrelate_SendsOnlyTheLegacyShaInput()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["ref"] = "abc123" },
+            CancellationToken.None);
+
+        var inputs = gitHub.LastWorkflowDispatchCommand!.Inputs!;
+        Assert.Equal(["sha"], inputs.Keys);
+        Assert.Null(Assert.Single(result.ExternalActions!).CorrelationKey);
+    }
+
+    /// <summary>
+    /// Silently dropping the key would be the worst outcome: the dispatch looks correlated, the
+    /// workflow never receives it, and the wait expires with nothing pointing at the cause.
+    /// </summary>
+    [Fact]
+    public void CicdTriggerDeployTool_Validate_CorrelationKeyWithoutCorrelate_IsRejected()
+    {
+        var tool = new CicdTriggerDeployTool(new RecordingGitHubConnector());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tool.Validate(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["correlation_key"] = "build-vmodel-001:unit",
+            }));
+
+        Assert.Contains("requires 'correlate'", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task CicdTriggerDeployTool_ExecuteAsync_WhenNoInputGiven_StillDispatchesUsingConnectorDefaults()
     {
@@ -1847,9 +2017,12 @@ public sealed class PolicyEvaluationServiceTests
 
         public int TriggerWorkflowDispatchCalls { get; private set; }
 
+        public TriggerGitHubWorkflowDispatchCommand? LastWorkflowDispatchCommand { get; private set; }
+
         public Task<GitHubWorkflowDispatchResult> TriggerWorkflowDispatchAsync(TriggerGitHubWorkflowDispatchCommand command, CancellationToken cancellationToken = default)
         {
             TriggerWorkflowDispatchCalls++;
+            LastWorkflowDispatchCommand = command;
             return Task.FromResult(new GitHubWorkflowDispatchResult(
                 command.WorkflowFileName ?? "deploy-to-test.yml",
                 command.Ref ?? "main",
