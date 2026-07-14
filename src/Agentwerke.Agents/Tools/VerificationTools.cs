@@ -94,41 +94,39 @@ public sealed class VerificationIngestTestResultsTool : IAgentTool, IToolSchemaP
         var ciRunUrl = GitHubToolInput.ReadOptional(input, "ci_run_url");
         var reportUrl = GitHubToolInput.ReadOptional(input, "report_url");
 
+        var output = new TestResultIngestOutput(
+            Provider: "ci",
+            Action: "ingest_test_results",
+            Format: "junit",
+            Status: result.Succeeded ? "passed" : "failed",
+            Total: result.Total,
+            Passed: result.Passed,
+            Failed: result.Failed,
+            Errors: result.Errors,
+            Skipped: result.Skipped,
+            DurationMs: result.DurationMs,
+            Incomplete: result.IsIncomplete,
+            DeclaredTotal: result.DeclaredTotal,
+            CiRunUrl: ciRunUrl,
+            ReportUrl: reportUrl,
+            ReportArtifact: artifactName,
+            Cases: result.Cases.Select(static c => new TestResultIngestCase(
+                Id: c.Id,
+                Name: c.Name,
+                ClassName: c.ClassName,
+                Suite: c.SuiteName,
+                Status: c.Status.ToString().ToLowerInvariant(),
+                DurationMs: c.DurationMs,
+                FailureType: c.Failure?.Type,
+                FailureMessage: c.Failure?.Message,
+                FailureDetail: c.Failure?.Detail)).ToArray());
+
         return new AgentToolExecutionResult(
             // True even when tests failed: ingesting a red report is a successful ingestion, and the
             // outcome belongs in the evidence rather than in whether this step ran. Failing the step
             // on a red build would lose the very result the thread exists to record.
             Succeeded: true,
-            Output: JsonSerializer.Serialize(new
-            {
-                provider = "ci",
-                action = "ingest_test_results",
-                format = "junit",
-                status = result.Succeeded ? "passed" : "failed",
-                total = result.Total,
-                passed = result.Passed,
-                failed = result.Failed,
-                errors = result.Errors,
-                skipped = result.Skipped,
-                duration_ms = result.DurationMs,
-                incomplete = result.IsIncomplete,
-                declared_total = result.DeclaredTotal,
-                ci_run_url = ciRunUrl,
-                report_url = reportUrl,
-                report_artifact = artifactName,
-                cases = result.Cases.Select(static c => new
-                {
-                    id = c.Id,
-                    name = c.Name,
-                    class_name = c.ClassName,
-                    suite = c.SuiteName,
-                    status = c.Status.ToString().ToLowerInvariant(),
-                    duration_ms = c.DurationMs,
-                    failure_type = c.Failure?.Type,
-                    failure_message = c.Failure?.Message,
-                    failure_detail = c.Failure?.Detail
-                })
-            }),
+            Output: JsonSerializer.Serialize(output),
             FailureReason: null,
             Artifacts: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
