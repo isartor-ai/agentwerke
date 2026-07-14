@@ -1,4 +1,4 @@
-import BpmnModdle from 'bpmn-moddle';
+import { BpmnModdle } from 'bpmn-moddle';
 import { agentwerkeModdleDescriptor } from '../bpmn/agentwerkeModdle';
 import { AGENTWERKE_NS_PREFIX, AGENTWERKE_NS_URI } from '../bpmn/constants';
 

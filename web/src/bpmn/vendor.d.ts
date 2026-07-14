@@ -96,7 +96,7 @@ declare module 'htm/preact' {
 }
 
 declare module 'bpmn-moddle' {
-  export default class BpmnModdle {
+  export class BpmnModdle {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(extensions?: Record<string, any>);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
