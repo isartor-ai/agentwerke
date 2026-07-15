@@ -76,6 +76,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Checked explicitly because the failure is otherwise unreadable: with the secrets unset,
+          # curl reports "URL rejected: Malformed input to a URL function", which does not point
+          # anyone at the missing configuration. Observed on a real dispatch before this guard.
+          if [ -z "${INGRESS_URL:-}" ] || [ -z "${INGRESS_SECRET:-}" ]; then
+            echo "::error::Set the AGENTWERKE_INGRESS_URL and AGENTWERKE_INGRESS_SECRET repository secrets. Without them this build cannot report its result, and the Agentwerke run that dispatched it will wait until it times out."
+            exit 1
+          fi
+
           if [ ! -f junit.xml ]; then
             # No report means the suite never ran (a build or install failure). Say so rather than
             # posting an empty report: Agentwerke rejects a non-report, but an absent one would
