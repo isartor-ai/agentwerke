@@ -309,8 +309,35 @@ public sealed class RunsControllerTests
             CancellationToken cancellationToken = default)
         {
             AnswerCommand = command;
-            return Task.FromResult(new AnswerInteractionResult(command.RunId, command.InteractionId, "pending"));
+            return Task.FromResult(
+                new AnswerInteractionResult(command.RunId, command.InteractionId, "pending", command.Channel));
         }
+
+        public RejectInteractionCommand? RejectCommand { get; private set; }
+
+        public Task<RejectInteractionResult> RejectInteractionAsync(
+            RejectInteractionCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            RejectCommand = command;
+            return Task.FromResult(
+                new RejectInteractionResult(command.RunId, command.InteractionId, "pending", command.Channel));
+        }
+
+        public CancelInteractionCommand? CancelCommand { get; private set; }
+
+        public Task<CancelInteractionResult> CancelInteractionAsync(
+            CancelInteractionCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            CancelCommand = command;
+            return Task.FromResult(new CancelInteractionResult("run-1", command.InteractionId, "cancelled"));
+        }
+
+        public Task<ExpireInteractionResult> ExpireInteractionAsync(
+            string interactionId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ExpireInteractionResult("run-1", interactionId, "expired"));
     }
 
     private sealed class FakeEvidencePackService : IEvidencePackService

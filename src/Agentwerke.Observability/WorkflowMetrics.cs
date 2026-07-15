@@ -17,6 +17,7 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
     private readonly Counter<long> _stepsFailed;
     private readonly Counter<long> _approvalsCreated;
     private readonly Counter<long> _approvalsDecided;
+    private readonly Counter<long> _interactionTransitions;
     private readonly Counter<long> _webhooksReceived;
     private readonly Counter<long> _connectorsSucceeded;
     private readonly Counter<long> _connectorsFailed;
@@ -44,6 +45,7 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
 
         _approvalsCreated = _meter.CreateCounter<long>("workflow.approvals.created", description: "Approval requests created.");
         _approvalsDecided = _meter.CreateCounter<long>("workflow.approvals.decided", description: "Approval decisions recorded.");
+        _interactionTransitions = _meter.CreateCounter<long>("workflow.interactions.transitions", description: "Terminal agent-interaction transitions, tagged by whether the caller won the race.");
 
         _webhooksReceived = _meter.CreateCounter<long>("workflow.webhooks.received", description: "Inbound webhooks received.");
         _connectorsSucceeded = _meter.CreateCounter<long>("workflow.connectors.succeeded", description: "Connector invocations completed successfully.");
@@ -110,6 +112,14 @@ public sealed class WorkflowMetrics : IWorkflowMetrics, IDisposable
         _approvalsDecided.Add(1,
             new KeyValuePair<string, object?>("decision", decision),
             new KeyValuePair<string, object?>("risk.level", riskLevel));
+    }
+
+    public void InteractionTransition(string toStatus, string channel, bool won)
+    {
+        _interactionTransitions.Add(1,
+            new KeyValuePair<string, object?>("to.status", toStatus),
+            new KeyValuePair<string, object?>("channel", channel),
+            new KeyValuePair<string, object?>("won", won));
     }
 
     public void WebhookReceived(string source, bool triggered)
