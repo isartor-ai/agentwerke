@@ -402,7 +402,10 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
                     + "Actual={Actual} Channel={Channel} CorrelationId={CorrelationId}",
                     interaction.Id, toStatus, result.Interaction!.Status, channel, correlationId);
                 throw new InteractionNotPendingException(
-                    interaction.Id, result.Interaction.Status, result.Interaction.RespondedChannel);
+                    interaction.Id,
+                    result.Interaction.Status,
+                    result.Interaction.RespondedChannel,
+                    result.Interaction.RespondedBy);
         }
 
         var won = result.Interaction!;
