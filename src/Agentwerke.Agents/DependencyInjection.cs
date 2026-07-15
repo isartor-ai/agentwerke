@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentTool, GitHubRequestReviewTool>();
         services.AddScoped<IAgentTool, GitHubPostReviewTool>();
         services.AddScoped<IAgentTool, CicdTriggerDeployTool>();
+        services.AddScoped<IAgentTool, VerificationIngestTestResultsTool>();
         services.AddScoped<IAgentTool, SandboxExecutionTool>();
         services.Configure<Knowledge.KnowledgeOptions>(configuration.GetSection(Knowledge.KnowledgeOptions.Section));
         services.AddSingleton<Knowledge.IKnowledgeRetriever>(sp =>
