@@ -1,4 +1,5 @@
 using Agentwerke.Integrations.Webhooks;
+using Agentwerke.Integrations.Channels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -43,6 +44,12 @@ public static class DependencyInjection
         services.AddScoped<IConnector>(sp => sp.GetRequiredService<TeamsConnector>());
 
         services.AddScoped<IConnectorRegistry, ConnectorRegistry>();
+
+        // Interaction channels (#215). Registered as IInteractionChannel so the provider-neutral
+        // router in Agentwerke.Application collects them without naming any provider.
+        services.AddHttpClient<TeamsInteractionChannel>();
+        services.AddScoped<Application.Agents.IInteractionChannel>(sp =>
+            sp.GetRequiredService<TeamsInteractionChannel>());
 
         // Approval-gate notifications fan out to the enabled chat connectors (#31).
         services.AddScoped<Application.Notifications.IApprovalNotifier, ConnectorApprovalNotifier>();

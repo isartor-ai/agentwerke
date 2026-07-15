@@ -83,18 +83,6 @@ public sealed class InteractionRouter : IInteractionRouter
                     continue;
                 }
 
-                if (interaction.Blocking && !channel.CanCarryResponse)
-                {
-                    await RecordAsync(
-                        interaction.Id,
-                        channelId,
-                        InteractionDeliveryResult.NotSupported(
-                            $"Channel '{channelId}' cannot accept responses; answer in the Agentwerke UI."),
-                        0,
-                        cancellationToken);
-                    continue;
-                }
-
                 // Persist the row as pending before any network call, so a crash mid-fan-out leaves a
                 // retryable record rather than a silently undelivered question.
                 await RecordAsync(interaction.Id, channelId, null, 0, cancellationToken);
@@ -103,7 +91,7 @@ public sealed class InteractionRouter : IInteractionRouter
 
             foreach (var channel in deliverable)
             {
-                await DeliverWithRetryAsync(interaction, channel, cancellationToken);
+                await DeliverWithRetryAsync(interaction, channel, run?.WorkflowName, cancellationToken);
             }
 
             await WarnIfUnreachableAsync(interaction, cancellationToken);
@@ -138,18 +126,20 @@ public sealed class InteractionRouter : IInteractionRouter
                 $"Interaction is '{interaction.Status}'; delivery was not retried.");
         }
 
-        return await DeliverWithRetryAsync(interaction, channel, cancellationToken);
+        var run = await _runs.GetRunAsync(interaction.RunId, cancellationToken);
+        return await DeliverWithRetryAsync(interaction, channel, run?.WorkflowName, cancellationToken);
     }
 
     private async Task<InteractionDeliveryResult> DeliverWithRetryAsync(
         AgentInteraction interaction,
         IInteractionChannel channel,
+        string? workflowName,
         CancellationToken cancellationToken)
     {
         var request = new InteractionDeliveryRequest(
             interaction,
             interaction.RunId,
-            WorkflowName: null,
+            WorkflowName: workflowName,
             RespondUrl: BuildRespondUrl(interaction));
 
         InteractionDeliveryResult result = InteractionDeliveryResult.Failed("No delivery attempt was made.");
@@ -159,6 +149,12 @@ public sealed class InteractionRouter : IInteractionRouter
             try
             {
                 result = await channel.DeliverAsync(request, cancellationToken);
+                if (interaction.Blocking && !channel.CanCarryResponse &&
+                    string.Equals(result.Status, InteractionDeliveryStatuses.Delivered, StringComparison.Ordinal))
+                {
+                    result = InteractionDeliveryResult.NotSupported(
+                        $"Channel '{channel.ChannelId}' cannot accept responses; answer in the Agentwerke UI.");
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
