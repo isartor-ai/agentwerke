@@ -255,6 +255,33 @@ export interface WorkflowRun {
   tags: string[];
 }
 
+/**
+ * One row of the run's evidence-backed traceability matrix (#210). Distinct from the BPMN-derived
+ * matrix, which shows what a workflow declares: every external field here is a real id or URL the
+ * run actually recorded, so a reader can click through to the system of record.
+ *
+ * A row means "the verification build dispatched for this requirement produced this case" — not
+ * that the test verifies the requirement. Nothing carries a per-test requirement mapping.
+ */
+export interface TraceabilityRow {
+  requirementProvider: string | null;
+  requirementId: string | null;
+  requirementUrl: string | null;
+  testId: string;
+  testName: string;
+  ciRunId: string | null;
+  ciRunUrl: string | null;
+  /** "passed" | "failed" | "error" | "skipped" — the test case's outcome, from the CI report. */
+  status: string;
+  evidenceArtifact: string | null;
+  failureMessage: string | null;
+}
+
+export interface RunTraceability {
+  runId: string;
+  rows: TraceabilityRow[];
+}
+
 export interface EvidencePack {
   schemaVersion: string;
   runId: string;
