@@ -3,59 +3,56 @@ using Agentwerke.Agents.Models;
 using Agentwerke.Application.Agents;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Persistence;
-
-// IAgentRegistry and AgentProfile live in the Agentwerke.Agents root namespace.
-using Agentwerke.Agents;
+using Microsoft.Extensions.Options;
 
 namespace Agentwerke.Agents.Tools;
 
+public sealed class AgentRequestOptions
+{
+    public const string Section = "Agents:Delegation";
+    public int MaxDelegationDepth { get; set; } = 3;
+}
+
 /// <summary>
-/// Delegates a task to another agent and returns its result (#192 Phase 4). The callee runs as an
-/// inline nested model run in the same run; request and reply are recorded as agent_request
-/// interactions linked by a correlation id, so the delegation shows up in the run conversation.
-///
-/// Depth guard: the callee runs read-only and is denied both <c>agent.request</c> (no further
-/// delegation — depth-1 only) and <c>human.ask</c> (a sub-task must not pause the whole run).
+/// Delegates to another registered agent. Blocking requests run the callee inline and return its
+/// reply. Non-blocking requests only post the request; no reply is delivered to the caller.
 /// </summary>
 public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IAgentRegistry _registry;
-    // Resolved lazily to break a DI cycle: this tool is part of the tool set the model runner
-    // itself depends on (AgentRequestTool -> IAgentModelRunner -> IToolGateway -> IToolRegistry ->
-    // IEnumerable<IAgentTool> -> AgentRequestTool). The runner is only needed at execution time.
     private readonly Lazy<IAgentModelRunner> _modelRunner;
     private readonly IAgentInteractionRepository _interactions;
+    private readonly AgentRequestOptions _options;
 
     public AgentRequestTool(
         IAgentRegistry registry,
         Lazy<IAgentModelRunner> modelRunner,
-        IAgentInteractionRepository interactions)
+        IAgentInteractionRepository interactions,
+        IOptions<AgentRequestOptions> options)
     {
         _registry = registry;
         _modelRunner = modelRunner;
         _interactions = interactions;
+        _options = options.Value;
     }
 
     public string Name => "agent.request";
-
     public string Category => AgentToolCategories.SubAgent;
 
     public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
     [
-        new("to", "string", "The id of the agent to delegate the task to.", Required: true),
-        new("task", "string", "The task for the delegated agent to complete.", Required: true),
+        new("to", "string", "The id of the agent to delegate the task to.", true),
+        new("task", "string", "The task for the delegated agent to complete.", true),
+        new("blocking", "boolean", "Whether to wait for and return the reply. Defaults to true; false dispatches without delivering a reply."),
     ];
 
     public void Validate(IReadOnlyDictionary<string, string> input)
     {
-        if (!input.TryGetValue("to", out var to) || string.IsNullOrWhiteSpace(to))
+        ValidateRequired(input, "to");
+        ValidateRequired(input, "task");
+        if (input.TryGetValue("blocking", out var raw) && !bool.TryParse(raw, out _))
         {
-            throw new InvalidOperationException("Tool input is missing required field 'to'.");
-        }
-
-        if (!input.TryGetValue("task", out var task) || string.IsNullOrWhiteSpace(task))
-        {
-            throw new InvalidOperationException("Tool input is missing required field 'task'.");
+            throw new InvalidOperationException("Tool input 'blocking' must be true or false.");
         }
     }
 
@@ -66,10 +63,22 @@ public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
     {
         var to = input["to"].Trim();
         var task = input["task"].Trim();
+        var blocking = !input.TryGetValue("blocking", out var rawBlocking) || bool.Parse(rawBlocking);
 
         if (string.Equals(to, context.AgentName, StringComparison.OrdinalIgnoreCase))
         {
             return Failure($"Agent '{context.AgentName}' cannot delegate to itself.");
+        }
+
+        if (context.DelegationDepth >= Math.Max(0, _options.MaxDelegationDepth))
+        {
+            return Failure($"The maximum delegation depth of {_options.MaxDelegationDepth} has been reached; '{to}' was not invoked.");
+        }
+
+        if ((context.DelegationChain ?? []).Contains(to, StringComparer.OrdinalIgnoreCase))
+        {
+            var chain = string.Join(" -> ", (context.DelegationChain ?? []).Append(to));
+            return Failure($"Delegation cycle detected ({chain}); '{to}' was not invoked.");
         }
 
         var profile = _registry.Find(to);
@@ -79,22 +88,44 @@ public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
         }
 
         var correlationId = Guid.NewGuid().ToString("n");
-        await RecordAsync(context, correlationId, from: context.AgentName, addressee: to, text: task, cancellationToken);
+        var request = CreateRequest(context, correlationId, to, task, blocking);
+        await PersistAsync(request, cancellationToken);
 
-        var result = await _modelRunner.Value.RunAsync(
-            BuildDelegatedRequest(context, profile, task),
-            cancellationToken);
+        if (!blocking)
+        {
+            return new(true, $"Dispatched to {to}.", null);
+        }
+
+        ModelRunResult result;
+        try
+        {
+            result = await _modelRunner.Value.RunAsync(
+                BuildDelegatedRequest(context, profile, task), cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            result = new ModelRunResult(
+                false, null, ex.Message, [], null, null);
+        }
 
         var reply = result.Succeeded
             ? result.Output ?? "(no output)"
             : $"Delegation failed: {result.FailureReason}";
 
-        await RecordAsync(context, correlationId, from: to, addressee: context.AgentName, text: reply, cancellationToken);
+        request.Status = AgentInteractionStatuses.Answered;
+        request.Response = reply;
+        request.RespondedBy = to;
+        request.RespondedChannel = InteractionChannels.Agent;
+        request.RespondedAt = DateTimeOffset.UtcNow.ToString("o");
+        request.Version++;
+
+        await _interactions.AddAsync(CreateReply(context, correlationId, to, reply), cancellationToken);
+        await _interactions.SaveChangesAsync(cancellationToken);
 
         return new AgentToolExecutionResult(
-            Succeeded: result.Succeeded,
-            Output: result.Succeeded ? $"{to} replied: {reply}" : null,
-            FailureReason: result.Succeeded ? null : reply);
+            result.Succeeded,
+            result.Succeeded ? $"{to} replied: {reply}" : null,
+            result.Succeeded ? null : reply);
     }
 
     private ModelRunRequest BuildDelegatedRequest(
@@ -103,79 +134,81 @@ public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
         string task)
     {
         var promptSnapshot = new AgentPromptSnapshot(
-            FinalPrompt: BuildDelegatedPrompt(context.AgentName, profile, task),
-            RenderedAt: DateTimeOffset.UtcNow.ToString("o"),
-            Sections: [],
-            Variables: new Dictionary<string, string>(),
-            SourceFiles: []);
+            BuildDelegatedPrompt(context.AgentName, profile, task),
+            DateTimeOffset.UtcNow.ToString("o"), [], new Dictionary<string, string>(), []);
 
         var contract = new AgentRuntimeContract
         {
             Permissions = new AgentPermissionContract
             {
                 Level = AgentPermissionLevels.ReadOnly,
-                // Depth-1 guard: the callee can neither delegate again nor pause the run for a human.
-                DeniedTools = [Name, "human.ask"],
+                DeniedTools = ["human.ask", "human.confirm"],
             },
         };
 
         return new ModelRunRequest(
-            RunId: context.RunId,
-            StepId: context.StepId,
-            AgentName: profile.AgentId,
-            Action: "delegated_task",
-            Environment: context.Environment,
-            PurposeType: context.PurposeType,
-            PolicyTag: context.PolicyTag,
-            RequiresEvidence: [],
-            Attempt: 1,
-            PromptSnapshot: promptSnapshot,
-            Contract: contract);
+            context.RunId,
+            context.StepId,
+            profile.AgentId,
+            "delegated_task",
+            context.Environment,
+            context.PurposeType,
+            context.PolicyTag,
+            [],
+            1,
+            promptSnapshot,
+            contract,
+            NodeId: context.NodeId,
+            DelegationDepth: context.DelegationDepth + 1,
+            DelegationChain: (context.DelegationChain ?? []).Append(context.AgentName).ToArray());
     }
 
-    private static string BuildDelegatedPrompt(string fromAgent, AgentProfile profile, string task)
+    private static AgentInteraction CreateRequest(
+        AgentToolExecutionContext context,
+        string correlationId,
+        string to,
+        string task,
+        bool blocking) => new()
     {
-        var builder = new StringBuilder();
-        if (!string.IsNullOrWhiteSpace(profile.SystemPrompt))
-        {
-            builder.AppendLine(profile.SystemPrompt);
-            builder.AppendLine();
-        }
+        Id = Guid.NewGuid().ToString("n"),
+        RunId = context.RunId,
+        StepId = string.IsNullOrWhiteSpace(context.StepId) ? null : context.StepId,
+        FromAgent = context.AgentName,
+        Kind = AgentInteractionKinds.AgentRequest,
+        AddresseeType = AgentInteractionAddresseeTypes.Agent,
+        Addressee = to,
+        Blocking = blocking,
+        Prompt = task,
+        CorrelationId = correlationId,
+        Status = blocking ? AgentInteractionStatuses.Pending : AgentInteractionStatuses.Posted,
+        DelegationDepth = context.DelegationDepth,
+        CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+    };
 
-        builder.AppendLine(
-            $"Agent '{fromAgent}' has delegated the following task to you. Complete it and report the result concisely.");
-        builder.AppendLine();
-        builder.AppendLine("Task:");
-        builder.Append(task);
-        return builder.ToString();
-    }
-
-    private Task RecordAsync(
+    private static AgentInteraction CreateReply(
         AgentToolExecutionContext context,
         string correlationId,
         string from,
-        string addressee,
-        string text,
-        CancellationToken cancellationToken)
+        string reply) => new()
     {
-        var interaction = new AgentInteraction
-        {
-            Id = Guid.NewGuid().ToString("n"),
-            RunId = context.RunId,
-            StepId = string.IsNullOrWhiteSpace(context.StepId) ? null : context.StepId,
-            FromAgent = from,
-            Kind = AgentInteractionKinds.AgentRequest,
-            AddresseeType = AgentInteractionAddresseeTypes.Agent,
-            Addressee = addressee,
-            Blocking = false,
-            Prompt = text,
-            CorrelationId = correlationId,
-            Status = AgentInteractionStatuses.Posted,
-            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
-        };
-
-        return PersistAsync(interaction, cancellationToken);
-    }
+        Id = Guid.NewGuid().ToString("n"),
+        RunId = context.RunId,
+        StepId = string.IsNullOrWhiteSpace(context.StepId) ? null : context.StepId,
+        FromAgent = from,
+        Kind = AgentInteractionKinds.AgentRequest,
+        AddresseeType = AgentInteractionAddresseeTypes.Agent,
+        Addressee = context.AgentName,
+        Blocking = false,
+        Prompt = reply,
+        Response = reply,
+        CorrelationId = correlationId,
+        Status = AgentInteractionStatuses.Answered,
+        RespondedBy = from,
+        RespondedChannel = InteractionChannels.Agent,
+        RespondedAt = DateTimeOffset.UtcNow.ToString("o"),
+        DelegationDepth = context.DelegationDepth + 1,
+        CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+    };
 
     private async Task PersistAsync(AgentInteraction interaction, CancellationToken cancellationToken)
     {
@@ -183,6 +216,26 @@ public sealed class AgentRequestTool : IAgentTool, IToolSchemaProvider
         await _interactions.SaveChangesAsync(cancellationToken);
     }
 
-    private static AgentToolExecutionResult Failure(string reason) =>
-        new(Succeeded: false, Output: null, FailureReason: reason);
+    private static void ValidateRequired(IReadOnlyDictionary<string, string> input, string field)
+    {
+        if (!input.TryGetValue(field, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException($"Tool input is missing required field '{field}'.");
+        }
+    }
+
+    private static string BuildDelegatedPrompt(string fromAgent, AgentProfile profile, string task)
+    {
+        var builder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(profile.SystemPrompt))
+        {
+            builder.AppendLine(profile.SystemPrompt).AppendLine();
+        }
+
+        builder.AppendLine($"Agent '{fromAgent}' has delegated the following task to you. Complete it and report the result concisely.")
+            .AppendLine().AppendLine("Task:").Append(task);
+        return builder.ToString();
+    }
+
+    private static AgentToolExecutionResult Failure(string reason) => new(false, null, reason);
 }
