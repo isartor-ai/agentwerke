@@ -12,7 +12,7 @@ public sealed class HumanInteractionToolsTests
     [Fact]
     public async Task Ask_FirstCall_PersistsPendingInteractionAndSuspends()
     {
-        var store = new FakeInteractionStore();
+        var store = new InMemoryInteractionRepository();
         var ask = new HumanAskTool(store);
 
         var ex = await Assert.ThrowsAsync<AgentInteractionRequiredException>(() =>
@@ -34,7 +34,7 @@ public sealed class HumanInteractionToolsTests
     [Fact]
     public async Task Ask_AfterAnswer_ReRunReturnsAnswerWithoutAskingAgain()
     {
-        var store = new FakeInteractionStore();
+        var store = new InMemoryInteractionRepository();
         var ask = new HumanAskTool(store);
         var input = new Dictionary<string, string> { ["question"] = "Which auth scheme?" };
 
@@ -58,7 +58,7 @@ public sealed class HumanInteractionToolsTests
     [Fact]
     public async Task Ask_WhileStillPending_ReThrowsToKeepWaiting()
     {
-        var store = new FakeInteractionStore();
+        var store = new InMemoryInteractionRepository();
         var ask = new HumanAskTool(store);
         var input = new Dictionary<string, string> { ["question"] = "Proceed?" };
 
@@ -75,14 +75,14 @@ public sealed class HumanInteractionToolsTests
     [Fact]
     public void Ask_MissingQuestion_Throws()
     {
-        var ask = new HumanAskTool(new FakeInteractionStore());
+        var ask = new HumanAskTool(new InMemoryInteractionRepository());
         Assert.Throws<InvalidOperationException>(() => ask.Validate(new Dictionary<string, string>()));
     }
 
     [Fact]
     public async Task Notify_PersistsNonBlockingInteraction_AndDoesNotSuspend()
     {
-        var store = new FakeInteractionStore();
+        var store = new InMemoryInteractionRepository();
         var notify = new HumanNotifyTool(store);
 
         var result = await notify.ExecuteAsync(
@@ -97,34 +97,4 @@ public sealed class HumanInteractionToolsTests
         Assert.Equal(AgentInteractionStatuses.Posted, item.Status);
     }
 
-    private sealed class FakeInteractionStore : IAgentInteractionRepository
-    {
-        public List<AgentInteraction> Items { get; } = new();
-
-        public Task AddAsync(AgentInteraction interaction, CancellationToken cancellationToken)
-        {
-            Items.Add(interaction);
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<AgentInteraction>> GetByRunAsync(string runId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<AgentInteraction>>(
-                Items.Where(i => i.RunId == runId).OrderBy(i => i.CreatedAt).ToList());
-
-        public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(
-            string runId, string? fromFilter, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<AgentInteraction>>(
-                Items.Where(i => i.RunId == runId && i.Kind == AgentInteractionKinds.Post).ToList());
-
-        public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) =>
-            Task.FromResult(Items.FirstOrDefault(i => i.Id == interactionId));
-
-        public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) =>
-            Task.FromResult(Items
-                .Where(i => i.RunId == runId && i.Status == AgentInteractionStatuses.Pending)
-                .OrderBy(i => i.CreatedAt)
-                .FirstOrDefault());
-
-        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    }
 }
