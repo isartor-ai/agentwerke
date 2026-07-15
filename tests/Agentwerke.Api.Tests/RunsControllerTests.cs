@@ -221,7 +221,16 @@ public sealed class RunsControllerTests
         {
             InteractionException = new InvalidInteractionAnswerException("int_1", ["approve", "reject"])
         };
-        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService());
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "approver-7")], "test"))
+                }
+            }
+        };
 
         var result = await controller.AnswerInteraction(
             "run_1", "int_1", new AnswerInteractionRequest("maybe"), CancellationToken.None);
