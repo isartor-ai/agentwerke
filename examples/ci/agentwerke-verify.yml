@@ -1,0 +1,123 @@
+# Reference CI workflow for the Agentwerke verification thread (#210).
+#
+# Copy this into the repository Agentwerke dispatches — it is the CI half of the contract that
+# examples/v-model-pilot-thread.bpmn expects. The BPMN dispatches this workflow and then waits; this
+# workflow runs the tests and reports the result back, which is what resumes the run. No operator
+# calls resume-external.
+#
+# Required repository secrets:
+#   AGENTWERKE_INGRESS_URL     e.g. https://agentwerke.example/webhooks/events — must be reachable
+#                              from GitHub's runners.
+#   AGENTWERKE_INGRESS_SECRET  the shared secret for this source, matching the entry under
+#                              Integrations:EventIngress:Sources whose Id is sent as
+#                              X-Agentwerke-Source below.
+name: Agentwerke Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      # These four are not optional decoration. GitHub rejects the whole dispatch with
+      # 422 "Unexpected inputs provided" if Agentwerke sends an input this workflow does not
+      # declare, so every input cicd.trigger_deploy sends with correlate=true must appear here —
+      # even the ones this workflow ignores.
+      agentwerke_run_id:
+        description: The Agentwerke run that dispatched this build.
+        required: true
+      agentwerke_correlation_key:
+        description: Key this workflow must echo back; it is how Agentwerke finds the waiting run.
+        required: true
+      agentwerke_requirement_id:
+        description: The requirement this build verifies.
+        required: false
+      commit_sha:
+        description: Commit to verify. Defaults to the dispatched ref.
+        required: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # continue-on-error, deliberately: a failing test suite must NOT end the job here. The report
+      # step below is the only thing that can resume the waiting Agentwerke run, so failing fast
+      # would leave the run waiting for a callback that never comes, until it times out — and a red
+      # build is precisely the result the thread exists to record.
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: npm test -- --reporter=junit --outputFile=junit.xml
+
+      # Keeps the runner's own copy of the evidence, independent of what Agentwerke stores.
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: junit.xml
+          if-no-files-found: warn
+
+      - name: Report result to Agentwerke
+        if: always()
+        env:
+          INGRESS_URL: ${{ secrets.AGENTWERKE_INGRESS_URL }}
+          INGRESS_SECRET: ${{ secrets.AGENTWERKE_INGRESS_SECRET }}
+          CORRELATION_KEY: ${{ inputs.agentwerke_correlation_key }}
+          REQUIREMENT_ID: ${{ inputs.agentwerke_requirement_id }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f junit.xml ]; then
+            # No report means the suite never ran (a build or install failure). Say so rather than
+            # posting an empty report: Agentwerke rejects a non-report, but an absent one would
+            # silently leave the run waiting.
+            echo "::error::No junit.xml was produced — the run will not be resumed by this build."
+            exit 1
+          fi
+
+          # jq builds the body so the XML is escaped correctly, and --rawfile keeps it byte-exact.
+          # The report travels inline; Agentwerke never fetches a URL from an event payload.
+          jq -n \
+            --arg key "$CORRELATION_KEY" \
+            --arg requirement "$REQUIREMENT_ID" \
+            --arg ci_run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --rawfile report junit.xml \
+            '{
+               messageName: "test.unit.completed",
+               correlationKey: $key,
+               payload: {
+                 report_xml: $report,
+                 ci_run_url: $ci_run_url,
+                 requirement_id: $requirement
+               }
+             }' > payload.json
+
+          # Sign the exact bytes that are POSTed — sign the file, then send the same file with
+          # --data-binary. Re-serialising between signing and sending would break the signature.
+          # awk '{print $NF}' because openssl prints either "SHA2-256(stdin)= <hex>" or bare hex
+          # depending on version, and an empty signature reads as a mismatch.
+          SIGNATURE="$(openssl dgst -sha256 -hmac "$INGRESS_SECRET" -hex < payload.json | awk '{print $NF}')"
+
+          # Delivery id is stable per attempt, so a re-run of the same attempt is deduplicated while
+          # a genuine re-run reports again.
+          curl --fail-with-body --silent --show-error \
+            -X POST "$INGRESS_URL" \
+            -H 'Content-Type: application/json' \
+            -H 'X-Agentwerke-Source: ci' \
+            -H "X-Agentwerke-Signature-256: sha256=$SIGNATURE" \
+            -H "X-Agentwerke-Delivery: ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --data-binary @payload.json
+
+      # The job's own status still reflects the tests, after the result is safely reported.
+      - name: Fail the build if tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
