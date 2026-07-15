@@ -100,7 +100,9 @@ public static class DependencyInjection
         services.AddScoped<IInteractionChannelResolver, InteractionChannelResolver>();
         services.AddScoped<IInteractionRouter, InteractionRouter>();
 
+        services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddHostedService<RunDispatchWorker>();
+        services.AddHostedService<InteractionTimeoutSweeper>();
 
         // Default no-op notifier; AddAgentwerkeIntegrations overrides it with the
         // connector-backed implementation when chat channels are configured (#31).
