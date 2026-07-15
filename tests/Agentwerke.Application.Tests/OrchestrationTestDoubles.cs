@@ -158,6 +158,24 @@ internal sealed class CapturingRunContextRepository : IRunContextRepository
             .ToArray();
         return Task.FromResult<IReadOnlyList<RunContextEntry>>(entries);
     }
+
+    public Task<RunContextEntry?> GetAsync(string runId, string key, CancellationToken cancellationToken)
+    {
+        var write = Writes.LastOrDefault(w => w.RunId == runId && w.Key == key);
+        return Task.FromResult<RunContextEntry?>(write == default ? null : new RunContextEntry
+        {
+            RunId = write.RunId,
+            Key = write.Key,
+            Value = write.Value,
+            Kind = write.Kind
+        });
+    }
+
+    public Task DeleteAsync(string runId, string key, CancellationToken cancellationToken)
+    {
+        Writes.RemoveAll(w => w.RunId == runId && w.Key == key);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class NoOpRunContextRepository : IRunContextRepository
@@ -178,6 +196,11 @@ internal sealed class NoOpRunContextRepository : IRunContextRepository
     {
         return Task.FromResult<IReadOnlyList<RunContextEntry>>([]);
     }
+
+    public Task<RunContextEntry?> GetAsync(string runId, string key, CancellationToken cancellationToken) =>
+        Task.FromResult<RunContextEntry?>(null);
+
+    public Task DeleteAsync(string runId, string key, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 internal sealed class InMemoryApprovalRepository : IApprovalRepository

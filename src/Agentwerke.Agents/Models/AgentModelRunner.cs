@@ -145,7 +145,10 @@ public sealed class AgentModelRunner : IAgentModelRunner
             AllowedTools: permissions.AllowedTools,
             DeniedTools: permissions.DeniedTools,
             Input: enrichedInput,
-            ToolEscalation: permissions.ToolEscalation);
+            ToolEscalation: permissions.ToolEscalation,
+            NodeId: request.NodeId,
+            DelegationDepth: request.DelegationDepth,
+            DelegationChain: request.DelegationChain);
 
         await ReportProgressAsync(
             progressReporter,

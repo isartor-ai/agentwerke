@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentTool, AgentPostMessageTool>();
         services.AddScoped<IAgentTool, AgentReadMessagesTool>();
         services.AddScoped<IAgentTool, HumanAskTool>();
+        services.AddScoped<IAgentTool, HumanConfirmTool>();
         services.AddScoped<IAgentTool, HumanNotifyTool>();
         services.AddScoped<IAgentTool, AgentRequestTool>();
         services.AddScoped<IAgentHookHandler, InternalPolicyHookHandler>();

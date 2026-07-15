@@ -20,3 +20,9 @@ public sealed class AgentInteractionRequiredException : Exception
 
     public string Prompt { get; }
 }
+
+
+public sealed class ConfirmationRejectedException : Exception
+{
+    public ConfirmationRejectedException(string message) : base(message) { }
+}

@@ -1,39 +1,42 @@
 using Agentwerke.Application.Agents;
+using Agentwerke.Application.Workflows;
 using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Persistence;
 
 namespace Agentwerke.Agents.Tools;
 
-/// <summary>
-/// Lets an agent pause mid-step to ask a human a free-form question and receive the answer (#192).
-/// First call persists a pending <see cref="AgentInteraction"/> and throws
-/// <see cref="AgentInteractionRequiredException"/> to suspend the run. When the human answers, the
-/// step re-runs (Phase 2 strategy) and this tool finds the answered interaction and returns it, so
-/// the agent proceeds without re-asking.
-/// </summary>
 public sealed class HumanAskTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IAgentInteractionRepository _interactions;
+    private readonly IRunContextRepository _runContext;
+    private readonly IInteractionRouter _router;
+    private readonly InteractionOptions _options;
 
-    public HumanAskTool(IAgentInteractionRepository interactions) => _interactions = interactions;
+    public HumanAskTool(
+        IAgentInteractionRepository interactions,
+        IRunContextRepository runContext,
+        IInteractionRouter router,
+        InteractionOptions options)
+    {
+        _interactions = interactions;
+        _runContext = runContext;
+        _router = router;
+        _options = options;
+    }
 
     public string Name => "human.ask";
-
     public string Category => AgentToolCategories.Coordination;
 
     public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
     [
-        new("question", "string", "The question to ask the human. The run pauses until it is answered.", Required: true),
-        new("options", "string", "Optional comma-separated choices to offer the human.", Required: false),
+        new("question", "string", "The question to ask the human. The run pauses until it is answered.", true),
+        new("options", "string", "Optional comma-separated choices to offer the human."),
+        new("channels", "string", "Optional comma-separated delivery channels (UI is always available)."),
+        new("timeout_seconds", "integer", "Optional timeout in seconds; omitted uses the configured default."),
     ];
 
-    public void Validate(IReadOnlyDictionary<string, string> input)
-    {
-        if (!input.TryGetValue("question", out var question) || string.IsNullOrWhiteSpace(question))
-        {
-            throw new InvalidOperationException("Tool input is missing required field 'question'.");
-        }
-    }
+    public void Validate(IReadOnlyDictionary<string, string> input) =>
+        HumanInteractionToolSupport.ValidateRequired(input, "question");
 
     public async Task<AgentToolExecutionResult> ExecuteAsync(
         AgentToolExecutionContext context,
@@ -41,118 +44,287 @@ public sealed class HumanAskTool : IAgentTool, IToolSchemaProvider
         CancellationToken cancellationToken)
     {
         var question = input["question"].Trim();
-
-        // On a re-run the agent asks the same question again; match by run + kind + prompt so we
-        // return the answer instead of asking twice. StepId is not a key — it changes per re-run.
-        var existing = (await _interactions.GetByRunAsync(context.RunId, cancellationToken))
-            .LastOrDefault(i =>
-                i.AddresseeType == AgentInteractionAddresseeTypes.Human &&
-                (i.Kind == AgentInteractionKinds.Question || i.Kind == AgentInteractionKinds.Choice) &&
-                string.Equals(i.Prompt, question, StringComparison.Ordinal));
+        var key = HumanInteractionToolSupport.PendingKey(context);
+        var existing = await HumanInteractionToolSupport.FindPendingAsync(
+            context.RunId, key, _runContext, _interactions, cancellationToken);
 
         if (existing is not null)
         {
-            if (existing.Status == AgentInteractionStatuses.Answered)
+            if (existing.Status == AgentInteractionStatuses.Pending)
             {
-                return new AgentToolExecutionResult(
-                    Succeeded: true,
-                    Output: $"Human answered: {existing.Response}",
-                    FailureReason: null);
+                throw new AgentInteractionRequiredException(existing.Id, existing.Prompt);
             }
 
-            // Still pending — keep waiting.
-            throw new AgentInteractionRequiredException(existing.Id, question);
+            await _runContext.DeleteAsync(context.RunId, key, cancellationToken);
+            return HumanInteractionToolSupport.ResolveAsk(existing);
         }
 
-        var options = ParseOptions(input);
-        var interaction = new AgentInteraction
-        {
-            Id = Guid.NewGuid().ToString("n"),
-            RunId = context.RunId,
-            StepId = string.IsNullOrWhiteSpace(context.StepId) ? null : context.StepId,
-            FromAgent = context.AgentName,
-            Kind = options.Count > 0 ? AgentInteractionKinds.Choice : AgentInteractionKinds.Question,
-            AddresseeType = AgentInteractionAddresseeTypes.Human,
-            Addressee = null,
-            Blocking = true,
-            Prompt = question,
-            Options = options,
-            Status = AgentInteractionStatuses.Pending,
-            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
-        };
+        var choices = HumanInteractionToolSupport.ParseCsv(input, "options");
+        var interaction = HumanInteractionToolSupport.CreateHumanInteraction(
+            context,
+            choices.Count == 0 ? AgentInteractionKinds.Question : AgentInteractionKinds.Choice,
+            question,
+            blocking: true,
+            choices,
+            HumanInteractionToolSupport.ParseCsv(input, "channels"),
+            HumanInteractionToolSupport.ResolveTimeout(input, _options));
 
-        await _interactions.AddAsync(interaction, cancellationToken);
-        await _interactions.SaveChangesAsync(cancellationToken);
-
+        await HumanInteractionToolSupport.PersistAndRouteAsync(
+            interaction, key, _interactions, _runContext, _router, cancellationToken);
         throw new AgentInteractionRequiredException(interaction.Id, question);
-    }
-
-    private static List<string> ParseOptions(IReadOnlyDictionary<string, string> input)
-    {
-        if (!input.TryGetValue("options", out var raw) || string.IsNullOrWhiteSpace(raw))
-        {
-            return new List<string>();
-        }
-
-        return raw
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
     }
 }
 
-/// <summary>
-/// Sends a human a non-blocking heads-up from an agent (#192). Persists a <c>notify</c>
-/// interaction; the run does not suspend.
-/// </summary>
-public sealed class HumanNotifyTool : IAgentTool, IToolSchemaProvider
+public sealed class HumanConfirmTool : IAgentTool, IToolSchemaProvider
 {
     private readonly IAgentInteractionRepository _interactions;
+    private readonly IRunContextRepository _runContext;
+    private readonly IInteractionRouter _router;
+    private readonly InteractionOptions _options;
 
-    public HumanNotifyTool(IAgentInteractionRepository interactions) => _interactions = interactions;
+    public HumanConfirmTool(
+        IAgentInteractionRepository interactions,
+        IRunContextRepository runContext,
+        IInteractionRouter router,
+        InteractionOptions options)
+    {
+        _interactions = interactions;
+        _runContext = runContext;
+        _router = router;
+        _options = options;
+    }
 
-    public string Name => "human.notify";
-
+    public string Name => "human.confirm";
     public string Category => AgentToolCategories.Coordination;
 
     public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
     [
-        new("message", "string", "A short heads-up for the human. Does not pause the run.", Required: true),
+        new("question", "string", "A confirmation that must be explicitly approved or rejected.", true),
+        new("channels", "string", "Optional comma-separated delivery channels (UI is always available)."),
+        new("timeout_seconds", "integer", "Optional timeout in seconds; omitted uses the configured default."),
     ];
 
-    public void Validate(IReadOnlyDictionary<string, string> input)
-    {
-        if (!input.TryGetValue("message", out var message) || string.IsNullOrWhiteSpace(message))
-        {
-            throw new InvalidOperationException("Tool input is missing required field 'message'.");
-        }
-    }
+    public void Validate(IReadOnlyDictionary<string, string> input) =>
+        HumanInteractionToolSupport.ValidateRequired(input, "question");
 
     public async Task<AgentToolExecutionResult> ExecuteAsync(
         AgentToolExecutionContext context,
         IReadOnlyDictionary<string, string> input,
         CancellationToken cancellationToken)
     {
-        var interaction = new AgentInteraction
+        var question = input["question"].Trim();
+        var key = HumanInteractionToolSupport.PendingKey(context);
+        var existing = await HumanInteractionToolSupport.FindPendingAsync(
+            context.RunId, key, _runContext, _interactions, cancellationToken);
+
+        if (existing is not null)
+        {
+            if (existing.Status == AgentInteractionStatuses.Pending)
+            {
+                throw new AgentInteractionRequiredException(existing.Id, existing.Prompt);
+            }
+
+            await _runContext.DeleteAsync(context.RunId, key, cancellationToken);
+            return HumanInteractionToolSupport.ResolveConfirm(existing);
+        }
+
+        var interaction = HumanInteractionToolSupport.CreateHumanInteraction(
+            context,
+            AgentInteractionKinds.Confirm,
+            question,
+            blocking: true,
+            ["approve", "reject"],
+            HumanInteractionToolSupport.ParseCsv(input, "channels"),
+            HumanInteractionToolSupport.ResolveTimeout(input, _options));
+
+        await HumanInteractionToolSupport.PersistAndRouteAsync(
+            interaction, key, _interactions, _runContext, _router, cancellationToken);
+        throw new AgentInteractionRequiredException(interaction.Id, question);
+    }
+}
+
+public sealed class HumanNotifyTool : IAgentTool, IToolSchemaProvider
+{
+    private readonly IAgentInteractionRepository _interactions;
+    private readonly IInteractionRouter _router;
+    private readonly InteractionOptions _options;
+
+    public HumanNotifyTool(
+        IAgentInteractionRepository interactions,
+        IInteractionRouter router,
+        InteractionOptions options)
+    {
+        _interactions = interactions;
+        _router = router;
+        _options = options;
+    }
+
+    public string Name => "human.notify";
+    public string Category => AgentToolCategories.Coordination;
+
+    public IReadOnlyList<ToolSchemaParameter> GetParameters() =>
+    [
+        new("message", "string", "A short heads-up for the human. Does not pause the run.", true),
+        new("channels", "string", "Optional comma-separated delivery channels (UI is always available)."),
+        new("timeout_seconds", "integer", "Optional delivery timeout in seconds; omitted uses the configured default."),
+    ];
+
+    public void Validate(IReadOnlyDictionary<string, string> input) =>
+        HumanInteractionToolSupport.ValidateRequired(input, "message");
+
+    public async Task<AgentToolExecutionResult> ExecuteAsync(
+        AgentToolExecutionContext context,
+        IReadOnlyDictionary<string, string> input,
+        CancellationToken cancellationToken)
+    {
+        var interaction = HumanInteractionToolSupport.CreateHumanInteraction(
+            context,
+            AgentInteractionKinds.Notify,
+            input["message"].Trim(),
+            blocking: false,
+            [],
+            HumanInteractionToolSupport.ParseCsv(input, "channels"),
+            HumanInteractionToolSupport.ResolveTimeout(input, _options));
+        interaction.Status = AgentInteractionStatuses.Posted;
+
+        await _interactions.AddAsync(interaction, cancellationToken);
+        await _interactions.SaveChangesAsync(cancellationToken);
+        await HumanInteractionToolSupport.RouteSafelyAsync(_router, interaction, cancellationToken);
+        return new(true, "Notified the human.", null);
+    }
+}
+
+internal static class HumanInteractionToolSupport
+{
+    private const int MaxHumanResponseLength = 8192;
+
+    public static string PendingKey(AgentToolExecutionContext context) =>
+        $"interaction.pending.{context.NodeId ?? context.StepId}";
+
+    public static void ValidateRequired(IReadOnlyDictionary<string, string> input, string field)
+    {
+        if (!input.TryGetValue(field, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException($"Tool input is missing required field '{field}'.");
+        }
+
+        if (input.TryGetValue("timeout_seconds", out var timeout) &&
+            (!int.TryParse(timeout, out var parsed) || parsed <= 0))
+        {
+            throw new InvalidOperationException("Tool input 'timeout_seconds' must be a positive integer.");
+        }
+    }
+
+    public static List<string> ParseCsv(IReadOnlyDictionary<string, string> input, string key) =>
+        input.TryGetValue(key, out var raw) && !string.IsNullOrWhiteSpace(raw)
+            ? raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+            : [];
+
+    public static int? ResolveTimeout(IReadOnlyDictionary<string, string> input, InteractionOptions options) =>
+        input.TryGetValue("timeout_seconds", out var raw) && !string.IsNullOrWhiteSpace(raw)
+            ? int.Parse(raw, System.Globalization.CultureInfo.InvariantCulture)
+            : options.DefaultTimeoutSeconds;
+
+    public static AgentInteraction CreateHumanInteraction(
+        AgentToolExecutionContext context,
+        string kind,
+        string prompt,
+        bool blocking,
+        List<string> choices,
+        List<string> channels,
+        int? timeoutSeconds)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new AgentInteraction
         {
             Id = Guid.NewGuid().ToString("n"),
             RunId = context.RunId,
             StepId = string.IsNullOrWhiteSpace(context.StepId) ? null : context.StepId,
             FromAgent = context.AgentName,
-            Kind = AgentInteractionKinds.Notify,
+            Kind = kind,
             AddresseeType = AgentInteractionAddresseeTypes.Human,
-            Addressee = null,
-            Blocking = false,
-            Prompt = input["message"].Trim(),
-            Status = AgentInteractionStatuses.Posted,
-            CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Blocking = blocking,
+            Prompt = prompt,
+            Options = choices,
+            RequestedChannels = channels,
+            Status = blocking ? AgentInteractionStatuses.Pending : AgentInteractionStatuses.Posted,
+            TimeoutAt = timeoutSeconds is null ? null : now.AddSeconds(timeoutSeconds.Value).ToString("o"),
+            ExpiresAction = blocking ? InteractionExpiryActions.Fail : null,
+            CreatedAt = now.ToString("o"),
         };
+    }
 
-        await _interactions.AddAsync(interaction, cancellationToken);
-        await _interactions.SaveChangesAsync(cancellationToken);
+    public static async Task<AgentInteraction?> FindPendingAsync(
+        string runId,
+        string key,
+        IRunContextRepository runContext,
+        IAgentInteractionRepository interactions,
+        CancellationToken cancellationToken)
+    {
+        var entry = await runContext.GetAsync(runId, key, cancellationToken);
+        if (entry is null) return null;
+        var interaction = await interactions.GetByIdAsync(entry.Value, cancellationToken);
+        if (interaction is null) await runContext.DeleteAsync(runId, key, cancellationToken);
+        return interaction;
+    }
 
-        return new AgentToolExecutionResult(
-            Succeeded: true,
-            Output: "Notified the human.",
-            FailureReason: null);
+    public static async Task PersistAndRouteAsync(
+        AgentInteraction interaction,
+        string key,
+        IAgentInteractionRepository interactions,
+        IRunContextRepository runContext,
+        IInteractionRouter router,
+        CancellationToken cancellationToken)
+    {
+        await interactions.AddAsync(interaction, cancellationToken);
+        await interactions.SaveChangesAsync(cancellationToken);
+        await runContext.SetAsync(interaction.RunId, key, interaction.Id, RunContextKinds.Interaction, cancellationToken);
+        await RouteSafelyAsync(router, interaction, cancellationToken);
+    }
+
+    public static async Task RouteSafelyAsync(
+        IInteractionRouter router,
+        AgentInteraction interaction,
+        CancellationToken cancellationToken)
+    {
+        try { await router.RouteAsync(interaction, cancellationToken); }
+        catch { /* The persisted UI interaction remains usable if external delivery fails. */ }
+    }
+
+    public static AgentToolExecutionResult ResolveAsk(AgentInteraction interaction) => interaction.Status switch
+    {
+        AgentInteractionStatuses.Answered => new(true,
+            $"Human answered via {interaction.RespondedChannel ?? "unknown"}:\n--- BEGIN UNTRUSTED HUMAN RESPONSE ---\n{Bound(interaction.Response)}\n--- END UNTRUSTED HUMAN RESPONSE ---", null),
+        AgentInteractionStatuses.Rejected => throw new ConfirmationRejectedException("The human rejected the request."),
+        AgentInteractionStatuses.Expired when interaction.ExpiresAction == InteractionExpiryActions.DefaultAnswer =>
+            new(true, Bound(interaction.DefaultAnswer), null),
+        AgentInteractionStatuses.Expired when interaction.ExpiresAction == InteractionExpiryActions.Continue =>
+            new(true, "No answer was received; proceed without it.", null),
+        AgentInteractionStatuses.Expired => new(false, null, "No answer was received before the request expired."),
+        AgentInteractionStatuses.Cancelled => new(false, null, "The request was cancelled."),
+        _ => throw new AgentInteractionRequiredException(interaction.Id, interaction.Prompt),
+    };
+
+    public static AgentToolExecutionResult ResolveConfirm(AgentInteraction interaction)
+    {
+        if (interaction.Status == AgentInteractionStatuses.Answered &&
+            string.Equals(interaction.Response?.Trim(), "approve", StringComparison.OrdinalIgnoreCase))
+        {
+            return new(true,
+                $"Confirmed by {interaction.RespondedBy ?? "unknown"} via {interaction.RespondedChannel ?? "unknown"}.", null);
+        }
+
+        if (interaction.Status is AgentInteractionStatuses.Rejected or AgentInteractionStatuses.Answered)
+        {
+            throw new ConfirmationRejectedException("The human rejected the confirmation request.");
+        }
+
+        return ResolveAsk(interaction);
+    }
+
+    private static string Bound(string? value)
+    {
+        value ??= string.Empty;
+        return value.Length <= MaxHumanResponseLength ? value : value[..MaxHumanResponseLength];
     }
 }

@@ -32,4 +32,13 @@ internal sealed class InMemoryRunContextRepository : IRunContextRepository
             .ToList();
         return Task.FromResult<IReadOnlyList<RunContextEntry>>(result);
     }
+
+    public Task<RunContextEntry?> GetAsync(string runId, string key, CancellationToken cancellationToken) =>
+        Task.FromResult(_entries.GetValueOrDefault($"{runId}::{key}"));
+
+    public Task DeleteAsync(string runId, string key, CancellationToken cancellationToken)
+    {
+        _entries.Remove($"{runId}::{key}");
+        return Task.CompletedTask;
+    }
 }

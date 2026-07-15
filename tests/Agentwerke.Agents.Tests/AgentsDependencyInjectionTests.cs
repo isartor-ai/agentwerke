@@ -5,6 +5,7 @@ using Agentwerke.Agents.Tools;
 using Agentwerke.AgentSecOps;
 using Agentwerke.Application.Agents;
 using Agentwerke.Domain.Persistence;
+using Agentwerke.Application.Workflows;
 using Agentwerke.Integrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -97,6 +98,9 @@ public sealed class AgentsDependencyInjectionTests
         services.AddScoped<IPolicyEvaluationService, StubPolicyEvaluationService>();
         services.AddScoped<ISandboxProfileSelector, StubSandboxProfileSelector>();
         services.AddScoped<IAgentInteractionRepository, StubInteractionRepository>();
+        services.AddScoped<IRunContextRepository, InMemoryRunContextRepository>();
+        services.AddSingleton(new InteractionOptions());
+        services.AddScoped<IInteractionRouter, StubInteractionRouter>();
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
@@ -106,6 +110,7 @@ public sealed class AgentsDependencyInjectionTests
 
         Assert.NotNull(gateway);
         Assert.NotNull(registry);
+        Assert.Contains(registry.All(), tool => tool.Name == "human.confirm");
     }
 
     [Fact]
@@ -141,6 +146,13 @@ public sealed class AgentsDependencyInjectionTests
     private sealed class StubPolicyEvaluationService : IPolicyEvaluationService
     {
         public PolicyDecision Evaluate(PolicyEvaluationRequest request) => throw new NotImplementedException();
+    }
+
+    private sealed class StubInteractionRouter : IInteractionRouter
+    {
+        public Task RouteAsync(AgentInteraction interaction, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<InteractionDeliveryResult> RetryAsync(string interactionId, string channel, CancellationToken cancellationToken) =>
+            Task.FromResult(InteractionDeliveryResult.Delivered());
     }
 
     private sealed class StubSandboxProfileSelector : ISandboxProfileSelector

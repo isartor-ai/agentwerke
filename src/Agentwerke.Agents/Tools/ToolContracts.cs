@@ -40,7 +40,10 @@ public sealed record AgentToolExecutionContext(
     string? Environment,
     string PurposeType,
     string PolicyTag,
-    int Attempt);
+    int Attempt,
+    string? NodeId = null,
+    int DelegationDepth = 0,
+    IReadOnlyList<string>? DelegationChain = null);
 
 public sealed record AgentToolExecutionResult(
     bool Succeeded,
@@ -75,7 +78,10 @@ public sealed record ToolGatewayRequest(
     /// How a contract-denied tool call is handled (#202): "escalate" (default; asks a human via
     /// a blocking tool_access interaction) or "fail" (fail the tool call immediately).
     /// </summary>
-    string? ToolEscalation = null);
+    string? ToolEscalation = null,
+    string? NodeId = null,
+    int DelegationDepth = 0,
+    IReadOnlyList<string>? DelegationChain = null);
 
 public sealed record ToolGatewayResult(
     bool Succeeded,
