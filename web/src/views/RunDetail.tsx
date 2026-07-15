@@ -4,6 +4,7 @@ import { apiClient } from '../api/client';
 import { canApprove, canOperate } from '../auth/permissions';
 import { BpmnViewer } from '../components/BpmnViewer';
 import { GatewayDecisionList } from '../components/GatewayDecisionList';
+import { RunTraceabilityRows } from '../components/RunTraceabilityRows';
 import { TraceabilityMatrix } from '../components/TraceabilityMatrix';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
@@ -600,7 +601,18 @@ export function RunDetail({ auth }: RunDetailProps) {
         );
 
       case 'Traceability':
-        return <TraceabilityMatrix workflowXml={workflowXml} steps={run.steps ?? []} />;
+        // Two matrices, deliberately not merged: the rows above are what this run actually recorded
+        // against external systems, the matrix below is what the workflow declares. They answer
+        // different questions ("did this thread really execute?" vs "is the model well-formed?"),
+        // and folding declared metadata in with resolvable external ids would blur exactly the line
+        // the evidence-backed rows exist to draw.
+        return (
+          <>
+            <RunTraceabilityRows runId={run.id} />
+            <h3 className="traceability-heading">Declared traceability</h3>
+            <TraceabilityMatrix workflowXml={workflowXml} steps={run.steps ?? []} />
+          </>
+        );
 
       case 'Conversation':
         return (
