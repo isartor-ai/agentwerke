@@ -47,6 +47,9 @@ public sealed class AgentInteraction
     /// <summary>Optional choices offered to the responder.</summary>
     public List<string> Options { get; set; } = new();
 
+    /// <summary>Channels on which the interaction should be delivered.</summary>
+    public List<string> RequestedChannels { get; set; } = new();
+
     /// <summary>Links a request to its reply (e.g. agent.request ↔ its result).</summary>
     public string? CorrelationId { get; set; }
 
@@ -59,6 +62,29 @@ public sealed class AgentInteraction
 
     public string? RespondedAt { get; set; }
 
+    public string? RespondedChannel { get; set; }
+
+    /// <summary>ISO-8601 timestamp after which the interaction expires; null means never.</summary>
+    public string? TimeoutAt { get; set; }
+
+    /// <summary>Action to take when the interaction expires.</summary>
+    public string? ExpiresAction { get; set; }
+
+    /// <summary>Answer supplied on expiry when <see cref="ExpiresAction"/> is default_answer.</summary>
+    public string? DefaultAnswer { get; set; }
+
+    public string? CancelledAt { get; set; }
+
+    public string? CancelledBy { get; set; }
+
+    public string? ResumedAt { get; set; }
+
+    /// <summary>Current depth of an agent-to-agent delegation chain.</summary>
+    public int DelegationDepth { get; set; }
+
+    /// <summary>Optimistic concurrency token for interaction state transitions.</summary>
+    public int Version { get; set; }
+
     public string CreatedAt { get; set; } = string.Empty;
 }
 
@@ -70,6 +96,12 @@ public static class AgentInteractionKinds
     public const string Notify = "notify";
     public const string AgentRequest = "agent_request";
     public const string Approval = "approval";
+
+    /// <summary>
+    /// A confirmation boundary: the agent must not proceed without an explicit approve/reject.
+    /// Unlike question/choice, a rejection fails the step rather than feeding text back to the model.
+    /// </summary>
+    public const string Confirm = "confirm";
 
     /// <summary>
     /// An agent needs a tool that exists but is not allowed for its step (#202). Blocking; a
@@ -96,6 +128,31 @@ public static class AgentInteractionStatuses
     /// <summary>A fire-and-forget message that needs no answer.</summary>
     public const string Posted = "posted";
 
-    /// <summary>Timed out / abandoned without an answer.</summary>
+    /// <summary>Timed out / abandoned without an answer; written by InteractionTimeoutSweeper.</summary>
     public const string Expired = "expired";
+
+    /// <summary>A confirmation the responder explicitly declined. The step fails.</summary>
+    public const string Rejected = "rejected";
+
+    /// <summary>Withdrawn by the originating agent, an operator, or a cancelled run.</summary>
+    public const string Cancelled = "cancelled";
+
+    public static bool IsTerminal(string status) =>
+        status is Answered or Rejected or Expired or Cancelled or Posted;
+}
+
+public static class InteractionChannels
+{
+    public const string Ui = "ui";
+    public const string Slack = "slack";
+    public const string Teams = "teams";
+    public const string Webhook = "webhook";
+    public const string Agent = "agent";
+}
+
+public static class InteractionExpiryActions
+{
+    public const string Fail = "fail";
+    public const string Continue = "continue";
+    public const string DefaultAnswer = "default_answer";
 }

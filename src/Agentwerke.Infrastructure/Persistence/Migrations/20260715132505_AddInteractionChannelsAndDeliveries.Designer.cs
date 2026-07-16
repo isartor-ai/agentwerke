@@ -3,6 +3,7 @@ using System;
 using Agentwerke.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Agentwerke.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgentwerkeDbContext))]
-    partial class AgentwerkeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715132505_AddInteractionChannelsAndDeliveries")]
+    partial class AddInteractionChannelsAndDeliveries
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -309,10 +312,6 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("DeliveryId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -327,19 +326,10 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<string>("Source")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CorrelationHint")
                         .HasDatabaseName("ix_external_workflow_events_correlation_hint");
-
-                    b.HasIndex("DeliveryId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_external_workflow_events_delivery_id")
-                        .HasFilter("\"DeliveryId\" IS NOT NULL");
 
                     b.ToTable("external_workflow_events", "agentwerke");
                 });

@@ -156,6 +156,9 @@ public sealed class AgentsDependencyInjectionTests
         public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(string runId, string? fromFilter, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
         public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) => Task.FromResult<AgentInteraction?>(null);
         public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) => Task.FromResult<AgentInteraction?>(null);
+        public Task<InteractionTransitionResult> TryTransitionAsync(string interactionId, string toStatus, string? response, string? respondedBy, string? respondedChannel, CancellationToken cancellationToken) => Task.FromResult(new InteractionTransitionResult(InteractionTransitionOutcome.NotFound, null));
+        public Task<IReadOnlyList<AgentInteraction>> GetPendingAsync(string? runId, string? addresseeType, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
+        public Task<IReadOnlyList<AgentInteraction>> GetDueForExpiryAsync(string nowIso, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

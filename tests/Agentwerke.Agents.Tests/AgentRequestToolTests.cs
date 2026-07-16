@@ -15,13 +15,13 @@ public sealed class AgentRequestToolTests
 
     private static AgentRequestTool BuildTool(
         out FakeAgentModelRunner runner,
-        out FakeInteractionStore store,
+        out InMemoryInteractionRepository store,
         params AgentProfile[] profiles)
     {
         runner = new FakeAgentModelRunner(new ModelRunResult(
             Succeeded: true, Output: "scaffolding done", FailureReason: null,
             ToolInvocations: [], Artifacts: null, TokenUsage: null));
-        store = new FakeInteractionStore();
+        store = new InMemoryInteractionRepository();
         var capturedRunner = runner;
         return new AgentRequestTool(
             new FakeRegistry(profiles), new Lazy<IAgentModelRunner>(() => capturedRunner), store);
@@ -95,7 +95,7 @@ public sealed class AgentRequestToolTests
     [Fact]
     public async Task WhenCalleeFails_ReportsFailure_AndRecordsFailureReply()
     {
-        var store = new FakeInteractionStore();
+        var store = new InMemoryInteractionRepository();
         var runner = new FakeAgentModelRunner(new ModelRunResult(
             Succeeded: false, Output: null, FailureReason: "model not configured",
             ToolInvocations: [], Artifacts: null, TokenUsage: null));
@@ -154,31 +154,4 @@ public sealed class AgentRequestToolTests
         }
     }
 
-    private sealed class FakeInteractionStore : IAgentInteractionRepository
-    {
-        public List<AgentInteraction> Items { get; } = new();
-
-        public Task AddAsync(AgentInteraction interaction, CancellationToken cancellationToken)
-        {
-            Items.Add(interaction);
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<AgentInteraction>> GetByRunAsync(string runId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<AgentInteraction>>(Items.Where(i => i.RunId == runId).ToList());
-
-        public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(
-            string runId, string? fromFilter, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<AgentInteraction>>(
-                Items.Where(i => i.RunId == runId && i.Kind == AgentInteractionKinds.Post).ToList());
-
-        public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) =>
-            Task.FromResult(Items.FirstOrDefault(i => i.Id == interactionId));
-
-        public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) =>
-            Task.FromResult(Items.FirstOrDefault(i =>
-                i.RunId == runId && i.Status == AgentInteractionStatuses.Pending));
-
-        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    }
 }
