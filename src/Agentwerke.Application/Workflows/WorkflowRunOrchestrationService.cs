@@ -10,6 +10,14 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     private const string PendingStatus = "pending";
     private const string PendingApprovalStatus = "pending";
     private const string CancelledStatus = "cancelled";
+    private const string ExpiredStatus = "expired";
+
+    /// <summary>
+    /// Run statuses past which a response can no longer resume anything. A late answer to one of
+    /// these runs is refused rather than enqueued (#219).
+    /// </summary>
+    private static readonly HashSet<string> TerminalRunStatuses =
+        new(StringComparer.OrdinalIgnoreCase) { "completed", "failed", "cancelled" };
 
     private readonly IWorkflowDefinitionRepository _definitionRepository;
     private readonly IWorkflowRunRepository _runRepository;
@@ -202,54 +210,236 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var correlationId = _correlationContext.CorrelationId;
+        var interaction = await LoadScopedInteractionAsync(command.InteractionId, command.RunId, cancellationToken);
+        await EnsureRunAcceptsResponsesAsync(command.RunId, cancellationToken);
+        ValidateAnswerAgainstOptions(interaction, command.Answer);
+
+        var answeredBy = command.AnsweredBy ?? "api-user";
+        await TransitionAndResumeAsync(
+            interaction: interaction,
+            toStatus: AgentInteractionStatuses.Answered,
+            response: command.Answer,
+            actor: answeredBy,
+            channel: command.Channel,
+            auditAction: "interaction.answer",
+            auditOutcome: "answered",
+            cancellationToken: cancellationToken);
+
+        return new AnswerInteractionResult(
+            command.RunId, command.InteractionId, PendingStatus, command.Channel);
+    }
+
+    public async Task<RejectInteractionResult> RejectInteractionAsync(
+        RejectInteractionCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var interaction = await LoadScopedInteractionAsync(command.InteractionId, command.RunId, cancellationToken);
+        await EnsureRunAcceptsResponsesAsync(command.RunId, cancellationToken);
+
+        var rejectedBy = command.RejectedBy ?? "api-user";
+
+        // A rejection resumes the run just like an answer does. It is not "do nothing": the step must
+        // re-run so the tool can fail it with this reason rather than the model arguing past a human's no.
+        await TransitionAndResumeAsync(
+            interaction: interaction,
+            toStatus: AgentInteractionStatuses.Rejected,
+            response: command.Reason,
+            actor: rejectedBy,
+            channel: command.Channel,
+            auditAction: "interaction.reject",
+            auditOutcome: "rejected",
+            cancellationToken: cancellationToken);
+
+        return new RejectInteractionResult(
+            command.RunId, command.InteractionId, PendingStatus, command.Channel);
+    }
+
+    public async Task<CancelInteractionResult> CancelInteractionAsync(
+        CancelInteractionCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
 
         var interaction = await _interactionRepository.GetByIdAsync(command.InteractionId, cancellationToken)
             ?? throw new InteractionNotFoundException(command.InteractionId);
 
+        var cancelledBy = command.CancelledBy ?? "api-user";
+
+        await TransitionAndResumeAsync(
+            interaction: interaction,
+            toStatus: AgentInteractionStatuses.Cancelled,
+            response: command.Reason,
+            actor: null,
+            channel: null,
+            auditAction: "interaction.cancel",
+            auditOutcome: "cancelled",
+            cancellationToken: cancellationToken,
+            actorTypeOverride: "operator",
+            auditActor: cancelledBy,
+            onWon: won =>
+            {
+                won.CancelledBy = cancelledBy;
+                won.CancelledAt = DateTimeOffset.UtcNow.ToString("o");
+            });
+
+        return new CancelInteractionResult(interaction.RunId, command.InteractionId, CancelledStatus);
+    }
+
+    public async Task<ExpireInteractionResult> ExpireInteractionAsync(
+        string interactionId,
+        CancellationToken cancellationToken = default)
+    {
+        var interaction = await _interactionRepository.GetByIdAsync(interactionId, cancellationToken)
+            ?? throw new InteractionNotFoundException(interactionId);
+
+        // default_answer resumes the step with the configured answer; fail and continue resume with
+        // none, and the tool decides what that means for the step on re-run (#222).
+        var response = string.Equals(
+            interaction.ExpiresAction, InteractionExpiryActions.DefaultAnswer, StringComparison.Ordinal)
+            ? interaction.DefaultAnswer
+            : null;
+
+        await TransitionAndResumeAsync(
+            interaction: interaction,
+            toStatus: AgentInteractionStatuses.Expired,
+            response: response,
+            actor: null,
+            channel: null,
+            auditAction: "interaction.expire",
+            auditOutcome: "expired",
+            cancellationToken: cancellationToken,
+            actorTypeOverride: "system",
+            auditActor: "interaction-timeout-sweeper");
+
+        return new ExpireInteractionResult(interaction.RunId, interactionId, ExpiredStatus);
+    }
+
+    private async Task<AgentInteraction> LoadScopedInteractionAsync(
+        string interactionId,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        var interaction = await _interactionRepository.GetByIdAsync(interactionId, cancellationToken)
+            ?? throw new InteractionNotFoundException(interactionId);
+
         // Scope the interaction to its run so a mismatched runId can't answer someone else's question.
-        if (!string.Equals(interaction.RunId, command.RunId, StringComparison.Ordinal))
+        if (!string.Equals(interaction.RunId, runId, StringComparison.Ordinal))
         {
-            throw new InteractionNotFoundException(command.InteractionId);
+            throw new InteractionNotFoundException(interactionId);
         }
 
-        if (!string.Equals(interaction.Status, AgentInteractionStatuses.Pending, StringComparison.Ordinal))
+        // Deliberately no "is it still pending?" check here. TryTransitionAsync is the single
+        // authority: a pre-check would short-circuit a sequential duplicate before it was counted as
+        // a lost race, so the metric would only see true concurrent losers and under-report replays.
+        // It would also duplicate a decision that has to exist in the transition anyway.
+        return interaction;
+    }
+
+    /// <summary>
+    /// A response must not resume a run that has already finished — a Slack click landing after the
+    /// run was cancelled must be refused, not acted on.
+    /// </summary>
+    private async Task EnsureRunAcceptsResponsesAsync(string runId, CancellationToken cancellationToken)
+    {
+        var run = await _runRepository.GetRunAsync(runId, cancellationToken)
+            ?? throw new WorkflowRunNotFoundException(runId);
+
+        if (TerminalRunStatuses.Contains(run.Status))
         {
-            throw new InteractionNotPendingException(command.InteractionId, interaction.Status);
+            throw new RunNotAcceptingResponsesException(runId, run.Status);
+        }
+    }
+
+    private static void ValidateAnswerAgainstOptions(AgentInteraction interaction, string answer)
+    {
+        if (interaction.Options.Count == 0)
+        {
+            return;
         }
 
-        _ = await _runRepository.GetRunAsync(command.RunId, cancellationToken)
-            ?? throw new WorkflowRunNotFoundException(command.RunId);
+        if (!interaction.Options.Contains(answer, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidInteractionAnswerException(interaction.Id, interaction.Options);
+        }
+    }
 
-        var answeredBy = command.AnsweredBy ?? "api-user";
-        interaction.Status = AgentInteractionStatuses.Answered;
-        interaction.Response = command.Answer;
-        interaction.RespondedBy = answeredBy;
-        interaction.RespondedAt = DateTimeOffset.UtcNow.ToString("o");
+    /// <summary>
+    /// The single place a terminal interaction transition and its run resume happen together.
+    ///
+    /// The ordering here is the point of #218: the outbox Resume is enqueued only for the caller that
+    /// won the transition. Move the enqueue outside this guard and two channels answering at the same
+    /// instant will each resume the run.
+    /// </summary>
+    private async Task TransitionAndResumeAsync(
+        AgentInteraction interaction,
+        string toStatus,
+        string? response,
+        string? actor,
+        string? channel,
+        string auditAction,
+        string auditOutcome,
+        CancellationToken cancellationToken,
+        string actorTypeOverride = "user",
+        string? auditActor = null,
+        Action<AgentInteraction>? onWon = null)
+    {
+        var correlationId = _correlationContext.CorrelationId;
 
-        await _interactionRepository.SaveChangesAsync(cancellationToken);
+        var result = await _interactionRepository.TryTransitionAsync(
+            interaction.Id, toStatus, response, actor, channel, cancellationToken);
+
+        switch (result.Outcome)
+        {
+            case InteractionTransitionOutcome.NotFound:
+                throw new InteractionNotFoundException(interaction.Id);
+
+            case InteractionTransitionOutcome.AlreadyTerminal:
+                _metrics.InteractionTransition(toStatus, channel ?? "none", won: false);
+                _logger.LogInformation(
+                    "Interaction transition lost. InteractionId={InteractionId} Attempted={Attempted} "
+                    + "Actual={Actual} Channel={Channel} CorrelationId={CorrelationId}",
+                    interaction.Id, toStatus, result.Interaction!.Status, channel, correlationId);
+                throw new InteractionNotPendingException(
+                    interaction.Id, result.Interaction.Status, result.Interaction.RespondedChannel);
+        }
+
+        var won = result.Interaction!;
+        if (onWon is not null)
+        {
+            onWon(won);
+            await _interactionRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        _metrics.InteractionTransition(toStatus, channel ?? "none", won: true);
 
         _logger.LogInformation(
-            "Interaction answered. RunId={RunId} InteractionId={InteractionId} AnsweredBy={AnsweredBy} CorrelationId={CorrelationId}",
-            command.RunId, command.InteractionId, answeredBy, correlationId);
+            "Interaction {Outcome}. RunId={RunId} InteractionId={InteractionId} Actor={Actor} "
+            + "Channel={Channel} CorrelationId={CorrelationId}",
+            auditOutcome, won.RunId, interaction.Id, auditActor ?? actor, channel, correlationId);
 
         await WriteAuditAsync(
-            runId: command.RunId,
+            runId: won.RunId,
             correlationId: correlationId,
-            actorType: "user",
-            actor: answeredBy,
-            action: "interaction.answer",
+            actorType: actorTypeOverride,
+            actor: auditActor ?? actor ?? "system",
+            action: auditAction,
             resourceType: "interaction",
-            resourceId: command.InteractionId,
-            outcome: "answered",
-            details: command.Answer,
+            resourceId: interaction.Id,
+            outcome: auditOutcome,
+            details: channel is null ? response : $"channel={channel}; {response}",
             cancellationToken);
 
-        // Re-run the suspended step (Phase 2 strategy); on re-run human.ask finds this answer.
-        var payload = new OutboxResumePayload(answeredBy).Serialize();
-        await _outbox.EnqueueAsync(OutboxOperations.Resume, command.RunId, payload, ct: cancellationToken);
+        // A non-blocking interaction has no parked step to wake — resuming would advance the run twice.
+        if (!won.Blocking)
+        {
+            return;
+        }
 
-        return new AnswerInteractionResult(command.RunId, command.InteractionId, PendingStatus);
+        // Re-run the suspended step (Phase 2 strategy); on re-run the tool finds this terminal state.
+        var payload = new OutboxResumePayload(auditActor ?? actor).Serialize();
+        await _outbox.EnqueueAsync(OutboxOperations.Resume, won.RunId, payload, ct: cancellationToken);
     }
 
     public async Task<ResumeExternalRunResult> ResumeExternalRunAsync(

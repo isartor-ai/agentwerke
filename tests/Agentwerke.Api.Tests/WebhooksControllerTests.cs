@@ -723,6 +723,15 @@ public sealed class WebhooksControllerTests
 
         public Task<AnswerInteractionResult> AnswerInteractionAsync(AnswerInteractionCommand command, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<RejectInteractionResult> RejectInteractionAsync(RejectInteractionCommand command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<CancelInteractionResult> CancelInteractionAsync(CancelInteractionCommand command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ExpireInteractionResult> ExpireInteractionAsync(string interactionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class CapturingExternalWorkflowEventRepository : IExternalWorkflowEventRepository

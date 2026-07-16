@@ -43,9 +43,44 @@ public sealed record AnswerInteractionCommand(
     string RunId,
     string InteractionId,
     string Answer,
-    string? AnsweredBy);
+    string? AnsweredBy,
+    /// <summary>Which channel supplied the answer — one of <see cref="InteractionChannels"/>.</summary>
+    string Channel = InteractionChannels.Ui);
 
-public sealed record AnswerInteractionResult(string RunId, string InteractionId, string Status);
+/// <summary><see cref="AcceptedChannel"/> names the channel whose response won (#219).</summary>
+public sealed record AnswerInteractionResult(
+    string RunId,
+    string InteractionId,
+    string Status,
+    string? AcceptedChannel = null);
+
+/// <summary>
+/// Declines a confirmation (#219). Distinct from answering "reject": a rejection fails the step
+/// rather than feeding a refusal back into the model loop.
+/// </summary>
+public sealed record RejectInteractionCommand(
+    string RunId,
+    string InteractionId,
+    string Reason,
+    string? RejectedBy,
+    string Channel = InteractionChannels.Ui);
+
+public sealed record RejectInteractionResult(
+    string RunId,
+    string InteractionId,
+    string Status,
+    string? AcceptedChannel = null);
+
+/// <summary>Withdraws a pending interaction — by the originating agent or an operator (#219).</summary>
+public sealed record CancelInteractionCommand(
+    string InteractionId,
+    string Reason,
+    string? CancelledBy);
+
+public sealed record CancelInteractionResult(string RunId, string InteractionId, string Status);
+
+/// <summary>Expires a pending interaction whose timeout has passed. Raised by the sweeper (#221).</summary>
+public sealed record ExpireInteractionResult(string RunId, string InteractionId, string Status);
 
 public sealed record ResumeExternalRunCommand(
     string RunId,
@@ -79,6 +114,17 @@ public interface IWorkflowRunOrchestrationService
     Task<ResumeRunResult> ResumeRunAsync(ResumeRunCommand command, CancellationToken cancellationToken = default);
 
     Task<AnswerInteractionResult> AnswerInteractionAsync(AnswerInteractionCommand command, CancellationToken cancellationToken = default);
+
+    Task<RejectInteractionResult> RejectInteractionAsync(RejectInteractionCommand command, CancellationToken cancellationToken = default);
+
+    Task<CancelInteractionResult> CancelInteractionAsync(CancelInteractionCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves a timed-out interaction to expired and honours its <see cref="AgentInteraction.ExpiresAction"/>.
+    /// Safe to call on an interaction that was answered a moment ago: it races the responder through the
+    /// same single-winner transition and simply does nothing if it loses (#221).
+    /// </summary>
+    Task<ExpireInteractionResult> ExpireInteractionAsync(string interactionId, CancellationToken cancellationToken = default);
 
     Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default);
 
@@ -218,6 +264,11 @@ public sealed class InteractionNotFoundException : Exception
     public string InteractionId { get; }
 }
 
+/// <summary>
+/// The interaction already reached a terminal status. One exception covers duplicate, already-answered
+/// (by another channel), expired and cancelled — all four are "not pending" — so
+/// <see cref="Status"/> carries which one, and callers map it to 409 (#227).
+/// </summary>
 public sealed class InteractionNotPendingException : Exception
 {
     public InteractionNotPendingException(string interactionId, string status)
@@ -227,7 +278,51 @@ public sealed class InteractionNotPendingException : Exception
         Status = status;
     }
 
+    public InteractionNotPendingException(string interactionId, string status, string? respondedChannel)
+        : base(respondedChannel is null
+            ? $"Agent interaction '{interactionId}' cannot be answered because its status is '{status}'."
+            : $"Agent interaction '{interactionId}' was already answered via {respondedChannel}.")
+    {
+        InteractionId = interactionId;
+        Status = status;
+        RespondedChannel = respondedChannel;
+    }
+
     public string InteractionId { get; }
+    public string Status { get; }
+
+    /// <summary>The channel whose response won, when the interaction was answered. Null otherwise.</summary>
+    public string? RespondedChannel { get; }
+}
+
+/// <summary>The answer was not one of the interaction's offered choices. Maps to 400 (#227).</summary>
+public sealed class InvalidInteractionAnswerException : Exception
+{
+    public InvalidInteractionAnswerException(string interactionId, IReadOnlyList<string> options)
+        : base($"Answer must be one of: {string.Join(", ", options)}.")
+    {
+        InteractionId = interactionId;
+        Options = options;
+    }
+
+    public string InteractionId { get; }
+    public IReadOnlyList<string> Options { get; }
+}
+
+/// <summary>
+/// The run reached a terminal status, so a response can no longer resume it — a Slack click that
+/// lands after the run was cancelled, for example. Maps to 422 (#227).
+/// </summary>
+public sealed class RunNotAcceptingResponsesException : Exception
+{
+    public RunNotAcceptingResponsesException(string runId, string status)
+        : base($"Workflow run '{runId}' is '{status}' and cannot accept interaction responses.")
+    {
+        RunId = runId;
+        Status = status;
+    }
+
+    public string RunId { get; }
     public string Status { get; }
 }
 
