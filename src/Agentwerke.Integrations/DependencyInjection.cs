@@ -47,6 +47,12 @@ public static class DependencyInjection
 
         // Interaction channels (#215). Registered as IInteractionChannel so the provider-neutral
         // router in Agentwerke.Application collects them without naming any provider.
+        services.AddHttpClient<WebhookInteractionChannel>();
+        services.AddScoped<Application.Agents.IInteractionChannel>(sp =>
+            sp.GetRequiredService<WebhookInteractionChannel>());
+        services.AddHttpClient<SlackInteractionChannel>();
+        services.AddScoped<Application.Agents.IInteractionChannel>(sp =>
+            sp.GetRequiredService<SlackInteractionChannel>());
         services.AddHttpClient<TeamsInteractionChannel>();
         services.AddScoped<Application.Agents.IInteractionChannel>(sp =>
             sp.GetRequiredService<TeamsInteractionChannel>());
