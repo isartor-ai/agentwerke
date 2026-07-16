@@ -115,8 +115,13 @@ export function RunDetail({ auth }: RunDetailProps) {
     const firstLoad = isFirstLoad.current;
     if (firstLoad) setLoading(true);
     setError(null);
+    // Guard the initial load against a fetch that never settles — e.g. an exhausted HTTP/1.1
+    // connection pool while an SSE stream is held open would otherwise leave the view stuck on
+    // "Loading run detail" forever. On timeout the load aborts and surfaces as a retryable error.
+    const watchdog = firstLoad ? new AbortController() : undefined;
+    const watchdogTimer = watchdog ? setTimeout(() => watchdog.abort(), 20_000) : undefined;
     try {
-      const data = await apiClient.getRun(runId);
+      const data = await apiClient.getRun(runId, watchdog?.signal);
       if (!data) { setError(`Run ${runId} was not found.`); return; }
       if (firstLoad) {
         isFirstLoad.current = false;
@@ -139,8 +144,14 @@ export function RunDetail({ auth }: RunDetailProps) {
           );
         });
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unknown error');
+      const timedOut = watchdog?.signal.aborted === true;
+      setError(
+        timedOut
+          ? 'Timed out loading this run. It may still be available — retry.'
+          : loadError instanceof Error ? loadError.message : 'Unknown error',
+      );
     } finally {
+      if (watchdogTimer) clearTimeout(watchdogTimer);
       if (firstLoad) setLoading(false);
     }
   }, [runId]);
@@ -255,6 +266,7 @@ export function RunDetail({ auth }: RunDetailProps) {
   useEffect(() => {
     if (!runId || isTerminal) return;
     const controller = new AbortController();
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     apiClient.streamRunEvents(
       runId,
       (event) => {
@@ -269,16 +281,23 @@ export function RunDetail({ auth }: RunDetailProps) {
         }
       },
       () => {
-        void loadRun();
-        // If the component is still mounted and the run isn't terminal yet,
-        // increment the revision to re-open the SSE stream.
-        if (!controller.signal.aborted) {
+        if (controller.signal.aborted) return;
+        // Reconnect after a delay rather than immediately. A stream that fails fast (e.g. the
+        // endpoint briefly errors) would otherwise reconnect in a tight loop, and because each
+        // fetch-based SSE stream holds a browser connection, that storm can exhaust the per-host
+        // HTTP/1.1 pool and starve the run fetch — the cause of a stuck "Loading run detail".
+        reconnectTimer = setTimeout(() => {
+          if (controller.signal.aborted) return;
+          void loadRun();
           setSseRevision((r) => r + 1);
-        }
+        }, 3_000);
       },
       controller.signal,
     );
-    return () => { controller.abort(); };
+    return () => {
+      controller.abort();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
   }, [runId, isTerminal, loadRun, sseRevision]);
 
   // Auto-track: open panel for newly active step

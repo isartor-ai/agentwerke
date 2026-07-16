@@ -67,8 +67,61 @@ Approval decisions require the Approver role or a higher role with equivalent ac
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /webhooks/github` | Receive signed GitHub events such as `issues`. |
+| `POST /webhooks/events` | Receive a signed domain event from a registered external system. |
 
 GitHub webhooks are anonymous at the HTTP auth layer but validated through signature checking.
+
+### Generic event ingress
+
+`POST /webhooks/events` lets any external system — a CI job, a test runner — resume a workflow run
+that is waiting on a BPMN message, without Agentwerke needing a connector for that system. The
+sender names the message, so a wait on `test.unit.completed` is satisfiable by whatever actually ran
+the tests.
+
+```json
+{
+  "messageName": "test.unit.completed",
+  "correlationKey": "build-vmodel-001:unit",
+  "payload": { "conclusion": "success", "report_url": "https://ci.example/junit.xml" }
+}
+```
+
+The run resumes when `messageName` and `correlationKey` both match a waiting run; `payload`'s
+top-level fields become run inputs. Unmatched events are recorded and return `resumed: false`.
+
+Required headers:
+
+| Header | Purpose |
+| --- | --- |
+| `X-Agentwerke-Source` | Registered source id from `Integrations:EventIngress:Sources`. |
+| `X-Agentwerke-Signature-256` | `sha256=<hex>` HMAC-SHA256 of the raw body under that source's secret. |
+| `X-Agentwerke-Delivery` | Optional idempotency key. Omitted, the body's signature digest is used. |
+
+Configure senders under `Integrations:EventIngress`. The endpoint is disabled by default and
+returns 404 until `Enabled` is true:
+
+```json
+{
+  "Integrations": {
+    "EventIngress": {
+      "Enabled": true,
+      "Sources": [
+        {
+          "Id": "ci",
+          "Secret": "<shared secret>",
+          "AllowedMessageNames": [ "test.unit.completed" ]
+        }
+      ]
+    }
+  }
+}
+```
+
+Unlike the connector webhooks, an empty `Secret` does not skip signature validation — it disables
+the source. This endpoint can satisfy a verification gate, so misconfiguration fails closed.
+`AllowedMessageNames` is optional but recommended in production: it stops a leaked CI secret from
+resuming unrelated waits. Redelivery is idempotent — a repeated delivery is recorded once and
+resumes a run at most once.
 
 ## API usage pattern
 

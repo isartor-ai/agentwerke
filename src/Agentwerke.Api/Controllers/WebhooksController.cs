@@ -873,6 +873,179 @@ public sealed class WebhooksController : ControllerBase
     }
 
     /// <summary>
+    /// Generic signed event ingress (#206): lets any registered external system deliver a domain
+    /// event that resumes a BPMN message wait, without Agentwerke needing a connector for it.
+    /// The connector webhooks above speak GitHub's or Jira's vocabulary; this endpoint lets the
+    /// sender name the message, so <c>test.unit.completed</c> is deliverable by whatever ran the tests.
+    /// </summary>
+    /// <remarks>
+    /// Authenticated per-source by HMAC-SHA256 over the raw body (X-Agentwerke-Signature-256),
+    /// keyed by X-Agentwerke-Source. Deduplicated on X-Agentwerke-Delivery, falling back to the
+    /// body's signature digest so a sender that omits the header still cannot double-resume a run.
+    /// </remarks>
+    [HttpPost("events")]
+    public async Task<IActionResult> Events(CancellationToken cancellationToken)
+    {
+        if (!_options.EventIngress.Enabled)
+        {
+            return NotFound(new { error = "Event ingress is not enabled." });
+        }
+
+        var body = await ReadBodyAsync(cancellationToken);
+        var sourceId = Request.Headers["X-Agentwerke-Source"].FirstOrDefault();
+
+        // A form/urlencoded content type makes ASP.NET consume the stream before we read it, so the
+        // signature would be computed over an empty body and fail as a mismatch. Senders here are
+        // third-party CI jobs; say what is actually wrong rather than blaming their secret.
+        if (body.Length == 0)
+        {
+            return BadRequest(new
+            {
+                error = "Empty request body.",
+                hint = "Send the event as Content-Type: application/json.",
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(sourceId))
+        {
+            return Unauthorized(new { error = "Missing X-Agentwerke-Source header." });
+        }
+
+        var source = _options.EventIngress.Sources
+            .FirstOrDefault(s => string.Equals(s.Id, sourceId, StringComparison.OrdinalIgnoreCase));
+
+        // An unregistered source and a bad signature get the same answer on purpose: the caller
+        // learns only that it is not authorized, not which source ids exist.
+        if (source is null)
+        {
+            _logger.LogWarning("Rejected event ingress from unregistered source '{Source}'.", sourceId);
+            return Unauthorized(new { error = "Unknown or unauthorized event source." });
+        }
+
+        var validation = WebhookSignatureValidator.ValidateEventIngress(
+            body,
+            Request.Headers["X-Agentwerke-Signature-256"].FirstOrDefault(),
+            source.Secret);
+
+        if (!validation.IsValid)
+        {
+            _logger.LogWarning(
+                "Rejected event ingress from source '{Source}': {Reason}", source.Id, validation.ErrorMessage);
+            return Unauthorized(new { error = validation.ErrorMessage });
+        }
+
+        EventIngressPayload payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<EventIngressPayload>(body, EventIngressSerializerOptions)
+                ?? throw new JsonException("Null payload.");
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = "Invalid JSON payload.", detail = ex.Message });
+        }
+
+        if (string.IsNullOrWhiteSpace(payload.MessageName))
+        {
+            return BadRequest(new { error = "Payload is missing 'messageName'." });
+        }
+
+        if (string.IsNullOrWhiteSpace(payload.CorrelationKey))
+        {
+            return BadRequest(new { error = "Payload is missing 'correlationKey'." });
+        }
+
+        if (source.AllowedMessageNames.Count > 0
+            && !source.AllowedMessageNames.Contains(payload.MessageName, StringComparer.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Source '{Source}' is not allowed to deliver message '{MessageName}'.", source.Id, payload.MessageName);
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                error = $"Source '{source.Id}' is not allowed to deliver message '{payload.MessageName}'."
+            });
+        }
+
+        // An explicit delivery id lets a sender retry a failed POST without re-resuming. Without one,
+        // the signature digest identifies the body, which for a correlated domain event is the event.
+        var deliveryId = Request.Headers["X-Agentwerke-Delivery"].FirstOrDefault() is { Length: > 0 } header
+            ? $"{source.Id}:{header}"
+            : $"{source.Id}:{WebhookSignatureValidator.ComputeSignatureDigest(body, source.Secret)}";
+
+        var @event = new ExternalWorkflowEvent
+        {
+            Id = $"ext_{Guid.NewGuid():N}",
+            Kind = payload.MessageName,
+            CorrelationHint = payload.CorrelationKey,
+            Payload = payload.Payload is { ValueKind: not JsonValueKind.Undefined } p
+                ? p.GetRawText()
+                : "{}",
+            ReceivedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Source = source.Id,
+            DeliveryId = deliveryId,
+        };
+
+        if (!await _externalEventRepository.TryAddAsync(@event, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Ignored duplicate event delivery {DeliveryId} for {MessageName}.", deliveryId, payload.MessageName);
+            return Ok(new
+            {
+                recorded = true,
+                duplicate = true,
+                kind = @event.Kind,
+                correlationHint = @event.CorrelationHint,
+                resumed = false,
+            });
+        }
+
+        return await MatchAndResumeAsync(
+            @event,
+            [payload.CorrelationKey],
+            FlattenResumePayload(payload.Payload),
+            $"event-ingress:{source.Id}",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Run inputs are a string map, so the event's JSON payload is flattened one level: scalars
+    /// become their text, and nested objects/arrays keep their raw JSON so nothing is silently
+    /// dropped from the evidence a resumed run sees.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> FlattenResumePayload(JsonElement payload)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            return result;
+        }
+
+        foreach (var property in payload.EnumerateObject())
+        {
+            result[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+                JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => property.Value.GetRawText(),
+            };
+        }
+
+        return result;
+    }
+
+    private static readonly JsonSerializerOptions EventIngressSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    private sealed record EventIngressPayload(
+        string? MessageName,
+        string? CorrelationKey,
+        JsonElement Payload);
+
+    /// <summary>
     /// A run may be waiting on either a branch name or a commit sha as its correlation key —
     /// e.g. "wait for PR merge" is naturally branch-keyed, while "wait for CI green" after a
     /// deploy dispatch (#139) is naturally sha-keyed, since a branch can have multiple runs.
@@ -911,7 +1084,21 @@ public sealed class WebhooksController : ControllerBase
         CancellationToken cancellationToken)
     {
         await _externalEventRepository.AddAsync(@event, cancellationToken);
+        return await MatchAndResumeAsync(@event, correlationCandidates, resumePayload, "github-webhook", cancellationToken);
+    }
 
+    /// <summary>
+    /// Finds a run waiting on this event's message name and any of the correlation candidates, and
+    /// resumes it. Shared by the connector webhooks and the generic event ingress (#206) — the
+    /// matching is already vocabulary-agnostic, so only the callers differ.
+    /// </summary>
+    private async Task<IActionResult> MatchAndResumeAsync(
+        ExternalWorkflowEvent @event,
+        IReadOnlyList<string> correlationCandidates,
+        IReadOnlyDictionary<string, string> resumePayload,
+        string resumedBy,
+        CancellationToken cancellationToken)
+    {
         string? waitingRunId = null;
         string? matchedCorrelationKey = null;
         foreach (var candidate in correlationCandidates)
@@ -936,7 +1123,7 @@ public sealed class WebhooksController : ControllerBase
         try
         {
             await _orchestrationService.ResumeExternalRunAsync(
-                new ResumeExternalRunCommand(waitingRunId, matchedCorrelationKey, resumePayload, ResumedBy: "github-webhook"),
+                new ResumeExternalRunCommand(waitingRunId, matchedCorrelationKey, resumePayload, ResumedBy: resumedBy),
                 cancellationToken);
         }
         catch (WorkflowRunNotFoundException)

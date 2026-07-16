@@ -3,6 +3,7 @@ using System;
 using Agentwerke.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Agentwerke.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgentwerkeDbContext))]
-    partial class AgentwerkeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714114319_AddExternalEventDeliveryIdempotency")]
+    partial class AddExternalEventDeliveryIdempotency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -40,14 +43,6 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Blocking")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("CancelledAt")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("CancelledBy")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -55,17 +50,6 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedAt")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<string>("DefaultAnswer")
-                        .HasMaxLength(8192)
-                        .HasColumnType("character varying(8192)");
-
-                    b.Property<int>("DelegationDepth")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ExpiresAction")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("FromAgent")
                         .IsRequired()
@@ -90,12 +74,6 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                         .HasMaxLength(8192)
                         .HasColumnType("character varying(8192)");
 
-                    b.Property<string>("RequestedChannels")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
                     b.Property<string>("RespondedAt")
                         .HasColumnType("text");
 
@@ -103,17 +81,9 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("RespondedChannel")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
                     b.Property<string>("Response")
                         .HasMaxLength(8192)
                         .HasColumnType("character varying(8192)");
-
-                    b.Property<string>("ResumedAt")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("RunId")
                         .IsRequired()
@@ -129,29 +99,13 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("TimeoutAt")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<string>("ToolName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.HasKey("Id");
 
-                    b.HasIndex("CorrelationId");
-
                     b.HasIndex("RunId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("Status", "TimeoutAt");
 
                     b.ToTable("agent_interactions", "agentwerke");
                 });
@@ -342,58 +296,6 @@ namespace Agentwerke.Infrastructure.Persistence.Migrations
                         .HasFilter("\"DeliveryId\" IS NOT NULL");
 
                     b.ToTable("external_workflow_events", "agentwerke");
-                });
-
-            modelBuilder.Entity("Agentwerke.Domain.Persistence.InteractionDelivery", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
-
-                    b.Property<int>("Attempts")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Channel")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("ChannelMessageId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("CreatedAt")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("InteractionId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("LastAttemptAt")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InteractionId");
-
-                    b.HasIndex("Channel", "ChannelMessageId");
-
-                    b.HasIndex("InteractionId", "Channel")
-                        .IsUnique();
-
-                    b.ToTable("interaction_deliveries", "agentwerke");
                 });
 
             modelBuilder.Entity("Agentwerke.Domain.Persistence.OutboxEntry", b =>

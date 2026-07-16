@@ -81,6 +81,266 @@ public sealed class PolicyEvaluationServiceTests
         Assert.Equal("dispatched", action.Status);
     }
 
+    /// <summary>
+    /// Issue numbers are per-repository and dense, so reading #42 from the wrong repository almost
+    /// always finds a real but different issue. The run would implement someone else's requirement
+    /// and cite it as evidence — worse than failing (#210).
+    /// </summary>
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WhenRepositoryIsNotTheConfiguredOne_FailsInsteadOfReadingTheWrongRepo()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = "octo/agentwerke" };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["issue_number"] = "42",
+                ["repository"] = "someone-else/other-repo",
+            },
+            CancellationToken.None));
+
+        Assert.Contains("someone-else/other-repo", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("octo/agentwerke", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, gitHub.GetIssueCalls);
+    }
+
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WhenRepositoryMatchesTheConfiguredOne_Reads()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = "octo/agentwerke" };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["issue_number"] = "42",
+                // Case and surrounding space come from run input, not a careful author.
+                ["repository"] = " Octo/Agentwerke ",
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, gitHub.GetIssueCalls);
+    }
+
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WithoutARepositoryInput_ReadsTheConfiguredRepo()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = "octo/agentwerke" };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["issue_number"] = "42" },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, gitHub.GetIssueCalls);
+    }
+
+    [Fact]
+    public async Task GitHubReadIssueTool_ExecuteAsync_WhenNoRepositoryIsConfigured_RejectsARequestedOne()
+    {
+        var gitHub = new RecordingGitHubConnector { RepositorySlug = null };
+        var tool = new GitHubReadIssueTool(gitHub);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tool.ExecuteAsync(
+            CreateToolContext("github.read_issue"),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["issue_number"] = "42",
+                ["repository"] = "octo/agentwerke",
+            },
+            CancellationToken.None));
+
+        Assert.Contains("no GitHub repository is configured", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(0, gitHub.GetIssueCalls);
+    }
+
+    private static AgentToolExecutionContext CreateToolContext(string action) =>
+        new(
+            RunId: "run_abc123",
+            StepId: "step-1",
+            AgentName: "analyst",
+            Action: action,
+            Environment: "github",
+            PurposeType: "requirement_read",
+            PolicyTag: "vmodel-pilot-requirement",
+            Attempt: 1);
+
+    /// <summary>
+    /// The dispatch API returns no run id, so the workflow has to echo back a key chosen up front.
+    /// Defaulting it to the run id is what lets a waiting node derive the same value via {{run.id}}
+    /// without the two nodes exchanging data.
+    /// </summary>
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_PassesCorrelationInputsToTheWorkflow()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["correlate"] = "true",
+                ["ref"] = "abc123",
+                ["requirement_id"] = "42",
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+
+        var inputs = gitHub.LastWorkflowDispatchCommand!.Inputs!;
+        Assert.Equal("run_abc123", inputs["agentwerke_run_id"]);
+        Assert.Equal("run_abc123", inputs["agentwerke_correlation_key"]);
+        Assert.Equal("42", inputs["agentwerke_requirement_id"]);
+        Assert.Equal("abc123", inputs["commit_sha"]);
+        // Predates the correlation inputs; existing deploy workflows read it (#139).
+        Assert.Equal("abc123", inputs["sha"]);
+
+        Assert.Contains("\"correlation_key\":\"run_abc123\"", result.Output, StringComparison.Ordinal);
+        Assert.Contains("\"requirement_id\":\"42\"", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_RecordsTheCorrelationKeyAsStructuredEvidence()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["correlate"] = "true" },
+            CancellationToken.None);
+
+        var action = Assert.Single(result.ExternalActions!);
+        Assert.Equal("run_abc123", action.CorrelationKey);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_AnExplicitCorrelationKeyOverridesTheRunId()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["correlate"] = "true",
+                ["correlation_key"] = "build-vmodel-001:unit",
+            },
+            CancellationToken.None);
+
+        Assert.Equal(
+            "build-vmodel-001:unit",
+            gitHub.LastWorkflowDispatchCommand!.Inputs!["agentwerke_correlation_key"]);
+        Assert.Equal("build-vmodel-001:unit", Assert.Single(result.ExternalActions!).CorrelationKey);
+        // The run id still travels, so CI can link back even when the key is something else.
+        Assert.Equal("run_abc123", gitHub.LastWorkflowDispatchCommand.Inputs!["agentwerke_run_id"]);
+    }
+
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_WhenCorrelatingWithoutARef_SendsNoShaInput()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["correlate"] = "true" },
+            CancellationToken.None);
+
+        var inputs = gitHub.LastWorkflowDispatchCommand!.Inputs!;
+        Assert.False(inputs.ContainsKey("sha"));
+        Assert.False(inputs.ContainsKey("commit_sha"));
+        Assert.False(inputs.ContainsKey("agentwerke_requirement_id"));
+        Assert.Equal("run_abc123", inputs["agentwerke_correlation_key"]);
+    }
+
+    /// <summary>
+    /// workflow_dispatch rejects the whole call with 422 "Unexpected inputs provided" when handed an
+    /// input the workflow does not declare, and deploy workflows written against #139 declare at most
+    /// "sha". So without correlate, the payload must stay exactly what it was before #210.
+    /// </summary>
+    [Fact]
+    public async Task CicdTriggerDeployTool_ExecuteAsync_WithoutCorrelate_SendsOnlyTheLegacyShaInput()
+    {
+        var gitHub = new RecordingGitHubConnector();
+        var tool = new CicdTriggerDeployTool(gitHub);
+
+        var result = await tool.ExecuteAsync(
+            new AgentToolExecutionContext(
+                RunId: "run_abc123",
+                StepId: "step-1",
+                AgentName: "cicd-agent",
+                Action: "cicd.trigger_deploy",
+                Environment: "test",
+                PurposeType: "deploy",
+                PolicyTag: "deploy-test",
+                Attempt: 1),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["ref"] = "abc123" },
+            CancellationToken.None);
+
+        var inputs = gitHub.LastWorkflowDispatchCommand!.Inputs!;
+        Assert.Equal(["sha"], inputs.Keys);
+        Assert.Null(Assert.Single(result.ExternalActions!).CorrelationKey);
+    }
+
+    /// <summary>
+    /// Silently dropping the key would be the worst outcome: the dispatch looks correlated, the
+    /// workflow never receives it, and the wait expires with nothing pointing at the cause.
+    /// </summary>
+    [Fact]
+    public void CicdTriggerDeployTool_Validate_CorrelationKeyWithoutCorrelate_IsRejected()
+    {
+        var tool = new CicdTriggerDeployTool(new RecordingGitHubConnector());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tool.Validate(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["correlation_key"] = "build-vmodel-001:unit",
+            }));
+
+        Assert.Contains("requires 'correlate'", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task CicdTriggerDeployTool_ExecuteAsync_WhenNoInputGiven_StillDispatchesUsingConnectorDefaults()
     {
@@ -1782,6 +2042,8 @@ public sealed class PolicyEvaluationServiceTests
 
     private sealed class RecordingGitHubConnector : IGitHubConnector
     {
+        public string? RepositorySlug { get; init; } = "octo/agentwerke";
+
         public int GetIssueCalls { get; private set; }
         public int CreateBranchCalls { get; private set; }
         public int CreatePullRequestCalls { get; private set; }
@@ -1847,9 +2109,12 @@ public sealed class PolicyEvaluationServiceTests
 
         public int TriggerWorkflowDispatchCalls { get; private set; }
 
+        public TriggerGitHubWorkflowDispatchCommand? LastWorkflowDispatchCommand { get; private set; }
+
         public Task<GitHubWorkflowDispatchResult> TriggerWorkflowDispatchAsync(TriggerGitHubWorkflowDispatchCommand command, CancellationToken cancellationToken = default)
         {
             TriggerWorkflowDispatchCalls++;
+            LastWorkflowDispatchCommand = command;
             return Task.FromResult(new GitHubWorkflowDispatchResult(
                 command.WorkflowFileName ?? "deploy-to-test.yml",
                 command.Ref ?? "main",

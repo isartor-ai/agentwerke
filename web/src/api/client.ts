@@ -391,8 +391,8 @@ export const apiClient = {
     return requestJson<WorkflowRun[]>('/api/runs');
   },
 
-  async getRun(id: string): Promise<WorkflowRun | undefined> {
-    return requestJson<WorkflowRun>(`/api/runs/${id}`);
+  async getRun(id: string, signal?: AbortSignal): Promise<WorkflowRun | undefined> {
+    return requestJson<WorkflowRun>(`/api/runs/${id}`, signal ? { signal } : undefined);
   },
 
   async getRunInteractions(runId: string): Promise<RunInteraction[]> {
