@@ -130,4 +130,69 @@ public sealed class ApiClient
         resp.EnsureSuccessStatusCode();
         return (await resp.Content.ReadFromJsonAsync<JsonObject>(JsonOpts, ct))!;
     }
+
+    // ── Interactions (#215) ─────────────────────────────────────────────────────
+
+    /// <summary>Pending interactions across runs — the decision inbox surface (#227).</summary>
+    public async Task<(int Status, JsonArray Items)> ListPendingInteractionsAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync("/api/interactions?status=pending", ct);
+        var items = resp.IsSuccessStatusCode
+            ? (await resp.Content.ReadFromJsonAsync<JsonArray>(JsonOpts, ct)) ?? []
+            : [];
+        return ((int)resp.StatusCode, items);
+    }
+
+    public async Task<JsonArray> ListRunInteractionsAsync(string runId, CancellationToken ct = default)
+    {
+        var resp = await _http.GetAsync($"/api/runs/{runId}/interactions", ct);
+        resp.EnsureSuccessStatusCode();
+        return (await resp.Content.ReadFromJsonAsync<JsonArray>(JsonOpts, ct)) ?? [];
+    }
+
+    public async Task<int> AnswerInteractionAsync(
+        string runId, string interactionId, string answer, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync(
+            $"/api/runs/{runId}/interactions/{interactionId}/answer", new { answer }, JsonOpts, ct);
+        return (int)resp.StatusCode;
+    }
+
+    /// <summary>
+    /// Posts a response to the generic inbound webhook (#224), HMAC-signed exactly as the outbound
+    /// channel signs: sha256 over "{unixSeconds}.{rawBody}", so a test exercises the real verifier.
+    /// </summary>
+    public async Task<int> PostSignedWebhookResponseAsync(
+        object payload,
+        string secret,
+        long? unixTimestampOverride = null,
+        string? signatureOverride = null,
+        CancellationToken ct = default)
+    {
+        var body = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOpts);
+        var timestamp = (unixTimestampOverride ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds()).ToString();
+        var signature = signatureOverride ?? SignWebhook(body, timestamp, secret);
+
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/webhooks/interactions/response")
+        {
+            Content = new ByteArrayContent(body),
+        };
+        message.Content.Headers.ContentType = new("application/json") { CharSet = "utf-8" };
+        message.Headers.TryAddWithoutValidation("X-Agentwerke-Signature", signature);
+        message.Headers.TryAddWithoutValidation("X-Agentwerke-Timestamp", timestamp);
+
+        var resp = await _http.SendAsync(message, ct);
+        return (int)resp.StatusCode;
+    }
+
+    private static string SignWebhook(byte[] body, string timestamp, string secret)
+    {
+        var material = new byte[timestamp.Length + 1 + body.Length];
+        var prefix = System.Text.Encoding.UTF8.GetBytes(timestamp + ".");
+        Buffer.BlockCopy(prefix, 0, material, 0, prefix.Length);
+        Buffer.BlockCopy(body, 0, material, prefix.Length, body.Length);
+        var hash = System.Security.Cryptography.HMACSHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(secret), material);
+        return "sha256=" + Convert.ToHexString(hash).ToLowerInvariant();
+    }
 }
