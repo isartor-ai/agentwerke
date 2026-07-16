@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:agentwerke="https://agentwerke.ai/bpmn"
+                  id="e2e-interaction-defs"
+                  targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
+
+  <!--
+    Drives one agent task whose agent asks a human a blocking question (#230). The WireMock
+    Anthropic stub makes the model call human.ask on the first pass (the run parks in waiting_user)
+    and return final text once the conversation carries the human's answer (the re-run after the
+    answer). No approval gate, so the run's only wait state is the interaction.
+  -->
+  <bpmn:process id="e2e-interaction" name="E2E Interaction Workflow" isExecutable="true">
+
+    <bpmn:startEvent id="Start" name="Start"/>
+
+    <bpmn:serviceTask id="AskHuman" name="Ask Human">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="release-manager"
+          action="ask-human"
+          environment="ci"
+          purposeType="clarification"
+          policyTag="standard"
+          requiresEvidence=""/>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End" name="End"/>
+
+    <bpmn:sequenceFlow id="f1" sourceRef="Start" targetRef="AskHuman"/>
+    <bpmn:sequenceFlow id="f2" sourceRef="AskHuman" targetRef="End"/>
+
+  </bpmn:process>
+</bpmn:definitions>
