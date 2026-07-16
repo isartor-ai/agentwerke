@@ -1,0 +1,63 @@
+{
+  "//": "Drives the human.ask interaction loop (#230). Stateless: the model gets human_ask until the",
+  "//2": "conversation carries the answer, then returns final text. The answer marker string is the",
+  "//3": "exact prefix HumanAskTool feeds back on re-run ('Human answered via ...'), so priority ordering",
+  "//4": "alone decides the turn — no WireMock scenario state to get out of sync across parked/resumed runs.",
+  "mappings": [
+    {
+      "name": "human.ask - after answer: final text",
+      "priority": 1,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/messages",
+        "bodyPatterns": [{ "contains": "Human answered via" }]
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": "msg_e2e_human_ask_final",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-6",
+          "content": [
+            { "type": "text", "text": "Proceeding with the release as the human confirmed." }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": { "input_tokens": 40, "output_tokens": 14 }
+        }
+      }
+    },
+    {
+      "name": "human.ask - first pass: emit human_ask tool_use",
+      "priority": 2,
+      "request": {
+        "method": "POST",
+        "urlPath": "/v1/messages",
+        "bodyPatterns": [{ "contains": "human_ask" }]
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": "msg_e2e_human_ask_call",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-6",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_e2e_human_ask",
+              "name": "human_ask",
+              "input": { "question": "Deploy release 1.4.2 to production?", "options": "approve,reject" }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": { "input_tokens": 60, "output_tokens": 20 }
+        }
+      }
+    }
+  ]
+}

@@ -286,7 +286,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             PromptSnapshot: promptAssembly.PromptSnapshot,
             Contract: metadata.RuntimeContract ?? new AgentRuntimeContract(),
             Model: profile?.Model,
-            ReasoningEffort: profile?.ReasoningEffort);
+            ReasoningEffort: profile?.ReasoningEffort,
+            NodeId: node.Id);
 
         ModelRunResult modelResult;
         switch (executionMode)
@@ -319,7 +320,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 break;
             case AgentExecutionModes.ToolSandboxed:
             {
-                var sandboxToolRequest = BuildSandboxExecutionToolRequest(runId, stepId, metadata, attempt, profile);
+                var sandboxToolRequest = BuildSandboxExecutionToolRequest(runId, stepId, node, metadata, attempt, profile);
                 if (sandboxToolRequest is null)
                 {
                     return await FinalizeOutcomeAsync(
@@ -364,6 +365,15 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 {
                     // An operator answered the tool-access escalation with 'fail' (#202): the
                     // step fails instead of feeding a denial back into the model loop.
+                    return new AgentTaskOutcome(
+                        Succeeded: false,
+                        Output: null,
+                        FailureReason: ex.Message,
+                        PolicyDecision: policyDecision,
+                        RuntimeSnapshot: runtimeSnapshot with { ExecutionMode = executionMode });
+                }
+                catch (ConfirmationRejectedException ex)
+                {
                     return new AgentTaskOutcome(
                         Succeeded: false,
                         Output: null,
@@ -480,6 +490,14 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 FailureReason: ex.Message,
                 RuntimeSnapshot: runtimeSnapshot), cancellationToken);
         }
+        catch (ConfirmationRejectedException ex)
+        {
+            return await FinalizeOutcomeAsync(node, metadata, attempt, new AgentTaskOutcome(
+                Succeeded: false,
+                Output: null,
+                FailureReason: ex.Message,
+                RuntimeSnapshot: runtimeSnapshot), cancellationToken);
+        }
 
         var updatedSnapshot = runtimeSnapshot with
         {
@@ -553,7 +571,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["branch_name"] = branchName
-                });
+                },
+                nodeId: node.Id);
         }
 
         if (IsGitHubPullRequestAction(metadata.Action))
@@ -576,7 +595,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     ["title"] = node.Name is { Length: > 0 } ? $"Agentwerke: {node.Name}" : $"Agentwerke run {runId}",
                     ["body"] = BuildPullRequestBody(runId, stepId, metadata, attempt),
                     ["commit_message"] = $"Agentwerke evidence for run {runId}, step {stepId}"
-                });
+                },
+                nodeId: node.Id);
         }
 
         if (IsDirectGitHubToolAction(metadata.Action) || IsDirectCicdToolAction(metadata.Action))
@@ -589,7 +609,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 metadata,
                 attempt,
                 permissions,
-                ExtractToolInput(metadata.RuntimeContract, runContext, runId, stepId, attempt));
+                ExtractToolInput(metadata.RuntimeContract, runContext, runId, stepId, attempt),
+                nodeId: node.Id);
         }
 
         if (_toolRegistry.Find(metadata.Action) is { Category: var category } &&
@@ -603,7 +624,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                 metadata,
                 attempt,
                 permissions,
-                ExtractToolInput(metadata.RuntimeContract, runContext, runId, stepId, attempt));
+                ExtractToolInput(metadata.RuntimeContract, runContext, runId, stepId, attempt),
+                nodeId: node.Id);
         }
 
         return null;
@@ -612,6 +634,7 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
     private ToolGatewayRequest? BuildSandboxExecutionToolRequest(
         string runId,
         string stepId,
+        BpmnNodeDefinition node,
         AgentwerkeTaskMetadata metadata,
         int attempt,
         AgentProfile? profile)
@@ -642,7 +665,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
                     ?? profile?.SandboxProfiles.FirstOrDefault()
                     ?? SandboxProfileNames.Offline
             },
-            allowedSandboxProfiles: profile?.SandboxProfiles ?? []);
+            allowedSandboxProfiles: profile?.SandboxProfiles ?? [],
+            nodeId: node.Id);
     }
 
     private async Task<McpPreparationResult> PrepareMcpToolsAsync(
@@ -1177,7 +1201,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
         int attempt,
         AgentPermissionContract permissions,
         IReadOnlyDictionary<string, string> input,
-        IReadOnlyList<string>? allowedSandboxProfiles = null) =>
+        IReadOnlyList<string>? allowedSandboxProfiles = null,
+        string? nodeId = null) =>
         new(
             ToolName,
             Action,
@@ -1193,7 +1218,8 @@ public sealed class AgentOrchestrator : IServiceTaskExecutor
             permissions.AllowedTools,
             permissions.DeniedTools,
             input,
-            allowedSandboxProfiles ?? []);
+            allowedSandboxProfiles ?? [],
+            NodeId: nodeId);
 
     private static IReadOnlyDictionary<string, string> ExtractToolInput(
         AgentRuntimeContract? runtimeContract,

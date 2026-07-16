@@ -80,6 +80,21 @@ resume, so the interaction endpoint fails closed.
 **Created in `isartor-ai/agentwerke-private` on 2026-07-15** as issues [#215](https://github.com/isartor-ai/agentwerke-private/issues/215)–[#231](https://github.com/isartor-ai/agentwerke-private/issues/231).
 #215 is the tracking epic (label `epic`); #216–#231 are its sub-tickets and each backlinks to it.
 
+### Implementation status (2026-07-16)
+
+| Issues | Repository status |
+| --- | --- |
+| #216–#223 | Implemented and committed on `feat/agent-interactions-221`; #220's dedicated provider-boundary architecture test is still missing |
+| #224 | Generic webhook implementation and API tests are committed on `feat/agent-interactions-224`; persistent nonce replay protection remains open |
+| #225 | Slack adapter, shared callback dispatch, and provider/API tests are committed on `feat/agent-interactions-224` |
+| #226–#229 | Implemented and committed on `feat/agent-interactions-221` |
+| #230 | Not implemented; E2E fixtures/race/restart evidence gate remains open |
+| #231 | Documentation added; manual test remains gated by #224's nonce protection and #230 as stated in `docs/manual-test-interactions.md` |
+
+This status is intentionally implementation-based rather than inferred from GitHub issue state (the
+issues are still open). The epic is not complete until #224's nonce protection and #230 land
+and the manual scenario passes from a clean checkout.
+
 The drafts in this directory remain the source of truth for edits — update the markdown, then sync the
 issue body.
 

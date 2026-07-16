@@ -165,6 +165,14 @@ services:
       Integrations__GitHub__RepositoryName: "mock-repo"
       Integrations__Jira__WebhookSecret: ""
       Integrations__GitHub__WebhookSecret: ""
+      # Interaction channels (#215). Enabled so the interaction E2E scenarios exercise the real
+      # routing + inbound path; the generic webhook points back at WireMock and its secret both
+      # signs outbound and verifies inbound responses (#224).
+      Integrations__Interactions__Enabled: "true"
+      Integrations__Interactions__RespondUrlBase: "http://api:8080"
+      Integrations__InteractionWebhook__Enabled: "true"
+      Integrations__InteractionWebhook__Endpoint: "http://wiremock:8080/interaction-callback"
+      Integrations__InteractionWebhook__Secret: "e2e-interaction-webhook-secret"
     depends_on:
       postgres:
         condition: service_healthy

@@ -13,6 +13,7 @@ public sealed class AuthorizationMetadataTests
     [InlineData(typeof(WorkflowsController))]
     [InlineData(typeof(RunsController))]
     [InlineData(typeof(ApprovalsController))]
+    [InlineData(typeof(InteractionsController))]
     [InlineData(typeof(TemplatesController))]
     public void ProductReadControllers_RequireViewerPolicy(Type controllerType)
     {
@@ -55,6 +56,10 @@ public sealed class AuthorizationMetadataTests
     [InlineData(typeof(RunsController), nameof(RunsController.GetEvidencePack), AgentwerkePolicies.Operator)]
     [InlineData(typeof(RunsController), nameof(RunsController.DownloadEvidencePack), AgentwerkePolicies.Operator)]
     [InlineData(typeof(ApprovalsController), nameof(ApprovalsController.Decide), AgentwerkePolicies.Approver)]
+    [InlineData(typeof(RunsController), nameof(RunsController.AnswerInteraction), AgentwerkePolicies.Approver)]
+    [InlineData(typeof(RunsController), nameof(RunsController.RejectInteraction), AgentwerkePolicies.Approver)]
+    [InlineData(typeof(InteractionsController), nameof(InteractionsController.Cancel), AgentwerkePolicies.Approver)]
+    [InlineData(typeof(InteractionsController), nameof(InteractionsController.RetryDelivery), AgentwerkePolicies.Operator)]
     [InlineData(typeof(TemplatesController), nameof(TemplatesController.Clone), AgentwerkePolicies.Operator)]
     public void StateChangingActions_RequireExpectedPolicy(
         Type controllerType,

@@ -9,7 +9,36 @@ public sealed class IntegrationOptions
     public SlackOptions Slack { get; set; } = new();
     public TeamsOptions Teams { get; set; } = new();
     public NotificationOptions Notifications { get; set; } = new();
+
+    /// <summary>
+    /// The generic outbound/inbound interaction webhook (#224). Provider-specific, so it lives here
+    /// rather than in InteractionOptions: that type is consumed by the provider-neutral router in
+    /// Agentwerke.Application, which must know nothing about any particular channel.
+    /// </summary>
+    public InteractionWebhookOptions InteractionWebhook { get; set; } = new();
     public EventIngressOptions EventIngress { get; set; } = new();
+}
+
+public sealed class InteractionWebhookOptions
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Absolute URL an interaction is POSTed to.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// HMAC secret for both directions: signing the outbound POST and verifying the inbound response.
+    /// Resolved through ISecretStore, so this may hold a secret reference rather than the value.
+    ///
+    /// Unlike the Jira/GitHub trigger secrets, an empty value here is fatal rather than "skip
+    /// verification": the inbound endpoint resumes a parked run, so it fails closed.
+    /// </summary>
+    public string Secret { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
+
+    /// <summary>How far an inbound response's timestamp may drift before it is rejected as a replay.</summary>
+    public int ToleranceSeconds { get; set; } = 300;
 }
 
 /// <summary>
@@ -167,6 +196,22 @@ public sealed class SlackOptions
     /// (approve/reject from a message). Leave empty to skip verification (dev only). #172
     /// </summary>
     public string SigningSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Bot token (xoxb-…), required only for free-text answers, which need views.open to raise a
+    /// modal. An incoming webhook alone cannot open one, so without this the Slack channel degrades
+    /// to structured choices plus a link back to Agentwerke (#225).
+    /// </summary>
+    public string BotToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How far an inbound Slack request's timestamp may drift before it is rejected as a replay.
+    ///
+    /// Slack signs "v0:{timestamp}:{body}" but nothing forces the timestamp to be recent, so without
+    /// this window a captured payload stays replayable forever — Slack's own guidance is five
+    /// minutes (#225).
+    /// </summary>
+    public int ToleranceSeconds { get; set; } = 300;
 }
 
 public sealed class TeamsOptions

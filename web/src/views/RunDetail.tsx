@@ -178,6 +178,17 @@ export function RunDetail({ auth }: RunDetailProps) {
     await loadRun();
   }, [runId, loadRun]);
 
+  const handleRejectInteraction = useCallback(async (interactionId: string, reason: string) => {
+    if (!runId) return;
+    await apiClient.rejectInteraction(runId, interactionId, reason);
+    await loadRun();
+  }, [runId, loadRun]);
+
+  const handleRetryInteractionDelivery = useCallback(async (interactionId: string, channel: string) => {
+    await apiClient.retryInteractionDelivery(interactionId, channel);
+    await loadRun();
+  }, [loadRun]);
+
   // Count interactions per step so the timeline can mark steps that talked to a human or agent (#192).
   const interactionCountByStep = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -628,6 +639,8 @@ export function RunDetail({ auth }: RunDetailProps) {
             error={interactionError}
             canAnswer={canSubmitApprovals}
             onAnswer={handleAnswerInteraction}
+            onReject={handleRejectInteraction}
+            onRetryDelivery={handleRetryInteractionDelivery}
             resolveAgentIdentity={resolveAgentIdentity}
           />
         );

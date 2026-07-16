@@ -1,11 +1,12 @@
+using Agentwerke.AgentSecOps;
+using Agentwerke.Application.Agents;
 using Agentwerke.Application.Observability;
 using Agentwerke.Application.Secrets;
 using Agentwerke.Application.Workflows;
-using Agentwerke.AgentSecOps;
 using Agentwerke.Infrastructure.Persistence;
 using Agentwerke.Infrastructure.Policies;
-using Agentwerke.Infrastructure.Workers;
 using Agentwerke.Infrastructure.Secrets;
+using Agentwerke.Infrastructure.Workers;
 using Agentwerke.Infrastructure.Workflows;
 using Agentwerke.Workflows.Runtime;
 using Microsoft.EntityFrameworkCore;
@@ -90,7 +91,18 @@ public static class DependencyInjection
 
         services.AddScoped<IRunOutbox, OutboxRepository>();
         services.AddScoped<IWorkflowRunExecutor, WorkflowRunExecutor>();
+        services.Configure<InteractionOptions>(configuration.GetSection(InteractionOptions.Section));
+
+        // Agentwerke.Application deliberately depends on nothing but Domain and logging — it has no
+        // Microsoft.Extensions.Options reference — so the router and resolver take a plain
+        // InteractionOptions. Project the bound IOptions value so both styles share one config source.
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<InteractionOptions>>().Value);
+        services.AddScoped<IInteractionChannelResolver, InteractionChannelResolver>();
+        services.AddScoped<IInteractionRouter, InteractionRouter>();
+
+        services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddHostedService<RunDispatchWorker>();
+        services.AddHostedService<InteractionTimeoutSweeper>();
 
         // Default no-op notifier; AddAgentwerkeIntegrations overrides it with the
         // connector-backed implementation when chat channels are configured (#31).

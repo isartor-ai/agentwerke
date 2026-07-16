@@ -110,12 +110,22 @@ public static class WebhookSignatureValidator
     /// Validates a Slack request signature: <c>X-Slack-Signature</c> is
     /// <c>v0=&lt;hex&gt;</c> where the HMAC-SHA256 is computed over
     /// <c>v0:{X-Slack-Request-Timestamp}:{raw body}</c> with the app signing secret.
+    ///
+    /// The timestamp is inside the signed base string, but signing it is not the same as checking it:
+    /// until this took <paramref name="now"/>, the timestamp was never compared to anything and a
+    /// captured payload stayed replayable forever (#225).
+    ///
+    /// <paramref name="now"/> is required rather than defaulted. An optional clock would make replay
+    /// protection opt-in — the same shape as the "no secret configured = skip validation" branch above,
+    /// which is exactly how this gap survived unnoticed. A caller must state its clock.
     /// </summary>
     public static WebhookValidationResult ValidateSlack(
         byte[] requestBody,
         string? signatureHeader,
         string? timestampHeader,
-        string signingSecret)
+        string signingSecret,
+        DateTimeOffset now,
+        TimeSpan tolerance)
     {
         if (string.IsNullOrWhiteSpace(signingSecret))
         {
@@ -130,6 +140,19 @@ public static class WebhookSignatureValidator
         if (string.IsNullOrWhiteSpace(timestampHeader))
         {
             return WebhookValidationResult.Fail("Missing X-Slack-Request-Timestamp header.");
+        }
+
+        if (!long.TryParse(timestampHeader, out var unixSeconds))
+        {
+            return WebhookValidationResult.Fail("X-Slack-Request-Timestamp must be unix seconds.");
+        }
+
+        // Freshness before the HMAC: a stale request is refused however well it is signed, which is
+        // what bounds the replay window for a captured payload.
+        if ((now - DateTimeOffset.FromUnixTimeSeconds(unixSeconds)).Duration() > tolerance)
+        {
+            return WebhookValidationResult.Fail(
+                $"Timestamp is outside the allowed {tolerance.TotalMinutes:0} minute window.");
         }
 
         const string prefix = "v0=";
@@ -150,6 +173,88 @@ public static class WebhookSignatureValidator
             Encoding.ASCII.GetBytes(signatureHeader))
             ? WebhookValidationResult.Ok()
             : WebhookValidationResult.Fail("Signature mismatch.");
+    }
+
+    /// <summary>
+    /// Signs an outbound Agentwerke interaction webhook: HMAC-SHA256 over <c>{timestamp}.{raw body}</c>,
+    /// returned as the <c>sha256=&lt;hex&gt;</c> value for <c>X-Agentwerke-Signature</c>. The timestamp is
+    /// inside the signed material so it cannot be altered to widen the replay window.
+    /// </summary>
+    public static string SignAgentwerke(byte[] requestBody, string timestamp, string secret) =>
+        "sha256=" + ComputeHmacSha256Hex(BuildAgentwerkeBaseString(requestBody, timestamp), secret);
+
+    /// <summary>
+    /// Validates an inbound Agentwerke interaction-response signature and its freshness.
+    ///
+    /// Two deliberate differences from the trigger validators above:
+    ///
+    /// 1. It <b>fails closed</b> when no secret is configured. Skipping validation is defensible for a
+    ///    trigger — the worst case is an unwanted workflow run. This endpoint resumes a parked run and
+    ///    decides an agent's confirmation, so an unset secret would be an unauthenticated resume.
+    /// 2. It enforces a freshness window. <see cref="ValidateSlack"/> puts the timestamp in the signed
+    ///    base string but never checks that it is recent, so a captured payload stays replayable
+    ///    forever; that is not repeated here.
+    /// </summary>
+    public static WebhookValidationResult ValidateAgentwerke(
+        byte[] requestBody,
+        string? signatureHeader,
+        string? timestampHeader,
+        string secret,
+        DateTimeOffset now,
+        TimeSpan tolerance)
+    {
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            return WebhookValidationResult.Fail(
+                "Interaction webhook secret is not configured; refusing the request.");
+        }
+
+        if (string.IsNullOrWhiteSpace(signatureHeader))
+        {
+            return WebhookValidationResult.Fail("Missing X-Agentwerke-Signature header.");
+        }
+
+        if (string.IsNullOrWhiteSpace(timestampHeader))
+        {
+            return WebhookValidationResult.Fail("Missing X-Agentwerke-Timestamp header.");
+        }
+
+        if (!long.TryParse(timestampHeader, out var unixSeconds))
+        {
+            return WebhookValidationResult.Fail("X-Agentwerke-Timestamp must be unix seconds.");
+        }
+
+        // Check freshness before the HMAC: a stale request is rejected regardless of how well it is
+        // signed, which is what bounds the replay window for a captured payload.
+        var skew = now - DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+        if (skew.Duration() > tolerance)
+        {
+            return WebhookValidationResult.Fail(
+                $"Timestamp is outside the allowed {tolerance.TotalMinutes:0} minute window.");
+        }
+
+        const string prefix = "sha256=";
+        if (!signatureHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return WebhookValidationResult.Fail("Signature header must start with 'sha256='.");
+        }
+
+        var expected = SignAgentwerke(requestBody, timestampHeader, secret);
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(expected),
+            Encoding.ASCII.GetBytes(signatureHeader))
+            ? WebhookValidationResult.Ok()
+            : WebhookValidationResult.Fail("Signature mismatch.");
+    }
+
+    private static byte[] BuildAgentwerkeBaseString(byte[] requestBody, string timestamp)
+    {
+        var prefixBytes = Encoding.UTF8.GetBytes($"{timestamp}.");
+        var basestring = new byte[prefixBytes.Length + requestBody.Length];
+        Buffer.BlockCopy(prefixBytes, 0, basestring, 0, prefixBytes.Length);
+        Buffer.BlockCopy(requestBody, 0, basestring, prefixBytes.Length, requestBody.Length);
+        return basestring;
     }
 
     private static string ComputeHmacSha256Hex(byte[] payload, string secret)
