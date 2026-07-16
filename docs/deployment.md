@@ -42,6 +42,20 @@ Settings use the standard .NET `Section__Key` env mapping.
   `__PersonalAccessToken`, `__DefaultBaseBranch`, `__BranchPrefix`,
   `__CreateDraftPullRequests`.
 
+**Agent interaction channels**
+- `Integrations__Interactions__Enabled`, `__DefaultChannels`, `__ChannelsByWorkflow`,
+  `__ChannelsByAgent`, `__DefaultTimeoutSeconds`, `__SweepIntervalSeconds`,
+  `__MaxDeliveryAttempts`, `__RetryBaseDelayMs`, and `__RespondUrlBase`.
+- `Integrations__Slack__Enabled`, `__WebhookUrl`, `__SigningSecret`, optional `__BotToken`, and
+  `__ToleranceSeconds`.
+- `Integrations__Teams__Enabled`, `__WebhookUrl`. Teams incoming webhooks are outbound-only in v1;
+  questions must be answered in Agentwerke or another response-capable channel.
+- `Integrations__InteractionWebhook__Enabled`, `__Endpoint`, `__Secret`, `__TimeoutSeconds`, and
+  `__ToleranceSeconds`.
+
+See [interaction-channels.md](interaction-channels.md) for configuration precedence, provider setup,
+the signed webhook contract, API reference, and the operational runbook.
+
 **Sandboxes**
 - `Sandboxes__Enabled`, `Sandboxes__Provider` (`docker` / OpenSandbox / k8s),
   `Sandboxes__Docker__Enabled`, `Sandboxes__Docker__DockerEndpoint`.

@@ -270,6 +270,23 @@ Responsibilities:
 - Credential-aware external communication
 - Connector health and retry handling
 
+Agent clarification delivery crosses a provider-neutral `IInteractionChannel` boundary owned by
+`Agentwerke.Application`. The router depends only on `ChannelId`, `Enabled`, `CanCarryResponse`, and a
+narrow delivery request/result contract. Slack, Teams, and generic-webhook adapters belong in
+`Agentwerke.Integrations` and are registered through dependency injection.
+
+This dependency direction is mandatory: `Agentwerke.Domain`, `Agentwerke.Agents`, and
+`Agentwerke.Application` may not reference provider adapter types or provider SDKs. #220 specifies an
+architecture test to enforce that rule; the current tree has the correct project/type boundary but no
+dedicated architecture test was found, so adding that guard remains a review gate. The narrow outbound
+contract also keeps run context, artifacts, tool output, and credentials from crossing the channel
+trust boundary.
+
+Channel selection is layered, most specific first: per-interaction request, per-workflow override,
+per-agent override, then configured defaults. Only the first non-empty layer is used; the UI is always
+added as a safe fallback. Delivery fan-out is best effort and persisted per channel, so an external
+outage does not fail the agent step or hide the question from the UI.
+
 ### 6.8 Plugin Runtime
 
 Responsibilities:

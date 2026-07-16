@@ -113,18 +113,58 @@ delegations, and questions/notifications to a human. Backs the run **Conversatio
 - `RunId` (varchar(128), required, indexed)
 - `StepId` (varchar(128), nullable) — the step that produced the interaction, for anchoring in the UI
 - `FromAgent` (varchar(128), required)
-- `Kind` (varchar(64), required) — `post` | `question` | `choice` | `notify` | `agent_request` | `approval`
+- `Kind` (varchar(64), required) — `post` | `notify` | `question` | `choice` | `confirm` |
+  `agent_request` | `approval` | `tool_access`
 - `AddresseeType` (varchar(32), required) — `human` | `agent`
 - `Addressee` (varchar(128), nullable) — agent id or human role/user; null = broadcast to the run
 - `Blocking` (boolean, required) — whether the sender suspends until answered
 - `Prompt` (varchar(8192), required) — the message / question / task text
 - `Options` (jsonb, required) — choices offered to the responder
+- `RequestedChannels` (jsonb, required, default `[]`) — requested delivery channels
 - `CorrelationId` (varchar(128), nullable) — links a request to its reply (e.g. `agent.request` ↔ result)
-- `Status` (varchar(64), required) — `pending` | `answered` | `posted` | `expired`
+- `Status` (varchar(64), required) — `pending` | `answered` | `posted` | `expired` | `rejected` | `cancelled`
 - `Response` (varchar(8192), nullable)
 - `RespondedBy` (varchar(128), nullable)
 - `RespondedAt` (text, nullable)
+- `RespondedChannel` (varchar(32), nullable) — channel whose accepted response won
+- `TimeoutAt` (varchar(64), nullable) — expiry instant; null means never
+- `ExpiresAction` (varchar(32), nullable) — `fail` | `continue` | `default_answer`
+- `DefaultAnswer` (varchar(8192), nullable)
+- `CancelledAt` (varchar(64), nullable)
+- `CancelledBy` (varchar(128), nullable)
+- `ResumedAt` (varchar(64), nullable)
+- `DelegationDepth` (integer, required, default `0`)
+- `Version` (integer, required, default `0`, optimistic concurrency token)
 - `CreatedAt` (text, required)
+
+Indexes cover `RunId`, `Status`, (`Status`, `TimeoutAt`), and `CorrelationId`.
+
+`Version` deliberately uses an application-visible `int`, not PostgreSQL's `xmin`. Interaction
+repositories have hand-written in-memory fakes and concurrency tests that must exercise the same token
+without Docker or an EF shadow property. Replacing it with `xmin` would make the first-response-wins
+invariant testable only against PostgreSQL and would weaken the fast unit-test proof of the race.
+
+### interaction_deliveries
+
+One row per interaction/channel, updated in place across retries:
+
+- `Id` (text, PK)
+- `InteractionId` (varchar(64), required, indexed)
+- `Channel` (varchar(32), required)
+- `Status` (varchar(32), required) — `pending` | `delivered` | `failed` | `not_supported`
+- `ChannelMessageId` (varchar(256), nullable) — provider correlation id
+- `Attempts` (integer, required)
+- `LastAttemptAt` (varchar(64), nullable)
+- `LastError` (varchar(1024), nullable) — provider-facing diagnostic retained for operators
+- `CreatedAt` (varchar(64), required)
+
+The unique (`InteractionId`, `Channel`) index makes retry an update rather than a duplicate delivery
+row. (`Channel`, `ChannelMessageId`) supports inbound provider correlation.
+
+All interaction and delivery timestamps are produced with the .NET round-trip (`"o"`) ISO-8601
+format. This is a storage contract: the expiry repository compares `TimeoutAt` and the current
+timestamp with ordinal string comparison, which is correct only while every value uses the same
+UTC-normalized round-trip representation. Do not introduce locale-formatted or mixed-offset strings.
 
 ## Notes
 
