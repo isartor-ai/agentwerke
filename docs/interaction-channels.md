@@ -110,9 +110,8 @@ token and `views.open`; an incoming webhook alone cannot open the answer modal. 
 actions use namespaced action ids so the existing approval buttons keep their behavior.
 
 Operational warning: do not put `slack` in interaction channel selection on a deployed revision that
-does not contain `SlackInteractionChannel`; the resolver will log and drop it. The adapter and callback
-dispatch are currently present as uncommitted #225 work in this working tree and must pass their test
-gate before deployment.
+does not contain `SlackInteractionChannel`; the resolver will log and drop it. The adapter, callback
+dispatch, and their provider/API tests are committed on `feat/agent-interactions-224`.
 
 ### Microsoft Teams
 

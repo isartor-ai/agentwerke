@@ -10,6 +10,11 @@ public sealed class SlackInteractionTests
 {
     private const string Secret = "slack-signing-secret";
 
+    /// <summary>The instant the fixture timestamp represents. Kept fixed so signatures stay stable.</summary>
+    private static readonly DateTimeOffset SignedAt = DateTimeOffset.FromUnixTimeSeconds(1700000000);
+
+    private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
+
     private static (string Signature, string Timestamp) Sign(byte[] body)
     {
         const string ts = "1700000000";
@@ -23,7 +28,7 @@ public sealed class SlackInteractionTests
     {
         var body = Encoding.UTF8.GetBytes("payload=%7B%7D");
         var (sig, ts) = Sign(body);
-        Assert.True(WebhookSignatureValidator.ValidateSlack(body, sig, ts, Secret).IsValid);
+        Assert.True(WebhookSignatureValidator.ValidateSlack(body, sig, ts, Secret, SignedAt, Window).IsValid);
     }
 
     [Fact]
@@ -32,20 +37,65 @@ public sealed class SlackInteractionTests
         var body = Encoding.UTF8.GetBytes("payload=%7B%7D");
         var (sig, ts) = Sign(body);
         var tampered = Encoding.UTF8.GetBytes("payload=%7B%22x%22%3A1%7D");
-        Assert.False(WebhookSignatureValidator.ValidateSlack(tampered, sig, ts, Secret).IsValid);
+        Assert.False(WebhookSignatureValidator.ValidateSlack(tampered, sig, ts, Secret, SignedAt, Window).IsValid);
     }
 
     [Fact]
     public void ValidateSlack_EmptySecret_SkipsValidation()
     {
-        Assert.True(WebhookSignatureValidator.ValidateSlack([1, 2, 3], null, null, string.Empty).IsValid);
+        Assert.True(WebhookSignatureValidator.ValidateSlack([1, 2, 3], null, null, string.Empty, SignedAt, Window).IsValid);
     }
 
     [Fact]
     public void ValidateSlack_MissingHeaders_Fail()
     {
-        Assert.False(WebhookSignatureValidator.ValidateSlack([1], null, "1700000000", Secret).IsValid);
-        Assert.False(WebhookSignatureValidator.ValidateSlack([1], "v0=abc", null, Secret).IsValid);
+        Assert.False(WebhookSignatureValidator.ValidateSlack([1], null, "1700000000", Secret, SignedAt, Window).IsValid);
+        Assert.False(WebhookSignatureValidator.ValidateSlack([1], "v0=abc", null, Secret, SignedAt, Window).IsValid);
+    }
+
+    /// <summary>
+    /// The gap this closes: the timestamp is signed but was never checked, so a captured payload
+    /// replayed days later validated cleanly (#225).
+    /// </summary>
+    [Fact]
+    public void ValidateSlack_StaleTimestamp_FailsEvenWithAValidSignature()
+    {
+        var body = Encoding.UTF8.GetBytes("payload=%7B%7D");
+        var (sig, ts) = Sign(body);
+
+        var result = WebhookSignatureValidator.ValidateSlack(
+            body, sig, ts, Secret, SignedAt.AddMinutes(6), Window);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("window", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A clock skewed the other way is just as replayable.</summary>
+    [Fact]
+    public void ValidateSlack_FutureTimestamp_Fails()
+    {
+        var body = Encoding.UTF8.GetBytes("payload=%7B%7D");
+        var (sig, ts) = Sign(body);
+
+        Assert.False(WebhookSignatureValidator.ValidateSlack(
+            body, sig, ts, Secret, SignedAt.AddMinutes(-6), Window).IsValid);
+    }
+
+    [Fact]
+    public void ValidateSlack_WithinTheWindow_Passes()
+    {
+        var body = Encoding.UTF8.GetBytes("payload=%7B%7D");
+        var (sig, ts) = Sign(body);
+
+        Assert.True(WebhookSignatureValidator.ValidateSlack(
+            body, sig, ts, Secret, SignedAt.AddMinutes(4), Window).IsValid);
+    }
+
+    [Fact]
+    public void ValidateSlack_NonNumericTimestamp_Fails()
+    {
+        Assert.False(WebhookSignatureValidator.ValidateSlack(
+            [1], "v0=abc", "not-a-timestamp", Secret, SignedAt, Window).IsValid);
     }
 
     [Fact]
