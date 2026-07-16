@@ -85,14 +85,14 @@ resume, so the interaction endpoint fails closed.
 | Issues | Repository status |
 | --- | --- |
 | #216–#223 | Implemented and committed on `feat/agent-interactions-221`; #220's dedicated provider-boundary architecture test is still missing |
-| #224 | Generic webhook implementation is present as uncommitted work; persistent nonce replay protection and its final tests remain open |
-| #225 | Adapter and shared callback dispatch are present as uncommitted work; final provider/API tests remain open |
+| #224 | Generic webhook implementation and API tests are committed on `feat/agent-interactions-224`; persistent nonce replay protection remains open |
+| #225 | Slack adapter, shared callback dispatch, and provider/API tests are committed on `feat/agent-interactions-224` |
 | #226–#229 | Implemented and committed on `feat/agent-interactions-221` |
 | #230 | Not implemented; E2E fixtures/race/restart evidence gate remains open |
-| #231 | Documentation added; manual test remains gated by #224/#225/#230 as stated in `docs/manual-test-interactions.md` |
+| #231 | Documentation added; manual test remains gated by #224's nonce protection and #230 as stated in `docs/manual-test-interactions.md` |
 
 This status is intentionally implementation-based rather than inferred from GitHub issue state (the
-issues are still open). The epic is not complete until #224's nonce protection, #225, and #230 land
+issues are still open). The epic is not complete until #224's nonce protection and #230 land
 and the manual scenario passes from a clean checkout.
 
 The drafts in this directory remain the source of truth for edits — update the markdown, then sync the
