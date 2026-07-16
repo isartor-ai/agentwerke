@@ -14,6 +14,8 @@ vi.mock('../api/client', () => ({
     getAgents: vi.fn(),
     getRunInteractions: vi.fn(),
     answerInteraction: vi.fn(),
+    rejectInteraction: vi.fn(),
+    retryInteractionDelivery: vi.fn(),
     getWorkflow: vi.fn(),
     streamRunEvents: vi.fn(),
     getRunEvidencePack: vi.fn(),
@@ -89,6 +91,8 @@ describe('RunDetail integration', () => {
     vi.mocked(apiClient.cancelRun).mockResolvedValue(undefined);
     vi.mocked(apiClient.getRunInteractions).mockResolvedValue([]);
     vi.mocked(apiClient.answerInteraction).mockResolvedValue(undefined);
+    vi.mocked(apiClient.rejectInteraction).mockResolvedValue(undefined);
+    vi.mocked(apiClient.retryInteractionDelivery).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -571,5 +575,42 @@ describe('RunDetail integration', () => {
     clickRunDetailTab('Conversation');
 
     expect(await screen.findByText('Conversation unavailable')).toBeInTheDocument();
+  });
+
+  it('shows confirmation, winning channel, timeout, and retryable delivery state', async () => {
+    vi.mocked(apiClient.getRunInteractions).mockResolvedValue([
+      {
+        id: 'confirm-1', runId: 'run-0421', stepId: 'step-7', from: 'reviewer', kind: 'confirm',
+        addresseeType: 'human', blocking: true, prompt: 'Deploy to production?', options: ['approve', 'reject'],
+        status: 'pending', createdAt: new Date().toISOString(),
+        timeoutAt: new Date(Date.now() + 12 * 60_000).toISOString(), requestedChannels: ['ui', 'slack'],
+        deliveries: [{ channel: 'slack', status: 'failed', attempts: 3, lastError: 'Slack returned 503' }],
+      },
+      {
+        id: 'answered-1', runId: 'run-0421', from: 'reviewer', kind: 'choice', addresseeType: 'human',
+        blocking: true, prompt: 'Ship?', options: ['yes', 'no'], status: 'answered', response: 'yes',
+        respondedBy: 'dana', respondedChannel: 'slack', respondedAt: '2026-07-15T12:00:00Z',
+        createdAt: '2026-07-15T11:00:00Z',
+      },
+      {
+        id: 'teams-1', runId: 'run-0421', from: 'reviewer', kind: 'question', addresseeType: 'human',
+        blocking: true, prompt: 'Fallback?', options: [], status: 'pending', createdAt: new Date().toISOString(),
+        deliveries: [{ channel: 'teams', status: 'not_supported', attempts: 1, lastError: 'outbound only' }],
+      },
+    ]);
+
+    renderDetail();
+    expect(await screen.findByText('Run run-0421')).toBeInTheDocument();
+    clickRunDetailTab('Conversation');
+
+    expect(await screen.findByText('needs confirmation')).toBeInTheDocument();
+    expect(screen.getByText('Sent to: ui, slack')).toBeInTheDocument();
+    expect(screen.getByText(/expires in 12m/i)).toBeInTheDocument();
+    expect(screen.getByText('Answered via Slack by dana')).toBeInTheDocument();
+    expect(screen.getByText('Slack returned 503')).toBeInTheDocument();
+    expect(screen.getByText(/Teams cannot accept replies/i)).toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: 'Approve' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Slack delivery' }));
+    await waitFor(() => expect(apiClient.retryInteractionDelivery).toHaveBeenCalledWith('confirm-1', 'slack'));
   });
 });

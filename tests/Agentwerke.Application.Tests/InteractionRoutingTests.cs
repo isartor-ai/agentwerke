@@ -228,7 +228,7 @@ public sealed class InteractionRoutingTests
 
         await harness.Router.RouteAsync(harness.Interaction, CancellationToken.None);
 
-        Assert.Equal(0, teams.Calls);
+        Assert.Equal(1, teams.Calls);
         var row = Row(await harness.Deliveries.GetByInteractionAsync("int_1", CancellationToken.None), InteractionChannels.Teams);
         Assert.Equal(InteractionDeliveryStatuses.NotSupported, row.Status);
         Assert.Contains("cannot accept responses", row.LastError);

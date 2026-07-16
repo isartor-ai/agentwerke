@@ -197,13 +197,13 @@ export interface RunInteraction {
   runId: string;
   stepId?: string | null;
   from: string;
-  kind: 'post' | 'question' | 'choice' | 'notify' | 'agent_request' | 'approval' | 'tool_access';
+  kind: 'post' | 'question' | 'choice' | 'confirm' | 'notify' | 'agent_request' | 'approval' | 'tool_access';
   addresseeType: 'human' | 'agent';
   addressee?: string | null;
   blocking: boolean;
   prompt: string;
   options: string[];
-  status: 'pending' | 'answered' | 'posted' | 'expired';
+  status: 'pending' | 'answered' | 'posted' | 'expired' | 'rejected' | 'cancelled';
   response?: string | null;
   respondedBy?: string | null;
   respondedAt?: string | null;
@@ -212,6 +212,26 @@ export interface RunInteraction {
   toolName?: string | null;
   /** For tool_access interactions (#202): the model's stated intent (truncated tool input). */
   intent?: string | null;
+  requestedChannels?: string[];
+  respondedChannel?: string | null;
+  timeoutAt?: string | null;
+  cancelledAt?: string | null;
+  resumedAt?: string | null;
+  delegationDepth?: number;
+  deliveries?: InteractionDelivery[];
+  workflowName?: string | null;
+  correlationId?: string | null;
+  expiresAction?: string | null;
+  defaultAnswer?: string | null;
+}
+
+export interface InteractionDelivery {
+  channel: string;
+  status: 'pending' | 'delivered' | 'failed' | 'not_supported';
+  channelMessageId?: string | null;
+  attempts: number;
+  lastAttemptAt?: string | null;
+  lastError?: string | null;
 }
 
 /** A pending tool-access escalation (#202) shown on the Approvals dashboard. */

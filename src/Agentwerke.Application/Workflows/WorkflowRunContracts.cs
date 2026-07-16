@@ -278,14 +278,20 @@ public sealed class InteractionNotPendingException : Exception
         Status = status;
     }
 
-    public InteractionNotPendingException(string interactionId, string status, string? respondedChannel)
+    public InteractionNotPendingException(
+        string interactionId,
+        string status,
+        string? respondedChannel,
+        string? respondedBy = null)
         : base(respondedChannel is null
             ? $"Agent interaction '{interactionId}' cannot be answered because its status is '{status}'."
-            : $"Agent interaction '{interactionId}' was already answered via {respondedChannel}.")
+            : $"Agent interaction '{interactionId}' was already answered via {respondedChannel}"
+              + (respondedBy is null ? "." : $" by {respondedBy}."))
     {
         InteractionId = interactionId;
         Status = status;
         RespondedChannel = respondedChannel;
+        RespondedBy = respondedBy;
     }
 
     public string InteractionId { get; }
@@ -293,6 +299,7 @@ public sealed class InteractionNotPendingException : Exception
 
     /// <summary>The channel whose response won, when the interaction was answered. Null otherwise.</summary>
     public string? RespondedChannel { get; }
+    public string? RespondedBy { get; }
 }
 
 /// <summary>The answer was not one of the interaction's offered choices. Maps to 400 (#227).</summary>

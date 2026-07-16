@@ -3728,6 +3728,33 @@ textarea {
   padding: 12px 14px;
   background: var(--color-surface-container);
 }
+.conversation-entry-answered {
+  background: rgb(129 201 149 / 0.08);
+}
+.conversation-entry-rejected,
+.conversation-entry-expired,
+.conversation-entry:has(.conversation-delivery-error) {
+  background: rgb(255 180 171 / 0.08);
+}
+.conversation-entry-cancelled {
+  background: var(--color-surface-low);
+  color: var(--color-muted);
+}
+.conversation-entry-linked {
+  box-shadow: inset 4px 0 rgb(217 176 106 / 0.35);
+}
+.conversation-terminal {
+  color: var(--color-muted);
+  font-weight: 700;
+}
+.conversation-delivery-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: var(--color-error);
+}
 .conversation-head {
   display: flex;
   align-items: center;

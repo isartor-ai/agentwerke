@@ -30,7 +30,10 @@ public sealed record SandboxedAgentRunEnvelope(
     /// Operator guidance for tools whose access request was declined, keyed by tool name; the
     /// guidance is returned to the model as the tool result on the step re-run.
     /// </summary>
-    IReadOnlyDictionary<string, string>? ToolAccessGuidance = null);
+    IReadOnlyDictionary<string, string>? ToolAccessGuidance = null,
+    string? NodeId = null,
+    int DelegationDepth = 0,
+    IReadOnlyList<string>? DelegationChain = null);
 
 public sealed record SandboxedToolContract(
     string Name,
