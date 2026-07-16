@@ -111,6 +111,36 @@ describe('RunDetail integration', () => {
     fireEvent.click(within(runTablist).getByRole('tab', { name }));
   }
 
+  it('surfaces a retryable error instead of hanging when the initial run fetch stalls', async () => {
+    // Regression for the stuck "Loading run detail" spinner: a fetch that never settles (e.g. an
+    // HTTP/1.1 connection pool exhausted by held-open SSE streams) must degrade to a retryable error
+    // via the load watchdog, not spin forever. Without the watchdog this test hangs on the spinner.
+    vi.useFakeTimers();
+    try {
+      vi.mocked(apiClient.getRun).mockImplementation(
+        (_id, signal) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            );
+          }),
+      );
+
+      renderDetail();
+
+      expect(screen.getByText('Loading run detail')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+
+      expect(screen.queryByText('Loading run detail')).not.toBeInTheDocument();
+      expect(screen.getByText(/Timed out loading this run/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders live run detail with tabs, events, artifacts and approvals', async () => {
     renderDetail();
 
