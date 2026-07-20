@@ -12,6 +12,10 @@ public interface IRunContextRepository
     /// <summary>Upserts a context entry. Writing an existing key replaces its value.</summary>
     Task SetAsync(string runId, string key, string value, string kind, CancellationToken cancellationToken);
 
+    Task<RunContextEntry?> GetAsync(string runId, string key, CancellationToken cancellationToken);
+
+    Task DeleteAsync(string runId, string key, CancellationToken cancellationToken);
+
     /// <summary>Returns all context entries for a run, ordered by creation time.</summary>
     Task<IReadOnlyList<RunContextEntry>> GetAllAsync(string runId, CancellationToken cancellationToken);
 }
@@ -22,4 +26,5 @@ public static class RunContextKinds
     public const string Input = "input";
     public const string Output = "output";
     public const string External = "external";
+    public const string Interaction = "interaction";
 }

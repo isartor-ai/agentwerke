@@ -81,10 +81,17 @@ async function requestJson<T>(
   if (!response.ok) {
     const errorText = await response.text();
     const errorMessage = extractErrorMessage(errorText) ?? `Request failed for ${path}: ${response.status}`;
-    throw new Error(errorMessage);
+    throw new ApiRequestError(errorMessage, response.status);
   }
 
   return (await response.json()) as T;
+}
+
+export class ApiRequestError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
 }
 
 function extractErrorMessage(errorText: string): string | null {
@@ -396,6 +403,30 @@ export const apiClient = {
     await requestJson<void>(
       `/api/runs/${encodeURIComponent(runId)}/interactions/${encodeURIComponent(interactionId)}/answer`,
       { method: 'POST', body: JSON.stringify({ answer }) },
+    );
+  },
+
+  async getPendingInteractions(): Promise<RunInteraction[]> {
+    return requestJson<RunInteraction[]>('/api/interactions?status=pending&addresseeType=human');
+  },
+
+  async rejectInteraction(runId: string, interactionId: string, reason: string): Promise<void> {
+    await requestJson<void>(
+      `/api/runs/${encodeURIComponent(runId)}/interactions/${encodeURIComponent(interactionId)}/reject`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    );
+  },
+
+  async cancelInteraction(interactionId: string, reason: string): Promise<void> {
+    await requestJson<void>(`/api/interactions/${encodeURIComponent(interactionId)}/cancel`, {
+      method: 'POST', body: JSON.stringify({ reason }),
+    });
+  },
+
+  async retryInteractionDelivery(interactionId: string, channel: string): Promise<void> {
+    await requestJson<void>(
+      `/api/interactions/${encodeURIComponent(interactionId)}/deliveries/${encodeURIComponent(channel)}/retry`,
+      { method: 'POST' },
     );
   },
 

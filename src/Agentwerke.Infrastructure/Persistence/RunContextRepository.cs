@@ -50,4 +50,15 @@ public sealed class RunContextRepository : IRunContextRepository
             .OrderBy(e => e.CreatedAt)
             .ToListAsync(cancellationToken);
     }
+
+    public Task<RunContextEntry?> GetAsync(string runId, string key, CancellationToken cancellationToken) =>
+        _dbContext.RunContextEntries.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.RunId == runId && e.Key == key, cancellationToken);
+
+    public async Task DeleteAsync(string runId, string key, CancellationToken cancellationToken)
+    {
+        await _dbContext.RunContextEntries
+            .Where(e => e.RunId == runId && e.Key == key)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
 }

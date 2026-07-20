@@ -11,6 +11,10 @@ vi.mock('../api/client', () => ({
     getRunArtifactContent: vi.fn(),
     getToolAccessRequests: vi.fn(),
     answerInteraction: vi.fn(),
+    getPendingInteractions: vi.fn(),
+    rejectInteraction: vi.fn(),
+    cancelInteraction: vi.fn(),
+    retryInteractionDelivery: vi.fn(),
   },
 }));
 
@@ -35,6 +39,8 @@ describe('ApprovalsDashboard integration', () => {
     vi.mocked(apiClient.decideApproval).mockResolvedValue(undefined);
     vi.mocked(apiClient.getToolAccessRequests).mockResolvedValue([]);
     vi.mocked(apiClient.answerInteraction).mockResolvedValue(undefined);
+    vi.mocked(apiClient.getPendingInteractions).mockResolvedValue([]);
+    vi.mocked(apiClient.rejectInteraction).mockResolvedValue(undefined);
   });
 
   it('opens review drawer and submits approval decision', async () => {
@@ -66,6 +72,45 @@ describe('ApprovalsDashboard integration', () => {
       );
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Approval approved');
+  });
+
+  it('renders and answers pending interactions from every run', async () => {
+    vi.mocked(apiClient.getPendingInteractions).mockResolvedValue([{
+      id: 'int-9', runId: 'run-99', workflowName: 'Production deploy', stepId: 'review',
+      from: 'reviewer', kind: 'choice', addresseeType: 'human', addressee: null,
+      blocking: true, prompt: 'Ship now?', options: ['Ship', 'Wait'], status: 'pending',
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+      timeoutAt: new Date(Date.now() + 600_000).toISOString(),
+    }]);
+
+    render(<MemoryRouter><ApprovalsDashboard auth={adminAuthFixture} /></MemoryRouter>);
+
+    const inbox = await screen.findByRole('region', { name: 'Pending interactions' });
+    expect(within(inbox).getByText('Production deploy')).toBeInTheDocument();
+    expect(within(inbox).getByText('Ship now?')).toBeInTheDocument();
+    expect(within(inbox).getByText('Blocking')).toBeInTheDocument();
+    expect(within(inbox).getByText(/2m old/i)).toBeInTheDocument();
+    expect(within(inbox).getByText(/expires in 10m/i)).toBeInTheDocument();
+    fireEvent.click(within(inbox).getByRole('button', { name: 'Ship' }));
+    await waitFor(() => expect(apiClient.answerInteraction).toHaveBeenCalledWith('run-99', 'int-9', 'Ship'));
+  });
+
+  it('treats a 409 race as a neutral already-answered update', async () => {
+    vi.mocked(apiClient.getPendingInteractions).mockResolvedValue([{
+      id: 'int-9', runId: 'run-99', workflowName: 'Deploy', from: 'reviewer', kind: 'confirm',
+      addresseeType: 'human', blocking: true, prompt: 'Deploy?', options: ['approve', 'reject'],
+      status: 'pending', createdAt: new Date().toISOString(),
+    }]);
+    vi.mocked(apiClient.answerInteraction).mockRejectedValue(
+      Object.assign(new Error('Already answered via Slack by dana.'), { status: 409 }),
+    );
+
+    render(<MemoryRouter><ApprovalsDashboard auth={adminAuthFixture} /></MemoryRouter>);
+    const inbox = await screen.findByRole('region', { name: 'Pending interactions' });
+    fireEvent.click(within(inbox).getByRole('button', { name: 'Approve' }));
+
+    expect(await within(inbox).findByRole('status')).toHaveTextContent('Already answered via Slack by dana.');
+    expect(within(inbox).queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows an empty approval queue without a blank review area', async () => {

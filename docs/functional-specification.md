@@ -201,6 +201,32 @@ Approval features must include:
 - Timeout and escalation handling
 - Full audit history
 
+#### Agent interactions
+
+Agents can communicate through one persisted interaction lifecycle. The six core communication kinds
+are `post`, `notify`, `question`, `choice`, `confirm`, and `agent_request`; `approval` and
+`tool_access` are specialized existing kinds carried by the same model.
+
+- `post` and `notify` are non-blocking and finish in `posted` without suspending the run.
+- `question` accepts free text and `choice` accepts one of its declared options. A blocking question
+  parks the run in `waiting_user`; a non-blocking one does not.
+- `confirm` is always an explicit human boundary. Approval resumes the parked step. Rejection moves
+  the interaction to `rejected`, resumes the step only so the tool can fail it with the human's
+  reason, and does not return "no" to the model. This prevents a model from arguing past a human's
+  refusal.
+- `agent_request` records agent-to-agent delegation. Blocking requests suspend the caller and pair the
+  request/reply with a correlation id; non-blocking requests are posted and let the caller continue.
+
+Blocking interactions start in `pending` and can make exactly one terminal transition to `answered`,
+`rejected`, `expired`, or `cancelled`. Non-blocking interactions finish in `posted`. Every response
+surface uses the same optimistic-concurrency transition: the first valid response wins, records its
+responder and channel, and enqueues at most one run resume. Later or simultaneous responses receive a
+conflict and cannot overwrite the winner.
+
+Timeout is optional. A null timeout means "wait forever". When configured, expiry uses one of
+`fail`, `continue`, or `default_answer`; the timeout sweeper performs the same single-winner transition
+as a human or channel response.
+
 ### 8.6 External Integrations
 
 Agentwerke can integrate with external systems including:

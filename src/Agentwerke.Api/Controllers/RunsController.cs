@@ -372,7 +372,19 @@ public sealed class RunsController : ControllerBase
             .OrderBy(i => i.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        return Ok(interactions.Select(ToInteractionSummary).ToList());
+        var interactionIds = interactions.Select(i => i.Id).ToArray();
+        var deliveries = await _dbContext.InteractionDeliveries
+            .AsNoTracking()
+            .Where(d => interactionIds.Contains(d.InteractionId))
+            .OrderBy(d => d.CreatedAt)
+            .ToListAsync(cancellationToken);
+        var deliveriesByInteraction = deliveries
+            .GroupBy(d => d.InteractionId)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<InteractionDelivery>)group.ToList());
+
+        return Ok(interactions.Select(interaction => InteractionSummaryMappings.ToSummary(
+            interaction,
+            deliveriesByInteraction.GetValueOrDefault(interaction.Id))).ToList());
     }
 
     [Authorize(Policy = AgentwerkePolicies.Approver)]
@@ -405,15 +417,55 @@ public sealed class RunsController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+        catch (InvalidInteractionAnswerException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (WorkflowRunNotFoundException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+        catch (RunNotAcceptingResponsesException ex)
         {
             return UnprocessableEntity(new { message = ex.Message });
         }
     }
 
-    private static InteractionSummary ToInteractionSummary(AgentInteraction i) =>
-        new(
-            i.Id, i.RunId, i.StepId, i.FromAgent, i.Kind, i.AddresseeType, i.Addressee,
-            i.Blocking, i.Prompt, i.Options, i.Status, i.Response, i.RespondedBy, i.RespondedAt, i.CreatedAt,
-            i.ToolName, i.Intent);
+    [Authorize(Policy = AgentwerkePolicies.Approver)]
+    [HttpPost("{runId}/interactions/{interactionId}/reject")]
+    public async Task<IActionResult> RejectInteraction(
+        string runId,
+        string interactionId,
+        [FromBody] RejectInteractionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Reason))
+        {
+            return BadRequest(new { message = "A rejection reason is required." });
+        }
+
+        try
+        {
+            var rejectedBy = AuthenticatedPrincipal.ResolveSubject(User);
+            return Accepted(await _orchestrationService.RejectInteractionAsync(
+                new RejectInteractionCommand(runId, interactionId, request.Reason.Trim(), rejectedBy),
+                cancellationToken));
+        }
+        catch (InteractionNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (InteractionNotPendingException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (WorkflowRunNotFoundException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+        catch (RunNotAcceptingResponsesException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+    }
 }

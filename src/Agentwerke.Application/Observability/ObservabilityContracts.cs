@@ -48,6 +48,15 @@ public interface IWorkflowMetrics
     void StepCompleted(string stepType, string agentName, double durationMs, bool succeeded);
     void ApprovalCreated(string riskLevel);
     void ApprovalDecided(string decision, string riskLevel);
+
+    /// <summary>
+    /// Records a terminal interaction transition (#219). <paramref name="won"/> is false when the
+    /// caller lost the race to another channel, a duplicate, or the sweeper.
+    ///
+    /// Losses are expected once a question fans out to several channels and are not errors — but a
+    /// loss rate that climbs while fan-out is off means something is answering twice.
+    /// </summary>
+    void InteractionTransition(string toStatus, string channel, bool won);
     void WebhookReceived(string source, bool triggered);
     void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded);
 

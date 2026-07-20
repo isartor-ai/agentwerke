@@ -27,6 +27,8 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
 
     public DbSet<AgentInteraction> AgentInteractions => Set<AgentInteraction>();
 
+    public DbSet<InteractionDelivery> InteractionDeliveries => Set<InteractionDelivery>();
+
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
     public DbSet<OutboxEntry> OutboxEntries => Set<OutboxEntry>();
@@ -176,11 +178,45 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
                     json => DeserializeStringList(json))
                 .HasColumnType("jsonb")
                 .Metadata.SetValueComparer(StringListComparer);
+            entity.Property(e => e.RequestedChannels)
+                .HasConversion(
+                    list => SerializeStringList(list),
+                    json => DeserializeStringList(json))
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .Metadata.SetValueComparer(StringListComparer);
             entity.Property(e => e.CorrelationId).HasMaxLength(128);
             entity.Property(e => e.Status).HasMaxLength(64).IsRequired();
             entity.Property(e => e.Response).HasMaxLength(8192);
             entity.Property(e => e.RespondedBy).HasMaxLength(128);
+            entity.Property(e => e.RespondedChannel).HasMaxLength(32);
+            entity.Property(e => e.TimeoutAt).HasMaxLength(64);
+            entity.Property(e => e.ExpiresAction).HasMaxLength(32);
+            entity.Property(e => e.DefaultAnswer).HasMaxLength(8192);
+            entity.Property(e => e.CancelledAt).HasMaxLength(64);
+            entity.Property(e => e.CancelledBy).HasMaxLength(128);
+            entity.Property(e => e.ResumedAt).HasMaxLength(64);
+            entity.Property(e => e.Version).IsConcurrencyToken().HasDefaultValue(0);
             entity.HasIndex(e => e.RunId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => new { e.Status, e.TimeoutAt });
+            entity.HasIndex(e => e.CorrelationId);
+        });
+
+        modelBuilder.Entity<InteractionDelivery>(entity =>
+        {
+            entity.ToTable("interaction_deliveries");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.InteractionId).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Channel).HasMaxLength(32);
+            entity.Property(e => e.Status).HasMaxLength(32);
+            entity.Property(e => e.ChannelMessageId).HasMaxLength(256);
+            entity.Property(e => e.LastError).HasMaxLength(1024);
+            entity.Property(e => e.CreatedAt).HasMaxLength(64);
+            entity.Property(e => e.LastAttemptAt).HasMaxLength(64);
+            entity.HasIndex(e => e.InteractionId);
+            entity.HasIndex(e => new { e.InteractionId, e.Channel }).IsUnique();
+            entity.HasIndex(e => new { e.Channel, e.ChannelMessageId });
         });
 
         modelBuilder.Entity<OutboxEntry>(entity =>
@@ -217,8 +253,15 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
             entity.Property(e => e.CorrelationHint).HasMaxLength(256).IsRequired();
             entity.Property(e => e.Payload).HasColumnType("text").IsRequired();
             entity.Property(e => e.ReceivedAt).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Source).HasMaxLength(64);
+            entity.Property(e => e.DeliveryId).HasMaxLength(256);
             entity.HasIndex(e => e.CorrelationHint)
                 .HasDatabaseName("ix_external_workflow_events_correlation_hint");
+            // Unique so a concurrent redelivery loses the insert race rather than resuming twice.
+            entity.HasIndex(e => e.DeliveryId)
+                .IsUnique()
+                .HasFilter("\"DeliveryId\" IS NOT NULL")
+                .HasDatabaseName("ix_external_workflow_events_delivery_id");
         });
 
         modelBuilder.Entity<WaitingExternalCorrelation>(entity =>

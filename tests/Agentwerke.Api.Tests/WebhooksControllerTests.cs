@@ -1,5 +1,8 @@
 using System.Text;
+using System.Text.Json;
 using Agentwerke.Api.Controllers;
+using Agentwerke.Application.Agents;
+using Agentwerke.Application.Secrets;
 using Agentwerke.Application.Workflows;
 using Agentwerke.Domain.Persistence;
 using Agentwerke.Integrations;
@@ -601,7 +604,8 @@ public sealed class WebhooksControllerTests
         var orchestration = new CapturingOrchestrationService();
         const string secret = "slack-signing-secret";
         var controller = CreateController(
-            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret);
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret,
+            timeProvider: new FixedTimeProvider(SlackSignedAt));
 
         var json = "{\"actions\":[{\"action_id\":\"approve\",\"value\":\"apr_1:run_42\"}],\"user\":{\"username\":\"alice\"}}";
         SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
@@ -621,7 +625,8 @@ public sealed class WebhooksControllerTests
     {
         var orchestration = new CapturingOrchestrationService();
         var controller = CreateController(
-            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: "secret");
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: "secret",
+            timeProvider: new FixedTimeProvider(SlackSignedAt));
 
         var bytes = Encoding.UTF8.GetBytes("payload=%7B%7D");
         var request = controller.ControllerContext.HttpContext.Request;
@@ -634,6 +639,144 @@ public sealed class WebhooksControllerTests
         Assert.IsType<UnauthorizedObjectResult>(result);
         Assert.Null(orchestration.ResumeCommand);
     }
+
+    /// <summary>
+    /// The instant SetSignedBody signs at. Slack requests are now rejected outside a five-minute
+    /// window (#225), so these tests run on a clock anchored here — they exercise the signature, not
+    /// the wall clock.
+    /// </summary>
+    private static readonly DateTimeOffset SlackSignedAt = DateTimeOffset.FromUnixTimeSeconds(1700000000);
+
+    // ── Slack interaction dispatch (#225) ─────────────────────────────────────
+
+    /// <summary>
+    /// The regression that matters: interactions share Slack's callback URL, so an approval click must
+    /// still reach the approval path untouched.
+    /// </summary>
+    [Fact]
+    public async Task SlackInteractions_ApprovalAction_StillRoutesToTheApprovalPath()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        const string secret = "slack-signing-secret";
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret,
+            interactionRepository: new StubInteractionRepository(PendingInteraction()),
+            timeProvider: new FixedTimeProvider(SlackSignedAt));
+
+        var json = "{\"actions\":[{\"action_id\":\"approve\",\"value\":\"apr_1:run_42\"}],\"user\":{\"username\":\"alice\"}}";
+        SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
+
+        var result = await controller.SlackInteractions(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeCommand);
+        Assert.Null(orchestration.AnswerCommand);
+    }
+
+    [Fact]
+    public async Task SlackInteractions_ChoiceAction_AnswersTheInteractionViaSlack()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        const string secret = "slack-signing-secret";
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret,
+            interactionRepository: new StubInteractionRepository(PendingInteraction()),
+            timeProvider: new FixedTimeProvider(SlackSignedAt));
+
+        var json = "{\"actions\":[{\"action_id\":\"interaction_choice:approve\",\"value\":\"int_1:approve\"}],\"user\":{\"username\":\"dana\"}}";
+        SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
+
+        var result = await controller.SlackInteractions(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Null(orchestration.ResumeCommand);
+        Assert.NotNull(orchestration.AnswerCommand);
+        Assert.Equal("int_1", orchestration.AnswerCommand!.InteractionId);
+        Assert.Equal("approve", orchestration.AnswerCommand.Answer);
+        Assert.Equal("slack", orchestration.AnswerCommand.Channel);
+        Assert.Equal("slack:dana", orchestration.AnswerCommand.AnsweredBy);
+    }
+
+    /// <summary>A rejected confirmation fails the step, so it must take the reject verb (#219).</summary>
+    [Fact]
+    public async Task SlackInteractions_RejectOnAConfirm_UsesTheRejectVerb()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        const string secret = "slack-signing-secret";
+        var confirm = PendingInteraction();
+        confirm.Kind = AgentInteractionKinds.Confirm;
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret,
+            interactionRepository: new StubInteractionRepository(confirm),
+            timeProvider: new FixedTimeProvider(SlackSignedAt));
+
+        var json = "{\"actions\":[{\"action_id\":\"interaction_choice:reject\",\"value\":\"int_1:reject\"}],\"user\":{\"username\":\"dana\"}}";
+        SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
+
+        await controller.SlackInteractions(CancellationToken.None);
+
+        Assert.NotNull(orchestration.RejectCommand);
+        Assert.Null(orchestration.AnswerCommand);
+        Assert.Equal("slack", orchestration.RejectCommand!.Channel);
+    }
+
+    /// <summary>
+    /// Slack renders the body to the clicker, so losing a race must read as information rather than an
+    /// error. The 409 in the API contract is for API clients (#227), not for a person.
+    /// </summary>
+    [Fact]
+    public async Task SlackInteractions_AlreadyAnswered_ShowsAFriendlyNoticeNotAnError()
+    {
+        var orchestration = new CapturingOrchestrationService
+        {
+            AnswerThrows = new InteractionNotPendingException("int_1", "answered", "ui"),
+        };
+        const string secret = "slack-signing-secret";
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret,
+            interactionRepository: new StubInteractionRepository(PendingInteraction()),
+            timeProvider: new FixedTimeProvider(SlackSignedAt));
+
+        var json = "{\"actions\":[{\"action_id\":\"interaction_choice:approve\",\"value\":\"int_1:approve\"}],\"user\":{\"username\":\"dana\"}}";
+        SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
+
+        var result = await controller.SlackInteractions(CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Contains("Already answered via ui", JsonSerializer.Serialize(ok.Value));
+    }
+
+    /// <summary>AC 11 / #225: a replayed Slack payload is refused once it falls outside the window.</summary>
+    [Fact]
+    public async Task SlackInteractions_ReplayedOutsideTheWindow_IsRejected()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        const string secret = "slack-signing-secret";
+        var controller = CreateController(
+            orchestration, new CapturingExternalWorkflowEventRepository(), eventHeader: "", slackSigningSecret: secret,
+            timeProvider: new FixedTimeProvider(SlackSignedAt.AddHours(2)));
+
+        var json = "{\"actions\":[{\"action_id\":\"approve\",\"value\":\"apr_1:run_42\"}],\"user\":{\"username\":\"alice\"}}";
+        SetSignedBody(controller, "payload=" + Uri.EscapeDataString(json), secret);
+
+        var result = await controller.SlackInteractions(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeCommand);
+    }
+
+    private static AgentInteraction PendingInteraction() => new()
+    {
+        Id = "int_1",
+        RunId = "run_42",
+        FromAgent = "reviewer",
+        Kind = AgentInteractionKinds.Question,
+        AddresseeType = AgentInteractionAddresseeTypes.Human,
+        Blocking = true,
+        Prompt = "Deploy?",
+        Status = AgentInteractionStatuses.Pending,
+        CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
+    };
 
     private static void SetSignedBody(WebhooksController controller, string rawBody, string secret)
     {
@@ -648,6 +791,341 @@ public sealed class WebhooksControllerTests
         request.Headers["X-Slack-Request-Timestamp"] = ts;
     }
 
+    [Fact]
+    public async Task Events_SignedEventMatchingAWaitingRun_AutoResumesIt()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(
+            runId: "run_waiting_unit",
+            onlyMatchKey: "build-vmodel-001:unit",
+            onlyMatchMessage: "test.unit.completed");
+        var controller = CreateEventsController(orchestration, eventRepository, waitingRepository);
+
+        // The wait armed by examples/v-model-process.bpmn: messageName "test.unit.completed",
+        // correlationKeyTemplate "{{input.build_id}}:unit". Neither dimension was reachable
+        // through the GitHub-taxonomy ingress (#206).
+        var body = """
+            {
+              "messageName": "test.unit.completed",
+              "correlationKey": "build-vmodel-001:unit",
+              "payload": {
+                "conclusion": "success",
+                "total": 42,
+                "failed": 0,
+                "report_url": "https://ci.example/runs/9/junit.xml"
+              }
+            }
+            """;
+        SetSignedEventBody(controller, body);
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(orchestration.ResumeExternalCommand);
+        Assert.Equal("run_waiting_unit", orchestration.ResumeExternalCommand!.RunId);
+        Assert.Equal("build-vmodel-001:unit", orchestration.ResumeExternalCommand.CorrelationKey);
+        Assert.Equal("event-ingress:ci", orchestration.ResumeExternalCommand.ResumedBy);
+        Assert.Equal("success", orchestration.ResumeExternalCommand.Payload["conclusion"]);
+        Assert.Equal("42", orchestration.ResumeExternalCommand.Payload["total"]);
+        Assert.Equal(
+            "https://ci.example/runs/9/junit.xml",
+            orchestration.ResumeExternalCommand.Payload["report_url"]);
+
+        var recorded = Assert.Single(eventRepository.Added);
+        Assert.Equal("test.unit.completed", recorded.Kind);
+        Assert.Equal("build-vmodel-001:unit", recorded.CorrelationHint);
+        Assert.Equal("ci", recorded.Source);
+    }
+
+    [Fact]
+    public async Task Events_RedeliveredEvent_IsRecordedOnceAndResumesOnce()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit");
+        var controller = CreateEventsController(orchestration, eventRepository, waitingRepository);
+
+        var body = """
+            {
+              "messageName": "test.unit.completed",
+              "correlationKey": "build-vmodel-001:unit",
+              "payload": { "conclusion": "success" }
+            }
+            """;
+
+        SetSignedEventBody(controller, body, deliveryId: "delivery-1");
+        var first = await controller.Events(CancellationToken.None);
+
+        SetSignedEventBody(controller, body, deliveryId: "delivery-1");
+        var second = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(first);
+        Assert.IsType<OkObjectResult>(second);
+        Assert.Single(eventRepository.Added);
+        Assert.Equal(1, orchestration.ResumeExternalCount);
+    }
+
+    [Fact]
+    public async Task Events_RedeliveredEventWithoutADeliveryHeader_IsStillDeduplicatedByBodyDigest()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var waitingRepository = new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit");
+        var controller = CreateEventsController(orchestration, eventRepository, waitingRepository);
+
+        var body = """
+            {
+              "messageName": "test.unit.completed",
+              "correlationKey": "build-vmodel-001:unit",
+              "payload": { "conclusion": "success" }
+            }
+            """;
+
+        SetSignedEventBody(controller, body);
+        await controller.Events(CancellationToken.None);
+        SetSignedEventBody(controller, body);
+        await controller.Events(CancellationToken.None);
+
+        Assert.Single(eventRepository.Added);
+        Assert.Equal(1, orchestration.ResumeExternalCount);
+    }
+
+    [Fact]
+    public async Task Events_WrongSignature_IsRejectedAndNotRecorded()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var controller = CreateEventsController(
+            orchestration,
+            eventRepository,
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        var body = """
+            { "messageName": "test.unit.completed", "correlationKey": "build-vmodel-001:unit" }
+            """;
+        SetBody(controller, body);
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Signature-256"] =
+            "sha256=0000000000000000000000000000000000000000000000000000000000000000";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+        Assert.Empty(eventRepository.Added);
+    }
+
+    [Fact]
+    public async Task Events_UnsignedRequest_IsRejected()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    [Fact]
+    public async Task Events_UnknownSource_IsRejected()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetSignedEventBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "not-registered";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    /// <summary>
+    /// The connector webhooks treat an empty secret as "skip validation" (dev convenience). This
+    /// endpoint can resume a verification gate, so a misconfigured source must fail closed instead.
+    /// </summary>
+    [Fact]
+    public async Task Events_SourceWithNoConfiguredSecret_IsRejectedRatherThanSkippingValidation()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"),
+            sources: [new EventIngressSourceOptions { Id = "ci", Secret = string.Empty }]);
+
+        SetBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+        controller.ControllerContext.HttpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+
+        var result = await controller.Events(CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    [Fact]
+    public async Task Events_MessageNameOutsideTheSourceAllowlist_IsForbidden()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var controller = CreateEventsController(
+            orchestration,
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"),
+            sources:
+            [
+                new EventIngressSourceOptions
+                {
+                    Id = "ci",
+                    Secret = IngressSecret,
+                    AllowedMessageNames = ["test.unit.completed"],
+                }
+            ]);
+
+        SetSignedEventBody(controller, """{ "messageName": "deploy.prod.approved", "correlationKey": "k" }""");
+
+        var result = await controller.Events(CancellationToken.None);
+
+        var statusResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status403Forbidden, statusResult.StatusCode);
+        Assert.Null(orchestration.ResumeExternalCommand);
+    }
+
+    [Fact]
+    public async Task Events_WhenNoRunIsWaiting_RecordsTheEventAndReportsNotResumed()
+    {
+        var orchestration = new CapturingOrchestrationService();
+        var eventRepository = new CapturingExternalWorkflowEventRepository();
+        var controller = CreateEventsController(
+            orchestration,
+            eventRepository,
+            new StubWaitingExternalCorrelationRepository(runId: null));
+
+        SetSignedEventBody(controller, """
+            { "messageName": "test.unit.completed", "correlationKey": "nobody-waits-on-this" }
+            """);
+
+        var result = await controller.Events(CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Contains("resumed = False", ok.Value!.ToString(), StringComparison.Ordinal);
+        Assert.Null(orchestration.ResumeExternalCommand);
+        Assert.Single(eventRepository.Added);
+    }
+
+    /// <summary>
+    /// A form/urlencoded content type makes ASP.NET consume the body before the controller reads it,
+    /// which would otherwise surface as a confusing "Signature mismatch" for a correctly signed event.
+    /// </summary>
+    [Fact]
+    public async Task Events_EmptyBody_ReportsTheBodyRatherThanTheSignature()
+    {
+        var controller = CreateEventsController(
+            new CapturingOrchestrationService(),
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetSignedEventBody(controller, string.Empty);
+
+        var result = await controller.Events(CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Empty request body", badRequest.Value!.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Events_WhenIngressIsDisabled_TheEndpointIsNotFound()
+    {
+        var controller = CreateEventsController(
+            new CapturingOrchestrationService(),
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"),
+            enabled: false);
+
+        SetSignedEventBody(controller, """{ "messageName": "test.unit.completed", "correlationKey": "k" }""");
+
+        Assert.IsType<NotFoundObjectResult>(await controller.Events(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("""{ "correlationKey": "k" }""")]
+    [InlineData("""{ "messageName": "test.unit.completed" }""")]
+    [InlineData("""{ "messageName": "", "correlationKey": "k" }""")]
+    public async Task Events_MissingRequiredFields_IsRejected(string body)
+    {
+        var controller = CreateEventsController(
+            new CapturingOrchestrationService(),
+            new CapturingExternalWorkflowEventRepository(),
+            new StubWaitingExternalCorrelationRepository(runId: "run_waiting_unit"));
+
+        SetSignedEventBody(controller, body);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Events(CancellationToken.None));
+    }
+
+    private const string IngressSecret = "ci-shared-secret";
+
+    private static WebhooksController CreateEventsController(
+        IWorkflowRunOrchestrationService orchestration,
+        IExternalWorkflowEventRepository eventRepository,
+        IWaitingExternalCorrelationRepository waitingExternalCorrelationRepository,
+        IReadOnlyList<EventIngressSourceOptions>? sources = null,
+        bool enabled = true)
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Agentwerke-Source"] = "ci";
+
+        return new WebhooksController(
+            orchestration,
+            new StubTriggerRouter(null),
+            eventRepository,
+            waitingExternalCorrelationRepository,
+            new StubInteractionRepository(),
+            new StubSecretStore(),
+            TimeProvider.System,
+            Options.Create(new IntegrationOptions
+            {
+                EventIngress = new EventIngressOptions
+                {
+                    Enabled = enabled,
+                    Sources = [.. sources ?? [new EventIngressSourceOptions { Id = "ci", Secret = IngressSecret }]],
+                },
+            }),
+            NullLogger<WebhooksController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext },
+        };
+    }
+
+    private static void SetSignedEventBody(WebhooksController controller, string json, string? deliveryId = null)
+    {
+        SetBody(controller, json);
+
+        var signature = Convert.ToHexString(
+            System.Security.Cryptography.HMACSHA256.HashData(
+                Encoding.UTF8.GetBytes(IngressSecret),
+                Encoding.UTF8.GetBytes(json)))
+            .ToLowerInvariant();
+
+        var headers = controller.ControllerContext.HttpContext.Request.Headers;
+        headers["X-Agentwerke-Signature-256"] = $"sha256={signature}";
+        if (deliveryId is not null)
+        {
+            headers["X-Agentwerke-Delivery"] = deliveryId;
+        }
+    }
+
     private static WebhooksController CreateController(
         IWorkflowRunOrchestrationService orchestration,
         IExternalWorkflowEventRepository eventRepository,
@@ -655,7 +1133,10 @@ public sealed class WebhooksControllerTests
         ITriggerRouter? triggerRouter = null,
         IWaitingExternalCorrelationRepository? waitingExternalCorrelationRepository = null,
         string? slackSigningSecret = null,
-        string requiredLabel = "agentwerke")
+        string requiredLabel = "agentwerke",
+        IAgentInteractionRepository? interactionRepository = null,
+        string? interactionWebhookSecret = null,
+        TimeProvider? timeProvider = null)
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-GitHub-Event"] = eventHeader;
@@ -665,6 +1146,9 @@ public sealed class WebhooksControllerTests
             triggerRouter ?? new StubTriggerRouter(null),
             eventRepository,
             waitingExternalCorrelationRepository ?? new StubWaitingExternalCorrelationRepository(runId: null),
+            interactionRepository ?? new StubInteractionRepository(),
+            new StubSecretStore(),
+            timeProvider ?? TimeProvider.System,
             Options.Create(new IntegrationOptions
             {
                 GitHub = new GitHubOptions
@@ -678,11 +1162,47 @@ public sealed class WebhooksControllerTests
                 {
                     SigningSecret = slackSigningSecret ?? string.Empty,
                 },
+                InteractionWebhook = new InteractionWebhookOptions
+                {
+                    Enabled = interactionWebhookSecret is not null,
+                    Endpoint = "https://receiver.example/interactions",
+                    Secret = interactionWebhookSecret ?? string.Empty,
+                },
             }),
             NullLogger<WebhooksController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext },
         };
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    /// <summary>Returns the configured value as-is, mirroring an unresolved literal secret.</summary>
+    private sealed class StubSecretStore : ISecretStore
+    {
+        public Task<string?> GetSecretAsync(string key, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(key);
+    }
+
+    private sealed class StubInteractionRepository : IAgentInteractionRepository
+    {
+        private readonly AgentInteraction? _interaction;
+
+        public StubInteractionRepository(AgentInteraction? interaction = null) => _interaction = interaction;
+
+        public Task AddAsync(AgentInteraction interaction, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<AgentInteraction>> GetByRunAsync(string runId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
+        public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(string runId, string? fromFilter, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
+        public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) =>
+            Task.FromResult(_interaction is not null && _interaction.Id == interactionId ? _interaction : null);
+        public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) => Task.FromResult<AgentInteraction?>(null);
+        public Task<InteractionTransitionResult> TryTransitionAsync(string interactionId, string toStatus, string? response, string? respondedBy, string? respondedChannel, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AgentInteraction>> GetPendingAsync(string? runId, string? addresseeType, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
+        public Task<IReadOnlyList<AgentInteraction>> GetDueForExpiryAsync(string nowIso, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private static void SetBody(WebhooksController controller, string json)
@@ -698,7 +1218,17 @@ public sealed class WebhooksControllerTests
 
         public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
 
+        /// <summary>How many times a run was resumed — the assertion that dedup (#206) actually holds.</summary>
+        public int ResumeExternalCount { get; private set; }
+
         public ResumeRunCommand? ResumeCommand { get; private set; }
+
+        public AnswerInteractionCommand? AnswerCommand { get; private set; }
+
+        public RejectInteractionCommand? RejectCommand { get; private set; }
+
+        /// <summary>Set to simulate losing a race to another channel (#219).</summary>
+        public Exception? AnswerThrows { get; init; }
 
         public Task<StartRunResult> StartRunAsync(StartRunCommand command, CancellationToken cancellationToken = default)
         {
@@ -715,13 +1245,36 @@ public sealed class WebhooksControllerTests
         public Task<ResumeExternalRunResult> ResumeExternalRunAsync(ResumeExternalRunCommand command, CancellationToken cancellationToken = default)
         {
             ResumeExternalCommand = command;
+            ResumeExternalCount++;
             return Task.FromResult(new ResumeExternalRunResult(command.RunId, "pending"));
         }
 
         public Task<RecoverRunResult> RecoverRunAsync(string runId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<AnswerInteractionResult> AnswerInteractionAsync(AnswerInteractionCommand command, CancellationToken cancellationToken = default) =>
+        public Task<AnswerInteractionResult> AnswerInteractionAsync(AnswerInteractionCommand command, CancellationToken cancellationToken = default)
+        {
+            if (AnswerThrows is not null)
+            {
+                throw AnswerThrows;
+            }
+
+            AnswerCommand = command;
+            return Task.FromResult(
+                new AnswerInteractionResult(command.RunId, command.InteractionId, "pending", command.Channel));
+        }
+
+        public Task<RejectInteractionResult> RejectInteractionAsync(RejectInteractionCommand command, CancellationToken cancellationToken = default)
+        {
+            RejectCommand = command;
+            return Task.FromResult(
+                new RejectInteractionResult(command.RunId, command.InteractionId, "pending", command.Channel));
+        }
+
+        public Task<CancelInteractionResult> CancelInteractionAsync(CancelInteractionCommand command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ExpireInteractionResult> ExpireInteractionAsync(string interactionId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 
@@ -733,6 +1286,19 @@ public sealed class WebhooksControllerTests
         {
             Added.Add(@event);
             return Task.CompletedTask;
+        }
+
+        /// <summary>Mirrors the real unique-index dedup on DeliveryId so redelivery tests are meaningful.</summary>
+        public Task<bool> TryAddAsync(ExternalWorkflowEvent @event, CancellationToken cancellationToken)
+        {
+            if (@event.DeliveryId is { Length: > 0 }
+                && Added.Any(e => e.DeliveryId == @event.DeliveryId))
+            {
+                return Task.FromResult(false);
+            }
+
+            Added.Add(@event);
+            return Task.FromResult(true);
         }
     }
 

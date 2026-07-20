@@ -83,7 +83,7 @@ public sealed class AgentCoordinationTests
     {
         // Shared store stands in for the database; a fresh channel over the same store
         // is the "after restart" reader (#192 Phase 1).
-        var store = new FakeInteractionStore();
+        var store = new InMemoryInteractionRepository();
 
         var writer = new PersistentAgentCoordinationChannel(store);
         await writer.PostAsync("run-1", "ba", "requirements ready", stepId: "step-2");
@@ -104,41 +104,4 @@ public sealed class AgentCoordinationTests
         Assert.Equal("step-2", store.Items[0].StepId);
     }
 
-    private sealed class FakeInteractionStore : IAgentInteractionRepository
-    {
-        public List<AgentInteraction> Items { get; } = new();
-
-        public Task AddAsync(AgentInteraction interaction, CancellationToken cancellationToken)
-        {
-            Items.Add(interaction);
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<AgentInteraction>> GetByRunAsync(string runId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<AgentInteraction>>(
-                Items.Where(i => i.RunId == runId).OrderBy(i => i.CreatedAt).ToList());
-
-        public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(
-            string runId, string? fromFilter, CancellationToken cancellationToken)
-        {
-            var query = Items.Where(i => i.RunId == runId && i.Kind == AgentInteractionKinds.Post);
-            if (!string.IsNullOrWhiteSpace(fromFilter))
-            {
-                query = query.Where(i => i.FromAgent == fromFilter);
-            }
-
-            return Task.FromResult<IReadOnlyList<AgentInteraction>>(query.OrderBy(i => i.CreatedAt).ToList());
-        }
-
-        public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) =>
-            Task.FromResult(Items.FirstOrDefault(i => i.Id == interactionId));
-
-        public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) =>
-            Task.FromResult(Items
-                .Where(i => i.RunId == runId && i.Status == AgentInteractionStatuses.Pending)
-                .OrderBy(i => i.CreatedAt)
-                .FirstOrDefault());
-
-        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    }
 }

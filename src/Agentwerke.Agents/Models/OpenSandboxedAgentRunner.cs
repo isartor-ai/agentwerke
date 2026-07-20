@@ -133,7 +133,10 @@ public sealed class OpenSandboxedAgentRunner : ISandboxedAgentRunner
             ToolAccessEscalation.IsFailFastMode(request.Contract.Permissions.ToolEscalation)
                 ? []
                 : BuildEscalatableTools(toolResolution.Tools, toolAccess.Guidance),
-            toolAccess.Guidance);
+            toolAccess.Guidance,
+            request.NodeId,
+            request.DelegationDepth,
+            request.DelegationChain);
 
         var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope)));
         environmentVariables[EnvelopeEnvironmentVariable] = payload;

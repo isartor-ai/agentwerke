@@ -378,7 +378,10 @@ public sealed class SandboxedAgentRuntimeExecutor
                     Environment: envelope.Environment,
                     PurposeType: envelope.PurposeType,
                     PolicyTag: envelope.PolicyTag,
-                    Attempt: envelope.Attempt),
+                    Attempt: envelope.Attempt,
+                    NodeId: envelope.NodeId,
+                    DelegationDepth: envelope.DelegationDepth,
+                    DelegationChain: envelope.DelegationChain),
                 input,
                 cancellationToken);
         }
@@ -489,7 +492,10 @@ public sealed class SandboxedAgentRuntimeExecutor
             },
             envelope.ResolvedTools,
             envelope.SubAgents,
-            Math.Max(0, envelope.RemainingSubAgentDepth - 1));
+            Math.Max(0, envelope.RemainingSubAgentDepth - 1),
+            NodeId: envelope.NodeId,
+            DelegationDepth: envelope.DelegationDepth + 1,
+            DelegationChain: (envelope.DelegationChain ?? []).Append(envelope.AgentName).ToArray());
 
         SandboxedAgentRunResult subResult;
         try

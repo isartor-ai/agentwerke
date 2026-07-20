@@ -214,6 +214,55 @@ public sealed class RunsControllerTests
         Assert.Null(orchestration.AnswerCommand);
     }
 
+    [Fact]
+    public async Task AnswerInteraction_WithAnswerOutsideOptions_ReturnsBadRequestWithValidOptions()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService
+        {
+            InteractionException = new InvalidInteractionAnswerException("int_1", ["approve", "reject"])
+        };
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "approver-7")], "test"))
+                }
+            }
+        };
+
+        var result = await controller.AnswerInteraction(
+            "run_1", "int_1", new AnswerInteractionRequest("maybe"), CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("approve", JsonSerializer.Serialize(badRequest.Value));
+        Assert.Contains("reject", JsonSerializer.Serialize(badRequest.Value));
+    }
+
+    [Fact]
+    public async Task RejectInteraction_ForwardsReasonAndAuthenticatedPrincipal()
+    {
+        var orchestration = new CapturingWorkflowRunOrchestrationService();
+        var controller = new RunsController(null!, null!, orchestration, new FakeEvidencePackService())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "approver-7")], "test"))
+                }
+            }
+        };
+
+        var result = await controller.RejectInteraction(
+            "run_1", "int_1", new RejectInteractionRequest("Unsafe rollout"), CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal("Unsafe rollout", orchestration.RejectCommand?.Reason);
+        Assert.Equal("approver-7", orchestration.RejectCommand?.RejectedBy);
+    }
+
     private static RunsController BuildEvidenceController(IEvidencePackService evidencePackService)
     {
         return new RunsController(
@@ -270,6 +319,7 @@ public sealed class RunsControllerTests
 
     private sealed class CapturingWorkflowRunOrchestrationService : IWorkflowRunOrchestrationService
     {
+        public Exception? InteractionException { get; init; }
         public StartRunCommand? StartCommand { get; private set; }
         public ResumeExternalRunCommand? ResumeExternalCommand { get; private set; }
         public AnswerInteractionCommand? AnswerCommand { get; private set; }
@@ -308,9 +358,38 @@ public sealed class RunsControllerTests
             AnswerInteractionCommand command,
             CancellationToken cancellationToken = default)
         {
+            if (InteractionException is not null) throw InteractionException;
             AnswerCommand = command;
-            return Task.FromResult(new AnswerInteractionResult(command.RunId, command.InteractionId, "pending"));
+            return Task.FromResult(
+                new AnswerInteractionResult(command.RunId, command.InteractionId, "pending", command.Channel));
         }
+
+        public RejectInteractionCommand? RejectCommand { get; private set; }
+
+        public Task<RejectInteractionResult> RejectInteractionAsync(
+            RejectInteractionCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            if (InteractionException is not null) throw InteractionException;
+            RejectCommand = command;
+            return Task.FromResult(
+                new RejectInteractionResult(command.RunId, command.InteractionId, "pending", command.Channel));
+        }
+
+        public CancelInteractionCommand? CancelCommand { get; private set; }
+
+        public Task<CancelInteractionResult> CancelInteractionAsync(
+            CancelInteractionCommand command,
+            CancellationToken cancellationToken = default)
+        {
+            CancelCommand = command;
+            return Task.FromResult(new CancelInteractionResult("run-1", command.InteractionId, "cancelled"));
+        }
+
+        public Task<ExpireInteractionResult> ExpireInteractionAsync(
+            string interactionId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ExpireInteractionResult("run-1", interactionId, "expired"));
     }
 
     private sealed class FakeEvidencePackService : IEvidencePackService

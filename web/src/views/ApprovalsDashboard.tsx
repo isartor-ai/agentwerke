@@ -8,11 +8,12 @@ import { ErrorState } from '../components/ErrorState';
 import { KpiCard } from '../components/KpiCard';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
+import { PendingInteractions } from '../components/PendingInteractions';
 import { RiskBadge } from '../components/RiskBadge';
 import { ToastRegion } from '../components/ToastRegion';
 import { ToolAccessRequests } from '../components/ToolAccessRequests';
 import { useToastQueue } from '../components/useToastQueue';
-import type { ApprovalRequest, AuthState } from '../types';
+import type { ApprovalRequest, AuthState, RunInteraction } from '../types';
 
 function minutesRemaining(deadline: string): number {
   return Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 60_000));
@@ -24,6 +25,7 @@ interface ApprovalsDashboardProps {
 
 export function ApprovalsDashboard({ auth }: ApprovalsDashboardProps) {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [pendingInteractions, setPendingInteractions] = useState<RunInteraction[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ApprovalRequest['status']>('pending');
@@ -57,8 +59,12 @@ export function ApprovalsDashboard({ auth }: ApprovalsDashboardProps) {
     }
 
     try {
-      const data = await apiClient.getApprovals();
+      const [data, interactionData] = await Promise.all([
+        apiClient.getApprovals(),
+        apiClient.getPendingInteractions(),
+      ]);
       setApprovals(data);
+      setPendingInteractions(interactionData);
       setLoadError(null);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : 'Unknown error';
@@ -224,6 +230,12 @@ export function ApprovalsDashboard({ auth }: ApprovalsDashboardProps) {
         canDecide={canSubmitDecisions}
         onToast={pushToast}
         onCountChange={setToolAccessCount}
+      />
+
+      <PendingInteractions
+        interactions={pendingInteractions}
+        canDecide={canSubmitDecisions}
+        onChanged={() => loadApprovals({ background: true })}
       />
 
       <section className="filter-bar" aria-label="Approval filters">

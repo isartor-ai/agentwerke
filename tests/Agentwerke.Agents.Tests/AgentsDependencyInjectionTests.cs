@@ -5,6 +5,7 @@ using Agentwerke.Agents.Tools;
 using Agentwerke.AgentSecOps;
 using Agentwerke.Application.Agents;
 using Agentwerke.Domain.Persistence;
+using Agentwerke.Application.Workflows;
 using Agentwerke.Integrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -97,6 +98,9 @@ public sealed class AgentsDependencyInjectionTests
         services.AddScoped<IPolicyEvaluationService, StubPolicyEvaluationService>();
         services.AddScoped<ISandboxProfileSelector, StubSandboxProfileSelector>();
         services.AddScoped<IAgentInteractionRepository, StubInteractionRepository>();
+        services.AddScoped<IRunContextRepository, InMemoryRunContextRepository>();
+        services.AddSingleton(new InteractionOptions());
+        services.AddScoped<IInteractionRouter, StubInteractionRouter>();
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
@@ -106,6 +110,7 @@ public sealed class AgentsDependencyInjectionTests
 
         Assert.NotNull(gateway);
         Assert.NotNull(registry);
+        Assert.Contains(registry.All(), tool => tool.Name == "human.confirm");
     }
 
     [Fact]
@@ -126,6 +131,7 @@ public sealed class AgentsDependencyInjectionTests
     // never invoked (the test only resolves/constructs the graph), so they throw.
     private sealed class StubGitHubConnector : IGitHubConnector
     {
+        public string? RepositorySlug => throw new NotImplementedException();
         public Task<GitHubIssueResult> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubIssueCommentPostResult> CommentIssueAsync(CommentGitHubIssueCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<GitHubIssueStateResult> CloseIssueAsync(CloseGitHubIssueCommand command, CancellationToken cancellationToken = default) => throw new NotImplementedException();
@@ -143,6 +149,13 @@ public sealed class AgentsDependencyInjectionTests
         public PolicyDecision Evaluate(PolicyEvaluationRequest request) => throw new NotImplementedException();
     }
 
+    private sealed class StubInteractionRouter : IInteractionRouter
+    {
+        public Task RouteAsync(AgentInteraction interaction, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<InteractionDeliveryResult> RetryAsync(string interactionId, string channel, CancellationToken cancellationToken) =>
+            Task.FromResult(InteractionDeliveryResult.Delivered());
+    }
+
     private sealed class StubSandboxProfileSelector : ISandboxProfileSelector
     {
         public SandboxProfileSelectionResult Select(SandboxProfileSelectionRequest request) => throw new NotImplementedException();
@@ -155,6 +168,9 @@ public sealed class AgentsDependencyInjectionTests
         public Task<IReadOnlyList<AgentInteraction>> GetPostsForRunAsync(string runId, string? fromFilter, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
         public Task<AgentInteraction?> GetByIdAsync(string interactionId, CancellationToken cancellationToken) => Task.FromResult<AgentInteraction?>(null);
         public Task<AgentInteraction?> GetPendingForRunAsync(string runId, CancellationToken cancellationToken) => Task.FromResult<AgentInteraction?>(null);
+        public Task<InteractionTransitionResult> TryTransitionAsync(string interactionId, string toStatus, string? response, string? respondedBy, string? respondedChannel, CancellationToken cancellationToken) => Task.FromResult(new InteractionTransitionResult(InteractionTransitionOutcome.NotFound, null));
+        public Task<IReadOnlyList<AgentInteraction>> GetPendingAsync(string? runId, string? addresseeType, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
+        public Task<IReadOnlyList<AgentInteraction>> GetDueForExpiryAsync(string nowIso, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AgentInteraction>>([]);
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

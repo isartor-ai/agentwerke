@@ -9,6 +9,75 @@ public sealed class IntegrationOptions
     public SlackOptions Slack { get; set; } = new();
     public TeamsOptions Teams { get; set; } = new();
     public NotificationOptions Notifications { get; set; } = new();
+
+    /// <summary>
+    /// The generic outbound/inbound interaction webhook (#224). Provider-specific, so it lives here
+    /// rather than in InteractionOptions: that type is consumed by the provider-neutral router in
+    /// Agentwerke.Application, which must know nothing about any particular channel.
+    /// </summary>
+    public InteractionWebhookOptions InteractionWebhook { get; set; } = new();
+    public EventIngressOptions EventIngress { get; set; } = new();
+}
+
+public sealed class InteractionWebhookOptions
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Absolute URL an interaction is POSTed to.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// HMAC secret for both directions: signing the outbound POST and verifying the inbound response.
+    /// Resolved through ISecretStore, so this may hold a secret reference rather than the value.
+    ///
+    /// Unlike the Jira/GitHub trigger secrets, an empty value here is fatal rather than "skip
+    /// verification": the inbound endpoint resumes a parked run, so it fails closed.
+    /// </summary>
+    public string Secret { get; set; } = string.Empty;
+
+    public int TimeoutSeconds { get; set; } = 10;
+
+    /// <summary>How far an inbound response's timestamp may drift before it is rejected as a replay.</summary>
+    public int ToleranceSeconds { get; set; } = 300;
+}
+
+/// <summary>
+/// Generic signed event ingress (#206). Lets any CI or test system deliver a domain event
+/// (<c>test.unit.completed</c>, <c>deploy.staging.succeeded</c>, …) to <c>POST /webhooks/events</c>
+/// without Agentwerke needing a first-class connector for it, keeping BPMN message names
+/// decoupled from GitHub's event taxonomy.
+/// </summary>
+public sealed class EventIngressOptions
+{
+    /// <summary>
+    /// Disabled by default: the endpoint can resume runs, so it must be turned on deliberately.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Registered senders, keyed by the value each sends in the X-Agentwerke-Source header.
+    /// A request naming an unregistered source is rejected — there is no anonymous ingress.
+    /// </summary>
+    public List<EventIngressSourceOptions> Sources { get; set; } = [];
+}
+
+public sealed class EventIngressSourceOptions
+{
+    /// <summary>Source identifier the sender presents in the X-Agentwerke-Source header.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Shared secret for this source's HMAC-SHA256 signature. Unlike the connector webhooks,
+    /// an empty secret does not skip validation — it disables the source (see
+    /// <c>WebhookSignatureValidator.ValidateEventIngress</c>).
+    /// </summary>
+    public string Secret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional allowlist of message names this source may deliver. Empty means any message name.
+    /// Narrow this in production so a compromised CI token cannot resume unrelated waits.
+    /// </summary>
+    public List<string> AllowedMessageNames { get; set; } = [];
 }
 
 public sealed class NotificationOptions
@@ -127,6 +196,22 @@ public sealed class SlackOptions
     /// (approve/reject from a message). Leave empty to skip verification (dev only). #172
     /// </summary>
     public string SigningSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Bot token (xoxb-…), required only for free-text answers, which need views.open to raise a
+    /// modal. An incoming webhook alone cannot open one, so without this the Slack channel degrades
+    /// to structured choices plus a link back to Agentwerke (#225).
+    /// </summary>
+    public string BotToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How far an inbound Slack request's timestamp may drift before it is rejected as a replay.
+    ///
+    /// Slack signs "v0:{timestamp}:{body}" but nothing forces the timestamp to be recent, so without
+    /// this window a captured payload stays replayable forever — Slack's own guidance is five
+    /// minutes (#225).
+    /// </summary>
+    public int ToleranceSeconds { get; set; } = 300;
 }
 
 public sealed class TeamsOptions

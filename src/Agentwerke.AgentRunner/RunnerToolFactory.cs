@@ -158,6 +158,7 @@ internal static class RunnerToolFactory
         public void StepCompleted(string stepType, string agentName, double durationMs, bool succeeded) { }
         public void ApprovalCreated(string riskLevel) { }
         public void ApprovalDecided(string decision, string riskLevel) { }
+        public void InteractionTransition(string toStatus, string channel, bool won) { }
         public void WebhookReceived(string source, bool triggered) { }
         public void ConnectorInvoked(string connectorId, string operation, double durationMs, bool succeeded) { }
         public void ModelInvoked(string agentName, string modelId, int inputTokens, int outputTokens, double latencyMs, double costUsd, bool succeeded) { }

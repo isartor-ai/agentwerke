@@ -1,8 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using Agentwerke.Application.Agents;
+using Agentwerke.Application.Secrets;
 using Agentwerke.Application.Workflows;
 using Agentwerke.Domain.Persistence;
 using Agentwerke.Integrations;
+using Agentwerke.Integrations.Channels;
 using Agentwerke.Integrations.Webhooks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,6 +27,9 @@ public sealed class WebhooksController : ControllerBase
     private readonly ITriggerRouter _triggerRouter;
     private readonly IExternalWorkflowEventRepository _externalEventRepository;
     private readonly IWaitingExternalCorrelationRepository _waitingExternalCorrelationRepository;
+    private readonly IAgentInteractionRepository _interactionRepository;
+    private readonly ISecretStore _secretStore;
+    private readonly TimeProvider _timeProvider;
     private readonly IntegrationOptions _options;
     private readonly ILogger<WebhooksController> _logger;
 
@@ -32,6 +38,9 @@ public sealed class WebhooksController : ControllerBase
         ITriggerRouter triggerRouter,
         IExternalWorkflowEventRepository externalEventRepository,
         IWaitingExternalCorrelationRepository waitingExternalCorrelationRepository,
+        IAgentInteractionRepository interactionRepository,
+        ISecretStore secretStore,
+        TimeProvider timeProvider,
         IOptions<IntegrationOptions> options,
         ILogger<WebhooksController> logger)
     {
@@ -39,6 +48,9 @@ public sealed class WebhooksController : ControllerBase
         _triggerRouter = triggerRouter;
         _externalEventRepository = externalEventRepository;
         _waitingExternalCorrelationRepository = waitingExternalCorrelationRepository;
+        _interactionRepository = interactionRepository;
+        _secretStore = secretStore;
+        _timeProvider = timeProvider;
         _options = options.Value;
         _logger = logger;
     }
@@ -134,11 +146,15 @@ public sealed class WebhooksController : ControllerBase
     {
         var body = await ReadBodyAsync(cancellationToken);
 
+        // Enforcing the replay window here, not just signing the timestamp: a captured payload was
+        // previously valid indefinitely (#225).
         var validation = WebhookSignatureValidator.ValidateSlack(
             body,
             Request.Headers["X-Slack-Signature"].FirstOrDefault(),
             Request.Headers["X-Slack-Request-Timestamp"].FirstOrDefault(),
-            _options.Slack.SigningSecret);
+            _options.Slack.SigningSecret,
+            _timeProvider.GetUtcNow(),
+            TimeSpan.FromSeconds(_options.Slack.ToleranceSeconds > 0 ? _options.Slack.ToleranceSeconds : 300));
         if (!validation.IsValid)
         {
             return Unauthorized(new { error = validation.ErrorMessage });
@@ -148,6 +164,13 @@ public sealed class WebhooksController : ControllerBase
         if (payloadJson is null)
         {
             return BadRequest(new { error = "Missing 'payload' field." });
+        }
+
+        // Interactions share this callback URL with approvals. Dispatch on the namespaced action id
+        // before the approval parser sees it; the approval path below is untouched (#225).
+        if (TryParseInteractionAction(payloadJson, out var interactionAction))
+        {
+            return await HandleSlackInteractionAsync(interactionAction, cancellationToken);
         }
 
         SlackAction action;
@@ -183,6 +206,293 @@ public sealed class WebhooksController : ControllerBase
 
         return Ok(new { replace_original = true, text = $":white_check_mark: Approval *{action.Decision}d* by {action.User}." });
     }
+
+    /// <summary>
+    /// Accepts a signed response to an interaction delivered over the generic webhook channel (#224).
+    ///
+    /// Authentication is the signature: there is no bearer token, so this stays [AllowAnonymous] like
+    /// the other webhook actions. Unlike them, it fails closed when no secret is configured — those
+    /// guard triggers, this resumes a parked run.
+    /// </summary>
+    [HttpPost("interactions/response")]
+    public async Task<IActionResult> InteractionResponse(CancellationToken cancellationToken)
+    {
+        var body = await ReadBodyAsync(cancellationToken);
+
+        // Verify the bytes that were signed, not a re-serialisation of the parsed model: any
+        // whitespace or property-order difference would break an otherwise valid signature.
+        var secret = await ResolveInteractionWebhookSecretAsync(cancellationToken);
+        var validation = WebhookSignatureValidator.ValidateAgentwerke(
+            body,
+            Request.Headers["X-Agentwerke-Signature"].FirstOrDefault(),
+            Request.Headers["X-Agentwerke-Timestamp"].FirstOrDefault(),
+            secret ?? string.Empty,
+            _timeProvider.GetUtcNow(),
+            TimeSpan.FromSeconds(_options.InteractionWebhook.ToleranceSeconds > 0
+                ? _options.InteractionWebhook.ToleranceSeconds
+                : 300));
+
+        if (!validation.IsValid)
+        {
+            _logger.LogWarning("Rejected interaction webhook response: {Reason}", validation.ErrorMessage);
+            return Unauthorized(new { error = validation.ErrorMessage });
+        }
+
+        InteractionWebhookResponse? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<InteractionWebhookResponse>(
+                body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = "Invalid response payload.", detail = ex.Message });
+        }
+
+        if (payload is null
+            || string.IsNullOrWhiteSpace(payload.InteractionId)
+            || string.IsNullOrWhiteSpace(payload.Response))
+        {
+            return BadRequest(new { error = "interactionId and response are required." });
+        }
+
+        var responder = string.IsNullOrWhiteSpace(payload.Responder?.Id)
+            ? "webhook"
+            : $"webhook:{payload.Responder.Id}";
+
+        try
+        {
+            var runId = await ResolveInteractionRunIdAsync(payload.InteractionId, cancellationToken);
+            if (runId is null)
+            {
+                return NotFound(new { error = "Interaction was not found." });
+            }
+
+            // A rejected confirmation fails the step rather than feeding a refusal back to the agent,
+            // so it is a distinct verb rather than an answer of "reject" (#219).
+            if (string.Equals(payload.Decision, "reject", StringComparison.OrdinalIgnoreCase))
+            {
+                await _orchestrationService.RejectInteractionAsync(
+                    new RejectInteractionCommand(
+                        runId, payload.InteractionId, payload.Response, responder, InteractionChannels.Webhook),
+                    cancellationToken);
+            }
+            else
+            {
+                await _orchestrationService.AnswerInteractionAsync(
+                    new AnswerInteractionCommand(
+                        runId, payload.InteractionId, payload.Response, responder, InteractionChannels.Webhook),
+                    cancellationToken);
+            }
+
+            return Accepted(new { interactionId = payload.InteractionId, acceptedChannel = InteractionChannels.Webhook });
+        }
+        catch (InteractionNotFoundException)
+        {
+            return NotFound(new { error = "Interaction was not found." });
+        }
+        catch (InteractionNotPendingException ex)
+        {
+            // Duplicate, expired, cancelled, or another channel won: all "not pending", all idempotent.
+            return Conflict(new { error = ex.Message, status = ex.Status });
+        }
+        catch (InvalidInteractionAnswerException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (RunNotAcceptingResponsesException ex)
+        {
+            return UnprocessableEntity(new { error = ex.Message });
+        }
+        catch (WorkflowRunNotFoundException ex)
+        {
+            return UnprocessableEntity(new { error = ex.Message });
+        }
+    }
+
+    private async Task<string?> ResolveInteractionRunIdAsync(string interactionId, CancellationToken cancellationToken)
+    {
+        var interaction = await _interactionRepository.GetByIdAsync(interactionId, cancellationToken);
+        return interaction?.RunId;
+    }
+
+    private async Task<string?> ResolveInteractionWebhookSecretAsync(CancellationToken cancellationToken)
+    {
+        var configured = _options.InteractionWebhook.Secret;
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return null;
+        }
+
+        return await _secretStore.GetSecretAsync(configured, cancellationToken) ?? configured;
+    }
+
+    private sealed record InteractionWebhookResponder(string? Id, string? DisplayName);
+
+    private sealed record InteractionWebhookResponse(
+        string? InteractionId,
+        string? Response,
+        string? Decision,
+        InteractionWebhookResponder? Responder,
+        string? Nonce,
+        string? Timestamp);
+
+    /// <summary>
+    /// Recognises an interaction payload without disturbing the approval parser. Returns false for
+    /// anything else — an approval click, or an action this build does not know — so the caller falls
+    /// through to the existing path (#225).
+    /// </summary>
+    private static bool TryParseInteractionAction(string payloadJson, out SlackInteractionAction action)
+    {
+        action = default!;
+
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            var root = document.RootElement;
+            var type = root.TryGetProperty("type", out var t) ? t.GetString() : null;
+            var user = ReadSlackUser(root);
+
+            // Free text arrives as a view_submission; the interaction id rides in private_metadata.
+            if (string.Equals(type, "view_submission", StringComparison.Ordinal))
+            {
+                if (!root.TryGetProperty("view", out var view)
+                    || !view.TryGetProperty("private_metadata", out var metadata))
+                {
+                    return false;
+                }
+
+                var interactionId = metadata.GetString();
+                if (string.IsNullOrWhiteSpace(interactionId))
+                {
+                    return false;
+                }
+
+                action = new SlackInteractionAction(interactionId, ReadModalAnswer(view) ?? string.Empty, user);
+                return true;
+            }
+
+            if (!root.TryGetProperty("actions", out var actions) || actions.GetArrayLength() == 0)
+            {
+                return false;
+            }
+
+            var first = actions[0];
+            var actionId = first.TryGetProperty("action_id", out var a) ? a.GetString() ?? string.Empty : string.Empty;
+
+            // The approval path keys on bare "approve"/"reject"; only the namespaced ids are ours.
+            if (!actionId.StartsWith(SlackInteractionChannel.ActionPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var value = first.TryGetProperty("value", out var v) ? v.GetString() ?? string.Empty : string.Empty;
+            var separator = value.IndexOf(':');
+            if (separator <= 0)
+            {
+                return false;
+            }
+
+            action = new SlackInteractionAction(value[..separator], value[(separator + 1)..], user);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string ReadSlackUser(JsonElement root)
+    {
+        if (!root.TryGetProperty("user", out var userElement))
+        {
+            return "unknown";
+        }
+
+        return (userElement.TryGetProperty("username", out var un) ? un.GetString() : null)
+            ?? (userElement.TryGetProperty("id", out var id) ? id.GetString() : null)
+            ?? "unknown";
+    }
+
+    private static string? ReadModalAnswer(JsonElement view)
+    {
+        if (!view.TryGetProperty("state", out var state) || !state.TryGetProperty("values", out var values))
+        {
+            return null;
+        }
+
+        foreach (var block in values.EnumerateObject())
+        {
+            foreach (var input in block.Value.EnumerateObject())
+            {
+                if (input.Value.TryGetProperty("value", out var value))
+                {
+                    return value.GetString();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<IActionResult> HandleSlackInteractionAsync(
+        SlackInteractionAction action,
+        CancellationToken cancellationToken)
+    {
+        var interaction = await _interactionRepository.GetByIdAsync(action.InteractionId, cancellationToken);
+        if (interaction is null)
+        {
+            return SlackReply(":warning: That request no longer exists.");
+        }
+
+        var responder = $"slack:{action.User}";
+
+        try
+        {
+            if (string.Equals(action.Answer, "reject", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(interaction.Kind, AgentInteractionKinds.Confirm, StringComparison.Ordinal))
+            {
+                await _orchestrationService.RejectInteractionAsync(
+                    new RejectInteractionCommand(
+                        interaction.RunId, action.InteractionId, $"Rejected via Slack by {action.User}.",
+                        responder, InteractionChannels.Slack),
+                    cancellationToken);
+
+                return SlackReply($":no_entry: Rejected by {action.User}.");
+            }
+
+            await _orchestrationService.AnswerInteractionAsync(
+                new AnswerInteractionCommand(
+                    interaction.RunId, action.InteractionId, action.Answer, responder, InteractionChannels.Slack),
+                cancellationToken);
+
+            return SlackReply($":white_check_mark: Answered by {action.User}.");
+        }
+        catch (InteractionNotPendingException ex)
+        {
+            // Slack renders the body, so a lost race must read as information, not as an error. The
+            // 409 in the API contract is for API clients (#227), not for a person who clicked a button.
+            var via = ex.RespondedChannel is { Length: > 0 } channel ? $" via {channel}" : string.Empty;
+            return SlackReply($":information_source: Already answered{via}.");
+        }
+        catch (Exception ex) when (ex is InteractionNotFoundException
+                                    or InvalidInteractionAnswerException
+                                    or RunNotAcceptingResponsesException
+                                    or WorkflowRunNotFoundException)
+        {
+            return SlackReply($":warning: Could not apply that: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Slack shows the response body to the clicker, so every outcome returns 200 with a message —
+    /// matching the approval path's convention. replace_original spends the buttons so a second click
+    /// is not offered.
+    /// </summary>
+    private static OkObjectResult SlackReply(string text) =>
+        new(new { replace_original = true, text });
+
+    private sealed record SlackInteractionAction(string InteractionId, string Answer, string User);
 
     private static string? ExtractFormField(string formBody, string field)
     {
@@ -563,6 +873,179 @@ public sealed class WebhooksController : ControllerBase
     }
 
     /// <summary>
+    /// Generic signed event ingress (#206): lets any registered external system deliver a domain
+    /// event that resumes a BPMN message wait, without Agentwerke needing a connector for it.
+    /// The connector webhooks above speak GitHub's or Jira's vocabulary; this endpoint lets the
+    /// sender name the message, so <c>test.unit.completed</c> is deliverable by whatever ran the tests.
+    /// </summary>
+    /// <remarks>
+    /// Authenticated per-source by HMAC-SHA256 over the raw body (X-Agentwerke-Signature-256),
+    /// keyed by X-Agentwerke-Source. Deduplicated on X-Agentwerke-Delivery, falling back to the
+    /// body's signature digest so a sender that omits the header still cannot double-resume a run.
+    /// </remarks>
+    [HttpPost("events")]
+    public async Task<IActionResult> Events(CancellationToken cancellationToken)
+    {
+        if (!_options.EventIngress.Enabled)
+        {
+            return NotFound(new { error = "Event ingress is not enabled." });
+        }
+
+        var body = await ReadBodyAsync(cancellationToken);
+        var sourceId = Request.Headers["X-Agentwerke-Source"].FirstOrDefault();
+
+        // A form/urlencoded content type makes ASP.NET consume the stream before we read it, so the
+        // signature would be computed over an empty body and fail as a mismatch. Senders here are
+        // third-party CI jobs; say what is actually wrong rather than blaming their secret.
+        if (body.Length == 0)
+        {
+            return BadRequest(new
+            {
+                error = "Empty request body.",
+                hint = "Send the event as Content-Type: application/json.",
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(sourceId))
+        {
+            return Unauthorized(new { error = "Missing X-Agentwerke-Source header." });
+        }
+
+        var source = _options.EventIngress.Sources
+            .FirstOrDefault(s => string.Equals(s.Id, sourceId, StringComparison.OrdinalIgnoreCase));
+
+        // An unregistered source and a bad signature get the same answer on purpose: the caller
+        // learns only that it is not authorized, not which source ids exist.
+        if (source is null)
+        {
+            _logger.LogWarning("Rejected event ingress from unregistered source '{Source}'.", sourceId);
+            return Unauthorized(new { error = "Unknown or unauthorized event source." });
+        }
+
+        var validation = WebhookSignatureValidator.ValidateEventIngress(
+            body,
+            Request.Headers["X-Agentwerke-Signature-256"].FirstOrDefault(),
+            source.Secret);
+
+        if (!validation.IsValid)
+        {
+            _logger.LogWarning(
+                "Rejected event ingress from source '{Source}': {Reason}", source.Id, validation.ErrorMessage);
+            return Unauthorized(new { error = validation.ErrorMessage });
+        }
+
+        EventIngressPayload payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<EventIngressPayload>(body, EventIngressSerializerOptions)
+                ?? throw new JsonException("Null payload.");
+        }
+        catch (JsonException ex)
+        {
+            return BadRequest(new { error = "Invalid JSON payload.", detail = ex.Message });
+        }
+
+        if (string.IsNullOrWhiteSpace(payload.MessageName))
+        {
+            return BadRequest(new { error = "Payload is missing 'messageName'." });
+        }
+
+        if (string.IsNullOrWhiteSpace(payload.CorrelationKey))
+        {
+            return BadRequest(new { error = "Payload is missing 'correlationKey'." });
+        }
+
+        if (source.AllowedMessageNames.Count > 0
+            && !source.AllowedMessageNames.Contains(payload.MessageName, StringComparer.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Source '{Source}' is not allowed to deliver message '{MessageName}'.", source.Id, payload.MessageName);
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                error = $"Source '{source.Id}' is not allowed to deliver message '{payload.MessageName}'."
+            });
+        }
+
+        // An explicit delivery id lets a sender retry a failed POST without re-resuming. Without one,
+        // the signature digest identifies the body, which for a correlated domain event is the event.
+        var deliveryId = Request.Headers["X-Agentwerke-Delivery"].FirstOrDefault() is { Length: > 0 } header
+            ? $"{source.Id}:{header}"
+            : $"{source.Id}:{WebhookSignatureValidator.ComputeSignatureDigest(body, source.Secret)}";
+
+        var @event = new ExternalWorkflowEvent
+        {
+            Id = $"ext_{Guid.NewGuid():N}",
+            Kind = payload.MessageName,
+            CorrelationHint = payload.CorrelationKey,
+            Payload = payload.Payload is { ValueKind: not JsonValueKind.Undefined } p
+                ? p.GetRawText()
+                : "{}",
+            ReceivedAt = DateTimeOffset.UtcNow.ToString("o"),
+            Source = source.Id,
+            DeliveryId = deliveryId,
+        };
+
+        if (!await _externalEventRepository.TryAddAsync(@event, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Ignored duplicate event delivery {DeliveryId} for {MessageName}.", deliveryId, payload.MessageName);
+            return Ok(new
+            {
+                recorded = true,
+                duplicate = true,
+                kind = @event.Kind,
+                correlationHint = @event.CorrelationHint,
+                resumed = false,
+            });
+        }
+
+        return await MatchAndResumeAsync(
+            @event,
+            [payload.CorrelationKey],
+            FlattenResumePayload(payload.Payload),
+            $"event-ingress:{source.Id}",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Run inputs are a string map, so the event's JSON payload is flattened one level: scalars
+    /// become their text, and nested objects/arrays keep their raw JSON so nothing is silently
+    /// dropped from the evidence a resumed run sees.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> FlattenResumePayload(JsonElement payload)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            return result;
+        }
+
+        foreach (var property in payload.EnumerateObject())
+        {
+            result[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+                JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => property.Value.GetRawText(),
+            };
+        }
+
+        return result;
+    }
+
+    private static readonly JsonSerializerOptions EventIngressSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    private sealed record EventIngressPayload(
+        string? MessageName,
+        string? CorrelationKey,
+        JsonElement Payload);
+
+    /// <summary>
     /// A run may be waiting on either a branch name or a commit sha as its correlation key —
     /// e.g. "wait for PR merge" is naturally branch-keyed, while "wait for CI green" after a
     /// deploy dispatch (#139) is naturally sha-keyed, since a branch can have multiple runs.
@@ -601,7 +1084,21 @@ public sealed class WebhooksController : ControllerBase
         CancellationToken cancellationToken)
     {
         await _externalEventRepository.AddAsync(@event, cancellationToken);
+        return await MatchAndResumeAsync(@event, correlationCandidates, resumePayload, "github-webhook", cancellationToken);
+    }
 
+    /// <summary>
+    /// Finds a run waiting on this event's message name and any of the correlation candidates, and
+    /// resumes it. Shared by the connector webhooks and the generic event ingress (#206) — the
+    /// matching is already vocabulary-agnostic, so only the callers differ.
+    /// </summary>
+    private async Task<IActionResult> MatchAndResumeAsync(
+        ExternalWorkflowEvent @event,
+        IReadOnlyList<string> correlationCandidates,
+        IReadOnlyDictionary<string, string> resumePayload,
+        string resumedBy,
+        CancellationToken cancellationToken)
+    {
         string? waitingRunId = null;
         string? matchedCorrelationKey = null;
         foreach (var candidate in correlationCandidates)
@@ -626,7 +1123,7 @@ public sealed class WebhooksController : ControllerBase
         try
         {
             await _orchestrationService.ResumeExternalRunAsync(
-                new ResumeExternalRunCommand(waitingRunId, matchedCorrelationKey, resumePayload, ResumedBy: "github-webhook"),
+                new ResumeExternalRunCommand(waitingRunId, matchedCorrelationKey, resumePayload, ResumedBy: resumedBy),
                 cancellationToken);
         }
         catch (WorkflowRunNotFoundException)
