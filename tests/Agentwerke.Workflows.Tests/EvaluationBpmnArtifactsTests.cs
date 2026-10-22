@@ -103,6 +103,7 @@ public sealed class EvaluationBpmnArtifactsTests
                 "ImplementChange",
                 "DispatchVerificationCi",
                 "WaitForVerificationResult",
+                "IngestTestResults",
                 "End"
             },
             definition.Nodes.Select(static node => node.Id).ToArray());
@@ -155,6 +156,20 @@ public sealed class EvaluationBpmnArtifactsTests
         Assert.False(metadata.ContainsKey("tool.input.correlation_key"));
 
         AssertExternalWait(definition, "WaitForVerificationResult", "test.unit.completed", "{{run_id}}");
+    }
+
+    [Fact]
+    public void VModelPilotThreadArtifact_IngestsTheVerificationReportFromTheEventPayload()
+    {
+        var definition = ValidatePilotThread();
+
+        var ingest = definition.Nodes.Single(static node => node.Id == "IngestTestResults");
+        Assert.Equal("verification.ingest_test_results", ingest.Metadata!.Action);
+        Assert.Equal("read-only", ingest.Metadata.RuntimeContract!.Permissions.Level);
+
+        var metadata = ingest.Metadata.RuntimeContract.Metadata;
+        Assert.Equal("{{event.report_xml}}", metadata["tool.input.report_xml"]);
+        Assert.Equal("{{event.ci_run_url}}", metadata["tool.input.ci_run_url"]);
     }
 
     [Fact]
