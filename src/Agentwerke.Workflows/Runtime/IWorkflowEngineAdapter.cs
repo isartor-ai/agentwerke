@@ -32,7 +32,8 @@ public sealed record WorkflowEngineResumeRequest(
     string? ApprovedBy,
     string? ExternalCorrelationKey = null,
     IReadOnlyDictionary<string, string>? ExternalPayload = null,
-    string? ResumedBy = null);
+    string? ResumedBy = null,
+    string? ExternalMessageName = null);
 
 public sealed record WorkflowEngineRecoverRequest(
     string RunId,

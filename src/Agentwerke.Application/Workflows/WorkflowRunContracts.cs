@@ -86,7 +86,8 @@ public sealed record ResumeExternalRunCommand(
     string RunId,
     string CorrelationKey,
     IReadOnlyDictionary<string, string> Payload,
-    string? ResumedBy);
+    string? ResumedBy,
+    string? MessageName = null);
 
 public sealed record ResumeExternalRunResult(string RunId, string Status);
 
@@ -154,13 +155,20 @@ public interface IWorkflowRunner
         IReadOnlyDictionary<string, string>? externalPayload,
         string? externalCorrelationKey,
         string? resumedBy,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? externalMessageName = null);
 
     Task<WorkflowRunnerResult> RecoverAsync(
         string runId,
         string bpmnXml,
         CancellationToken cancellationToken);
 }
+
+public sealed record WaitingExternalSlot(
+    string NodeId,
+    string CorrelationKey,
+    string MessageName,
+    DateTimeOffset? TimerDueAt = null);
 
 public sealed record WorkflowRunnerResult(
     string RunId,
@@ -169,7 +177,9 @@ public sealed record WorkflowRunnerResult(
     DateTimeOffset? TimerDueAt = null,
     /// <summary>Set when <see cref="Status"/> is "waiting_external" (#137/#138).</summary>
     string? WaitingExternalCorrelationKey = null,
-    string? WaitingExternalMessageName = null);
+    string? WaitingExternalMessageName = null,
+    /// <summary>All open external waits when <see cref="Status"/> is "waiting_external" (#209).</summary>
+    IReadOnlyList<WaitingExternalSlot>? WaitingExternalCorrelations = null);
 
 public interface IWorkflowRunRepository
 {
@@ -200,7 +210,8 @@ public interface IWorkflowRunExecutor
         string? externalCorrelationKey,
         IReadOnlyDictionary<string, string>? externalPayload,
         string? resumedBy,
-        CancellationToken ct);
+        CancellationToken ct,
+        string? externalMessageName = null);
     Task ExecuteRecoverAsync(string runId, CancellationToken ct);
 }
 
@@ -224,7 +235,8 @@ public sealed record OutboxResumePayload(
     string? ApprovedBy,
     string? ExternalCorrelationKey = null,
     IReadOnlyDictionary<string, string>? ExternalPayload = null,
-    string? ResumedBy = null)
+    string? ResumedBy = null,
+    string? ExternalMessageName = null)
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
     public string Serialize() => JsonSerializer.Serialize(this, Options);

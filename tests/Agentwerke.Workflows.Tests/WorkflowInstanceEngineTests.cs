@@ -548,6 +548,98 @@ public sealed class WorkflowInstanceEngineTests
         Assert.Contains(events, static e => e.Type == "run_completed");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ParallelGateway_WhenBranchesWaitOnExternalEvents_HoldsMultipleCorrelationsAndResumesInAnyOrder(bool resumeBranchAFirst)
+    {
+        var store = new InMemoryWorkflowRuntimeStore();
+        var contextRepo = new InMemoryRunContextRepository();
+        var engine = new WorkflowInstanceEngine(store, new NoOpServiceTaskExecutor(), contextRepo, NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var definition = new BpmnWorkflowDefinition(
+            ProcessId: "ParallelExternalWaitFlow",
+            ProcessName: "Parallel External Wait Flow",
+            Nodes:
+            [
+                new BpmnNodeDefinition("Start", "Start", "startEvent", null),
+                new BpmnNodeDefinition("Fork", "Fork", "parallelGateway", null),
+                new BpmnNodeDefinition(
+                    "WaitUnit",
+                    "Wait Unit Tests",
+                    "intermediateCatchEvent",
+                    null,
+                    ExternalEventMetadata: new AgentwerkeExternalEventMetadata("test.unit.completed", "{{run_id}}")),
+                new BpmnNodeDefinition(
+                    "WaitSecurity",
+                    "Wait Security Scan",
+                    "intermediateCatchEvent",
+                    null,
+                    ExternalEventMetadata: new AgentwerkeExternalEventMetadata("security.scan.completed", "{{run_id}}")),
+                new BpmnNodeDefinition("Join", "Join", "parallelGateway", null),
+                new BpmnNodeDefinition("Deploy", "Deploy", "serviceTask", new AgentwerkeTaskMetadata("agent", "deploy", null, "purpose", "policy", [])),
+                new BpmnNodeDefinition("End", "End", "endEvent", null)
+            ],
+            SequenceFlows:
+            [
+                new BpmnSequenceFlow("f1", "Start", "Fork"),
+                new BpmnSequenceFlow("f2", "Fork", "WaitUnit"),
+                new BpmnSequenceFlow("f3", "Fork", "WaitSecurity"),
+                new BpmnSequenceFlow("f4", "WaitUnit", "Join"),
+                new BpmnSequenceFlow("f5", "WaitSecurity", "Join"),
+                new BpmnSequenceFlow("f6", "Join", "Deploy"),
+                new BpmnSequenceFlow("f7", "Deploy", "End")
+            ]);
+
+        var started = await engine.StartAsync(Guid.NewGuid().ToString(), definition, "system", CancellationToken.None);
+
+        Assert.Equal("waiting_external", started.Status);
+        Assert.NotNull(started.WaitingExternalCorrelations);
+        Assert.Equal(2, started.WaitingExternalCorrelations!.Count);
+        Assert.Contains(
+            started.WaitingExternalCorrelations,
+            slot => slot.NodeId == "WaitUnit" && slot.MessageName == "test.unit.completed" && slot.CorrelationKey == started.RunId);
+        Assert.Contains(
+            started.WaitingExternalCorrelations,
+            slot => slot.NodeId == "WaitSecurity" && slot.MessageName == "security.scan.completed" && slot.CorrelationKey == started.RunId);
+
+        var firstMessage = resumeBranchAFirst ? "test.unit.completed" : "security.scan.completed";
+        var secondMessage = resumeBranchAFirst ? "security.scan.completed" : "test.unit.completed";
+        var expectedRemainingNode = resumeBranchAFirst ? "WaitSecurity" : "WaitUnit";
+
+        var afterFirstResume = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                started.RunId,
+                definition,
+                "webhook",
+                ExternalCorrelationKey: started.RunId,
+                ExternalPayload: new Dictionary<string, string> { ["passed"] = "true" },
+                ExternalMessageName: firstMessage),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", afterFirstResume.Status);
+        var remainingSlot = Assert.Single(afterFirstResume.WaitingExternalCorrelations!);
+        Assert.Equal(expectedRemainingNode, remainingSlot.NodeId);
+        Assert.Equal(secondMessage, remainingSlot.MessageName);
+
+        var afterSecondResume = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                started.RunId,
+                definition,
+                "webhook",
+                ExternalCorrelationKey: started.RunId,
+                ExternalPayload: new Dictionary<string, string> { ["passed"] = "true" },
+                ExternalMessageName: secondMessage),
+            CancellationToken.None);
+
+        Assert.Equal("completed", afterSecondResume.Status);
+        Assert.Null(afterSecondResume.WaitingExternalCorrelations);
+
+        var events = await store.ListRunEventsAsync(started.RunId, CancellationToken.None);
+        Assert.Contains(events, static e => e.Type == "parallel_joined");
+        Assert.Contains(events, static e => e.Type == "run_completed");
+    }
+
     [Fact]
     public async Task StartAsync_WhenServiceTaskReturnsRuntimeSnapshot_PersistsSnapshotOnStep()
     {

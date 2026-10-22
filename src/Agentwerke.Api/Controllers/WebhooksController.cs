@@ -1123,7 +1123,12 @@ public sealed class WebhooksController : ControllerBase
         try
         {
             await _orchestrationService.ResumeExternalRunAsync(
-                new ResumeExternalRunCommand(waitingRunId, matchedCorrelationKey, resumePayload, ResumedBy: resumedBy),
+                new ResumeExternalRunCommand(
+                    waitingRunId,
+                    matchedCorrelationKey,
+                    resumePayload,
+                    ResumedBy: resumedBy,
+                    MessageName: @event.Kind),
                 cancellationToken);
         }
         catch (WorkflowRunNotFoundException)

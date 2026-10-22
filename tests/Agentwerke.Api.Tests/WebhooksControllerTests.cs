@@ -1318,6 +1318,9 @@ public sealed class WebhooksControllerTests
         public Task RemoveAsync(string runId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task RemoveAsync(string runId, string nodeId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<string?> FindWaitingRunIdAsync(string messageName, string correlationKey, CancellationToken cancellationToken)
         {
             var keyMatches = onlyMatchKey is null || string.Equals(onlyMatchKey, correlationKey, StringComparison.Ordinal);

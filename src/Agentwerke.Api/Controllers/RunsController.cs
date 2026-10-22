@@ -226,7 +226,8 @@ public sealed class RunsController : ControllerBase
                     RunId: runId,
                     CorrelationKey: request.CorrelationKey,
                     Payload: request.Payload ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-                    ResumedBy: request.ResumedBy ?? AuthenticatedPrincipal.ResolveSubject(User)),
+                    ResumedBy: request.ResumedBy ?? AuthenticatedPrincipal.ResolveSubject(User),
+                    MessageName: request.MessageName),
                 HttpContext.RequestAborted);
 
             return Accepted(new { runId = result.RunId, status = ApiContractMappings.NormalizeRunStatus(result.Status) });

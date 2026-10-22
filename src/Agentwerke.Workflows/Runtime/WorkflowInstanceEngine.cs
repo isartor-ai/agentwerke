@@ -144,6 +144,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 throw new InvalidOperationException($"Run '{request.RunId}' requires an external correlation key to resume.");
             }
 
+            if (checkpoint.WaitingBranches is { Count: > 0 } && checkpoint.ParallelJoinNodeId is not null)
+            {
+                return await ResumeParallelExternalWaitAsync(request, checkpoint, cancellationToken);
+            }
+
             if (!string.Equals(checkpoint.ExternalCorrelationKey, request.ExternalCorrelationKey, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException($"Run '{request.RunId}' correlation key '{request.ExternalCorrelationKey}' does not match the waiting checkpoint.");
@@ -215,6 +220,47 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
         if (string.Equals(checkpoint.Status, WaitingExternalStatus, StringComparison.Ordinal))
         {
+            if (checkpoint.WaitingBranches is { Count: > 0 })
+            {
+                foreach (var branch in checkpoint.WaitingBranches)
+                {
+                    var branchDeadline = ParseTimestamp(branch.ExternalTimeoutAt);
+                    if (branchDeadline is not null && branch.BoundaryNodeId is not null && branchDeadline <= DateTimeOffset.UtcNow)
+                    {
+                        var timedOutCheckpoint = checkpoint with
+                        {
+                            WaitingOnNodeId = branch.WaitingOnNodeId,
+                            NextNodeId = branch.NextNodeId,
+                            ExternalCorrelationKey = branch.ExternalCorrelationKey,
+                            ExternalMessageName = branch.ExternalMessageName,
+                            ExternalTimeoutAt = branch.ExternalTimeoutAt,
+                            BoundaryNodeId = branch.BoundaryNodeId,
+                        };
+                        return await TriggerExternalWaitTimeoutAsync(
+                            request.RunId, request.Definition, timedOutCheckpoint, branchDeadline.Value, cancellationToken);
+                    }
+                }
+
+                var slots = BuildWaitingExternalSlots(checkpoint.WaitingBranches);
+                var earliestDeadline = slots
+                    .Where(static s => s.TimerDueAt.HasValue)
+                    .Select(static s => s.TimerDueAt!.Value)
+                    .OrderBy(static d => d)
+                    .Select(static d => (DateTimeOffset?)d)
+                    .FirstOrDefault();
+
+                return new WorkflowExecutionState(
+                    RunId: request.RunId,
+                    Status: WaitingExternalStatus,
+                    NextNodeId: checkpoint.NextNodeId,
+                    WaitingOnNodeId: checkpoint.WaitingOnNodeId,
+                    CompletedAt: null,
+                    TimerDueAt: earliestDeadline,
+                    WaitingExternalCorrelationKey: checkpoint.ExternalCorrelationKey,
+                    WaitingExternalMessageName: checkpoint.ExternalMessageName,
+                    WaitingExternalCorrelations: slots);
+            }
+
             var deadline = ParseTimestamp(checkpoint.ExternalTimeoutAt);
 
             // The wait's boundary timer has expired: the external system never delivered
@@ -224,6 +270,12 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             {
                 return await TriggerExternalWaitTimeoutAsync(request.RunId, request.Definition, checkpoint, deadline.Value, cancellationToken);
             }
+
+            IReadOnlyList<WaitingExternalSlot>? singleSlots =
+                !string.IsNullOrWhiteSpace(checkpoint.ExternalCorrelationKey) &&
+                !string.IsNullOrWhiteSpace(checkpoint.ExternalMessageName)
+                    ? [new WaitingExternalSlot(checkpoint.WaitingOnNodeId ?? string.Empty, checkpoint.ExternalCorrelationKey, checkpoint.ExternalMessageName, deadline)]
+                    : null;
 
             return new WorkflowExecutionState(
                 RunId: request.RunId,
@@ -235,7 +287,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                 // drop it. Always in the future here, so this cannot spin.
                 TimerDueAt: deadline,
                 WaitingExternalCorrelationKey: checkpoint.ExternalCorrelationKey,
-                WaitingExternalMessageName: checkpoint.ExternalMessageName);
+                WaitingExternalMessageName: checkpoint.ExternalMessageName,
+                WaitingExternalCorrelations: singleSlots);
         }
 
         return await AdvanceAsync(request.RunId, request.Definition, checkpoint.NextNodeId, cancellationToken);
@@ -366,7 +419,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                             Serialize(new { runId, gatewayId = node.Id, branchNodeIds }),
                             cancellationToken);
 
-                        ServiceExecutionResult[] branchResults;
+                        BranchExecutionOutcome[] branchResults;
 
                         if (_serviceScopeFactory is not null)
                         {
@@ -376,7 +429,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                         }
                         else
                         {
-                            var results = new List<ServiceExecutionResult>(branchNodeIds.Count);
+                            var results = new List<BranchExecutionOutcome>(branchNodeIds.Count);
                             foreach (var branchId in branchNodeIds)
                             {
                                 results.Add(await ExecuteBranchAsync(runId, definition, graph, branchId, joinNodeId, cancellationToken));
@@ -385,11 +438,26 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                             branchResults = results.ToArray();
                         }
 
-                        if (branchResults.Any(static result => result == ServiceExecutionResult.Failed))
+                        if (branchResults.Any(static result => result.Status == ServiceExecutionResult.Failed))
                         {
                             await _store.UpdateRunStatusAsync(runId, FailedStatus, completedAt: null, cancellationToken);
                             await SaveCheckpointAsync(runId, FailedStatus, null, null, null, cancellationToken);
                             return new WorkflowExecutionState(runId, FailedStatus, null, null, null);
+                        }
+
+                        var waitingBranches = branchResults
+                            .Where(static r => r.WaitingBranch is not null)
+                            .Select(static r => r.WaitingBranch!)
+                            .ToList();
+
+                        if (waitingBranches.Count > 0)
+                        {
+                            return await ParkParallelExternalWaitAsync(
+                                runId,
+                                node.Id,
+                                joinNodeId,
+                                waitingBranches,
+                                cancellationToken);
                         }
 
                         var afterJoin = graph.GetSingleSuccessor(joinNodeId);
@@ -455,7 +523,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         }
     }
 
-    private async Task<ServiceExecutionResult> ExecuteBranchAsync(
+    private async Task<BranchExecutionOutcome> ExecuteBranchAsync(
         string runId,
         BpmnWorkflowDefinition definition,
         FlowGraph graph,
@@ -477,7 +545,14 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             {
                 var result = await ExecuteServiceTaskAsync(runId, definition, graph, branchNode, cancellationToken);
                 if (result == ServiceExecutionResult.Failed)
-                    return ServiceExecutionResult.Failed;
+                    return new BranchExecutionOutcome(ServiceExecutionResult.Failed);
+            }
+            else if ((branchNode.ElementName == "intermediateCatchEvent" && branchNode.ExternalEventMetadata is not null)
+                || branchNode.ElementName == "receiveTask")
+            {
+                var waitingBranch = await RegisterBranchExternalWaitAsync(
+                    runId, graph, branchNode, _store, _runContext, cancellationToken);
+                return new BranchExecutionOutcome(ServiceExecutionResult.WaitingExternal, waitingBranch);
             }
             else if (branchNode.ElementName == "intermediateCatchEvent")
             {
@@ -492,10 +567,10 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
             nodeId = graph.GetSingleSuccessor(branchNode.Id);
         }
-        return ServiceExecutionResult.Completed;
+        return new BranchExecutionOutcome(ServiceExecutionResult.Completed);
     }
 
-    private async Task<ServiceExecutionResult> ExecuteBranchInScopeAsync(
+    private async Task<BranchExecutionOutcome> ExecuteBranchInScopeAsync(
         string runId,
         BpmnWorkflowDefinition definition,
         FlowGraph graph,
@@ -531,7 +606,14 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
                     scopedRunContext);
 
                 if (result == ServiceExecutionResult.Failed)
-                    return ServiceExecutionResult.Failed;
+                    return new BranchExecutionOutcome(ServiceExecutionResult.Failed);
+            }
+            else if ((branchNode.ElementName == "intermediateCatchEvent" && branchNode.ExternalEventMetadata is not null)
+                || branchNode.ElementName == "receiveTask")
+            {
+                var waitingBranch = await RegisterBranchExternalWaitAsync(
+                    runId, graph, branchNode, scopedStore, scopedRunContext, cancellationToken);
+                return new BranchExecutionOutcome(ServiceExecutionResult.WaitingExternal, waitingBranch);
             }
             else if (branchNode.ElementName == "intermediateCatchEvent")
             {
@@ -547,7 +629,7 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             nodeId = graph.GetSingleSuccessor(branchNode.Id);
         }
 
-        return ServiceExecutionResult.Completed;
+        return new BranchExecutionOutcome(ServiceExecutionResult.Completed);
     }
 
     private async Task<ServiceExecutionResult> ExecuteServiceTaskAsync(
@@ -890,6 +972,8 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             externalTimeoutAt: timeoutAt?.ToString("o"),
             boundaryNodeId: boundaryNode?.Id);
 
+        var slot = new WaitingExternalSlot(node.Id, correlationKey, externalEvent.MessageName, timeoutAt);
+
         return new WorkflowExecutionState(
             RunId: runId,
             Status: WaitingExternalStatus,
@@ -898,8 +982,213 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
             CompletedAt: null,
             TimerDueAt: timeoutAt,
             WaitingExternalCorrelationKey: correlationKey,
-            WaitingExternalMessageName: externalEvent.MessageName);
+            WaitingExternalMessageName: externalEvent.MessageName,
+            WaitingExternalCorrelations: [slot]);
     }
+
+    private async Task<WaitingExternalBranch> RegisterBranchExternalWaitAsync(
+        string runId,
+        FlowGraph graph,
+        BpmnNodeDefinition node,
+        IWorkflowRuntimeStore store,
+        IRunContextRepository runContext,
+        CancellationToken cancellationToken)
+    {
+        var externalEvent = node.ExternalEventMetadata
+            ?? throw new InvalidOperationException($"Node '{node.Id}' is missing external event metadata.");
+
+        var correlationKey = await RenderCorrelationKeyAsync(
+            runId, externalEvent.CorrelationKeyTemplate, cancellationToken, runContext);
+
+        var boundaryNode = graph.GetAttachedTimerBoundary(node.Id);
+        DateTimeOffset? timeoutAt = boundaryNode is null
+            ? null
+            : DateTimeOffset.UtcNow.Add(ParseDuration(boundaryNode.TimerDuration));
+
+        await store.AppendEventAsync(runId, "external_event_waiting",
+            Serialize(new
+            {
+                runId,
+                nodeId = node.Id,
+                messageName = externalEvent.MessageName,
+                correlationKey,
+                timeoutAt = timeoutAt?.ToString("o"),
+                boundaryNodeId = boundaryNode?.Id
+            }),
+            cancellationToken);
+
+        if (boundaryNode is not null)
+        {
+            await store.AppendEventAsync(runId, "timer_scheduled",
+                Serialize(new
+                {
+                    runId,
+                    nodeId = boundaryNode.Id,
+                    attachedToNodeId = node.Id,
+                    dueAt = timeoutAt!.Value.ToString("o"),
+                    duration = boundaryNode.TimerDuration
+                }),
+                cancellationToken);
+        }
+
+        return new WaitingExternalBranch(
+            WaitingOnNodeId: node.Id,
+            NextNodeId: graph.GetSingleSuccessor(node.Id),
+            ExternalCorrelationKey: correlationKey,
+            ExternalMessageName: externalEvent.MessageName,
+            ExternalTimeoutAt: timeoutAt?.ToString("o"),
+            BoundaryNodeId: boundaryNode?.Id);
+    }
+
+    private async Task<WorkflowExecutionState> ParkParallelExternalWaitAsync(
+        string runId,
+        string? forkNodeId,
+        string joinNodeId,
+        IReadOnlyList<WaitingExternalBranch> waitingBranches,
+        CancellationToken cancellationToken)
+    {
+        var primary = waitingBranches[0];
+        var slots = BuildWaitingExternalSlots(waitingBranches);
+        var earliestDeadline = slots
+            .Where(static s => s.TimerDueAt.HasValue)
+            .Select(static s => s.TimerDueAt!.Value)
+            .OrderBy(static d => d)
+            .Select(static d => (DateTimeOffset?)d)
+            .FirstOrDefault();
+
+        await _store.UpdateRunStatusAsync(runId, WaitingExternalStatus, completedAt: null, cancellationToken);
+        await SaveCheckpointAsync(
+            runId,
+            WaitingExternalStatus,
+            primary.NextNodeId,
+            primary.WaitingOnNodeId,
+            completedAt: null,
+            cancellationToken,
+            externalCorrelationKey: primary.ExternalCorrelationKey,
+            externalMessageName: primary.ExternalMessageName,
+            externalTimeoutAt: primary.ExternalTimeoutAt,
+            boundaryNodeId: primary.BoundaryNodeId,
+            parallelForkNodeId: forkNodeId,
+            parallelJoinNodeId: joinNodeId,
+            waitingBranches: waitingBranches);
+
+        return new WorkflowExecutionState(
+            RunId: runId,
+            Status: WaitingExternalStatus,
+            NextNodeId: primary.NextNodeId,
+            WaitingOnNodeId: primary.WaitingOnNodeId,
+            CompletedAt: null,
+            TimerDueAt: earliestDeadline,
+            WaitingExternalCorrelationKey: primary.ExternalCorrelationKey,
+            WaitingExternalMessageName: primary.ExternalMessageName,
+            WaitingExternalCorrelations: slots);
+    }
+
+    private async Task<WorkflowExecutionState> ResumeParallelExternalWaitAsync(
+        WorkflowEngineResumeRequest request,
+        CheckpointPayload checkpoint,
+        CancellationToken cancellationToken)
+    {
+        var waitingBranches = checkpoint.WaitingBranches!;
+        var joinNodeId = checkpoint.ParallelJoinNodeId!;
+
+        var matchedBranch = waitingBranches.FirstOrDefault(b =>
+            string.Equals(b.ExternalCorrelationKey, request.ExternalCorrelationKey, StringComparison.Ordinal) &&
+            (string.IsNullOrWhiteSpace(request.ExternalMessageName) ||
+             string.Equals(b.ExternalMessageName, request.ExternalMessageName, StringComparison.OrdinalIgnoreCase)));
+
+        if (matchedBranch is null)
+        {
+            throw new InvalidOperationException(
+                $"Run '{request.RunId}' correlation key '{request.ExternalCorrelationKey}' does not match the waiting checkpoint.");
+        }
+
+        await MergeExternalPayloadAsync(
+            request.RunId,
+            request.ExternalPayload ?? new Dictionary<string, string>(),
+            cancellationToken);
+
+        await _store.AppendEventAsync(request.RunId, "external_event_received",
+            Serialize(new
+            {
+                runId = request.RunId,
+                nodeId = matchedBranch.WaitingOnNodeId,
+                messageName = matchedBranch.ExternalMessageName,
+                correlationKey = request.ExternalCorrelationKey,
+                payload = request.ExternalPayload ?? new Dictionary<string, string>(),
+                resumedBy = request.ResumedBy,
+                timestampUtc = DateTime.UtcNow.ToString("o")
+            }),
+            cancellationToken);
+
+        var graph = FlowGraph.Build(request.Definition);
+        if (graph.NodeById.TryGetValue(matchedBranch.WaitingOnNodeId, out var waitNode))
+        {
+            await CompleteNodeAsync(request.RunId, waitNode, cancellationToken);
+        }
+
+        var branchOutcome = await ExecuteBranchAsync(
+            request.RunId,
+            request.Definition,
+            graph,
+            matchedBranch.NextNodeId,
+            joinNodeId,
+            cancellationToken);
+
+        if (branchOutcome.Status == ServiceExecutionResult.Failed)
+        {
+            await _store.UpdateRunStatusAsync(request.RunId, FailedStatus, completedAt: null, cancellationToken);
+            await SaveCheckpointAsync(request.RunId, FailedStatus, null, null, null, cancellationToken);
+            return new WorkflowExecutionState(request.RunId, FailedStatus, null, null, null);
+        }
+
+        var remainingBranches = new List<WaitingExternalBranch>(waitingBranches.Count);
+        foreach (var branch in waitingBranches)
+        {
+            if (!ReferenceEquals(branch, matchedBranch))
+            {
+                remainingBranches.Add(branch);
+            }
+            else if (branchOutcome.WaitingBranch is not null)
+            {
+                remainingBranches.Add(branchOutcome.WaitingBranch);
+            }
+        }
+
+        if (remainingBranches.Count > 0)
+        {
+            return await ParkParallelExternalWaitAsync(
+                request.RunId,
+                checkpoint.ParallelForkNodeId,
+                joinNodeId,
+                remainingBranches,
+                cancellationToken);
+        }
+
+        var afterJoin = graph.GetSingleSuccessor(joinNodeId);
+        await _store.AppendEventAsync(request.RunId, "parallel_joined",
+            Serialize(new { runId = request.RunId, gatewayId = joinNodeId }),
+            cancellationToken);
+
+        if (checkpoint.ParallelForkNodeId is not null &&
+            graph.NodeById.TryGetValue(checkpoint.ParallelForkNodeId, out var forkNode))
+        {
+            await CompleteNodeAsync(request.RunId, forkNode, cancellationToken);
+        }
+
+        await SaveCheckpointAsync(request.RunId, RunningStatus, afterJoin, null, null, cancellationToken);
+        return await AdvanceAsync(request.RunId, request.Definition, afterJoin, cancellationToken);
+    }
+
+    private static IReadOnlyList<WaitingExternalSlot> BuildWaitingExternalSlots(
+        IReadOnlyList<WaitingExternalBranch> waitingBranches) =>
+        waitingBranches
+            .Select(static b => new WaitingExternalSlot(
+                b.WaitingOnNodeId,
+                b.ExternalCorrelationKey,
+                b.ExternalMessageName,
+                ParseTimestamp(b.ExternalTimeoutAt)))
+            .ToList();
 
     /// <summary>
     /// Fires the interrupting boundary timer on an external wait whose event never arrived:
@@ -1004,12 +1293,16 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         string? externalCorrelationKey = null,
         string? externalMessageName = null,
         string? externalTimeoutAt = null,
-        string? boundaryNodeId = null)
+        string? boundaryNodeId = null,
+        string? parallelForkNodeId = null,
+        string? parallelJoinNodeId = null,
+        IReadOnlyList<WaitingExternalBranch>? waitingBranches = null)
     {
         await _store.AppendEventAsync(runId, "checkpoint_saved",
             Serialize(new CheckpointPayload(
                 status, nextNodeId, waitingOnNodeId, completedAt,
-                externalCorrelationKey, externalMessageName, externalTimeoutAt, boundaryNodeId)),
+                externalCorrelationKey, externalMessageName, externalTimeoutAt, boundaryNodeId,
+                parallelForkNodeId, parallelJoinNodeId, waitingBranches)),
             cancellationToken);
     }
 
@@ -1054,9 +1347,11 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
     private async Task<Dictionary<string, string>> BuildRunVariableMapAsync(
         string runId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IRunContextRepository? runContextOverride = null)
     {
-        var entries = await _runContext.GetAllAsync(runId, cancellationToken);
+        var runContext = runContextOverride ?? _runContext;
+        var entries = await runContext.GetAllAsync(runId, cancellationToken);
         var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in entries)
         {
@@ -1082,9 +1377,10 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
     private async Task<string> RenderCorrelationKeyAsync(
         string runId,
         string template,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IRunContextRepository? runContextOverride = null)
     {
-        var variables = await BuildRunVariableMapAsync(runId, cancellationToken);
+        var variables = await BuildRunVariableMapAsync(runId, cancellationToken, runContextOverride);
 
         return TemplateVariablePattern.Replace(template, match =>
         {
@@ -1154,6 +1450,18 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, SerializerOptions);
 
+    private sealed record WaitingExternalBranch(
+        string WaitingOnNodeId,
+        string NextNodeId,
+        string ExternalCorrelationKey,
+        string ExternalMessageName,
+        string? ExternalTimeoutAt = null,
+        string? BoundaryNodeId = null);
+
+    private sealed record BranchExecutionOutcome(
+        ServiceExecutionResult Status,
+        WaitingExternalBranch? WaitingBranch = null);
+
     private sealed record CheckpointPayload(
         string Status,
         string? NextNodeId,
@@ -1164,9 +1472,12 @@ public sealed class WorkflowInstanceEngine : IWorkflowEngineAdapter
         /// <summary>When an external wait's interrupting boundary timer expires (#208). Null when the wait has no boundary timer.</summary>
         string? ExternalTimeoutAt = null,
         /// <summary>Id of the boundary event whose flow the run follows once <see cref="ExternalTimeoutAt"/> passes.</summary>
-        string? BoundaryNodeId = null);
+        string? BoundaryNodeId = null,
+        string? ParallelForkNodeId = null,
+        string? ParallelJoinNodeId = null,
+        IReadOnlyList<WaitingExternalBranch>? WaitingBranches = null);
 
-    private enum ServiceExecutionResult { Completed, Failed, WaitingUser }
+    private enum ServiceExecutionResult { Completed, Failed, WaitingUser, WaitingExternal }
 
     private sealed record GatewayConditionResult(
         string FlowId, string TargetRef, string Expression, bool Result, string? Detail);

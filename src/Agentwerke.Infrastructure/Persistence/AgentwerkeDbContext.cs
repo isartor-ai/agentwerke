@@ -267,8 +267,9 @@ public sealed class AgentwerkeDbContext(DbContextOptions<AgentwerkeDbContext> op
         modelBuilder.Entity<WaitingExternalCorrelation>(entity =>
         {
             entity.ToTable("waiting_external_correlations");
-            entity.HasKey(e => e.RunId);
+            entity.HasKey(e => new { e.RunId, e.NodeId });
             entity.Property(e => e.RunId).HasMaxLength(128).IsRequired();
+            entity.Property(e => e.NodeId).HasMaxLength(128).IsRequired().HasDefaultValue(string.Empty);
             entity.Property(e => e.CorrelationKey).HasMaxLength(256).IsRequired();
             entity.Property(e => e.MessageName).HasMaxLength(128).IsRequired();
             entity.Property(e => e.CreatedAt).HasMaxLength(64).IsRequired();

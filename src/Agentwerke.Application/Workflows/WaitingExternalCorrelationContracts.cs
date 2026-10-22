@@ -9,11 +9,14 @@ namespace Agentwerke.Application.Workflows;
 /// </summary>
 public interface IWaitingExternalCorrelationRepository
 {
-    /// <summary>Records (or replaces) the correlation a run is currently waiting on.</summary>
+    /// <summary>Records (or replaces) the correlation a run node is currently waiting on.</summary>
     Task UpsertAsync(WaitingExternalCorrelation correlation, CancellationToken cancellationToken);
 
-    /// <summary>Clears any correlation recorded for a run, e.g. once it resumes or fails.</summary>
+    /// <summary>Clears any correlations recorded for a run, e.g. once it completes or fails.</summary>
     Task RemoveAsync(string runId, CancellationToken cancellationToken);
+
+    /// <summary>Clears the correlation for a specific waiting node on a run (#209).</summary>
+    Task RemoveAsync(string runId, string nodeId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Finds the run id waiting on the given message name + correlation key, if any.
@@ -22,7 +25,7 @@ public interface IWaitingExternalCorrelationRepository
     Task<string?> FindWaitingRunIdAsync(string messageName, string correlationKey, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Every run currently parked on an external event. Used to publish the waiting_external
+    /// Every correlation currently parked on an external event. Used to publish the waiting_external
     /// gauge so ops can alert on waits that never resolve (#208).
     /// </summary>
     Task<IReadOnlyList<WaitingExternalCorrelation>> ListWaitingAsync(CancellationToken cancellationToken);
