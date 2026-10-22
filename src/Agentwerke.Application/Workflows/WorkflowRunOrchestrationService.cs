@@ -461,7 +461,8 @@ public sealed class WorkflowRunOrchestrationService : IWorkflowRunOrchestrationS
             ApprovedBy: null,
             ExternalCorrelationKey: command.CorrelationKey,
             ExternalPayload: command.Payload,
-            ResumedBy: resumedBy).Serialize();
+            ResumedBy: resumedBy,
+            ExternalMessageName: command.MessageName).Serialize();
 
         await _outbox.EnqueueAsync(OutboxOperations.Resume, command.RunId, payload, ct: cancellationToken);
 

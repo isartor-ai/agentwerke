@@ -16,7 +16,9 @@ public sealed class WaitingExternalCorrelationRepository : IWaitingExternalCorre
     public async Task UpsertAsync(WaitingExternalCorrelation correlation, CancellationToken cancellationToken)
     {
         var existing = await _dbContext.WaitingExternalCorrelations
-            .FirstOrDefaultAsync(c => c.RunId == correlation.RunId, cancellationToken);
+            .FirstOrDefaultAsync(
+                c => c.RunId == correlation.RunId && c.NodeId == correlation.NodeId,
+                cancellationToken);
 
         if (existing is not null)
         {
@@ -35,7 +37,24 @@ public sealed class WaitingExternalCorrelationRepository : IWaitingExternalCorre
     public async Task RemoveAsync(string runId, CancellationToken cancellationToken)
     {
         var existing = await _dbContext.WaitingExternalCorrelations
-            .FirstOrDefaultAsync(c => c.RunId == runId, cancellationToken);
+            .Where(c => c.RunId == runId)
+            .ToListAsync(cancellationToken);
+
+        if (existing.Count == 0)
+        {
+            return;
+        }
+
+        _dbContext.WaitingExternalCorrelations.RemoveRange(existing);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveAsync(string runId, string nodeId, CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.WaitingExternalCorrelations
+            .FirstOrDefaultAsync(
+                c => c.RunId == runId && c.NodeId == nodeId,
+                cancellationToken);
 
         if (existing is null)
         {

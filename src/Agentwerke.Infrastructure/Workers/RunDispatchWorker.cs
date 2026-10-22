@@ -116,7 +116,8 @@ public sealed class RunDispatchWorker : BackgroundService
                         resumePayload?.ExternalCorrelationKey,
                         resumePayload?.ExternalPayload,
                         resumePayload?.ResumedBy,
-                        ct);
+                        ct,
+                        resumePayload?.ExternalMessageName);
                     break;
 
                 case OutboxOperations.Recover:

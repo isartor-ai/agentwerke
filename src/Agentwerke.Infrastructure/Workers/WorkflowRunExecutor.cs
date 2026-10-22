@@ -87,7 +87,8 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
         string? externalCorrelationKey,
         IReadOnlyDictionary<string, string>? externalPayload,
         string? resumedBy,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? externalMessageName = null)
     {
         var run = await _runRepository.GetRunAsync(runId, ct)
             ?? throw new InvalidOperationException($"Run '{runId}' not found.");
@@ -109,7 +110,7 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
 
         try
         {
-            var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, externalPayload, externalCorrelationKey, resumedBy, ct);
+            var result = await _runner.ResumeAsync(runId, bpmnXml, approvedBy, externalPayload, externalCorrelationKey, resumedBy, ct, externalMessageName);
             span.SetTag("agentwerke.result_status", result.Status);
             await HandleResultAsync(runId, result, ct);
         }
@@ -196,30 +197,57 @@ public sealed class WorkflowRunExecutor : IWorkflowRunExecutor
     }
 
     /// <summary>
-    /// Keeps the waiting-external correlation store (#138) in sync with the run's status, so an
-    /// inbound webhook can find which run to auto-resume. A run has at most one active wait, so
-    /// any non-"waiting_external" result clears whatever was recorded for it.
+    /// Keeps the waiting-external correlation store (#138, #209) in sync with the run's status, so
+    /// an inbound webhook can find which run to auto-resume. A run may have multiple open external
+    /// waits (e.g. across parallel branches), so satisfied node slots are removed individually while
+    /// still-waiting slots remain registered; any non-"waiting_external" result clears all slots.
     /// </summary>
     private async Task SyncWaitingExternalCorrelationAsync(string runId, WorkflowRunnerResult result, CancellationToken ct)
     {
-        if (string.Equals(result.Status, "waiting_external", StringComparison.Ordinal) &&
-            !string.IsNullOrWhiteSpace(result.WaitingExternalCorrelationKey) &&
-            !string.IsNullOrWhiteSpace(result.WaitingExternalMessageName))
+        if (string.Equals(result.Status, "waiting_external", StringComparison.Ordinal))
         {
-            await _waitingExternalCorrelationRepository.UpsertAsync(
-                new WaitingExternalCorrelation
+            var slots = result.WaitingExternalCorrelations is { Count: > 0 }
+                ? result.WaitingExternalCorrelations
+                : (!string.IsNullOrWhiteSpace(result.WaitingExternalCorrelationKey) &&
+                   !string.IsNullOrWhiteSpace(result.WaitingExternalMessageName)
+                    ? [new WaitingExternalSlot(string.Empty, result.WaitingExternalCorrelationKey, result.WaitingExternalMessageName, result.TimerDueAt)]
+                    : []);
+
+            if (slots.Count > 0)
+            {
+                var existing = await _waitingExternalCorrelationRepository.ListWaitingAsync(ct);
+                var activeNodeIds = new HashSet<string>(
+                    slots.Select(static s => s.NodeId ?? string.Empty),
+                    StringComparer.Ordinal);
+
+                foreach (var row in existing.Where(r => string.Equals(r.RunId, runId, StringComparison.Ordinal)))
                 {
-                    RunId = runId,
-                    CorrelationKey = result.WaitingExternalCorrelationKey,
-                    MessageName = result.WaitingExternalMessageName,
-                    CreatedAt = DateTimeOffset.UtcNow.ToString("o"),
-                },
-                ct);
+                    if (!activeNodeIds.Contains(row.NodeId))
+                    {
+                        await _waitingExternalCorrelationRepository.RemoveAsync(runId, row.NodeId, ct);
+                    }
+                }
+
+                var now = DateTimeOffset.UtcNow.ToString("o");
+                foreach (var slot in slots)
+                {
+                    await _waitingExternalCorrelationRepository.UpsertAsync(
+                        new WaitingExternalCorrelation
+                        {
+                            RunId = runId,
+                            NodeId = slot.NodeId ?? string.Empty,
+                            CorrelationKey = slot.CorrelationKey,
+                            MessageName = slot.MessageName,
+                            CreatedAt = now,
+                        },
+                        ct);
+                }
+
+                return;
+            }
         }
-        else
-        {
-            await _waitingExternalCorrelationRepository.RemoveAsync(runId, ct);
-        }
+
+        await _waitingExternalCorrelationRepository.RemoveAsync(runId, ct);
     }
 
     private async Task CreateApprovalRequestAsync(

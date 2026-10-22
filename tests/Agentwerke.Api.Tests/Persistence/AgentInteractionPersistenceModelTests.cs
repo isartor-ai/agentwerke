@@ -59,6 +59,33 @@ public sealed class AgentInteractionPersistenceModelTests
         Assert.NotNull(context.InteractionDeliveries);
     }
 
+    [Fact]
+    public void WaitingExternalCorrelation_KeysByRunIdAndNodeIdForParallelWaits()
+    {
+        using var context = CreateContext();
+        var entity = context.Model.FindEntityType(typeof(WaitingExternalCorrelation));
+
+        Assert.NotNull(entity);
+        Assert.Equal("waiting_external_correlations", entity!.GetTableName());
+
+        var primaryKey = entity.FindPrimaryKey();
+        Assert.NotNull(primaryKey);
+        Assert.Equal(
+            [nameof(WaitingExternalCorrelation.RunId), nameof(WaitingExternalCorrelation.NodeId)],
+            primaryKey!.Properties.Select(property => property.Name));
+
+        var nodeId = entity.FindProperty(nameof(WaitingExternalCorrelation.NodeId));
+        Assert.NotNull(nodeId);
+        Assert.Equal(128, nodeId!.GetMaxLength());
+        Assert.Equal(string.Empty, nodeId.GetDefaultValue());
+
+        AssertIndex(
+            entity,
+            false,
+            nameof(WaitingExternalCorrelation.MessageName),
+            nameof(WaitingExternalCorrelation.CorrelationKey));
+    }
+
     private static AgentwerkeDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AgentwerkeDbContext>()

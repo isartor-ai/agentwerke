@@ -39,11 +39,12 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
         IReadOnlyDictionary<string, string>? externalPayload,
         string? externalCorrelationKey,
         string? resumedBy,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? externalMessageName = null)
     {
         var definition = ParseOrThrow(bpmnXml);
         var state = await _engine.ResumeAsync(
-            new WorkflowEngineResumeRequest(runId, definition, approvedBy, externalCorrelationKey, externalPayload, resumedBy),
+            new WorkflowEngineResumeRequest(runId, definition, approvedBy, externalCorrelationKey, externalPayload, resumedBy, externalMessageName),
             cancellationToken);
         return ToResult(state, definition);
     }
@@ -104,13 +105,30 @@ public sealed class WorkflowRunnerAdapter : IWorkflowRunner
                 ArtifactName: state.WaitingApprovalArtifactName);
         }
 
+        IReadOnlyList<WaitingExternalSlot>? waitingExternalCorrelations = state.WaitingExternalCorrelations;
+        if (waitingExternalCorrelations is null &&
+            string.Equals(state.Status, "waiting_external", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(state.WaitingExternalCorrelationKey) &&
+            !string.IsNullOrWhiteSpace(state.WaitingExternalMessageName))
+        {
+            waitingExternalCorrelations =
+            [
+                new WaitingExternalSlot(
+                    state.WaitingOnNodeId ?? string.Empty,
+                    state.WaitingExternalCorrelationKey,
+                    state.WaitingExternalMessageName,
+                    state.TimerDueAt)
+            ];
+        }
+
         return new WorkflowRunnerResult(
             state.RunId,
             state.Status,
             waitingApproval,
             state.TimerDueAt,
             state.WaitingExternalCorrelationKey,
-            state.WaitingExternalMessageName);
+            state.WaitingExternalMessageName,
+            waitingExternalCorrelations);
     }
 
     private static string InferRiskLevel(string? policyTag)
