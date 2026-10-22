@@ -1,4 +1,6 @@
 using System.Xml.Linq;
+using Agentwerke.Application.Workflows;
+using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Workflows.Bpmn;
 using Agentwerke.Workflows.Runtime;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -33,15 +35,19 @@ public sealed class EvaluationBpmnArtifactsTests
                 "GenerateUnitTestPlan",
                 "WaitUnitTestResults",
                 "UnitTestResultsTimeout",
+                "UnitTestOutcomeGateway",
                 "ValidateComponentTraceability",
                 "GenerateIntegrationTestPlan",
                 "WaitIntegrationTestResults",
                 "IntegrationTestResultsTimeout",
+                "IntegrationTestOutcomeGateway",
                 "ValidateArchitectureTraceability",
                 "AnalyzeSystemTestResults",
                 "WaitSystemTestResults",
                 "SystemTestResultsTimeout",
+                "SystemTestOutcomeGateway",
                 "SummarizeVerificationFailures",
+                "EndVerificationFailed",
                 "PrepareAcceptanceTest",
                 "ApproveAcceptanceSignoff",
                 "PrepareTraceabilityReport",
@@ -256,6 +262,238 @@ public sealed class EvaluationBpmnArtifactsTests
         Assert.Contains("requires agentwerke:agentTask metadata", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void VModelProcessEvaluationArtifact_RoutesVerificationFailuresBackToDecompositionOrEscalatesWhenReworkExhausted()
+    {
+        var bpmn = File.ReadAllText(FindRepositoryFile("examples", "v-model-process.bpmn"));
+        var definition = new BpmnWorkflowValidator().Validate(bpmn).Definition!;
+
+        AssertOutcomeGateway(
+            definition,
+            gatewayId: "UnitTestOutcomeGateway",
+            reworkTargetId: "ImplementComponents",
+            passTargetId: "ValidateComponentTraceability");
+        AssertOutcomeGateway(
+            definition,
+            gatewayId: "IntegrationTestOutcomeGateway",
+            reworkTargetId: "DraftSystemArchitecture",
+            passTargetId: "ValidateArchitectureTraceability");
+        AssertOutcomeGateway(
+            definition,
+            gatewayId: "SystemTestOutcomeGateway",
+            reworkTargetId: "DraftRequirements",
+            passTargetId: "PrepareAcceptanceTest");
+
+        var summarizeIncoming = definition.SequenceFlows!
+            .Where(static flow => flow.TargetRef == "SummarizeVerificationFailures")
+            .ToArray();
+        Assert.Equal(
+            new[]
+            {
+                "UnitTestOutcomeGateway",
+                "IntegrationTestOutcomeGateway",
+                "SystemTestOutcomeGateway"
+            },
+            summarizeIncoming.Select(static flow => flow.SourceRef).ToArray());
+        Assert.All(
+            summarizeIncoming,
+            static flow => Assert.Equal("{{event.rework_exhausted}} == \"true\"", flow.ConditionExpression));
+
+        var summarizeOutgoing = Assert.Single(
+            definition.SequenceFlows!,
+            static flow => flow.SourceRef == "SummarizeVerificationFailures");
+        Assert.Equal("EndVerificationFailed", summarizeOutgoing.TargetRef);
+    }
+
+    [Fact]
+    public async Task VModelProcessEvaluationArtifact_DryRun_RoutesFailedResultsBackToReworkAndBoundsExhaustedRework()
+    {
+        var bpmn = File.ReadAllText(FindRepositoryFile("examples", "v-model-process.bpmn"));
+        var definition = new BpmnWorkflowValidator().Validate(bpmn).Definition!;
+
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContext = new InMemoryRunContextRepository();
+        var executedNodes = new List<string>();
+        var engine = new WorkflowInstanceEngine(
+            store,
+            new RecordingServiceTaskExecutor(executedNodes),
+            runContext,
+            NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var run = await store.CreateRunAsync("VModelProcessEvaluation", "system", CancellationToken.None);
+        await runContext.SetAsync(run.Id, "input.change_id", "VMODEL-001", RunContextKinds.Input, CancellationToken.None);
+        await runContext.SetAsync(run.Id, "input.build_id", "build-vmodel-001", RunContextKinds.Input, CancellationToken.None);
+
+        var state = await engine.StartAsync(
+            new WorkflowEngineStartRequest(
+                "VModelProcessEvaluation",
+                definition,
+                "system",
+                ExistingRunId: run.Id),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_user", state.Status);
+        Assert.Equal("ApproveRequirementsBaseline", state.WaitingOnNodeId);
+
+        state = await engine.ResumeAsync(state.RunId, definition, "reviewer", CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal("WaitUnitTestResults", state.WaitingOnNodeId);
+
+        // 1. Unit test failure routes back to ImplementComponents rather than advancing to ValidateComponentTraceability.
+        executedNodes.Clear();
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:unit",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "failure"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal("WaitUnitTestResults", state.WaitingOnNodeId);
+        Assert.Equal(["ImplementComponents", "GenerateUnitTestPlan"], executedNodes);
+
+        // Unit test pass advances through ValidateComponentTraceability -> GenerateIntegrationTestPlan -> WaitIntegrationTestResults.
+        executedNodes.Clear();
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:unit",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "success"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal("WaitIntegrationTestResults", state.WaitingOnNodeId);
+        Assert.Equal(["ValidateComponentTraceability", "GenerateIntegrationTestPlan"], executedNodes);
+
+        // 2. Integration test failure routes back to DraftSystemArchitecture -> DraftComponentDesign -> ImplementComponents -> GenerateUnitTestPlan.
+        executedNodes.Clear();
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:integration",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "failure"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal("WaitUnitTestResults", state.WaitingOnNodeId);
+        Assert.Equal(
+            ["DraftSystemArchitecture", "DraftComponentDesign", "ImplementComponents", "GenerateUnitTestPlan"],
+            executedNodes);
+
+        // Pass unit and integration to reach WaitSystemTestResults.
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:unit",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "success"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:integration",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "success"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", state.Status);
+        Assert.Equal("WaitSystemTestResults", state.WaitingOnNodeId);
+
+        // 3. System test failure routes back to DraftRequirements and blocks at ApproveRequirementsBaseline.
+        executedNodes.Clear();
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:system",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "failure"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_user", state.Status);
+        Assert.Equal("ApproveRequirementsBaseline", state.WaitingOnNodeId);
+        Assert.Equal(["DraftRequirements"], executedNodes);
+
+        // Approve baseline again, then exhaust rework at unit verification: routes through SummarizeVerificationFailures to EndVerificationFailed.
+        state = await engine.ResumeAsync(state.RunId, definition, "reviewer", CancellationToken.None);
+
+        executedNodes.Clear();
+        state = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                state.RunId,
+                definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: "build-vmodel-001:unit",
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["conclusion"] = "failure",
+                    ["rework_exhausted"] = "true"
+                },
+                ResumedBy: "ci"),
+            CancellationToken.None);
+
+        Assert.Equal("completed", state.Status);
+        Assert.Equal(["SummarizeVerificationFailures"], executedNodes);
+        Assert.DoesNotContain("PrepareAcceptanceTest", executedNodes);
+    }
+
+    private static void AssertOutcomeGateway(
+        BpmnWorkflowDefinition definition,
+        string gatewayId,
+        string reworkTargetId,
+        string passTargetId)
+    {
+        var gateway = definition.Nodes.Single(node => node.Id == gatewayId);
+        Assert.Equal("exclusiveGateway", gateway.ElementName);
+
+        var outgoing = definition.SequenceFlows!
+            .Where(flow => flow.SourceRef == gatewayId)
+            .ToArray();
+        Assert.Equal(3, outgoing.Length);
+
+        Assert.Equal("SummarizeVerificationFailures", outgoing[0].TargetRef);
+        Assert.Equal("{{event.rework_exhausted}} == \"true\"", outgoing[0].ConditionExpression);
+
+        Assert.Equal(reworkTargetId, outgoing[1].TargetRef);
+        Assert.Equal("{{event.conclusion}} == \"failure\"", outgoing[1].ConditionExpression);
+
+        Assert.Equal(passTargetId, outgoing[2].TargetRef);
+        Assert.Null(outgoing[2].ConditionExpression);
+    }
+
     private static void AssertExternalWait(
         BpmnWorkflowDefinition definition,
         string nodeId,
@@ -327,5 +565,23 @@ public sealed class EvaluationBpmnArtifactsTests
                 Succeeded: true,
                 Output: $"stub output for {node.Id}",
                 FailureReason: null));
+    }
+
+    private sealed class RecordingServiceTaskExecutor(List<string> executedNodes) : IServiceTaskExecutor
+    {
+        public Task<AgentTaskOutcome> ExecuteAsync(
+            string runId,
+            string stepId,
+            BpmnNodeDefinition node,
+            int attempt,
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
+        {
+            executedNodes.Add(node.Id);
+            return Task.FromResult(new AgentTaskOutcome(
+                Succeeded: true,
+                Output: $"stub output for {node.Id}",
+                FailureReason: null));
+        }
     }
 }

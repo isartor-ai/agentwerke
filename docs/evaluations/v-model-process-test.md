@@ -20,12 +20,12 @@ approvals, and external test-result waits.
 | System architecture/design | `DraftSystemArchitecture` agent task |
 | Component design | `DraftComponentDesign` agent task |
 | Implementation | `ImplementComponents` sandboxed agent task |
-| Unit verification | `GenerateUnitTestPlan` and `WaitUnitTestResults` |
+| Unit verification | `GenerateUnitTestPlan`, `WaitUnitTestResults`, and `UnitTestOutcomeGateway` |
 | Component traceability gate | `ValidateComponentTraceability` |
-| Integration verification | `GenerateIntegrationTestPlan` and `WaitIntegrationTestResults` |
+| Integration verification | `GenerateIntegrationTestPlan`, `WaitIntegrationTestResults`, and `IntegrationTestOutcomeGateway` |
 | Architecture traceability gate | `ValidateArchitectureTraceability` |
-| System verification | `AnalyzeSystemTestResults` and `WaitSystemTestResults` |
-| Failure analysis | `SummarizeVerificationFailures` |
+| System verification | `AnalyzeSystemTestResults`, `WaitSystemTestResults`, and `SystemTestOutcomeGateway` |
+| Failure analysis & escalation | `SummarizeVerificationFailures` and `EndVerificationFailed` (only on bounded failure escalation) |
 | Acceptance verification | `PrepareAcceptanceTest` |
 | Acceptance sign-off | `ApproveAcceptanceSignoff` user task |
 | Traceability evidence | `PrepareTraceabilityReport` |
@@ -86,21 +86,38 @@ Expected run timeline:
 6. `GenerateUnitTestPlan` maps unit tests to component obligations.
 7. `WaitUnitTestResults` resumes on `test.unit.completed` with
    `{{input.build_id}}:unit`.
-8. `ValidateComponentTraceability` checks component-design-to-unit-test
+8. `UnitTestOutcomeGateway` evaluates the unit verification result:
+   - on pass, advances to `ValidateComponentTraceability`;
+   - on `{{event.conclusion}} == "failure"`, loops back to `ImplementComponents` for rework;
+   - on `{{event.rework_exhausted}} == "true"`, routes to `SummarizeVerificationFailures` and terminates at `EndVerificationFailed`.
+9. `ValidateComponentTraceability` checks component-design-to-unit-test
    coverage.
-9. `GenerateIntegrationTestPlan` maps integration tests to component interfaces.
-10. `WaitIntegrationTestResults` resumes on `test.integration.completed` with
+10. `GenerateIntegrationTestPlan` maps integration tests to component interfaces.
+11. `WaitIntegrationTestResults` resumes on `test.integration.completed` with
     `{{input.build_id}}:integration`.
-11. `ValidateArchitectureTraceability` checks architecture-to-integration-test
+12. `IntegrationTestOutcomeGateway` evaluates the integration verification result:
+    - on pass, advances to `ValidateArchitectureTraceability`;
+    - on `{{event.conclusion}} == "failure"`, loops back to `DraftSystemArchitecture` for architecture/component rework;
+    - on `{{event.rework_exhausted}} == "true"`, routes to `SummarizeVerificationFailures` and terminates at `EndVerificationFailed`.
+13. `ValidateArchitectureTraceability` checks architecture-to-integration-test
     coverage.
-12. `AnalyzeSystemTestResults` prepares the system verification scope.
-13. `WaitSystemTestResults` resumes on `test.system.completed` with
+14. `AnalyzeSystemTestResults` prepares the system verification scope.
+15. `WaitSystemTestResults` resumes on `test.system.completed` with
     `{{input.build_id}}:system`.
-14. `SummarizeVerificationFailures` records failed/flaky checks and maps them
-    back to requirements.
-15. `PrepareAcceptanceTest` assembles acceptance evidence.
-16. `ApproveAcceptanceSignoff` blocks until human acceptance.
-17. `PrepareTraceabilityReport` emits the final traceability matrix.
+16. `SystemTestOutcomeGateway` evaluates the system verification result:
+    - on pass, advances directly to `PrepareAcceptanceTest` (skipping `SummarizeVerificationFailures`);
+    - on `{{event.conclusion}} == "failure"`, loops back to `DraftRequirements` for requirements/baseline rework;
+    - on `{{event.rework_exhausted}} == "true"`, routes to `SummarizeVerificationFailures` and terminates at `EndVerificationFailed`.
+17. `PrepareAcceptanceTest` assembles acceptance evidence.
+18. `ApproveAcceptanceSignoff` blocks until human acceptance.
+19. `PrepareTraceabilityReport` emits the final traceability matrix.
+
+Failure-path dry-run checks:
+
+- Resuming `WaitUnitTestResults` with `conclusion: "failure"` re-enters `ImplementComponents` -> `GenerateUnitTestPlan` -> `WaitUnitTestResults` instead of advancing to `ValidateComponentTraceability` or `End`.
+- Resuming `WaitIntegrationTestResults` with `conclusion: "failure"` re-enters `DraftSystemArchitecture` -> `DraftComponentDesign` -> `ImplementComponents` instead of advancing to `ValidateArchitectureTraceability` or `End`.
+- Resuming `WaitSystemTestResults` with `conclusion: "failure"` re-enters `DraftRequirements` -> `ApproveRequirementsBaseline` instead of advancing to `PrepareAcceptanceTest` or `End`.
+- Resuming any verification wait with `rework_exhausted: "true"` executes `SummarizeVerificationFailures` and stops at `EndVerificationFailed` rather than looping indefinitely or reaching `End`.
 
 ## Gaps and UX Friction
 

@@ -623,6 +623,7 @@ public static class SdlcTemplateSeeds
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
                   <bpmn:incoming>Flow_Start_DraftRequirements</bpmn:incoming>
+                  <bpmn:incoming>Flow_SystemTestOutcomeGateway_DraftRequirements</bpmn:incoming>
                   <bpmn:outgoing>Flow_DraftRequirements_ApproveRequirementsBaseline</bpmn:outgoing>
                 </bpmn:serviceTask>
 
@@ -662,6 +663,7 @@ public static class SdlcTemplateSeeds
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
                   <bpmn:incoming>Flow_ApproveRequirementsBaseline_DraftSystemArchitecture</bpmn:incoming>
+                  <bpmn:incoming>Flow_IntegrationTestOutcomeGateway_DraftSystemArchitecture</bpmn:incoming>
                   <bpmn:outgoing>Flow_DraftSystemArchitecture_DraftComponentDesign</bpmn:outgoing>
                 </bpmn:serviceTask>
 
@@ -725,6 +727,7 @@ public static class SdlcTemplateSeeds
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
                   <bpmn:incoming>Flow_DraftComponentDesign_ImplementComponents</bpmn:incoming>
+                  <bpmn:incoming>Flow_UnitTestOutcomeGateway_ImplementComponents</bpmn:incoming>
                   <bpmn:outgoing>Flow_ImplementComponents_GenerateUnitTestPlan</bpmn:outgoing>
                 </bpmn:serviceTask>
 
@@ -764,7 +767,7 @@ public static class SdlcTemplateSeeds
                       correlationKeyTemplate="{{input.build_id}}:unit" />
                   </bpmn:extensionElements>
                   <bpmn:incoming>Flow_GenerateUnitTestPlan_WaitUnitTestResults</bpmn:incoming>
-                  <bpmn:outgoing>Flow_WaitUnitTestResults_ValidateComponentTraceability</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_WaitUnitTestResults_UnitTestOutcomeGateway</bpmn:outgoing>
                   <bpmn:messageEventDefinition />
                 </bpmn:intermediateCatchEvent>
 
@@ -775,6 +778,13 @@ public static class SdlcTemplateSeeds
                     <bpmn:timeDuration>PT2H</bpmn:timeDuration>
                   </bpmn:timerEventDefinition>
                 </bpmn:boundaryEvent>
+
+                <bpmn:exclusiveGateway id="UnitTestOutcomeGateway" name="Unit Test Outcome">
+                  <bpmn:incoming>Flow_WaitUnitTestResults_UnitTestOutcomeGateway</bpmn:incoming>
+                  <bpmn:outgoing>Flow_UnitTestOutcomeGateway_SummarizeVerificationFailures</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_UnitTestOutcomeGateway_ImplementComponents</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_UnitTestOutcomeGateway_ValidateComponentTraceability</bpmn:outgoing>
+                </bpmn:exclusiveGateway>
 
                 <bpmn:serviceTask id="ValidateComponentTraceability" name="Component Traceability Gate">
                   <bpmn:extensionElements>
@@ -798,7 +808,7 @@ public static class SdlcTemplateSeeds
                       ]]></agentwerke:prompt>
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
-                  <bpmn:incoming>Flow_WaitUnitTestResults_ValidateComponentTraceability</bpmn:incoming>
+                  <bpmn:incoming>Flow_UnitTestOutcomeGateway_ValidateComponentTraceability</bpmn:incoming>
                   <bpmn:outgoing>Flow_ValidateComponentTraceability_GenerateIntegrationTestPlan</bpmn:outgoing>
                 </bpmn:serviceTask>
 
@@ -836,7 +846,7 @@ public static class SdlcTemplateSeeds
                       correlationKeyTemplate="{{input.build_id}}:integration" />
                   </bpmn:extensionElements>
                   <bpmn:incoming>Flow_GenerateIntegrationTestPlan_WaitIntegrationTestResults</bpmn:incoming>
-                  <bpmn:outgoing>Flow_WaitIntegrationTestResults_ValidateArchitectureTraceability</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_WaitIntegrationTestResults_IntegrationTestOutcomeGateway</bpmn:outgoing>
                   <bpmn:messageEventDefinition />
                 </bpmn:intermediateCatchEvent>
 
@@ -847,6 +857,13 @@ public static class SdlcTemplateSeeds
                     <bpmn:timeDuration>PT4H</bpmn:timeDuration>
                   </bpmn:timerEventDefinition>
                 </bpmn:boundaryEvent>
+
+                <bpmn:exclusiveGateway id="IntegrationTestOutcomeGateway" name="Integration Test Outcome">
+                  <bpmn:incoming>Flow_WaitIntegrationTestResults_IntegrationTestOutcomeGateway</bpmn:incoming>
+                  <bpmn:outgoing>Flow_IntegrationTestOutcomeGateway_SummarizeVerificationFailures</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_IntegrationTestOutcomeGateway_DraftSystemArchitecture</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_IntegrationTestOutcomeGateway_ValidateArchitectureTraceability</bpmn:outgoing>
+                </bpmn:exclusiveGateway>
 
                 <bpmn:serviceTask id="ValidateArchitectureTraceability" name="Architecture Traceability Gate">
                   <bpmn:extensionElements>
@@ -870,7 +887,7 @@ public static class SdlcTemplateSeeds
                       ]]></agentwerke:prompt>
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
-                  <bpmn:incoming>Flow_WaitIntegrationTestResults_ValidateArchitectureTraceability</bpmn:incoming>
+                  <bpmn:incoming>Flow_IntegrationTestOutcomeGateway_ValidateArchitectureTraceability</bpmn:incoming>
                   <bpmn:outgoing>Flow_ValidateArchitectureTraceability_AnalyzeSystemTestResults</bpmn:outgoing>
                 </bpmn:serviceTask>
 
@@ -907,7 +924,7 @@ public static class SdlcTemplateSeeds
                       correlationKeyTemplate="{{input.build_id}}:system" />
                   </bpmn:extensionElements>
                   <bpmn:incoming>Flow_AnalyzeSystemTestResults_WaitSystemTestResults</bpmn:incoming>
-                  <bpmn:outgoing>Flow_WaitSystemTestResults_SummarizeVerificationFailures</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_WaitSystemTestResults_SystemTestOutcomeGateway</bpmn:outgoing>
                   <bpmn:messageEventDefinition />
                 </bpmn:intermediateCatchEvent>
 
@@ -918,6 +935,13 @@ public static class SdlcTemplateSeeds
                     <bpmn:timeDuration>PT8H</bpmn:timeDuration>
                   </bpmn:timerEventDefinition>
                 </bpmn:boundaryEvent>
+
+                <bpmn:exclusiveGateway id="SystemTestOutcomeGateway" name="System Test Outcome">
+                  <bpmn:incoming>Flow_WaitSystemTestResults_SystemTestOutcomeGateway</bpmn:incoming>
+                  <bpmn:outgoing>Flow_SystemTestOutcomeGateway_SummarizeVerificationFailures</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_SystemTestOutcomeGateway_DraftRequirements</bpmn:outgoing>
+                  <bpmn:outgoing>Flow_SystemTestOutcomeGateway_PrepareAcceptanceTest</bpmn:outgoing>
+                </bpmn:exclusiveGateway>
 
                 <bpmn:serviceTask id="SummarizeVerificationFailures" name="Summarize Verification Failures">
                   <bpmn:extensionElements>
@@ -942,9 +966,15 @@ public static class SdlcTemplateSeeds
                       ]]></agentwerke:prompt>
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
-                  <bpmn:incoming>Flow_WaitSystemTestResults_SummarizeVerificationFailures</bpmn:incoming>
-                  <bpmn:outgoing>Flow_SummarizeVerificationFailures_PrepareAcceptanceTest</bpmn:outgoing>
+                  <bpmn:incoming>Flow_UnitTestOutcomeGateway_SummarizeVerificationFailures</bpmn:incoming>
+                  <bpmn:incoming>Flow_IntegrationTestOutcomeGateway_SummarizeVerificationFailures</bpmn:incoming>
+                  <bpmn:incoming>Flow_SystemTestOutcomeGateway_SummarizeVerificationFailures</bpmn:incoming>
+                  <bpmn:outgoing>Flow_SummarizeVerificationFailures_EndVerificationFailed</bpmn:outgoing>
                 </bpmn:serviceTask>
+
+                <bpmn:endEvent id="EndVerificationFailed" name="Verification Failed">
+                  <bpmn:incoming>Flow_SummarizeVerificationFailures_EndVerificationFailed</bpmn:incoming>
+                </bpmn:endEvent>
 
                 <bpmn:serviceTask id="PrepareAcceptanceTest" name="Prepare Acceptance Test">
                   <bpmn:extensionElements>
@@ -967,11 +997,11 @@ public static class SdlcTemplateSeeds
             {{output.DraftRequirements}}
 
             System-test summary:
-            {{output.SummarizeVerificationFailures}}
+            {{event.payload}}
                       ]]></agentwerke:prompt>
                     </agentwerke:agentTask>
                   </bpmn:extensionElements>
-                  <bpmn:incoming>Flow_SummarizeVerificationFailures_PrepareAcceptanceTest</bpmn:incoming>
+                  <bpmn:incoming>Flow_SystemTestOutcomeGateway_PrepareAcceptanceTest</bpmn:incoming>
                   <bpmn:outgoing>Flow_PrepareAcceptanceTest_ApproveAcceptanceSignoff</bpmn:outgoing>
                 </bpmn:serviceTask>
 
@@ -1060,14 +1090,35 @@ public static class SdlcTemplateSeeds
                 <bpmn:sequenceFlow id="Flow_DraftComponentDesign_ImplementComponents" sourceRef="DraftComponentDesign" targetRef="ImplementComponents" />
                 <bpmn:sequenceFlow id="Flow_ImplementComponents_GenerateUnitTestPlan" sourceRef="ImplementComponents" targetRef="GenerateUnitTestPlan" />
                 <bpmn:sequenceFlow id="Flow_GenerateUnitTestPlan_WaitUnitTestResults" sourceRef="GenerateUnitTestPlan" targetRef="WaitUnitTestResults" />
-                <bpmn:sequenceFlow id="Flow_WaitUnitTestResults_ValidateComponentTraceability" sourceRef="WaitUnitTestResults" targetRef="ValidateComponentTraceability" />
+                <bpmn:sequenceFlow id="Flow_WaitUnitTestResults_UnitTestOutcomeGateway" sourceRef="WaitUnitTestResults" targetRef="UnitTestOutcomeGateway" />
+                <bpmn:sequenceFlow id="Flow_UnitTestOutcomeGateway_SummarizeVerificationFailures" name="Unit rework exhausted" sourceRef="UnitTestOutcomeGateway" targetRef="SummarizeVerificationFailures">
+                  <bpmn:conditionExpression>{{event.rework_exhausted}} == "true"</bpmn:conditionExpression>
+                </bpmn:sequenceFlow>
+                <bpmn:sequenceFlow id="Flow_UnitTestOutcomeGateway_ImplementComponents" name="Unit tests failed" sourceRef="UnitTestOutcomeGateway" targetRef="ImplementComponents">
+                  <bpmn:conditionExpression>{{event.conclusion}} == "failure"</bpmn:conditionExpression>
+                </bpmn:sequenceFlow>
+                <bpmn:sequenceFlow id="Flow_UnitTestOutcomeGateway_ValidateComponentTraceability" name="Unit tests passed" sourceRef="UnitTestOutcomeGateway" targetRef="ValidateComponentTraceability" />
                 <bpmn:sequenceFlow id="Flow_ValidateComponentTraceability_GenerateIntegrationTestPlan" sourceRef="ValidateComponentTraceability" targetRef="GenerateIntegrationTestPlan" />
                 <bpmn:sequenceFlow id="Flow_GenerateIntegrationTestPlan_WaitIntegrationTestResults" sourceRef="GenerateIntegrationTestPlan" targetRef="WaitIntegrationTestResults" />
-                <bpmn:sequenceFlow id="Flow_WaitIntegrationTestResults_ValidateArchitectureTraceability" sourceRef="WaitIntegrationTestResults" targetRef="ValidateArchitectureTraceability" />
+                <bpmn:sequenceFlow id="Flow_WaitIntegrationTestResults_IntegrationTestOutcomeGateway" sourceRef="WaitIntegrationTestResults" targetRef="IntegrationTestOutcomeGateway" />
+                <bpmn:sequenceFlow id="Flow_IntegrationTestOutcomeGateway_SummarizeVerificationFailures" name="Integration rework exhausted" sourceRef="IntegrationTestOutcomeGateway" targetRef="SummarizeVerificationFailures">
+                  <bpmn:conditionExpression>{{event.rework_exhausted}} == "true"</bpmn:conditionExpression>
+                </bpmn:sequenceFlow>
+                <bpmn:sequenceFlow id="Flow_IntegrationTestOutcomeGateway_DraftSystemArchitecture" name="Integration tests failed" sourceRef="IntegrationTestOutcomeGateway" targetRef="DraftSystemArchitecture">
+                  <bpmn:conditionExpression>{{event.conclusion}} == "failure"</bpmn:conditionExpression>
+                </bpmn:sequenceFlow>
+                <bpmn:sequenceFlow id="Flow_IntegrationTestOutcomeGateway_ValidateArchitectureTraceability" name="Integration tests passed" sourceRef="IntegrationTestOutcomeGateway" targetRef="ValidateArchitectureTraceability" />
                 <bpmn:sequenceFlow id="Flow_ValidateArchitectureTraceability_AnalyzeSystemTestResults" sourceRef="ValidateArchitectureTraceability" targetRef="AnalyzeSystemTestResults" />
                 <bpmn:sequenceFlow id="Flow_AnalyzeSystemTestResults_WaitSystemTestResults" sourceRef="AnalyzeSystemTestResults" targetRef="WaitSystemTestResults" />
-                <bpmn:sequenceFlow id="Flow_WaitSystemTestResults_SummarizeVerificationFailures" sourceRef="WaitSystemTestResults" targetRef="SummarizeVerificationFailures" />
-                <bpmn:sequenceFlow id="Flow_SummarizeVerificationFailures_PrepareAcceptanceTest" sourceRef="SummarizeVerificationFailures" targetRef="PrepareAcceptanceTest" />
+                <bpmn:sequenceFlow id="Flow_WaitSystemTestResults_SystemTestOutcomeGateway" sourceRef="WaitSystemTestResults" targetRef="SystemTestOutcomeGateway" />
+                <bpmn:sequenceFlow id="Flow_SystemTestOutcomeGateway_SummarizeVerificationFailures" name="System rework exhausted" sourceRef="SystemTestOutcomeGateway" targetRef="SummarizeVerificationFailures">
+                  <bpmn:conditionExpression>{{event.rework_exhausted}} == "true"</bpmn:conditionExpression>
+                </bpmn:sequenceFlow>
+                <bpmn:sequenceFlow id="Flow_SystemTestOutcomeGateway_DraftRequirements" name="System tests failed" sourceRef="SystemTestOutcomeGateway" targetRef="DraftRequirements">
+                  <bpmn:conditionExpression>{{event.conclusion}} == "failure"</bpmn:conditionExpression>
+                </bpmn:sequenceFlow>
+                <bpmn:sequenceFlow id="Flow_SystemTestOutcomeGateway_PrepareAcceptanceTest" name="System tests passed" sourceRef="SystemTestOutcomeGateway" targetRef="PrepareAcceptanceTest" />
+                <bpmn:sequenceFlow id="Flow_SummarizeVerificationFailures_EndVerificationFailed" sourceRef="SummarizeVerificationFailures" targetRef="EndVerificationFailed" />
                 <bpmn:sequenceFlow id="Flow_PrepareAcceptanceTest_ApproveAcceptanceSignoff" sourceRef="PrepareAcceptanceTest" targetRef="ApproveAcceptanceSignoff" />
                 <bpmn:sequenceFlow id="Flow_ApproveAcceptanceSignoff_PrepareTraceabilityReport" sourceRef="ApproveAcceptanceSignoff" targetRef="PrepareTraceabilityReport" />
                 <bpmn:sequenceFlow id="Flow_PrepareTraceabilityReport_End" sourceRef="PrepareTraceabilityReport" targetRef="End" />
