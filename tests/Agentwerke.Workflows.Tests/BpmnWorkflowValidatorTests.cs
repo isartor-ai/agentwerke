@@ -759,4 +759,105 @@ public sealed class BpmnWorkflowValidatorTests
             warning.ElementId == "DeployTask" &&
             warning.Message.Contains("Unexpected Agentwerke extension element 'notify'", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Validate_WhenAgentTaskDeclaresMcpServers_ParsesStdioAndHttpContractsWithEnvSecretReferences()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
+              <bpmn:process id="McpFlow" name="MCP Flow">
+                <bpmn:startEvent id="Start" name="Start" />
+                <bpmn:serviceTask id="InspectRepo" name="Inspect Repo">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="github"
+                      action="requirements.inspect"
+                      purposeType="requirements_analysis"
+                      policyTag="vmodel-requirements">
+                      <agentwerke:mcpServer
+                        name="github-local"
+                        transport="stdio"
+                        command="github-mcp-server"
+                        arguments="stdio,--read-only"
+                        startupTimeoutSeconds="20">
+                        <agentwerke:argument value="--toolsets=issues,pull_requests" />
+                        <agentwerke:header name="GITHUB_PERSONAL_ACCESS_TOKEN" env="GITHUB_MCP_TOKEN" />
+                      </agentwerke:mcpServer>
+                      <agentwerke:mcpServer
+                        name="remote-audit"
+                        transport="https"
+                        url="https://mcp.example.test/v1"
+                        enabled="false">
+                        <agentwerke:header name="Authorization" env="AUDIT_MCP_TOKEN" prefix="Bearer " />
+                        <agentwerke:header name="X-Client" value="agentwerke" />
+                      </agentwerke:mcpServer>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+                <bpmn:endEvent id="End" name="End" />
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(static e => e.Message)));
+        var node = result.Definition!.Nodes.Single(static n => n.Id == "InspectRepo");
+        var servers = node.Metadata!.RuntimeContract!.McpServers;
+        Assert.Equal(2, servers.Count);
+
+        var stdio = servers[0];
+        Assert.Equal("github-local", stdio.Name);
+        Assert.Equal("stdio", stdio.Transport);
+        Assert.Equal("github-mcp-server", stdio.Command);
+        Assert.Equal(["stdio", "--read-only", "--toolsets=issues,pull_requests"], stdio.Arguments);
+        Assert.Equal(20, stdio.StartupTimeoutSeconds);
+        Assert.True(stdio.Enabled);
+        Assert.Equal("${env:GITHUB_MCP_TOKEN}", stdio.Headers["GITHUB_PERSONAL_ACCESS_TOKEN"]);
+
+        var https = servers[1];
+        Assert.Equal("remote-audit", https.Name);
+        Assert.Equal("https", https.Transport);
+        Assert.Equal("https://mcp.example.test/v1", https.Url);
+        Assert.False(https.Enabled);
+        Assert.Equal("Bearer ${env:AUDIT_MCP_TOKEN}", https.Headers["Authorization"]);
+        Assert.Equal("agentwerke", https.Headers["X-Client"]);
+    }
+
+    [Fact]
+    public void Validate_WhenMcpServerDeclarationIsInvalidOrInlinesSecret_ReturnsActionableErrors()
+    {
+        var xml = """
+            <bpmn:definitions
+                xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                xmlns:agentwerke="https://agentwerke.dev/bpmn/extensions/v1">
+              <bpmn:process id="BadMcpFlow" name="Bad MCP Flow">
+                <bpmn:serviceTask id="BadTask" name="Bad Task">
+                  <bpmn:extensionElements>
+                    <agentwerke:agentTask
+                      agent="github"
+                      action="requirements.inspect"
+                      purposeType="requirements_analysis"
+                      policyTag="vmodel-requirements">
+                      <agentwerke:mcpServer name="missing-cmd" transport="stdio" />
+                      <agentwerke:mcpServer name="missing-url" transport="https" />
+                      <agentwerke:mcpServer name="inlined-secret" transport="https" url="https://mcp.example.test/v1">
+                        <agentwerke:header name="Authorization" value="Bearer ghp_secret123" />
+                      </agentwerke:mcpServer>
+                    </agentwerke:agentTask>
+                  </bpmn:extensionElements>
+                </bpmn:serviceTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+        var result = _validator.Validate(xml);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, static e => e.Message.Contains("missing-cmd", StringComparison.Ordinal) && e.Message.Contains("command", StringComparison.Ordinal));
+        Assert.Contains(result.Errors, static e => e.Message.Contains("missing-url", StringComparison.Ordinal) && e.Message.Contains("url", StringComparison.Ordinal));
+        Assert.Contains(result.Errors, static e => e.Message.Contains("inlined-secret", StringComparison.Ordinal) && e.Message.Contains("environment variable", StringComparison.Ordinal));
+    }
 }

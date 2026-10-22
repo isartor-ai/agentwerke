@@ -329,6 +329,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         var toolEscalation = agentTask.Attribute("toolEscalation")?.Value?.Trim();
         var prompt = ParsePromptContract(agentTask, agentwerkeNamespace, element, errors);
         var metadata = ParseMetadataContract(agentTask, agentwerkeNamespace, element, errors);
+        var mcpServers = ParseMcpServersContract(agentTask, agentwerkeNamespace, element, errors);
 
         if (!string.IsNullOrWhiteSpace(toolEscalation) &&
             !toolEscalation.Equals("escalate", StringComparison.OrdinalIgnoreCase) &&
@@ -346,7 +347,8 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             && allowedTools.Count == 0
             && deniedTools.Count == 0
             && string.IsNullOrWhiteSpace(toolEscalation)
-            && metadata.Count == 0)
+            && metadata.Count == 0
+            && mcpServers.Count == 0)
         {
             return null;
         }
@@ -366,6 +368,7 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
         return new AgentRuntimeContract
         {
             Prompt = prompt,
+            McpServers = mcpServers,
             Permissions = new AgentPermissionContract
             {
                 Level = normalizedPermissionLevel,
@@ -376,6 +379,158 @@ public sealed class BpmnWorkflowValidator : IBpmnWorkflowValidator
             Metadata = metadata
         };
     }
+
+    private static IReadOnlyList<AgentMcpServerContract> ParseMcpServersContract(
+        XElement agentTask,
+        XNamespace agentwerkeNamespace,
+        XElement ownerElement,
+        ICollection<BpmnValidationError> errors)
+    {
+        var servers = new List<AgentMcpServerContract>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var serverElement in agentTask.Elements(agentwerkeNamespace + "mcpServer"))
+        {
+            var name = serverElement.Attribute("name")?.Value.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errors.Add(CreateError(ownerElement, "agentwerke:mcpServer must define a non-empty 'name' attribute."));
+                continue;
+            }
+
+            if (!seenNames.Add(name))
+            {
+                errors.Add(CreateError(ownerElement, $"Duplicate agentwerke:mcpServer name '{name}'."));
+                continue;
+            }
+
+            var transportAttr = serverElement.Attribute("transport")?.Value.Trim();
+            var transport = string.IsNullOrWhiteSpace(transportAttr) ? "stdio" : transportAttr.ToLowerInvariant();
+            if (transport is not ("stdio" or "http" or "https"))
+            {
+                errors.Add(CreateError(
+                    ownerElement,
+                    $"agentwerke:mcpServer '{name}' transport must be one of: stdio, http, https."));
+                continue;
+            }
+
+            var command = serverElement.Attribute("command")?.Value.Trim();
+            var url = serverElement.Attribute("url")?.Value.Trim();
+
+            if (transport == "stdio" && string.IsNullOrWhiteSpace(command))
+            {
+                errors.Add(CreateError(
+                    ownerElement,
+                    $"agentwerke:mcpServer '{name}' with transport 'stdio' requires a non-empty 'command' attribute."));
+            }
+
+            if (transport is "http" or "https")
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    errors.Add(CreateError(
+                        ownerElement,
+                        $"agentwerke:mcpServer '{name}' with transport '{transport}' requires a non-empty 'url' attribute."));
+                }
+                else if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUri) ||
+                         (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+                {
+                    errors.Add(CreateError(
+                        ownerElement,
+                        $"agentwerke:mcpServer '{name}' url '{url}' must be an absolute HTTP or HTTPS URI."));
+                }
+            }
+
+            var startupTimeoutSeconds = 15;
+            var timeoutAttr = serverElement.Attribute("startupTimeoutSeconds")?.Value.Trim();
+            if (!string.IsNullOrWhiteSpace(timeoutAttr) &&
+                (!int.TryParse(timeoutAttr, out startupTimeoutSeconds) || startupTimeoutSeconds <= 0))
+            {
+                errors.Add(CreateError(
+                    ownerElement,
+                    $"agentwerke:mcpServer '{name}' startupTimeoutSeconds must be a positive integer."));
+                startupTimeoutSeconds = 15;
+            }
+
+            var enabled = true;
+            var enabledAttr = serverElement.Attribute("enabled")?.Value.Trim();
+            if (!string.IsNullOrWhiteSpace(enabledAttr) && !bool.TryParse(enabledAttr, out enabled))
+            {
+                errors.Add(CreateError(
+                    ownerElement,
+                    $"agentwerke:mcpServer '{name}' enabled must be 'true' or 'false'."));
+                enabled = true;
+            }
+
+            var arguments = new List<string>(ParseCsvAttribute(serverElement, "arguments"));
+            foreach (var argElement in serverElement.Elements(agentwerkeNamespace + "argument"))
+            {
+                var argValue = argElement.Attribute("value")?.Value ?? argElement.Value;
+                if (!string.IsNullOrWhiteSpace(argValue))
+                {
+                    arguments.Add(argValue.Trim());
+                }
+            }
+
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var headerElement in serverElement.Elements(agentwerkeNamespace + "header"))
+            {
+                var headerName = headerElement.Attribute("name")?.Value.Trim();
+                if (string.IsNullOrWhiteSpace(headerName))
+                {
+                    errors.Add(CreateError(
+                        ownerElement,
+                        $"agentwerke:mcpServer '{name}' header must define a non-empty 'name' attribute."));
+                    continue;
+                }
+
+                var envVar = headerElement.Attribute("env")?.Value.Trim();
+                var rawValue = headerElement.Attribute("value")?.Value;
+
+                if (!string.IsNullOrWhiteSpace(envVar))
+                {
+                    var prefix = headerElement.Attribute("prefix")?.Value ?? string.Empty;
+                    headers[headerName] = $"{prefix}${{env:{envVar}}}";
+                    continue;
+                }
+
+                var resolvedValue = (rawValue ?? headerElement.Value)?.Trim() ?? string.Empty;
+                if (IsSensitiveHeaderName(headerName) && !ContainsEnvReference(resolvedValue))
+                {
+                    errors.Add(CreateError(
+                        ownerElement,
+                        $"agentwerke:mcpServer '{name}' header '{headerName}' must reference an environment variable (via env=\"VAR_NAME\" or ${{env:VAR_NAME}}) rather than inlining a secret literal in BPMN XML."));
+                    continue;
+                }
+
+                headers[headerName] = resolvedValue;
+            }
+
+            servers.Add(new AgentMcpServerContract
+            {
+                Name = name,
+                Transport = transport,
+                Command = string.IsNullOrWhiteSpace(command) ? null : command,
+                Arguments = arguments,
+                Url = string.IsNullOrWhiteSpace(url) ? null : url,
+                Headers = headers,
+                StartupTimeoutSeconds = startupTimeoutSeconds,
+                Enabled = enabled
+            });
+        }
+
+        return servers;
+    }
+
+    private static bool IsSensitiveHeaderName(string headerName) =>
+        headerName.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Equals("X-Api-Key", StringComparison.OrdinalIgnoreCase) ||
+        headerName.Equals("Api-Key", StringComparison.OrdinalIgnoreCase) ||
+        headerName.EndsWith("-Token", StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsEnvReference(string value) =>
+        value.Contains("${env:", StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyDictionary<string, string> ParseMetadataContract(
         XElement agentTask,

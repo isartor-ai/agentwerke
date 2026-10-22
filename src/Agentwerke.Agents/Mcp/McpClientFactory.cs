@@ -2,12 +2,17 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Agentwerke.Domain.AgentRuntime;
 
 namespace Agentwerke.Agents.Mcp;
 
 public sealed class McpClientFactory : IMcpClientFactory
 {
+    private static readonly Regex EnvPlaceholderPattern = new(
+        @"\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public Task<IMcpClientConnection> CreateAsync(AgentMcpServerContract server, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(server);
@@ -18,6 +23,22 @@ public sealed class McpClientFactory : IMcpClientFactory
             "stdio" => new StdioMcpClientConnection(server),
             _ => throw new InvalidOperationException(
                 $"MCP server '{server.Name}' uses unsupported transport '{server.Transport}'.")
+        });
+    }
+
+    public static string ResolveSecretReferences(string serverName, string value)
+    {
+        return EnvPlaceholderPattern.Replace(value, match =>
+        {
+            var envVar = match.Groups[1].Value;
+            var resolved = Environment.GetEnvironmentVariable(envVar);
+            if (string.IsNullOrWhiteSpace(resolved))
+            {
+                throw new InvalidOperationException(
+                    $"MCP server '{serverName}' requires environment variable '{envVar}', which is not set.");
+            }
+
+            return resolved;
         });
     }
 
@@ -218,7 +239,9 @@ public sealed class McpClientFactory : IMcpClientFactory
             _httpClient = new HttpClient();
             foreach (var header in server.Headers)
             {
-                _httpClient.DefaultRequestHeaders.TryAddWithoutValidation(header.Key, header.Value);
+                _httpClient.DefaultRequestHeaders.TryAddWithoutValidation(
+                    header.Key,
+                    ResolveSecretReferences(server.Name, header.Value));
             }
         }
 
@@ -292,7 +315,12 @@ public sealed class McpClientFactory : IMcpClientFactory
 
             foreach (var argument in server.Arguments)
             {
-                startInfo.ArgumentList.Add(argument);
+                startInfo.ArgumentList.Add(ResolveSecretReferences(server.Name, argument));
+            }
+
+            foreach (var header in server.Headers)
+            {
+                startInfo.Environment[header.Key] = ResolveSecretReferences(server.Name, header.Value);
             }
 
             _process = new Process { StartInfo = startInfo };
