@@ -1,8 +1,13 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Agentwerke.Agents.Tools;
 using Agentwerke.Application.Workflows;
+using Agentwerke.Domain.AgentRuntime;
 using Agentwerke.Domain.Persistence;
 using Agentwerke.Storage.Artifacts;
+using Agentwerke.Workflows.Bpmn;
+using Agentwerke.Workflows.Runtime;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agentwerke.Agents.Tests;
 
@@ -91,6 +96,87 @@ public sealed class TraceabilityRowContractTests
         Assert.Equal("boom", row.FailureMessage);
     }
 
+    /// <summary>
+    /// Runs the real <c>examples/v-model-pilot-thread.bpmn</c> artifact through
+    /// <see cref="WorkflowInstanceEngine"/> from <c>Start</c> to <c>WaitForVerificationResult</c>,
+    /// resumes with the CI callback payload shape emitted by <c>examples/ci/agentwerke-verify.yml</c>,
+    /// executes <c>IngestTestResults</c> via <see cref="VerificationIngestTestResultsTool"/> using the
+    /// BPMN node's <c>tool.input.*</c> templates rendered against the engine's run context, and proves
+    /// <see cref="TraceabilityRowBuilder.Build"/> produces the full requirement-to-test traceability rows (#210, #211).
+    /// </summary>
+    [Fact]
+    public async Task VModelPilotThread_ExecutesFromRequirementThroughWebhookResumeToTraceabilityRows()
+    {
+        var bpmnPath = FindRepositoryFile("examples", "v-model-pilot-thread.bpmn");
+        var validation = new BpmnWorkflowValidator().Validate(await File.ReadAllTextAsync(bpmnPath));
+        Assert.True(validation.IsValid);
+        var definition = validation.Definition!;
+
+        var store = new InMemoryWorkflowRuntimeStore();
+        var runContextRepo = new InMemoryRunContextRepository();
+        var executor = new PilotThreadServiceTaskExecutor(runContextRepo);
+        var engine = new WorkflowInstanceEngine(
+            store,
+            executor,
+            runContextRepo,
+            NullLogger<WorkflowInstanceEngine>.Instance);
+
+        var run = await store.CreateRunAsync("VModelPilotThread", "system", CancellationToken.None);
+        var waitingState = await engine.StartAsync(
+            new WorkflowEngineStartRequest("VModelPilotThread", definition, "system", ExistingRunId: run.Id),
+            CancellationToken.None);
+
+        Assert.Equal("waiting_external", waitingState.Status);
+        Assert.Equal("WaitForVerificationResult", waitingState.WaitingOnNodeId);
+        Assert.Equal(run.Id, waitingState.WaitingExternalCorrelationKey);
+
+        const string reportXml = """
+            <testsuites>
+              <testsuite name="Agentwerke.Workflows.Tests.dll" tests="2" failures="0" time="0.31">
+                <testcase classname="Agentwerke.Workflows.Tests.PilotTests" name="VerifiesRequirement42" time="0.015" />
+                <testcase classname="Agentwerke.Workflows.Tests.PilotTests" name="PreservesAuditTrail" time="0.012" />
+              </testsuite>
+            </testsuites>
+            """;
+
+        var completedState = await engine.ResumeAsync(
+            new WorkflowEngineResumeRequest(
+                RunId: run.Id,
+                Definition: definition,
+                ApprovedBy: null,
+                ExternalCorrelationKey: run.Id,
+                ExternalPayload: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["requirement_id"] = "42",
+                    ["ci_run_url"] = "https://github.com/octo/app/actions/runs/98765",
+                    ["report_xml"] = reportXml
+                },
+                ResumedBy: "github-actions"),
+            CancellationToken.None);
+
+        Assert.Equal("completed", completedState.Status);
+
+        var completedRun = await store.GetRunAsync(run.Id, CancellationToken.None);
+        Assert.NotNull(completedRun);
+
+        var rows = TraceabilityRowBuilder.Build(completedRun!);
+        Assert.Equal(2, rows.Count);
+
+        Assert.All(rows, row =>
+        {
+            Assert.Equal("github", row.RequirementProvider);
+            Assert.Equal("42", row.RequirementId);
+            Assert.Equal("https://github.com/octo/app/issues/42", row.RequirementUrl);
+            Assert.Equal("98765", row.CiRunId);
+            Assert.Equal("https://github.com/octo/app/actions/runs/98765", row.CiRunUrl);
+            Assert.Equal("passed", row.Status);
+            Assert.EndsWith("-junit.xml", row.EvidenceArtifact, StringComparison.Ordinal);
+        });
+
+        Assert.Contains(rows, r => r.TestId == "Agentwerke.Workflows.Tests.PilotTests.VerifiesRequirement42");
+        Assert.Contains(rows, r => r.TestId == "Agentwerke.Workflows.Tests.PilotTests.PreservesAuditTrail");
+    }
+
     private static async Task<string> IngestAsync(string reportXml)
     {
         var result = await new VerificationIngestTestResultsTool(new NoOpArtifactStorage()).ExecuteAsync(
@@ -126,5 +212,191 @@ public sealed class TraceabilityRowContractTests
 
         public Task<bool> ExistsAsync(string runId, string artifactName, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private static string FindRepositoryFile(params string[] segments)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Agentwerke.sln")))
+        {
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+        {
+            throw new InvalidOperationException("Could not locate the repository root (Agentwerke.sln) from the test output directory.");
+        }
+
+        return Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
+    }
+
+    private sealed class PilotThreadServiceTaskExecutor(IRunContextRepository runContextRepository) : IServiceTaskExecutor
+    {
+        private static readonly Regex TemplatePattern = new("{{\\s*([a-zA-Z0-9_.-]+)\\s*}}", RegexOptions.Compiled);
+
+        public async Task<AgentTaskOutcome> ExecuteAsync(
+            string runId,
+            string stepId,
+            BpmnNodeDefinition node,
+            int attempt,
+            CancellationToken cancellationToken,
+            AgentExecutionProgressReporter? progressReporter = null)
+        {
+            if (string.Equals(node.Id, "ReadRequirement", StringComparison.Ordinal))
+            {
+                return new AgentTaskOutcome(
+                    Succeeded: true,
+                    Output: "Read issue #42",
+                    FailureReason: null,
+                    ExternalActions:
+                    [
+                        new ExternalActionRecord(
+                            Provider: "github",
+                            Action: "read_issue",
+                            Status: "completed",
+                            ResourceId: "42",
+                            ResourceUrl: "https://github.com/octo/app/issues/42",
+                            Summary: "GitHub issue #42")
+                    ]);
+            }
+
+            if (string.Equals(node.Id, "IngestTestResults", StringComparison.Ordinal))
+            {
+                var entries = await runContextRepository.GetAllAsync(runId, cancellationToken);
+                var runContext = entries.ToDictionary(static e => e.Key, static e => e.Value, StringComparer.OrdinalIgnoreCase);
+                var metadata = node.Metadata!.RuntimeContract!.Metadata;
+                var toolInput = metadata
+                    .Where(static pair => pair.Key.StartsWith("tool.input.", StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(
+                        static pair => pair.Key["tool.input.".Length..],
+                        pair => TemplatePattern.Replace(
+                            pair.Value,
+                            match => runContext.TryGetValue(match.Groups[1].Value, out var val) ? val : match.Value),
+                        StringComparer.OrdinalIgnoreCase);
+
+                var toolResult = await new VerificationIngestTestResultsTool(new NoOpArtifactStorage()).ExecuteAsync(
+                    new AgentToolExecutionContext(
+                        RunId: runId,
+                        StepId: stepId,
+                        AgentName: node.Metadata.Agent,
+                        Action: node.Metadata.Action,
+                        Environment: node.Metadata.Environment,
+                        PurposeType: node.Metadata.PurposeType,
+                        PolicyTag: node.Metadata.PolicyTag,
+                        Attempt: attempt),
+                    toolInput,
+                    cancellationToken);
+
+                return new AgentTaskOutcome(
+                    Succeeded: toolResult.Succeeded,
+                    Output: toolResult.Output,
+                    FailureReason: toolResult.FailureReason,
+                    Artifacts: toolResult.Artifacts,
+                    ExternalActions: toolResult.ExternalActions);
+            }
+
+            return new AgentTaskOutcome(
+                Succeeded: true,
+                Output: $"completed {node.Id}",
+                FailureReason: null);
+        }
+    }
+
+    private sealed class InMemoryWorkflowRuntimeStore : IWorkflowRuntimeStore
+    {
+        private readonly Dictionary<string, WorkflowRun> _runs = [];
+
+        public Task<WorkflowRun> CreateRunAsync(
+            string workflowDefinitionId, string? initiator, CancellationToken cancellationToken,
+            string? correlationId = null)
+        {
+            var run = new WorkflowRun
+            {
+                Id = Guid.NewGuid().ToString(),
+                WorkflowId = workflowDefinitionId,
+                Status = "created",
+                RequestedBy = initiator ?? "unknown",
+                StartedAt = DateTime.UtcNow.ToString("o")
+            };
+            _runs[run.Id] = run;
+            return Task.FromResult(run);
+        }
+
+        public Task<WorkflowRun?> GetRunAsync(string runId, CancellationToken cancellationToken) =>
+            Task.FromResult(_runs.GetValueOrDefault(runId));
+
+        public Task<IReadOnlyList<WorkflowEvent>> ListRunEventsAsync(string runId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WorkflowEvent>>(
+                _runs.TryGetValue(runId, out var run) ? run.Events.AsReadOnly() : []);
+
+        public Task AppendEventAsync(string runId, string type, string message, CancellationToken cancellationToken)
+        {
+            if (_runs.TryGetValue(runId, out var run))
+            {
+                run.Events.Add(new WorkflowEvent
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = type,
+                    Message = message,
+                    CreatedAt = DateTime.UtcNow.ToString("o")
+                });
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateRunStatusAsync(string runId, string status, string? completedAt, CancellationToken cancellationToken)
+        {
+            if (_runs.TryGetValue(runId, out var run))
+            {
+                run.Status = status;
+                run.CompletedAt = completedAt;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task<WorkflowRunStep> CreateStepAsync(
+            string runId, string nodeId, string? nodeName, string nodeType,
+            string? agentName, CancellationToken cancellationToken)
+        {
+            var step = new WorkflowRunStep
+            {
+                Id = $"step_{Guid.NewGuid():N}",
+                Name = nodeName ?? nodeId,
+                Type = nodeType,
+                Status = "running",
+                StartedAt = DateTime.UtcNow.ToString("o"),
+                AgentName = agentName
+            };
+            if (_runs.TryGetValue(runId, out var run))
+            {
+                run.Steps.Add(step);
+            }
+
+            return Task.FromResult(step);
+        }
+
+        public Task UpdateStepStatusAsync(
+            string stepId, string status, string? output, string? error, string? completedAt,
+            PolicyDecision? policyDecision,
+            AgentRuntimeSnapshot? runtimeSnapshot,
+            CancellationToken cancellationToken)
+        {
+            var step = _runs.Values
+                .SelectMany(static r => r.Steps)
+                .FirstOrDefault(s => string.Equals(s.Id, stepId, StringComparison.Ordinal));
+            if (step is not null)
+            {
+                step.Status = status;
+                step.Output = output;
+                step.Error = error;
+                step.CompletedAt = completedAt;
+                step.PolicyDecision = policyDecision;
+                step.RuntimeSnapshot = runtimeSnapshot;
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }

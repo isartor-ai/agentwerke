@@ -8,9 +8,9 @@
   artifact proves the opposite property on the smallest possible shape: one requirement, read from
   a real system of record, through one real CI dispatch, resumed by one real callback.
 
-  What it deliberately leaves out, until the thread is proven:
+  What it deliberately leaves out:
   - the other seven phases, and the approval gates around them
-  - test-result ingestion and the traceability row (blocked on the format decision, #211)
+  - failure-driven rework loops (covered separately in #207)
 
   Required run inputs:
     requirement_provider   "github" — the only provider with a read tool today
@@ -142,22 +142,52 @@ Report the files you changed and the tests you added.
           correlationKeyTemplate="{{run_id}}" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_DispatchVerificationCi_WaitForVerificationResult</bpmn:incoming>
-      <bpmn:outgoing>Flow_WaitForVerificationResult_End</bpmn:outgoing>
+      <bpmn:outgoing>Flow_WaitForVerificationResult_IngestTestResults</bpmn:outgoing>
       <!-- Deliberately id-less: BpmnWorkflowValidator rejects any BPMN-namespace element that
            carries an id but isn't a supported node type, and event definitions are not in that
            list. Camunda Modeler assigns ids to these, so a round-tripped file fails validation. -->
       <bpmn:messageEventDefinition />
     </bpmn:intermediateCatchEvent>
 
+    <!--
+      Deterministic, like ReadRequirement and DispatchVerificationCi: verification.ingest_test_results
+      dispatches straight to the Tool Gateway with no model call. The CI workflow posts the JUnit XML
+      report and CI run URL inline in the test.unit.completed event payload; the resume path lands them
+      in run context under event.*, and this node parses the report and stores the raw XML verbatim as
+      a run artifact so TraceabilityRowBuilder can derive requirement → test → CI run → evidence rows.
+    -->
+    <bpmn:serviceTask id="IngestTestResults" name="Ingest Test Results">
+      <bpmn:extensionElements>
+        <agentwerke:agentTask
+          agent="ci"
+          action="verification.ingest_test_results"
+          environment="github"
+          purposeType="verification_ingest"
+          policyTag="vmodel-pilot-verification"
+          executionMode="local"
+          permissionLevel="read-only"
+          allowedTools="verification.ingest_test_results">
+          <agentwerke:metadata key="phase" value="unit_test" />
+          <agentwerke:metadata key="traceability.consumes" value="requirement_record" />
+          <agentwerke:metadata key="traceability.produces" value="unit_test_results" />
+          <agentwerke:metadata key="tool.input.report_xml" value="{{event.report_xml}}" />
+          <agentwerke:metadata key="tool.input.ci_run_url" value="{{event.ci_run_url}}" />
+        </agentwerke:agentTask>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_WaitForVerificationResult_IngestTestResults</bpmn:incoming>
+      <bpmn:outgoing>Flow_IngestTestResults_End</bpmn:outgoing>
+    </bpmn:serviceTask>
+
     <bpmn:endEvent id="End" name="Thread Verified">
-      <bpmn:incoming>Flow_WaitForVerificationResult_End</bpmn:incoming>
+      <bpmn:incoming>Flow_IngestTestResults_End</bpmn:incoming>
     </bpmn:endEvent>
 
     <bpmn:sequenceFlow id="Flow_Start_ReadRequirement" sourceRef="Start" targetRef="ReadRequirement" />
     <bpmn:sequenceFlow id="Flow_ReadRequirement_ImplementChange" sourceRef="ReadRequirement" targetRef="ImplementChange" />
     <bpmn:sequenceFlow id="Flow_ImplementChange_DispatchVerificationCi" sourceRef="ImplementChange" targetRef="DispatchVerificationCi" />
     <bpmn:sequenceFlow id="Flow_DispatchVerificationCi_WaitForVerificationResult" sourceRef="DispatchVerificationCi" targetRef="WaitForVerificationResult" />
-    <bpmn:sequenceFlow id="Flow_WaitForVerificationResult_End" sourceRef="WaitForVerificationResult" targetRef="End" />
+    <bpmn:sequenceFlow id="Flow_WaitForVerificationResult_IngestTestResults" sourceRef="WaitForVerificationResult" targetRef="IngestTestResults" />
+    <bpmn:sequenceFlow id="Flow_IngestTestResults_End" sourceRef="IngestTestResults" targetRef="End" />
   </bpmn:process>
 
   <bpmndi:BPMNDiagram id="BPMNDiagram_VModelPilotThread">
@@ -177,8 +207,11 @@ Report the files you changed and the tests you added.
       <bpmndi:BPMNShape id="WaitForVerificationResult_di" bpmnElement="WaitForVerificationResult">
         <dc:Bounds x="852" y="182" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="IngestTestResults_di" bpmnElement="IngestTestResults">
+        <dc:Bounds x="950" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="End_di" bpmnElement="End">
-        <dc:Bounds x="960" y="182" width="36" height="36" />
+        <dc:Bounds x="1162" y="182" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_Start_ReadRequirement_di" bpmnElement="Flow_Start_ReadRequirement">
         <di:waypoint x="156" y="200" />
@@ -196,9 +229,13 @@ Report the files you changed and the tests you added.
         <di:waypoint x="790" y="200" />
         <di:waypoint x="852" y="200" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_WaitForVerificationResult_End_di" bpmnElement="Flow_WaitForVerificationResult_End">
+      <bpmndi:BPMNEdge id="Flow_WaitForVerificationResult_IngestTestResults_di" bpmnElement="Flow_WaitForVerificationResult_IngestTestResults">
         <di:waypoint x="888" y="200" />
-        <di:waypoint x="960" y="200" />
+        <di:waypoint x="950" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_IngestTestResults_End_di" bpmnElement="Flow_IngestTestResults_End">
+        <di:waypoint x="1100" y="200" />
+        <di:waypoint x="1162" y="200" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
