@@ -7,6 +7,7 @@ using Agentwerke.Application.Agents;
 using Agentwerke.Domain.Persistence;
 using Agentwerke.Application.Workflows;
 using Agentwerke.Integrations;
+using Agentwerke.Storage.Artifacts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -101,6 +102,7 @@ public sealed class AgentsDependencyInjectionTests
         services.AddScoped<IRunContextRepository, InMemoryRunContextRepository>();
         services.AddSingleton(new InteractionOptions());
         services.AddScoped<IInteractionRouter, StubInteractionRouter>();
+        services.AddScoped<IArtifactStorage, StubArtifactStorage>();
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
@@ -154,6 +156,14 @@ public sealed class AgentsDependencyInjectionTests
         public Task RouteAsync(AgentInteraction interaction, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<InteractionDeliveryResult> RetryAsync(string interactionId, string channel, CancellationToken cancellationToken) =>
             Task.FromResult(InteractionDeliveryResult.Delivered());
+    }
+
+    private sealed class StubArtifactStorage : IArtifactStorage
+    {
+        public Task<IReadOnlyList<ArtifactDescriptor>> ListAsync(string runId, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task SaveAsync(string runId, string artifactName, Stream content, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<Stream> OpenReadAsync(string runId, string artifactName, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<bool> ExistsAsync(string runId, string artifactName, CancellationToken cancellationToken) => throw new NotImplementedException();
     }
 
     private sealed class StubSandboxProfileSelector : ISandboxProfileSelector

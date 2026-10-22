@@ -81,6 +81,30 @@ public sealed class RunsController : ControllerBase
         return Ok(ApiContractMappings.ToRunDetail(run, approvals, artifacts));
     }
 
+    /// <summary>
+    /// The run's traceability rows (#210): requirement → test → CI run → evidence, every external
+    /// field a real id or URL. Viewer-visible like the rest of the run, since it is a reading of the
+    /// run's own evidence rather than the evidence pack itself.
+    /// </summary>
+    [HttpGet("{runId}/traceability")]
+    public async Task<IActionResult> GetTraceability(string runId)
+    {
+        var run = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Include(r => r.Steps)
+            .Include(r => r.Events)
+            .FirstOrDefaultAsync(r => r.Id == runId);
+
+        if (run == null)
+        {
+            return NotFound();
+        }
+
+        // An empty list is a real answer — a run that has not reached verification has no rows yet,
+        // which is different from the run not existing.
+        return Ok(new { runId, rows = TraceabilityRowBuilder.Build(run) });
+    }
+
     [Authorize(Policy = AgentwerkePolicies.Operator)]
     [HttpGet("{runId}/evidence-pack")]
     public async Task<IActionResult> GetEvidencePack(string runId)

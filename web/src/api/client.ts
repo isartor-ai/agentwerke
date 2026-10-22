@@ -16,6 +16,7 @@ import type {
   PolicySimulationRequestInput,
   RunEvent,
   RunInteraction,
+  RunTraceability,
   RuntimeMode,
   SettingsSnapshot,
   SettingsTestResponse,
@@ -393,6 +394,10 @@ export const apiClient = {
 
   async getRun(id: string, signal?: AbortSignal): Promise<WorkflowRun | undefined> {
     return requestJson<WorkflowRun>(`/api/runs/${id}`, signal ? { signal } : undefined);
+  },
+
+  async getRunTraceability(runId: string): Promise<RunTraceability> {
+    return requestJson<RunTraceability>(`/api/runs/${encodeURIComponent(runId)}/traceability`);
   },
 
   async getRunInteractions(runId: string): Promise<RunInteraction[]> {

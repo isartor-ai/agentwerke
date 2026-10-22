@@ -524,6 +524,30 @@ main {
   background: var(--color-surface-low);
 }
 
+/* Mirrors .status-failed, so a failing test reads the same as a failing step. */
+.chip-danger {
+  border-color: rgb(255 180 171 / 0.45);
+  color: var(--color-error);
+  background: rgb(255 180 171 / 0.13);
+}
+
+/* Secondary line under a cell's primary value. .cell-meta alone is inline, so a test id would run
+   straight into the test name it belongs under. */
+.traceability-detail {
+  display: block;
+  margin-top: 0.15rem;
+  word-break: break-word;
+}
+
+.traceability-heading {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.traceability-heading:first-child {
+  margin-top: 0;
+}
+
 .traceability-summary {
   margin-bottom: 0.75rem;
 }
