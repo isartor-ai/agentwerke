@@ -117,6 +117,13 @@ its result, so both sides agree on the key without either guessing.
 
 A run can hold only one external wait at a time, so the run id alone is sufficient to identify it.
 
+`examples/ci/agentwerke-verify.yml` is the CI half of this contract — a reference GitHub Actions
+workflow to copy into the dispatched repository. It declares the inputs the dispatch sends (without
+which GitHub rejects the whole call with 422 "Unexpected inputs provided"), runs the tests, and posts
+the signed result back to `POST /webhooks/events`. Note that it reports the result *before* failing
+on a red build: the report is what resumes the waiting run, so failing first would leave the run
+waiting for a callback that never arrives.
+
 ## Timers
 
 An intermediate catch event with a BPMN timer event definition pauses the run for the configured duration.
