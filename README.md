@@ -13,7 +13,7 @@
 [![Model](https://img.shields.io/badge/agents-Claude-D97757)](src/Agentwerke.Agents/Models/AnthropicLanguageModelClient.cs)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[Premise](#premise) | [Factory line](#factory-line) | [Sample BPMN](#sample-bpmn-flow) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
+[Premise](#premise) | [Product Tour](#product-tour) | [Factory line](#factory-line) | [Sample BPMN](#sample-bpmn-flow) | [Quick start](#quick-start) | [Architecture](#architecture) | [API](#api-reference) | [Docs](#documentation)
 
 </div>
 
@@ -35,6 +35,25 @@ Agentwerke is the countermeasure. It is not another coding agent. It is the ente
 - **Self-hosted by design.** Run the factory on your infrastructure with your model keys and your data boundary.
 
 > The point is not to make agents harmless. The point is to make powerful automation inspectable, interruptible, and accountable.
+
+## Product tour
+
+<div align="center">
+  <a href="docs/assets/demo/agentwerke-demo.mp4">
+    <img src="docs/assets/demo/agentwerke-demo-preview.gif" alt="Agentwerke 90-second product tour" width="100%" />
+  </a>
+  <p><em>Click to watch the full 1080p product tour (<a href="docs/assets/demo/agentwerke-demo.mp4">MP4</a> · <a href="docs/assets/demo/agentwerke-demo.webm">WebM</a>) or regenerate anytime via <code>./scripts/generate-demo-assets.sh</code>.</em></p>
+</div>
+
+| Workflow Designer (BPMN 2.0) | Guided V-Model Factory |
+| :---: | :---: |
+| ![Workflow Designer](docs/assets/screenshots/01-workflow-designer.png) | ![Template Catalog](docs/assets/screenshots/02-template-catalog.png) |
+| **Executive Run Board & Fleet Telemetry** | **Live BPMN Execution & Gateway Decisions** |
+| ![Run Board Overview](docs/assets/screenshots/03-run-board-overview.png) | ![Run Detail Live BPMN](docs/assets/screenshots/04-run-detail-live-bpmn.png) |
+| **OpenSandbox Container & Claude 3.7 Telemetry** | **Bilateral V-Model Traceability Matrix** |
+| ![Agent Sandbox and LLM Trace](docs/assets/screenshots/05-agent-sandbox-and-llm-trace.png) | ![V-Model Traceability Matrix](docs/assets/screenshots/06-vmodel-traceability-matrix.png) |
+| **Human-in-the-Loop Approvals & Tool Escalations** | **Zero-Trust Policy Simulator & Audit Governance** |
+| ![HITL Approvals and Interactions](docs/assets/screenshots/07-hitl-approvals-and-interactions.png) | ![Policies and Audit](docs/assets/screenshots/08-policies-and-audit.png) |
 
 ## Factory line
 
