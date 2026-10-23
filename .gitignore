@@ -53,3 +53,7 @@ dist/
 
 # Local editor/tooling config
 .claude/
+
+# Playwright temporary output
+web/test-results/
+web/playwright-report/

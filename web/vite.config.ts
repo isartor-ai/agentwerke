@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
       globals: true,
       setupFiles: './src/test/setup.ts',
       css: true,
+      exclude: ['node_modules/**', 'dist/**', 'demo/**'],
       coverage: {
         reporter: ['text', 'html'],
       },
